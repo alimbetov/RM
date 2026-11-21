@@ -173,7 +173,8 @@ public class TenantAuthorization {
             case TENANT_RBAC_MANAGE, SALES_ORDER_CONFIRM, SALES_ORDER_CANCEL,
                  SALES_ORDER_FULFILL, INVENTORY_RELEASE,
                  INVENTORY_RECEIVE, INVENTORY_ADJUST, INVENTORY_RESERVE,
-                 INVENTORY_FULFILL -> false;
+                 INVENTORY_FULFILL, FILES_UPLOAD, FILES_READ, FILES_ATTACH,
+                 FILES_DETACH, FILES_DELETE -> false;
             case CRM_PII_READ -> role == OrganizationMembershipEntity.Role.OWNER
                 || role == OrganizationMembershipEntity.Role.ADMIN
                 || role == OrganizationMembershipEntity.Role.MANAGER;
