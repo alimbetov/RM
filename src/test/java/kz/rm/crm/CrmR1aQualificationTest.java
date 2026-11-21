@@ -2,6 +2,7 @@ package kz.rm.crm;
 
 import kz.rm.iam.*;
 import kz.rm.security.kms.TenantKeyService;
+import kz.rm.crm.dto.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,6 +10,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import java.time.Instant;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -317,6 +322,159 @@ class CrmR1aQualificationTest {
                 """,Integer.class,t.tenantId())).isZero();
         assertThat(secureQueries.getCustomer(verified(t.actorId()),t.tenantId(),
                 company.id()).name()).isEqualTo("Company");
+    }
+
+
+    @Test void customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized() {
+        var t=newTenant(),other=newTenant();
+        var person=secureCommands.createPerson(verified(t.actorId()),t.tenantId(),
+                "Private Person",null);
+        var company=secureCommands.createCompany(verified(t.actorId()),t.tenantId(),
+                "North Logistics LLP",null);
+        secureCommands.createCompany(verified(other.actorId()),other.tenantId(),
+                "Foreign Logistics",null);
+        var contact=secureCommands.addContact(verified(t.actorId()),t.tenantId(),
+                company.id(),"Private Contact","internal@example.kz","+77001234567");
+        var contactTwo=secureCommands.addContact(verified(t.actorId()),t.tenantId(),
+                person.id(),"Person Contact","person@example.kz",null);
+        var actor=verified(t.actorId());
+        var first=secureQueries.customers(actor,t.tenantId(),null,0,1);
+        assertThat(first.getTotalElements()).isEqualTo(2);
+        assertThat(first.getContent()).hasSize(1);
+        var second=secureQueries.customers(actor,t.tenantId(),null,1,1);
+        assertThat(second.getContent()).hasSize(1);
+        assertThat(first.getContent().getFirst().id())
+                .isNotEqualTo(second.getContent().getFirst().id());
+        var people=secureQueries.customers(actor,t.tenantId(),
+                new CustomerSearch("PERSON","ACTIVE",null,null),0,10);
+        assertThat(people.getTotalElements()).isEqualTo(1);
+        assertThat(people.getContent().getFirst().companyLabel()).isNull();
+        assertThat(people.getContent().getFirst().id()).isEqualTo(person.id());
+        var companies=secureQueries.customers(actor,t.tenantId(),
+                new CustomerSearch("COMPANY",null,null,"logistics"),0,10);
+        assertThat(companies.getContent()).hasSize(1);
+        assertThat(companies.getContent().getFirst().id()).isEqualTo(company.id());
+        assertThat(secureQueries.customers(actor,t.tenantId(),
+                new CustomerSearch(null,null,"43",null),0,10).getTotalElements()).isZero();
+
+        var contactList=secureQueries.contacts(actor,t.tenantId(),
+                new ContactSearch(company.id(),"ACTIVE",null),0,10);
+        assertThat(contactList.getTotalElements()).isEqualTo(1);
+        assertThat(contactList.getContent().getFirst().id()).isEqualTo(contact.id());
+        assertThat(contactList.getContent().getFirst().email()).isEqualTo("internal@example.kz");
+        assertThat(secureQueries.contacts(actor,t.tenantId(),
+                new ContactSearch(null,null,true),0,10).getTotalElements()).isZero();
+        assertThat(secureQueries.contacts(actor,t.tenantId(),null,0,1).getTotalElements()).isEqualTo(2);
+        assertThat(secureQueries.contacts(actor,t.tenantId(),
+                new ContactSearch(person.id(),null,null),0,10)
+                .getContent().getFirst().id()).isEqualTo(contactTwo.id());
+
+        assertThatThrownBy(()->secureQueries.customers(null,t.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contacts(null,t.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.customers(actor,other.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contacts(actor,other.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contacts(actor,t.tenantId(),null,0,101))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureQueries.customers(actor,t.tenantId(),null,-1,10))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->new CustomerSearch("UNKNOWN",null,null,null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->new ContactSearch(null,"UNKNOWN",null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        UUID organizationId=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,t.tenantId());
+        var viewer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "crm-search-viewer-"+UUID.randomUUID(),"Viewer"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                organizationId,viewer.getId(),OrganizationMembershipEntity.Role.VIEWER));
+        var viewerActor=verified(viewer.getId());
+        assertThat(secureQueries.customers(viewerActor,t.tenantId(),null,0,10).getTotalElements())
+                .isEqualTo(2);
+        assertThatThrownBy(()->secureQueries.contacts(viewerActor,t.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void consentRequestKeyIsIdempotentAndRejectsConflictingPayload() {
+        var t=newTenant(),other=newTenant();
+        var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Consent Customer",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),
+                "Consent","consent@example.kz",null);
+        var another=secureCommands.addContact(actor,t.tenantId(),customer.id(),
+                "Other","other@example.kz",null);
+        var foreignCustomer=secureCommands.createCompany(verified(other.actorId()),
+                other.tenantId(),"Other Tenant",null);
+        var foreignContact=secureCommands.addContact(verified(other.actorId()),other.tenantId(),
+                foreignCustomer.id(),"Foreign","foreign@example.kz",null);
+        String request="consent-"+UUID.randomUUID();
+        UUID first=secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),true,"MARKETING","v1","WEB_FORM",request);
+        assertThat(secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),true,"MARKETING","v1","WEB_FORM",request)).isEqualTo(first);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event
+                WHERE tenant_id=? AND request_key=?
+                """,Integer.class,t.tenantId(),request)).isEqualTo(1);
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),false,"MARKETING","v1","WEB_FORM",request))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                another.id(),true,"MARKETING","v1","WEB_FORM",request))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                foreignContact.id(),true,"MARKETING","v1","WEB_FORM","foreign-"+UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(null,t.tenantId(),
+                contact.id(),true,"MARKETING","v1","FORM","validkey001"))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),true,"MARKETING","v1","WEB_FORM","bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(secureQueries.hasEmailConsent(actor,t.tenantId(),contact.id(),"MARKETING"))
+                .isTrue();
+        UUID revoke=secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),false,"MARKETING","v1","UNSUBSCRIBE","revoke-"+UUID.randomUUID());
+        assertThat(revoke).isNotEqualTo(first);
+        assertThat(secureQueries.hasEmailConsent(actor,t.tenantId(),contact.id(),"MARKETING"))
+                .isFalse();
+    }
+
+    @Test void postgresConcurrentConsentSubmissionCreatesExactlyOneEvent() throws Exception {
+        try(var connection=dataSource.getConnection()){
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Concurrent Consent",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),
+                "Contact","a@example.kz",null);
+        var ready=new CountDownLatch(1);
+        String key="concurrent-"+UUID.randomUUID();
+        try(var executor=Executors.newFixedThreadPool(6)){
+            List<Future<UUID>> results=new ArrayList<>();
+            for(int i=0;i<12;i++) {
+                results.add(executor.submit(()->{
+                    if(!ready.await(10,TimeUnit.SECONDS))throw new IllegalStateException("Start");
+                    return secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                            contact.id(),true,"MARKETING","v1","WEB_FORM",key);
+                }));
+            }
+            ready.countDown();
+            UUID expected=results.getFirst().get(30,TimeUnit.SECONDS);
+            for(Future<UUID> result:results)assertThat(result.get(30,TimeUnit.SECONDS))
+                    .isEqualTo(expected);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event
+                WHERE tenant_id=? AND request_key=?
+                """,Integer.class,t.tenantId(),key)).isEqualTo(1);
     }
 
     @Test void katoRejectsSubdistrictForCustomer() {
