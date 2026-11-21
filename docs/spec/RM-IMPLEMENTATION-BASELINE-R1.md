@@ -148,3 +148,8 @@ Migrate per-object with checksum verification at destination, atomic storage poi
 - [ ] Four-language messages/documents and GEO Chinese fallback explicitly covered.
 - [ ] Partition candidate matrix and key constraints understood; no unqualified native partitions.
 - [ ] Acceptance tests defined: H2, PostgreSQL, integration, malicious upload, legal/consent, inter-tenant negative, deterministic CI.
+
+
+## Публичная витрина, автозаказ и покупательский кабинет
+
+**Нормативное дополнительное ТЗ:** [RM-STOREFRONT-AUTOORDER-R1](RM-STOREFRONT-AUTOORDER-R1.md). Новый модуль STOREFRONT с префиксом `store_` и целевыми таблицами `crm.store_front`, `crm.store_setting`, `crm.store_front_i18n`. Автозаказ **всегда** требует email, при отсутствии аккаунта IAM автоматически создаёт `PENDING_VERIFICATION` пользователя. При существующем аккаунте нельзя делать login или связывать доступ к чужим заказам на основе одного введённого email: требуется подтверждение владения адресом и аутентификация. `tenant_id` всегда продавца, `buyer_user_id` — глобальная IAM identity; покупатель не получает `ORG_MEMBER` продавца. Заказы остаются в SALES, связь покупателя с seller CRM — `crm.crm_buyer_link`; новый код не создавался. Четыре языка, FILES, tenant security, consent и исторические статусы обязательны.
