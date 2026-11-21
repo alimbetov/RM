@@ -10,8 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Comparator;
 import java.util.UUID;
 
 /**
@@ -94,7 +94,7 @@ public class SalesInventoryCommandService {
         List<UUID> active=jdbc.query("""
             SELECT id FROM crm.inv_stock_reservation
             WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
-            ORDER BY id
+            ORDER BY location_id,item_id,id
             """,(rs,n)->rs.getObject(1,UUID.class),tenantId,orderId);
         Integer fulfilled=jdbc.queryForObject("""
             SELECT count(*) FROM crm.inv_stock_reservation
@@ -128,7 +128,8 @@ public class SalesInventoryCommandService {
         int lineCount=lines(tenantId,orderId).size();
         List<UUID> active=jdbc.query("""
             SELECT id FROM crm.inv_stock_reservation
-            WHERE tenant_id=? AND order_id=? AND state='ACTIVE' ORDER BY id
+            WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+            ORDER BY location_id,item_id,id
             """,(rs,n)->rs.getObject(1,UUID.class),tenantId,orderId);
         if(active.size()!=lineCount || lineCount==0)
             throw new IllegalStateException("Order reservations incomplete");
@@ -152,7 +153,8 @@ public class SalesInventoryCommandService {
             SELECT l.id,s.catalog_item_id,l.quantity
             FROM crm.sales_order_line l JOIN crm.store_offer s
               ON s.tenant_id=l.tenant_id AND s.id=l.offer_id
-            WHERE l.tenant_id=? AND l.order_id=? ORDER BY l.id
+            WHERE l.tenant_id=? AND l.order_id=?
+            ORDER BY s.catalog_item_id,l.id
             """,(rs,n)->new Line(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                     BigDecimal.valueOf(rs.getLong(3))),tenant,order);
     }
