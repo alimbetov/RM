@@ -31,6 +31,19 @@ class DomainCommandBoundaryQualificationTest {
         assertThat(Modifier.isPublic(InventoryReservationService.class
                 .getDeclaredMethod("fulfill",UUID.class,UUID.class)
                 .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(InventoryReservationService.class
+                .getDeclaredMethod("release",UUID.class,UUID.class)
+                .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(SalesInventoryCommandService.class
+                .getDeclaredMethod("cancel",UUID.class,UUID.class,UUID.class)
+                .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(SalesInventoryCommandService.class
+                .getDeclaredMethod("fulfill",UUID.class,UUID.class,UUID.class)
+                .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(InventoryAuthorizedCommandService.class
+                .getDeclaredMethod("correct",UUID.class,UUID.class,UUID.class,UUID.class,
+                        String.class,BigDecimal.class).getModifiers())).isFalse();
+
         assertThat(Modifier.isPublic(InventoryMovementService.class
                 .getDeclaredMethod("adjust",UUID.class,UUID.class,UUID.class,
                         String.class,BigDecimal.class).getModifiers())).isFalse();
