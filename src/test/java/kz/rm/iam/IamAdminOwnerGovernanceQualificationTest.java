@@ -67,9 +67,8 @@ class IamAdminOwnerGovernanceQualificationTest {
         // The bootstrap is tested in an isolated, rollback-only transaction. This
         // temporarily deactivates other synthetic admin fixtures, not actual data.
         jdbc.update("""
-                UPDATE public.iam_global_role_assignment
-                SET revoked_at=? WHERE role='PLATFORM_ADMIN' AND revoked_at IS NULL
-                """,Timestamp.from(Instant.now()));
+                DELETE FROM public.iam_global_role_assignment WHERE role='PLATFORM_ADMIN'
+                """);
         UUID candidate=user();
         String secret="test-offline-setup-secret-"+UUID.randomUUID()+"-"+UUID.randomUUID();
         String digest=HexFormat.of().formatHex(
