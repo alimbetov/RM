@@ -2,7 +2,7 @@
 
 **Status:** PROPOSED — DOMAIN DESIGN; no file tables, controllers or storage implementation deployed yet.
 **Branch:** `feat/rm-kms-r1-implementation`
-**Priority:** Foundation alongside CRM-R1A and CATALOG-R1A.5, not after SALES.
+**Priority:** Foundation alongside CRM-R1A and CATALOG-R1A.5, not after SALES.\n**Naming convention:** [RM-MODULAR-DOMAIN-DB-R1](RM-MODULAR-DOMAIN-DB-R1.md) — module-owned tables use `file_` prefix; physical schema choice decided before first FILES migration. The `files.file_*` names below are conceptual and are not yet deployed.
 **Deployment:** one Spring Boot modular monolith / PostgreSQL, initial local filesystem; RustFS (S3-compatible object storage) behind one Java storage port later.
 
 ## 1. Non-negotiable boundary
