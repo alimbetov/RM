@@ -2,7 +2,7 @@
 
 **Версия:** R2.2 (R2.0 + пользовательские сценарии + базовый DTO-контракт) · **Базовая версия R2.0:** PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae` · **Сценарии R2.1:** PR #5, merge `378dba6ccbd79687ea979dab2ad952ef2fbbbd51` · **DTO R2.2:** включён в `main` через PR #6 (`27373aca6bdb9a36396e7396ca411bf30b8af362`). Статус описания не означает реализацию API или production.
 **Источник фактической реализации:** код и точный SHA `main`, а не версия ТЗ. Базовый внедрённый R2-код: PR #2; IAM hardening из [PR #4](https://github.com/alimbetov/RM/pull/4) включён в `main` (`bb6baf3392943525c29cc49232509e47591a54dd`). Отдельное независимое security-одобрение и production admission — **HOLD**.
-**Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`.
+**Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`. **Дополнение IAM-PII-R2.5 (§25) — DESIGN/ТЗ, не реализовано и не проходит текущий release gate.**
 
 ## 1. Назначение и продукт
 
@@ -26,7 +26,7 @@ RM — **CRM-first business platform**: единая рабочая среда �
 
 | Контекст | Владеет данными и поведением | R2-доставка |
 |---|---|---|
-| IAM | global identity, account status, membership, tenant roles, grants | Ядро и IAM lifecycle в main; независимый production security sign-off HOLD |
+| IAM | global identity, account status, membership, tenant roles, grants, защищённый профиль | IAM lifecycle в main; в base_dev IAM R2.3/R2.4 — PR #9. Шифрование global display name/phone и проверка смены email — **R2.5 TARGET**, не реализовано |
 | ORG | организация, подразделения/локации | Базовые сервисы и чтение реализованы |
 | GEO | справочник КАТО/территорий | Справочные контракты, реальная полнота определяется тестами |
 | FILES | метаданные и доступ к файлам, хранение | Расширение по отдельной вертикали |
@@ -47,6 +47,7 @@ RM — **CRM-first business platform**: единая рабочая среда �
 ## 4. Идентичность и tenant
 
 - Один глобальный `userId` для физического пользователя, одна связь с внешним OIDC subject; пользователь может входить в несколько организаций.
+- **Профиль IAM — глобальный, не tenant PII.** Email и профиль пользователя нельзя шифровать DEK одной организации. Существующие `iam_email_identity.email_envelope/lookup_hmac` уже защищают глобальный email; `iam_user_account.display_name/email_normalized/phone_e164` пока могут храниться открыто. Их миграция регламентируется §25.
 - **`tenantId = iam_workspace.id`** для организационных данных. `organizationId` — бизнес-сущность организации, не `tenantId`. Склад, филиал, KATO/регион, проект и профиль клиента **не являются** самостоятельными tenant по умолчанию.
 - Пользователь явно выбирает рабочую организацию, но **любой указанный tenantId проверяется сервером** по активным account, workspace, membership; нельзя принимать доверие к tenant/actor из HTTP body/query.
 - Операции другого tenant и чтение чужих идентификаторов — **deny by default**, включая вложенные JOIN, поисковые запросы, файлы, экспорт, фоновые задания.
@@ -82,6 +83,7 @@ CRM решает видимость клиентов/контактов и ра�
 
 ## 6. Доменные границы и пользовательский процесс
 
+- **IAM:** регистрация `emailVerified=false`; подтверждение конкретного адреса — только после one-time proof. При смене email старый адрес остаётся текущим до подтверждения нового. Статус почты не равен OIDC-login или tenant permission; подробнее §25.
 - **CRM:** создание/поиск клиента и контакта, история взаимодействий и согласий, ответственное лицо; PII раскрывается только после отдельного `CRM_PII_READ`. Создание контакта не означает согласие на рассылку. Полнота портфеля/назначений — отдельный контракт.
 - **SALES:** от коммерческого предложения/заказа к подтверждению, отмене и исполнению. Один seller tenant на заказ; фиксировать цены/состояния и сохранять историю. `COMPLETED` в текущей реализации нельзя автоматически трактовать как подтверждение доставки, оплаты или финансового закрытия.
 - **INVENTORY:** склад/позиция → поступление → доступный остаток → резерв → выдача/списание → неизменяемое движение. `available = on_hand - reserved`, `on_hand >= reserved >= 0`; причина коррекции, requestKey и audit обязательны.
@@ -97,6 +99,7 @@ CRM решает видимость клиентов/контактов и ра�
 5. При изменении схемы только **новые Liquibase changesets**; применённые не переписывать. Не удалять реальные записи клиентов, бухгалтерские данные, события/аудит и старые migrations ради документационной чистоты.
 6. Для пользовательских списков — ограниченная пагинация, стабильный порядок, серверная tenant фильтрация; COUNT и PAGE в разных запросах не дают консистентный export-snapshot. Файлы/PII/экспорт имеют собственные объектные проверки.
 7. История значимых бизнес-операций и изменений прав — append-only; исправление ошибочной записи новым событием. Не писать секреты, токены, расшифрованные PII в логи и audit. Ключи KMS не являются обычными правами `OWNER`.
+7a. **PII-by-default:** перед сохранением каждого нового личного поля указать владельца данных (global IAM или tenant CRM), режим шифрования, AAD, lookup-index, права расшифровки, миграцию/retention и negative tests. Ни JPA Entity, ни DTO, ни audit не становятся обходом PII-границы; существующие legacy plaintext IAM-поля должны исчезнуть после доказуемого cutover R2.5.
 8. Системные задачи/воркеры получают ограниченную service identity и явный tenant context. Не использовать «универсального системного пользователя» с доступом ко всем данным.
 
 ## 8. Готовность и доказательства
@@ -588,6 +591,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 | Шаг | Кто действует | Внутренний сервис | Проверки и последствия |
 |---|---|---|---|
 | A. Identity | Любой человек | `OidcActorResolver` → `VerifiedActor` | Только подтверждённый subject, ACTIVE account и действующий токен; настоящий HTTP/BFF пока HOLD |
+| A2. Email proof | Любой новый/сменяющий адрес пользователь | Существующий `EmailIdentityService` + проектируемый R2.5 email-change flow | При первой регистрации `emailVerified=false`; при смене новое значение требует **нового** подтверждения, старое CURRENT до успешного proof; см. §25 |
 | A1. Свои контексты | Любой вошедший пользователь | `MyAccessService.myTenants/myGlobalRoles/myFunctionalRoles` | Список только ACTIVE организаций текущего пользователя; глобальные роли отдельно; функциональные роли только своего tenant |
 | B. Назначить владельца новой компании | Глобальный `PLATFORM_ADMIN` | `PlatformTenantBootstrapService.provision` | ACTIVE admin, ACTIVE существующий user, создать organization/workspace/OWNER atomically; global admin **не получает** бизнес-прав |
 | C. Изолировать новую организацию | Система | шаг B | `iam_tenant_rbac_config.enforced=TRUE` немедленно; **default deny** любых бизнес-прав до конкретного назначения |
@@ -685,3 +689,44 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 **Техническая реализация:** Liquibase `0038–0043` аддитивно добавляет guard, append-only evidence, состояние запроса передачи и дополнительные коды tenant audit. Уже применённые миграции `0001–0037` не переписываются. Не вводить Redis, серверные сессии, брокер или универсальный workflow engine.
 
 **Не открывать production:** даже после H2/PG service GREEN остаются независимый security-review, реальный trusted issuer/OIDC/BFF, физическое хранение и доставка operator bootstrap secret, least-privilege DB, populated-upgrade/recovery и подготовленный offline recovery runbook.
+
+
+---
+
+## 25. IAM-PII-R2.5 — глобальное шифрование профиля и подтверждение email
+
+**Статус:** DESIGN / ТЗ; на текущую дату **НЕ РЕАЛИЗОВАНО** и не утверждено production-ready. Нормативные требования этого раздела обязательны для проектирования следующей IAM-вертикали. Подробный процессный и миграционный контракт — [RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION](../spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md). **Никаких контроллеров до квалификации сервисов.**
+
+### 25.1 Принятые продуктовые инварианты
+
+1. **Первая регистрация:** `emailVerified=false` без исключений. Не считать наличие email либо `email_verified` claim из внешнего OIDC доказательством RM-верификации. В уже существующем `iam_email_identity` источник истины — `verified_at IS NOT NULL` для действующего адреса; **не хранить второй противоречивый BOOLEAN**. Если email отсутствует, `emailVerified=false`.
+2. **Изменение адреса:** новый email **обязательно проверяется заново**; `pendingEmailVerified=false` до успешного challenge. Пока проверка не пройдена, старый подтверждённый email остаётся действующим и его `currentEmailVerified` не сбрасывается. Только атомарное принятие proof делает новый CURRENT и verified; старый становится HISTORICAL. Указание идентичного нормализованного email — no-op, не изменение.
+3. **Email proof ≠ аутентификация.** Проверка почты не выдаёт `VerifiedActor`, OIDC session, membership, tenant role, `CRM_PII_READ`, OWNER или PLATFORM_ADMIN; не восстанавливает SUSPENDED/DELETED пользователя. Email-dependent recovery, activation of email invitations и buyer order claim требуют **текущего** подтверждённого email и своей предметной проверки.
+4. **Глобальный ключевой контур:** email, display name и phone принадлежат глобальному IAM. **Запрещено шифровать профиль tenant DEK**. Применять AES-256-GCM, независимый от него глобальный IAM encryption key и доменно-разделённый per-field AAD (userId, поле, версия); HMAC-SHA-256 blind index для equality email/phone. Секреты вне исходников/логов; неправильная generation/secret → fail closed.
+5. **Не ломать существующий checkout:** `crm.sales_order.pending_email_identity_id` связывает исторический заказ с конкретным email identity. Нельзя при email change просто переписать `email_envelope`/HMAC у старой identity — сохранять immutable old identity. Перед cutover `findOrProvision`, verify и buyer-order claim обязаны исключать переназначение старых заказов.
+6. **Текущая защищённость (проверено по коду `base_dev`):** `EmailIdentityCrypto`/ `EmailIdentityService` уже обеспечивают encrypted email, HMAC lookup, verification token и durable outbox (отправка провайдером пока HOLD). `iam_user_account.display_name`, `email_normalized`, `phone_e164` не зашифрованы на уровне приложения; email-change service отсутствует. **Не выдавать существующее CRM PII/KMS за защиту всех IAM-полей.**
+
+### 25.2 Сервисный контракт, без нового framework
+
+| Сценарий | Вход и предварительные условия | Правило результата |
+|---|---|---|
+| IAM-PII-01 Первичная регистрация | Новый user / trusted signup; email нормализуется текущим IAM codec | Encrypted PENDING identity, `verified_at=NULL`, `emailVerified=false` |
+| IAM-PII-02 Подтверждение | Высокоэнтропийный one-time token, purpose и конкретная email identity | Проверка TTL/one-use (база: 15 минут), `verified_at`, единичное audit событие |
+| IAM-PII-03 Смена почты | Текущий `VerifiedActor`, новый email и будущая step-up policy | Новый PENDING, старый CURRENT не теряется до proof; после успешного proof одно атомарное переключение |
+| IAM-PII-04 Отмена / повтор / конфликт | Текущий пользователь; активный request | Повторы идемпотентны, истёкшие токены и чужие email не работают; ответ без account enumeration |
+| IAM-PII-05 Профиль | Текущий `VerifiedActor`; имя/телефон и `rowVersion` | Профиль AES-GCM в отдельной `iam_pii` области, собственные PII только по self-access, нет plaintext-DTO для посторонних |
+| IAM-PII-06 Исторические заказы | Checkout до и после смены email | Старые `email_identity_id`/order IDs неизменны; чужая перепривязка невозможна |
+
+### 25.3 Данные и миграции
+
+- `iam_user_account`: `userId`, статусы, `rowVersion` оставить типизированными; `external_subject` временно остаётся equality lookup OIDC под least-privilege DB (отдельный зафиксированный риск, не утверждать тотальное шифрование).
+- `iam_pii.user_profile_secret`: целевые encrypted `display_name` и `phone` с keyed `phone_lookup_hmac`. Email **не дублировать** — использовать `iam_email_identity`.
+- Существующий `iam_email_identity` требует минимальной версионируемой модели **PENDING/CURRENT/HISTORICAL**; у пользователя максимум один CURRENT и один PENDING, конкуренция подтверждений защищается индексами/транзакциями. Отказаться от прежнего `UNIQUE(user_id)` только с миграцией на partial uniqueness и изменением запросов. Historical identity нельзя считать разрешением login/recovery.
+- Существующие `iam_email_verification_challenge` и `iam_email_delivery_outbox` **переиспользовать**; challenge привязать к purpose/target email, исключить proof из другого процесса; не плодить новый mail subsystem.
+- Миграцию делать только новыми Liquibase changesets: additive schema → backfill из legacy → проверка на **заполненной** PostgreSQL с order FKs → переключение чтений/записей → удаление plaintext. Старые значения без проверяемого evidence **не превращать в verified=true** автоматически. Требуется безопасный план rollback/cutover и key recovery.
+
+### 25.4 Обязательные критерии приёмки
+
+**Не считать R2.5 завершённой**, пока H2 + PostgreSQL не доказали: регистрация `emailVerified=false`, первый proof → true, смена A→B с неизменным CURRENT до proof, cross-purpose и replay DENY, два одновременных владельца одного email → единственный победитель, invalid/suspended account DENY, integrity/AAD failure для ciphertext, отсутствие утечек через DTO/logs, сохранение исторических заказов, заполненная PG миграция/восстановление и fail-closed при недоступном глобальном IAM ключе.
+
+**Граница:** всё выше — требования к следующей сервисной разработке в `base_dev`. Не писать контроллеры, SMTP-отправку, Redis, second identity service или universal privacy engine. Даже после сервисного GREEN остаются независимое security-review, реальный issuer/JWKS/OIDC/BFF, provider delivery, least-privilege, секреты/ротация, проверка backup/restore и production approval.
