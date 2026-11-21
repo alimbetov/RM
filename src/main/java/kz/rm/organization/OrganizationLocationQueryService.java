@@ -32,7 +32,7 @@ class OrganizationLocationQueryService {
                         .and(Sort.by("id")))).map(mapper::toDto);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LocationDto get(UUID actorId,UUID tenantId,UUID id) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.ORGANIZATION_LOCATION_READ);
         if(id==null) throw new IllegalArgumentException("Location required");
