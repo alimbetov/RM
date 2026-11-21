@@ -37,8 +37,12 @@ public class FileUploadCompletionService {
         boolean committed=false;
         try {
             FileScanPort.Verdict verdict=scanner.scan(staged.key());
+            if(verdict==FileScanPort.Verdict.INFECTED) {
+                metadata.rejectInfected(actor.userId(),tenant,fileId);
+                throw new IOException("File scan reported infected content");
+            }
             if(verdict!=FileScanPort.Verdict.CLEAN)
-                throw new IOException("File scan did not pass");
+                throw new IOException("File scanner unavailable or result inconclusive");
             finalKey=storage.promote(tenant,fileId,staged);
             if(!storage.exists(finalKey))
                 throw new IOException("Promoted content is missing");
