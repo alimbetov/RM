@@ -2,6 +2,8 @@ package kz.rm.architecture;
 
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.crm.AuthenticatedCrmCommands;
+import kz.rm.files.AuthenticatedFilesCommands;
+import kz.rm.files.AuthenticatedFilesQueries;
 import kz.rm.crm.AuthenticatedCrmQueries;
 import kz.rm.crm.dto.CustomerSearch;
 import kz.rm.crm.dto.ContactSearch;
@@ -120,6 +122,15 @@ class DomainCommandBoundaryQualificationTest {
                 "kz.rm.organization.OrganizationLocationService").getModifiers())).isFalse();
         assertThat(Modifier.isPublic(Class.forName(
                 "kz.rm.organization.OrganizationLocationQueryService").getModifiers())).isFalse();
+    }
+
+    @Test void filesMetadataIsAccessibleOnlyThroughVerifiedPrincipalFacades() throws Exception {
+        assertThat(AuthenticatedFilesCommands.class.getDeclaredMethod("begin",
+                VerifiedActor.class,UUID.class,String.class,long.class,String.class)).isNotNull();
+        assertThat(AuthenticatedFilesQueries.class.getDeclaredMethod("ownStaged",
+                VerifiedActor.class,UUID.class,UUID.class)).isNotNull();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.files.FileMetadataService").getModifiers()))
+                .isFalse();
     }
 
     @Test void exposedCommandPortsRequireVerifiedIdentity() throws Exception {
