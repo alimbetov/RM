@@ -120,6 +120,41 @@ class FileAttachmentService {
                     tenant,customerId,limit);
     }
 
+    record VerifiedRead(UUID fileId,String key,long size,String sha256) {}
+
+    @Transactional
+    VerifiedRead authorizeCustomerBinaryRead(UUID actor,UUID tenant,UUID attachmentId) {
+        authorization.requireForCommand(actor,tenant,DomainPermission.FILES_READ);
+        if(attachmentId==null)throw new IllegalArgumentException("Attachment required");
+        var record=jdbc.query("""
+                SELECT a.owner_type,a.owner_id,f.id,f.size_bytes,f.sha256,
+                       f.state,f.scan_status,f.content_class,
+                       s.storage_key,s.encrypted_format_version
+                FROM crm.file_attachment a
+                JOIN crm.file_object f ON f.tenant_id=a.tenant_id AND f.id=a.file_id
+                JOIN crm.file_storage s ON s.tenant_id=f.tenant_id AND s.file_id=f.id
+                WHERE a.tenant_id=? AND a.id=? AND a.detached_at IS NULL
+                  AND s.state='ACTIVE'
+                """,rs->{
+                    if(!rs.next())throw new IllegalArgumentException("Attachment unavailable");
+                    return new ContentLink(rs.getString(1),rs.getObject(2,UUID.class),
+                            rs.getObject(3,UUID.class),rs.getLong(4),rs.getString(5),
+                            rs.getString(6),rs.getString(7),rs.getString(8),
+                            rs.getString(9),rs.getInt(10));
+                },tenant,attachmentId);
+        if(!"CRM_CUSTOMER".equals(record.ownerType()))
+            throw new SecurityException("Owner type not permitted");
+        owner.requireCustomerRead(actor,tenant,record.ownerId());
+        if(!"AVAILABLE".equals(record.state()) || !"CLEAN".equals(record.scan())
+                || !"INTERNAL".equals(record.classification()) || record.cryptoVersion()!=1
+                || record.sha()==null)
+            throw new SecurityException("Unqualified, legacy or unavailable binary content");
+        return new VerifiedRead(record.fileId(),record.key(),record.size(),record.sha());
+    }
+    private record ContentLink(String ownerType,UUID ownerId,UUID fileId,
+                               long size,String sha,String state,String scan,
+                               String classification,String key,int cryptoVersion) {}
+
     private record FileState(String state,String scan,String classification) {}
     private record OwnerLink(String type,UUID ownerId,UUID fileId) {}
 }
