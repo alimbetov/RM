@@ -817,8 +817,9 @@ class CrmR1aQualificationTest {
                 "BAD-DATES",today,today.minusDays(1),today)).isInstanceOf(IllegalArgumentException.class);
         var contract=contractService.create(actor,t.tenantId(),customer.id(),"OPEN-01",
                 today.plusDays(1),null,today);
-        assertThatThrownBy(()->contractService.changeStatus(actor,t.tenantId(),contract.id(),
-                CustomerContractEntity.Status.CLOSED,contract.rowVersion(),today))
+        final var draftContract=contract;
+        assertThatThrownBy(()->contractService.changeStatus(actor,t.tenantId(),draftContract.id(),
+                CustomerContractEntity.Status.CLOSED,draftContract.rowVersion(),today))
                 .isInstanceOf(IllegalStateException.class);
         contract=contractService.changeStatus(actor,t.tenantId(),contract.id(),
                 CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today);
