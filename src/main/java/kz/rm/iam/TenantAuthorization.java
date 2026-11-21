@@ -2,6 +2,10 @@ package kz.rm.iam;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import java.util.UUID;
 
@@ -19,9 +23,54 @@ public class TenantAuthorization {
     private final OrganizationMembershipRepository memberships;
     private final UserAccountRepository users;
     private final JdbcTemplate jdbc;
+    private String commandTenantLockSql;
 
-    public record Decision(UUID actorId, UUID tenantId, UUID organizationId,
-                           OrganizationMembershipEntity.Role role, DomainPermission permission) {}
+    @PostConstruct
+    void initializeCommandLock() {
+        String database=jdbc.execute((ConnectionCallback<String>) connection ->
+                connection.getMetaData().getDatabaseProductName());
+        // PostgreSQL shared row locks let different employee commands run in parallel;
+        // H2 uses its supported exclusive row lock for the test-only compatibility path.
+        commandTenantLockSql="SELECT id FROM public.iam_workspace WHERE id=? " +
+                (database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
+                        ? "FOR SHARE" : "FOR UPDATE");
+    }
+
+    /**
+     * Unforgeable inside application Java code: only TenantAuthorization can
+     * create a permission decision. It is not an authentication credential.
+     */
+    public static final class Decision {
+        private final UUID actorId,tenantId,organizationId;
+        private final OrganizationMembershipEntity.Role role;
+        private final DomainPermission permission;
+        private Decision(UUID actorId,UUID tenantId,UUID organizationId,
+                         OrganizationMembershipEntity.Role role,DomainPermission permission) {
+            this.actorId=actorId;this.tenantId=tenantId;this.organizationId=organizationId;
+            this.role=role;this.permission=permission;
+        }
+        public UUID actorId(){return actorId;}
+        public UUID tenantId(){return tenantId;}
+        public UUID organizationId(){return organizationId;}
+        public OrganizationMembershipEntity.Role role(){return role;}
+        public DomainPermission permission(){return permission;}
+    }
+
+    /**
+     * Only for mutating domain transactions. The shared workspace lock is kept
+     * until COMMIT, so an OWNER revocation (workspace FOR UPDATE) cannot cross
+     * an already-authorized mutation. Authentication / membership state changes
+     * must follow the same lock protocol in their own admin workflows.
+     */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public Decision requireForCommand(UUID actorId,UUID tenantId,DomainPermission permission) {
+        if(actorId==null || tenantId==null || permission==null)
+            throw new SecurityException("Authenticated actor, tenant and permission required");
+        UUID locked=jdbc.queryForObject(commandTenantLockSql,UUID.class,tenantId);
+        if(locked==null || !locked.equals(tenantId))
+            throw new SecurityException("Tenant unavailable");
+        return require(actorId,tenantId,permission);
+    }
 
     public Decision require(UUID actorId, UUID tenantId, DomainPermission permission) {
         if (actorId == null || tenantId == null || permission == null)
