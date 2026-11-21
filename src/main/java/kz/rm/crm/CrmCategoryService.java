@@ -20,12 +20,14 @@ public class CrmCategoryService {
     private final CustomerCategoryRepository categories;
     private final CrmCustomerRepository customers;
     private final TenantAuthorization authorization;
+    private final CrmHistoryService history;
 
     public record Category(UUID tenantId, UUID id, String code, String name,
                            CustomerCategoryEntity.Status status, long rowVersion) {}
     public CrmCategoryService(CustomerCategoryRepository categories, CrmCustomerRepository customers,
-                              TenantAuthorization authorization) {
+                              TenantAuthorization authorization, CrmHistoryService history) {
         this.categories = categories; this.customers = customers; this.authorization = authorization;
+        this.history = history;
     }
     private void authorize(VerifiedActor actor, UUID tenant, DomainPermission permission) {
         if (actor == null || tenant == null) throw new SecurityException("Verified actor and tenant required");
@@ -82,8 +84,11 @@ public class CrmCategoryService {
         if (customer.getStatus() != CrmCustomerEntity.Status.ACTIVE)
             throw new IllegalStateException("Customer is archived");
         // Composite FK in PostgreSQL is the final cross-tenant race safety net.
+        if (java.util.Objects.equals(customer.getPrimaryCategoryId(),categoryId)) return;
+        long before=customer.getRowVersion();
         customer.setPrimaryCategoryId(categoryId);
-        customers.saveAndFlush(customer);
+        var saved=customers.saveAndFlush(customer);
+        history.customer(tenant,customerId,actor.userId(),"CATEGORY_CHANGED",before,saved.getRowVersion());
     }
     @Transactional
     public Category get(VerifiedActor actor, UUID tenant, UUID id) {
