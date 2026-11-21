@@ -114,6 +114,29 @@ class AutoOrderR1QualificationTest {
     }
 
 
+    @Test void existingLegacyAccountReusesIdentityButRequiresNewEmailProof() {
+        var st=store();
+        String email="legacy-"+UUID.randomUUID()+"@example.kz";
+        UUID existingId=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO iam_user_account(id,email_normalized,display_name,status,created_at,updated_at,row_version)
+            VALUES (?,?,?,'ACTIVE',?,?,0)
+            """,existingId,email,"Existing User",Timestamp.from(Instant.now()),Timestamp.from(Instant.now()));
+        var placed=orders.checkout(st.slug(),email,"key-legacy-001",
+                List.of(new AutoOrderService.Line(st.offerId(),1)));
+        assertThat(jdbc.queryForObject("""
+            SELECT user_id FROM iam_email_identity WHERE lookup_hmac=?
+            """,UUID.class,crypto.lookup(email))).isEqualTo(existingId);
+        assertThat(jdbc.queryForObject("""
+            SELECT buyer_user_id FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,UUID.class,st.tenantId(),placed.order().orderId())).isNull();
+        assertThatThrownBy(()->orders.buyerOrders(existingId)).isInstanceOf(SecurityException.class);
+        assertThat(orders.verifyEmail(placed.verification().challengeId(),
+                placed.verification().token())).isEqualTo(existingId);
+        assertThat(orders.buyerOrders(existingId)).extracting(AutoOrderService.OrderReceipt::orderId)
+                .contains(placed.order().orderId());
+    }
+
     @Test void badEmailAndForgedOfferCannotCreateOrder() {
         var st=store();
         assertThatThrownBy(()->orders.checkout(st.slug(),"no-email","key-invalid-001",
