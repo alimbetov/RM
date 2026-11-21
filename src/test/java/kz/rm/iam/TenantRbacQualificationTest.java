@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import javax.sql.DataSource;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
@@ -19,6 +21,7 @@ class TenantRbacQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource source;
+    @Autowired PlatformTransactionManager transactionManager;
 
     private record Staff(UUID owner1,UUID owner2,UUID manager,UUID outsider,UUID tenant) {}
     private Staff createTenant() {
@@ -164,6 +167,30 @@ class TenantRbacQualificationTest {
             """,Integer.class,t.tenant(),role.id())).isEqualTo(1);
         assertThatThrownBy(()->roles.setRoleActive(t.manager(),t.tenant(),role.id(),false))
             .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void commandPermissionCannotBeReplayedOutsideItsTransaction() {
+        var t=createTenant();
+        var role=roles.createRole(t.owner1(),t.tenant(),"TX_BOUND","Transaction scoped");
+        roles.grant(t.owner1(),t.tenant(),role.id(),DomainPermission.INVENTORY_RECEIVE);
+        roles.assign(t.owner1(),t.tenant(),t.manager(),role.id());
+        roles.enable(t.owner1(),t.tenant());
+        var template=new TransactionTemplate(transactionManager);
+        var issued=template.execute(tx->{
+            var permit=authorization.requireForCommand(
+                t.manager(),t.tenant(),DomainPermission.INVENTORY_RECEIVE);
+            assertThat(permit.validForCurrentTransaction()).isTrue();
+            return permit;
+        });
+        assertThat(issued).isNotNull();
+        assertThat(issued.validForCurrentTransaction()).isFalse();
+        template.execute(tx->{
+            assertThat(issued.validForCurrentTransaction()).isFalse();
+            var fresh=authorization.requireForCommand(
+                t.manager(),t.tenant(),DomainPermission.INVENTORY_RECEIVE);
+            assertThat(fresh.validForCurrentTransaction()).isTrue();
+            return null;
+        });
     }
 
     @Test void postgresRoleEvidenceCannotBeMutated() throws Exception {
