@@ -1,6 +1,7 @@
 package kz.rm.iam;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -8,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
+import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -21,6 +23,7 @@ class IamAccessStatusQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository members;
     @Autowired JdbcTemplate jdbc;
+    @Autowired DataSource source;
 
     private record Fixture(UUID tenant, UUID owner, UUID coOwner, UUID staff, UUID admin) {}
     private UUID user(String name) {
@@ -128,4 +131,36 @@ class IamAccessStatusQualificationTest {
         assertThatThrownBy(()->access.restoreMember(actor(f.owner()),f.tenant(),f.staff()))
                 .isInstanceOf(SecurityException.class);
     }
+
+    @Test void activePlatformAdministratorCannotBeSuspendedWithoutRoleRevocation() {
+        Fixture f=createFixture();
+        UUID secondAdmin=user("second-admin");
+        jdbc.update("""
+                INSERT INTO public.iam_global_role_assignment (id,user_id,role,granted_at)
+                VALUES (?,?,?,?)
+                """,UUID.randomUUID(),secondAdmin,"PLATFORM_ADMIN",Timestamp.from(Instant.now()));
+        assertThatThrownBy(()->accounts.suspendAccount(actor(f.admin()),secondAdmin))
+                .isInstanceOf(SecurityException.class);
+        jdbc.update("""
+                UPDATE public.iam_global_role_assignment SET revoked_at=? 
+                WHERE user_id=? AND role='PLATFORM_ADMIN'
+                """,Timestamp.from(Instant.now()),secondAdmin);
+        accounts.suspendAccount(actor(f.admin()),secondAdmin);
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,secondAdmin)).isEqualTo("SUSPENDED");
+    }
+
+    @Test void postgresGlobalAccountHistoryIsImmutable() throws Exception {
+        try(var connection=source.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Fixture f=createFixture();
+        accounts.suspendAccount(actor(f.admin()),f.staff());
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM public.iam_account_status_event WHERE target_user_id=?
+                """,f.staff())).isInstanceOf(Exception.class);
+    }
+
 }
