@@ -96,3 +96,19 @@ CREATE TABLE security.kms_tenant_key_archive (
     CONSTRAINT ck_kms_archive_generation CHECK (key_generation > 0)
 );
 --rollback DROP TABLE security.kms_tenant_key_archive;
+
+
+--changeset rm:0006-kms-generation-invariants
+-- Add constraints without modifying previously executed changesets.
+ALTER TABLE security.kms_tenant_key ADD CONSTRAINT ck_kms_single_decrypt_only CHECK (
+    (CASE WHEN status_a='DECRYPT_ONLY' THEN 1 ELSE 0 END) +
+    (CASE WHEN status_b='DECRYPT_ONLY' THEN 1 ELSE 0 END) +
+    (CASE WHEN status_c='DECRYPT_ONLY' THEN 1 ELSE 0 END) <= 1
+);
+ALTER TABLE security.kms_tenant_key ADD CONSTRAINT ck_kms_next_generation CHECK (
+    (generation_a IS NULL OR next_generation > generation_a) AND
+    (generation_b IS NULL OR next_generation > generation_b) AND
+    (generation_c IS NULL OR next_generation > generation_c)
+);
+--rollback ALTER TABLE security.kms_tenant_key DROP CONSTRAINT ck_kms_next_generation;
+--rollback ALTER TABLE security.kms_tenant_key DROP CONSTRAINT ck_kms_single_decrypt_only;
