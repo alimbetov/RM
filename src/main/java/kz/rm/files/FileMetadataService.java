@@ -82,54 +82,139 @@ class FileMetadataService {
             },tenant,fileId,actor);
     }
 
-    /** Commit is brief and rechecks tenant IAM, uploader, file state, and size. */
+
+    private static final java.time.Duration CLAIM_TTL=java.time.Duration.ofMinutes(15);
+
+    record UploadClaim(FileUploadIntent intent,UUID token) {
+        boolean alreadyAvailable(){return token==null;}
+    }
+    private record Locked(String state,String scanStatus,String mime,long size,
+                          UUID uploader,String checksum,UUID token) {}
+
+    /**
+     * Serializable per-file admission with a durable claim. No transaction spans IO.
+     * The token is never exposed to a transport caller.
+     */
     @Transactional
-    FileUploadIntent finalizeClean(UUID actor,UUID tenant,UUID fileId,
+    UploadClaim claim(UUID actor,UUID tenant,UUID fileId) {
+        authorization.requireForCommand(actor,tenant,DomainPermission.FILES_UPLOAD);
+        if(fileId==null)throw new IllegalArgumentException("File ID required");
+        var r=jdbc.query("""
+            SELECT state,scan_status,mime_type,size_bytes,uploaded_by,sha256,
+                   processing_token,processing_started_at
+              FROM crm.file_object WHERE tenant_id=? AND id=? FOR UPDATE
+            """,rs->{
+                if(!rs.next())throw new IllegalArgumentException("Upload intent not found");
+                return new ClaimRow(rs.getString(1),rs.getString(2),rs.getString(3),
+                        rs.getLong(4),rs.getObject(5,UUID.class),rs.getString(6),
+                        rs.getObject(7,UUID.class),
+                        rs.getTimestamp(8)==null?null:rs.getTimestamp(8).toInstant());
+            },tenant,fileId);
+        if(!actor.equals(r.uploader()))throw new SecurityException("Only original uploader may finalize");
+        FileUploadIntent intent=new FileUploadIntent(fileId,r.state(),r.scanStatus(),r.mime(),r.size());
+        if("AVAILABLE".equals(r.state()) && "CLEAN".equals(r.scanStatus()))
+            return new UploadClaim(intent,null);
+        if(!"STAGED".equals(r.state())
+                || (!"NOT_SCANNED".equals(r.scanStatus()) && !"SCANNING".equals(r.scanStatus())))
+            throw new IllegalStateException("Upload not eligible for processing");
+        Instant now=Instant.now();
+        if("SCANNING".equals(r.scanStatus())
+                && (r.started()==null || !r.started().isBefore(now.minus(CLAIM_TTL))))
+            throw new IllegalStateException("File upload already processing");
+        UUID token=UUID.randomUUID();
+        int updated=jdbc.update("""
+                UPDATE crm.file_object
+                   SET processing_token=?,processing_started_at=?,scan_status='SCANNING',
+                       row_version=row_version+1
+                 WHERE tenant_id=? AND id=? AND state='STAGED'
+                """,token,Timestamp.from(now),tenant,fileId);
+        if(updated!=1)throw new IllegalStateException("File processing claim raced");
+        return new UploadClaim(intent,token);
+    }
+    private record ClaimRow(String state,String scanStatus,String mime,long size,
+                            UUID uploader,String checksum,UUID token,Instant started) {}
+
+    /** Release only one's own claim. Stale workers cannot touch a newer claim. */
+    @Transactional
+    void release(UUID actor,UUID tenant,UUID fileId,UUID token) {
+        if(token==null)return;
+        jdbc.update("""
+                UPDATE crm.file_object
+                   SET processing_token=NULL,processing_started_at=NULL,
+                       scan_status='NOT_SCANNED',row_version=row_version+1
+                 WHERE tenant_id=? AND id=? AND uploaded_by=? AND state='STAGED'
+                   AND scan_status='SCANNING' AND processing_token=?
+                """,tenant,fileId,actor,token);
+    }
+
+    @Transactional
+    void rejectInfected(UUID actor,UUID tenant,UUID fileId,UUID token) {
+        authorization.requireForCommand(actor,tenant,DomainPermission.FILES_UPLOAD);
+        int changed=jdbc.update("""
+                UPDATE crm.file_object
+                   SET state='REJECTED',scan_status='INFECTED',
+                       processing_token=NULL,processing_started_at=NULL,
+                       row_version=row_version+1
+                 WHERE tenant_id=? AND id=? AND uploaded_by=? AND state='STAGED'
+                   AND scan_status='SCANNING' AND processing_token=?
+                """,tenant,fileId,actor,token);
+        if(changed!=1)throw new IllegalStateException("Upload claim lost before malware rejection");
+    }
+
+    /** Final commit is fenced to the exact worker and includes fresh IAM admission. */
+    @Transactional
+    FileUploadIntent finalizeClean(UUID actor,UUID tenant,UUID fileId,UUID token,
                                    FileStoragePort.Staged staged,String finalKey) {
         authorization.requireForCommand(actor,tenant,DomainPermission.FILES_UPLOAD);
         var locked=jdbc.query("""
-                SELECT state,mime_type,size_bytes,uploaded_by
-                FROM crm.file_object
-                WHERE tenant_id=? AND id=? FOR UPDATE
+                SELECT state,scan_status,mime_type,size_bytes,uploaded_by,sha256,
+                       processing_token
+                  FROM crm.file_object
+                 WHERE tenant_id=? AND id=? FOR UPDATE
                 """,rs->{
                     if(!rs.next())throw new IllegalArgumentException("File not found");
-                    return new Locked(rs.getString(1),rs.getString(2),
-                            rs.getLong(3),rs.getObject(4,UUID.class));
+                    return new Locked(rs.getString(1),rs.getString(2),rs.getString(3),
+                            rs.getLong(4),rs.getObject(5,UUID.class),rs.getString(6),
+                            rs.getObject(7,UUID.class));
                 },tenant,fileId);
         if(!actor.equals(locked.uploader()) || !"STAGED".equals(locked.state())
+                || !"SCANNING".equals(locked.scanStatus()) || token==null
+                || !token.equals(locked.token())
                 || !locked.mime().equals(staged.detectedMime())
                 || locked.size()!=staged.sizeBytes())
-            throw new IllegalStateException("File upload state changed");
-        if(jdbc.queryForObject("""
-                SELECT count(*) FROM crm.file_storage WHERE tenant_id=? AND file_id=?
-                """,Integer.class,tenant,fileId)!=0)
-            throw new IllegalStateException("File already has storage location");
+            throw new IllegalStateException("Upload claim expired or metadata changed");
+        Integer previous=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.file_storage WHERE tenant_id=? AND file_id=?
+            """,Integer.class,tenant,fileId);
+        if(previous==null || previous!=0)
+            throw new IllegalStateException("File storage pointer already exists");
         jdbc.update("""
             INSERT INTO crm.file_storage(tenant_id,file_id,provider,storage_key,state)
             VALUES (?,?,'LOCAL',?,'ACTIVE')
             """,tenant,fileId,finalKey);
-        jdbc.update("""
+        int changed=jdbc.update("""
             UPDATE crm.file_object
                SET state='AVAILABLE',scan_status='CLEAN',sha256=?,completed_at=?,
+                   processing_token=NULL,processing_started_at=NULL,
                    row_version=row_version+1
              WHERE tenant_id=? AND id=? AND state='STAGED'
-            """,staged.sha256(),Timestamp.from(Instant.now()),tenant,fileId);
+               AND scan_status='SCANNING' AND processing_token=?
+            """,staged.sha256(),Timestamp.from(Instant.now()),tenant,fileId,token);
+        if(changed!=1)throw new IllegalStateException("Upload claim changed during commit");
         return new FileUploadIntent(fileId,"AVAILABLE","CLEAN",locked.mime(),locked.size());
     }
-    /** Positive malware verdict is terminal. Scanner errors are retryable STAGED. */
+
+    /** File is not logically available if its persisted blob is missing or corrupted. */
     @Transactional
-    void rejectInfected(UUID actor,UUID tenant,UUID fileId) {
-        authorization.requireForCommand(actor,tenant,DomainPermission.FILES_UPLOAD);
-        int changed=jdbc.update("""
-                UPDATE crm.file_object
-                   SET state='REJECTED',scan_status='INFECTED',row_version=row_version+1
-                 WHERE tenant_id=? AND id=? AND uploaded_by=? AND state='STAGED'
-                """,tenant,fileId,actor);
-        if(changed!=1)throw new IllegalStateException("Cannot reject changed upload intent");
+    void quarantineIntegrityFailure(UUID tenant,UUID fileId,String activeKey) {
+        jdbc.update("""
+            UPDATE crm.file_object SET state='REJECTED',scan_status='ERROR',
+                row_version=row_version+1
+            WHERE tenant_id=? AND id=? AND state='AVAILABLE' AND scan_status='CLEAN'
+              AND EXISTS (SELECT 1 FROM crm.file_storage s
+                          WHERE s.tenant_id=? AND s.file_id=? AND s.storage_key=?)
+            """,tenant,fileId,tenant,fileId,activeKey);
     }
-
-    private record Locked(String state,String mime,long size,UUID uploader) {}
-
     private record Existing(UUID id,String mime,long size,String state,
                             String scanStatus,UUID uploadedBy) {}
 }
