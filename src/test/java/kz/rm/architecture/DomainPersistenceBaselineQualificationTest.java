@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -45,7 +44,7 @@ class DomainPersistenceBaselineQualificationTest {
         for (String table:tables) {
             Integer count=jdbc.queryForObject("""
                 SELECT count(*) FROM INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_SCHEMA='CRM' AND TABLE_NAME=?
+                WHERE lower(TABLE_SCHEMA)='crm' AND lower(TABLE_NAME)=lower(?)
                 """,Integer.class,table);
             assertThat(count).as(table).isEqualTo(1);
         }
@@ -100,8 +99,6 @@ class DomainPersistenceBaselineQualificationTest {
         UUID a=tenant(),b=tenant();
         UUID item=catalogItem(a,"stock-"+UUID.randomUUID());
         UUID loc=UUID.randomUUID();
-        var orgB=organizations.saveAndFlush(new OrganizationEntity(
-                UUID.randomUUID(),"Warehouse LLP","Warehouse","KZ"));
         // We only need a valid KATO to insert a tenant-local warehouse.
         String kato=jdbc.queryForObject("""
             SELECT code FROM ref_kato_territory WHERE is_deleted=FALSE AND level_no <=3 ORDER BY code LIMIT 1
