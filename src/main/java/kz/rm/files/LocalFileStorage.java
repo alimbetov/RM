@@ -132,10 +132,15 @@ class LocalFileStorage implements FileStoragePort {
                 java.util.HexFormat.of().formatHex(digest.digest()).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
                 expectedHash.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
-    /** Legacy LOCAL bytes are intentionally denied by the secure binary-read contract. */
+    /** Caller must check tenant/CRM owner policy and stored SHA-256 first. */
     @Override public void streamVerified(UUID tenant,UUID fileId,String key,OutputStream sink)
             throws IOException {
-        throw new SecurityException("Encrypted binary storage qualification required");
+        if(tenant==null || fileId==null || sink==null || key==null
+                || !key.startsWith(tenant+"/"+fileId+"/final-"))
+            throw new SecurityException("LOCAL binary read tenant/file scope denied");
+        try(InputStream in=Files.newInputStream(resolve(key),LinkOption.NOFOLLOW_LINKS)) {
+            in.transferTo(sink);
+        }
     }
     @Override public java.util.List<String> listKeys(UUID tenant,UUID fileId) throws IOException {
         if(tenant==null || fileId==null)throw new IOException("Invalid file namespace");
