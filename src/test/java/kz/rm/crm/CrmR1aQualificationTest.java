@@ -35,6 +35,7 @@ class CrmR1aQualificationTest {
     @Autowired TenantKeyService keys;
     @Autowired CrmCustomerService crm;
     @Autowired CrmCustomerRepository customerMetadata;
+    @Autowired CrmContactRepository contactMetadata;
     @Autowired AuthenticatedCrmCommands secureCommands;
     @Autowired AuthenticatedCrmQueries secureQueries;
     @Autowired PlatformTransactionManager transactions;
@@ -54,6 +55,57 @@ class CrmR1aQualificationTest {
         jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         keys.provision(workspace.getId());
         return new Tenant(workspace.getId(),user.getId());
+    }
+
+    @Test void contactJpaMetadataIsTenantBoundAndHasNoPlaintextPiiFields() {
+        var tenantA = newTenant();
+        var tenantB = newTenant();
+        var customerA = secureCommands.createPerson(verified(tenantA.actorId()),
+                tenantA.tenantId(), "Customer A private", null);
+        var customerB = secureCommands.createCompany(verified(tenantB.actorId()),
+                tenantB.tenantId(), "Company B", null);
+        var contactA = secureCommands.addContact(verified(tenantA.actorId()),
+                tenantA.tenantId(), customerA.id(),
+                "Sensitive Contact A", "secret-a@example.kz", "+77000000001");
+        var contactB = secureCommands.addContact(verified(tenantB.actorId()),
+                tenantB.tenantId(), customerB.id(),
+                "Sensitive Contact B", "secret-b@example.kz", "+77000000002");
+
+        var metadataA = contactMetadata.findByTenantIdAndId(tenantA.tenantId(), contactA.id());
+        assertThat(metadataA).isPresent();
+        assertThat(metadataA.orElseThrow().getTenantId()).isEqualTo(tenantA.tenantId());
+        assertThat(metadataA.orElseThrow().getCustomerId()).isEqualTo(customerA.id());
+        assertThat(metadataA.orElseThrow().getStatus()).isEqualTo(CrmContactEntity.Status.ACTIVE);
+        assertThat(metadataA.orElseThrow().isPrimary()).isFalse();
+
+        assertThat(contactMetadata.findByTenantIdAndId(tenantB.tenantId(), contactA.id()))
+                .isEmpty();
+        assertThat(contactMetadata.findByTenantIdAndId(tenantA.tenantId(), contactB.id()))
+                .isEmpty();
+        assertThat(contactMetadata.findById(
+                new CrmContactKey(tenantB.tenantId(), contactA.id()))).isEmpty();
+        assertThat(contactMetadata.findByTenantIdAndCustomerId(
+                tenantA.tenantId(), customerB.id())).isEmpty();
+        assertThat(contactMetadata.findByTenantIdAndCustomerId(
+                tenantA.tenantId(), customerA.id()))
+                .extracting(CrmContactEntity::getId).containsExactly(contactA.id());
+
+        // Guard the entity mapping itself against accidental plaintext PII columns.
+        var mappedFields = java.util.Arrays.stream(CrmContactEntity.class.getDeclaredFields())
+                .map(java.lang.reflect.Field::getName).toList();
+        assertThat(mappedFields).doesNotContain(
+                "name", "email", "phone", "nameEnvelope", "emailEnvelope", "phoneEnvelope");
+        assertThat(jdbc.queryForObject("""
+                SELECT name_envelope FROM crm_pii.contact_secret
+                WHERE tenant_id=? AND contact_id=?
+                """,byte[].class,tenantA.tenantId(),contactA.id()))
+                .isNotNull();
+        assertThat(secureQueries.getContact(
+                verified(tenantA.actorId()),tenantA.tenantId(),contactA.id()).email())
+                .isEqualTo("secret-a@example.kz");
+        assertThatThrownBy(() -> secureQueries.getContact(
+                verified(tenantB.actorId()),tenantB.tenantId(),contactA.id()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test void metadataJpaRepositoryUsesCompositeTenantKeyAndNeverExposesPersonSecret() {
