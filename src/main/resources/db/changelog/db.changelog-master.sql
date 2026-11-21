@@ -1063,7 +1063,7 @@ CREATE TABLE crm.audit_retention_run (
 --rollback DROP TABLE crm.audit_retention_policy;
 
 
---changeset rm:0021-audit-retention-governance-lock dbms:postgresql
+--changeset rm:0021-audit-retention-governance-lock dbms:postgresql splitStatements:false
 -- Governance writes serialize against the nightly cleanup transaction.
 -- The row-batch worker holds the matching advisory transaction lock.
 CREATE FUNCTION crm.audit_retention_governance_lock() RETURNS trigger
