@@ -456,3 +456,22 @@ Fast Path означает **нет SQL именно за DEK при cache HIT**
 | KMS-32 | Batch rollback и повтор | Нет двойного счёта, нет частично мигрированного пакета |
 
 **Граница готовности:** проектирование R1.1 не означает работающий код. Сначала DDL/JPA и envelope, потом тесты decrypt и Caffeine, потом nightly, затем promotion и recovery. `migration.enabled=false` и автоматическая перезапись слотов запрещена до подтверждения KMS-21..KMS-32 на H2 и PostgreSQL.
+
+
+## 21. Обязательная квалификация внутреннего шифрования (RM-KMS-QUAL-R1)
+
+**Нормативное приложение:** [RM-KMS-QUAL-R1 — матрица 80 новых тестовых сценариев](RM-KMS-QUAL-R1.md). Оно является неотъемлемой частью этого ТЗ и расширяет ранее определённые `KMS-01..32` до **112 сценариев** (идентификаторов; один сценарий может иметь несколько параметризованных реализаций).
+
+Группы:
+- `CRYPT-01..20` — AES-256-GCM, UTF-8, round-trip, nonce/tag/AAD, tamper, известные KAT и property-based проверки;
+- `KEY-01..12` — генерация DEK, Root KEK wrapping, ошибки конфигурации, Caffeine, TTL, запрет архивного ключа в штатном пути;
+- `SLOT-01..12` — один ACTIVE, три слота и поколения, SQL constraints, Liquibase миграция старой модели, crash/rollback;
+- `BATCH-01..16` — 0/1/99/100/101/201 клиентов, stats по полям, идемпотентность, concurrency, ночное окно, rollback/retry;
+- `REC-01..10` — отдельный Archive KEK, rewrap, независимый backup, восстановление старого snapshot, authorization;
+- `ENV-01..10` — профили `dev`/H2 и `test`/PostgreSQL, HASH, изоляция интеграционных тестов, DB failures, CI evidence.
+
+**Минимальные пороги test coverage:** ≥90% line и ≥85% branch для внутреннего пакета `kz.rm.security.kms` через JaCoCo, без исключения критичных crypto/rotation/recovery классов. Пороги — вспомогательная проверка, не доказательство стойкости AES или безопасности: все негативные сценарии и независимый test vector обязательны даже при 100% coverage.
+
+**Gate:** G0 Crypto → G1 Schema → G2 Data integrity → G3 Restore → G4 Release. Перед включением nightly worker и auto rotation required negative/concurrency tests должны быть GREEN в PostgreSQL, а восстановление из независимого архива подтверждено. До этого `migration.enabled=false`, safe-reuse запрещён, productionAdmission=HOLD.
+
+**Необязательные для dev smoke, но обязательные до production:** измерения p95/p99 на PostgreSQL, восстановление при потере локальной БД, анализ race-condition и тесты сохранности historical KEK. Не заявлять GREEN только по наличию спецификации.
