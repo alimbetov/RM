@@ -15,7 +15,7 @@ import java.util.UUID;
 
 /** Seller tenant-scoped read model. No buyer PII in the projection. */
 @Repository
-public class SalesOrderRepository {
+class SalesOrderRepository {
     private final JdbcTemplate jdbc;
     public SalesOrderRepository(JdbcTemplate jdbc) {this.jdbc=jdbc;}
 
