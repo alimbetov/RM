@@ -90,6 +90,18 @@ class StockBalanceQueryQualificationTest {
         assertThat(queries.search(trusted,one.tenant(),
                 new StockSearch(null,one.emptyItem(),false),0,10).getTotalElements())
                 .isEqualTo(1);
+        // Known foreign location/item UUIDs must not switch the selected tenant.
+        assertThat(queries.search(trusted,one.tenant(),
+                new StockSearch(two.location(),null,false),0,10).getTotalElements()).isZero();
+        assertThat(queries.search(trusted,one.tenant(),
+                new StockSearch(null,two.stockItem(),false),0,10).getTotalElements()).isZero();
+        assertThat(queries.search(trusted,one.tenant(),
+                new StockSearch(two.location(),two.stockItem(),true),0,10)
+                .getContent()).isEmpty();
+        assertThat(firstPage.getContent()).allSatisfy(row ->
+                assertThat(row.tenantId()).isEqualTo(one.tenant()));
+        assertThat(secondPage.getContent()).allSatisfy(row ->
+                assertThat(row.tenantId()).isEqualTo(one.tenant()));
         assertThatThrownBy(()->queries.search(null,one.tenant(),null,0,10))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->queries.search(trusted,two.tenant(),null,0,10))
