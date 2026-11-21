@@ -576,8 +576,8 @@ CREATE TABLE crm.customer (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     row_version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT pk_crm_customer PRIMARY KEY (tenant_id, id),
-    CONSTRAINT fk_crm_customer_tenant FOREIGN KEY (tenant_id) REFERENCES iam_workspace(id),
-    CONSTRAINT fk_crm_customer_kato FOREIGN KEY (kato_code) REFERENCES ref_kato_territory(code),
+    CONSTRAINT fk_crm_customer_tenant FOREIGN KEY (tenant_id) REFERENCES public.iam_workspace(id),
+    CONSTRAINT fk_crm_customer_kato FOREIGN KEY (kato_code) REFERENCES public.ref_kato_territory(code),
     CONSTRAINT ck_crm_customer_type CHECK (customer_type IN ('PERSON','COMPANY')),
     CONSTRAINT ck_crm_customer_label CHECK (
       (customer_type='PERSON' AND organization_label IS NULL)
