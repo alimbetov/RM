@@ -1,7 +1,7 @@
 # RM-R0 — Bootstrap
 
 ## Stack
-Java 21, Spring Boot 4.1.3, Maven, Spring MVC, JPA/Hibernate, Lombok, H2 (dev), PostgreSQL driver (future), JUnit.
+Java 21, Spring Boot 4.1.3, Maven, Spring MVC, JPA/Hibernate, Lombok, H2 (dev), PostgreSQL driver (future), Liquibase formatted SQL, JUnit.
 
 ## Run
 ```bash
@@ -15,7 +15,7 @@ Expected: `{"status":"UP","application":"RM"}`.
 - JDBC URL: `jdbc:h2:mem:rm`
 - Username: `sa`, password blank
 - Console: `http://localhost:8080/h2-console`
-- In-memory data is lost on application shutdown.
+- In-memory data is lost on application shutdown. Liquibase executes the master SQL changelog when the app starts and records applied changes in DATABASECHANGELOG and DATABASECHANGELOGLOCK.
 
 ## PostgreSQL later
 ```bash
@@ -30,4 +30,7 @@ The postgres profile is a **future placeholder**, not deployable until schema mi
 - One Spring Boot application with modules under `kz.rm`.
 - No CRM tables, KMS or crypto keys in the bootstrap milestone.
 - Do not add microservices, Redis or partitioned tables.
-- Future schema migrations will use Flyway, not Hibernate DDL in PostgreSQL.
+- All migrations use **Liquibase formatted SQL**. No Flyway, XML or YAML migration changelogs.
+- The OSS-compatible root is `src/main/resources/db/changelog/db.changelog-master.sql`; append new uniquely identified `--changeset` blocks, never edit already executed changesets.
+- For a later multi-file SQL layout, check whether the available Liquibase edition supports SQL `--include`; do not silently introduce XML or YAML.
+- Hibernate uses `ddl-auto=validate` in all profiles. Liquibase owns schema changes.
