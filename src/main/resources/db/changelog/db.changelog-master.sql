@@ -1061,3 +1061,24 @@ CREATE TABLE crm.audit_retention_run (
 --rollback DROP TABLE crm.audit_retention_run;
 --rollback DROP TABLE crm.audit_retention_hold;
 --rollback DROP TABLE crm.audit_retention_policy;
+
+
+--changeset rm:0021-audit-retention-governance-lock dbms:postgresql
+-- Governance writes serialize against the nightly cleanup transaction.
+-- The row-batch worker holds the matching advisory transaction lock.
+CREATE FUNCTION crm.audit_retention_governance_lock() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(701121,1);
+  RETURN NULL;
+END;
+$$;
+CREATE TRIGGER trg_audit_retention_policy_lock
+BEFORE INSERT OR UPDATE OR DELETE ON crm.audit_retention_policy
+FOR EACH STATEMENT EXECUTE FUNCTION crm.audit_retention_governance_lock();
+CREATE TRIGGER trg_audit_retention_hold_lock
+BEFORE INSERT OR UPDATE OR DELETE ON crm.audit_retention_hold
+FOR EACH STATEMENT EXECUTE FUNCTION crm.audit_retention_governance_lock();
+--rollback DROP TRIGGER trg_audit_retention_hold_lock ON crm.audit_retention_hold;
+--rollback DROP TRIGGER trg_audit_retention_policy_lock ON crm.audit_retention_policy;
+--rollback DROP FUNCTION crm.audit_retention_governance_lock();
