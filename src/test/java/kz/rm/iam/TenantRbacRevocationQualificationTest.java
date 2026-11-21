@@ -150,4 +150,72 @@ class TenantRbacRevocationQualificationTest {
             assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
         }
     }
+
+    @Test void accountSuspensionWaitsForAlreadyAdmittedCommand() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var admitted=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                admitted.countDown();
+                await(finish);
+                return true;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var suspend=pool.submit(()->tx.execute(status->{
+                jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",f.staff());
+                return true;
+            }));
+            try {
+                assertThatThrownBy(()->suspend.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(command.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(suspend.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThatThrownBy(()->authorization.require(f.staff(),f.tenant(),
+                DomainPermission.INVENTORY_RECEIVE)).isInstanceOf(SecurityException.class);
+    }
+
+    @Test void suspendedAccountIsDeniedAfterWaitingForStatusUpdate() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var lockHeld=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var suspend=pool.submit(()->tx.execute(status->{
+                jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",f.staff());
+                lockHeld.countDown();
+                await(finish);
+                return true;
+            }));
+            assertThat(lockHeld.await(10,TimeUnit.SECONDS)).isTrue();
+            var command=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
+                        authorization.requireForCommand(f.staff(),f.tenant(),
+                                DomainPermission.INVENTORY_RECEIVE);
+                        return true;
+                    });
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            });
+            try {
+                assertThatThrownBy(()->command.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(suspend.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+    }
+
 }
