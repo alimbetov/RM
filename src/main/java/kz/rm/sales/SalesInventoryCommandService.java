@@ -80,7 +80,14 @@ public class SalesInventoryCommandService {
         authorization.require(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
-        if("CANCELLED".equals(state))return new CommandResult(orderId,state,0);
+        if("CANCELLED".equals(state)) {
+            Integer remaining=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,tenantId,orderId);
+            if(remaining!=0)throw new IllegalStateException("Cancelled order still has active reserves");
+            return new CommandResult(orderId,state,0);
+        }
         if("COMPLETED".equals(state) || "OUT_FOR_DELIVERY".equals(state)
                 || "READY_FOR_PICKUP".equals(state) || "REJECTED".equals(state))
             throw new IllegalStateException("Order cannot be cancelled");
@@ -106,7 +113,16 @@ public class SalesInventoryCommandService {
         authorization.require(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
-        if("COMPLETED".equals(state))return new CommandResult(orderId,state,0);
+        if("COMPLETED".equals(state)) {
+            int expected=lines(tenantId,orderId).size();
+            Integer completed=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state='FULFILLED'
+                """,Integer.class,tenantId,orderId);
+            if(expected==0 || completed!=expected)
+                throw new IllegalStateException("Completed order has inconsistent fulfillment");
+            return new CommandResult(orderId,state,0);
+        }
         if(!"CONFIRMED".equals(state) && !"PREPARING".equals(state))
             throw new IllegalStateException("Order not ready for fulfillment");
         int lineCount=lines(tenantId,orderId).size();
