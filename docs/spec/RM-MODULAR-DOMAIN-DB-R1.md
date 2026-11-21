@@ -157,3 +157,8 @@ kz.rm.crm/
 ## Поля, шифрование и жизненный цикл удаления
 
 **Нормативная проектная матрица:** [RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1](RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1.md). Для каждого модуля определены обязательные бизнес/технические поля, классификация PII/секретов, KMS-envelopes и blind-index candidates, а также differentiated lifecycle: soft-delete для изменяемых карточек/черновиков, correction/void для проведённых операций и append-only для финансовых/аудитных событий. Soft delete **не** является privacy erasure. `deleted_at` добавлять только по обоснованному use case; не дублировать его с `ARCHIVED` без различия семантики.
+
+
+## Публичная витрина, автозаказ и покупательский кабинет
+
+**Нормативное дополнительное ТЗ:** [RM-STOREFRONT-AUTOORDER-R1](RM-STOREFRONT-AUTOORDER-R1.md). Новый модуль STOREFRONT с префиксом `store_` и целевыми таблицами `crm.store_front`, `crm.store_setting`, `crm.store_front_i18n`. Автозаказ **всегда** требует email, при отсутствии аккаунта IAM автоматически создаёт `PENDING_VERIFICATION` пользователя. При существующем аккаунте нельзя делать login или связывать доступ к чужим заказам на основе одного введённого email: требуется подтверждение владения адресом и аутентификация. `tenant_id` всегда продавца, `buyer_user_id` — глобальная IAM identity; покупатель не получает `ORG_MEMBER` продавца. Заказы остаются в SALES, связь покупателя с seller CRM — `crm.crm_buyer_link`; новый код не создавался. Четыре языка, FILES, tenant security, consent и исторические статусы обязательны.
