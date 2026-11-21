@@ -193,13 +193,29 @@ public class TenantRoleService {
     }
 
     private void lockAndAuthorize(UUID actorId,UUID tenantId) {
-        authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
-        UUID locked=jdbc.queryForObject("""
-            SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE
-            """,UUID.class,tenantId);
+        if(actorId==null || tenantId==null)
+            throw new SecurityException("Verified owner and tenant required");
+        // Match the command admission order. The actor lock also fences global
+        // suspension; the tenant lock fences member and RBAC mutations.
+        String status=jdbc.query("""
+                SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
+                """,rs->rs.next()?rs.getString(1):null,actorId);
+        if(!"ACTIVE".equals(status))
+            throw new SecurityException("Organization owner account inactive");
+        UUID locked=jdbc.query("""
+                SELECT id FROM public.iam_workspace
+                WHERE id=? AND kind='ORGANIZATION' FOR UPDATE
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenantId);
         if(locked==null)throw new SecurityException("Tenant not found");
-        // Re-evaluate after acquiring serialization lock.
-        authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
+        // A JDBC read after acquiring the workspace lock avoids JPA L1 cached
+        // OWNER/membership state from before a concurrent suspension.
+        boolean activeOwner=jdbc.query("""
+                SELECT 1 FROM public.iam_workspace w
+                JOIN public.iam_org_membership m ON m.organization_id=w.organization_id
+                WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
+                  AND m.user_id=? AND m.role='OWNER' AND m.status='ACTIVE'
+                """,(org.springframework.jdbc.core.ResultSetExtractor<Boolean>)rs->rs.next(),tenantId,actorId);
+        if(!activeOwner)throw new SecurityException("Active organization owner required");
     }
 
     private void requireRole(UUID tenantId,UUID roleId) {

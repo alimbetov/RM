@@ -26,6 +26,8 @@ public class TenantAuthorization {
     private final UserAccountRepository users;
     private final JdbcTemplate jdbc;
     private String commandTenantLockSql;
+    private String commandActorLockSql;
+    private record FreshMember(UUID organizationId, OrganizationMembershipEntity.Role role) {}
 
     @PostConstruct
     void initializeCommandLock() {
@@ -33,9 +35,10 @@ public class TenantAuthorization {
                 connection.getMetaData().getDatabaseProductName());
         // PostgreSQL shared row locks let different employee commands run in parallel;
         // H2 uses its supported exclusive row lock for the test-only compatibility path.
-        commandTenantLockSql="SELECT id FROM public.iam_workspace WHERE id=? " +
-                (database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
-                        ? "FOR SHARE" : "FOR UPDATE");
+        String lockMode=database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
+                ? "FOR SHARE" : "FOR UPDATE";
+        commandActorLockSql="SELECT status FROM public.iam_user_account WHERE id=? " + lockMode;
+        commandTenantLockSql="SELECT id FROM public.iam_workspace WHERE id=? " + lockMode;
     }
 
     /**
@@ -77,11 +80,39 @@ public class TenantAuthorization {
     public Decision requireForCommand(UUID actorId,UUID tenantId,DomainPermission permission) {
         if(actorId==null || tenantId==null || permission==null)
             throw new SecurityException("Authenticated actor, tenant and permission required");
+        // A global account status UPDATE conflicts with this row lock, so an
+        // account suspension cannot commit across an admitted business command.
+        // Lock actor first, tenant second; future status writers must obey the
+        // same lock order and tenant membership writers must fence on workspace.
+        String actorStatus=jdbc.query(commandActorLockSql,rs->
+                rs.next()?rs.getString(1):null,actorId);
+        if(!"ACTIVE".equals(actorStatus))
+            throw new SecurityException("Actor inactive or unknown");
         UUID locked=jdbc.query(commandTenantLockSql,rs->
                 rs.next()?rs.getObject(1,UUID.class):null,tenantId);
         if(locked==null || !locked.equals(tenantId))
             throw new SecurityException("Tenant unavailable");
+
+        // A JPA persistence context may already contain an ACTIVE membership or
+        // workspace loaded before another transaction suspended it. The tenant
+        // lock serializes trusted status writers; re-read current DB status
+        // after admission, and fail closed if JPA returns a stale role.
+        FreshMember fresh=jdbc.query("""
+                SELECT w.organization_id,m.role
+                FROM public.iam_workspace w
+                JOIN public.iam_org_membership m
+                  ON m.organization_id=w.organization_id AND m.user_id=?
+                WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
+                  AND m.status='ACTIVE'
+                """,rs->rs.next()
+                ?new FreshMember(rs.getObject(1,UUID.class),
+                    OrganizationMembershipEntity.Role.valueOf(rs.getString(2))):null,
+                actorId,tenantId);
+        if(fresh==null) throw new SecurityException("Active organization membership required");
         Decision checked=require(actorId,tenantId,permission);
+        if(!fresh.organizationId().equals(checked.organizationId()) ||
+                fresh.role()!=checked.role())
+            throw new SecurityException("Stale membership decision");
         if(!TransactionSynchronizationManager.isSynchronizationActive())
             throw new IllegalStateException("Transactional synchronization required");
         TransactionSynchronization marker=new TransactionSynchronization() {};

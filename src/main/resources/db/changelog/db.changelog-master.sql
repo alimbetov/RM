@@ -1390,3 +1390,47 @@ ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHE
 --rollback ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
 --rollback ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
 --rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED','RBAC_ENABLED'));
+
+
+--changeset rm:0034-tenant-access-status-evidence
+-- Lifecycle events extend the existing immutable tenant evidence, not historical changeset 0033.
+ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+ ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+  'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
+  'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED'));
+--rollback ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+--rollback ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+--rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+--rollback   'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED'));
+
+--changeset rm:0035-account-status-audit
+-- Cross-tenant/global account changes need an independent immutable audit stream.
+CREATE TABLE public.iam_account_status_event (
+ id UUID NOT NULL PRIMARY KEY,
+ actor_user_id UUID NOT NULL,
+ target_user_id UUID NOT NULL,
+ from_status VARCHAR(20) NOT NULL,
+ to_status VARCHAR(20) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_account_status_actor FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_account_status_target FOREIGN KEY(target_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_account_status_transition CHECK(
+   (from_status='ACTIVE' AND to_status='SUSPENDED')
+   OR (from_status='SUSPENDED' AND to_status='ACTIVE'))
+);
+CREATE INDEX idx_account_status_event_target ON public.iam_account_status_event(target_user_id,occurred_at DESC);
+--rollback DROP TABLE public.iam_account_status_event;
+
+--changeset rm:0036-account-status-audit-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION public.iam_reject_account_status_event_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Account status history is immutable';
+END;
+$$;
+CREATE TRIGGER trg_iam_account_status_event_immutable
+BEFORE UPDATE OR DELETE ON public.iam_account_status_event
+FOR EACH ROW EXECUTE FUNCTION public.iam_reject_account_status_event_mutation();
+--rollback DROP TRIGGER trg_iam_account_status_event_immutable ON public.iam_account_status_event;
+--rollback DROP FUNCTION public.iam_reject_account_status_event_mutation();

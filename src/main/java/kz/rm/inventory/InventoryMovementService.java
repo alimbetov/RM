@@ -14,11 +14,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
- * Application port for a tenant-scoped stock adjustment. Locked balance ensures
+ * Internal persistence component for tenant-scoped stock adjustments. Locked balance ensures
  * atomic balance + immutable movement under concurrent workers. No stock-history
  * retention is enabled: legal classification must precede any purge.
- * caller tenant/actor must be derived by a trusted authenticated adapter before
- * making this internal service public.
+ * Never expose raw mutation overloads outside the inventory package.
+ * Call via InventoryAuthorizedCommandService after transaction-bound RBAC admission.
  */
 @Service
 public class InventoryMovementService {
@@ -38,7 +38,7 @@ public class InventoryMovementService {
     }
 
     @Transactional
-    public Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
+    Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
                            String requestKey, BigDecimal delta, Reason reason) {
         if (tenantId==null || locationId==null || itemId==null
                 || requestKey==null || !requestKey.matches("[A-Za-z0-9_-]{8,100}")
@@ -59,14 +59,6 @@ public class InventoryMovementService {
         jdbc.queryForObject(
                 "SELECT bucket FROM crm.inv_movement_request_lock WHERE bucket=? FOR UPDATE",
                 Integer.class,stripe);
-        // Serialize by the exact tenant/location/SKU stock row, across all pods.
-        List<BigDecimal[]> balance=jdbc.query("""
-            SELECT on_hand,reserved FROM crm.inv_stock_balance
-            WHERE tenant_id=? AND location_id=? AND item_id=? FOR UPDATE
-            """,(rs,n)->new BigDecimal[]{rs.getBigDecimal(1),rs.getBigDecimal(2)},
-                tenantId,locationId,itemId);
-        if (balance.isEmpty()) throw new IllegalArgumentException("Stock position not initialized");
-
         // Same request must return its original immutable ledger entry.
         var recorded=jdbc.query("""
             SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after,reason_code
@@ -85,6 +77,14 @@ public class InventoryMovementService {
                 throw new IllegalArgumentException("Idempotency key reused with different movement");
             return old;
         }
+
+        // Serialize by the exact tenant/location/SKU stock row, across all pods.
+        List<BigDecimal[]> balance=jdbc.query("""
+            SELECT on_hand,reserved FROM crm.inv_stock_balance
+            WHERE tenant_id=? AND location_id=? AND item_id=? FOR UPDATE
+            """,(rs,n)->new BigDecimal[]{rs.getBigDecimal(1),rs.getBigDecimal(2)},
+                tenantId,locationId,itemId);
+        if (balance.isEmpty()) throw new IllegalArgumentException("Stock position not initialized");
 
         BigDecimal before=balance.getFirst()[0],reserved=balance.getFirst()[1];
         BigDecimal after=before.add(delta);
