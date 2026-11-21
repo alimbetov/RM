@@ -53,3 +53,8 @@ All 15 bounded contexts are registered in `kz.rm.architecture.DomainModule`, eac
 6. INVENTORY+FINANCE, then MARKETING/TASKS/AUDIT and SUBSCRIPTION persistence in independently testable vertical slices.
 
 This document records the boundary of implementation; **a registered domain is not a production-ready business module**.
+
+
+## Ревизия DOMAIN-REVIEW-R1 — 2026-11-21
+
+Проведён жёсткий анализ actual Java/Liquibase/CI: [RM-DOMAIN-TECHNICAL-AUDIT-2026-11-21](../reviews/RM-DOMAIN-TECHNICAL-AUDIT-2026-11-21.md). **Реестр DomainModule больше не хранит Boolean о готовности модулей**; единственная его ответственность — идентичность модуля, пакет и префикс. Проверены двойные префиксы имён таблиц и лимит PostgreSQL идентификаторов. Остаются P0-gates: проверка actor в OrganizationLocationService, конкурентный checkout, защита legacy email identity и OIDC/outbox sender. Все новые модули CONTRACT ONLY до собственных persistence и integration test.
