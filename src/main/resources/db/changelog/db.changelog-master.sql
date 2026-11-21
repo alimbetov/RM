@@ -1736,3 +1736,17 @@ INSERT INTO crm.consent_request_lock(bucket)
 --rollback DROP TABLE crm.consent_request_lock;
 --rollback DROP INDEX uk_crm_consent_request_key;
 --rollback ALTER TABLE crm.email_consent_event DROP COLUMN request_key;
+
+--changeset rm:0053-crm-email-consent-immutable dbms:postgresql splitStatements:false
+-- Consent grants and revocations are durable evidence: only append a new event.
+CREATE FUNCTION crm.reject_email_consent_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CRM consent history is immutable';
+END;
+$$;
+CREATE TRIGGER trg_crm_consent_immutable
+BEFORE UPDATE OR DELETE ON crm.email_consent_event
+FOR EACH ROW EXECUTE FUNCTION crm.reject_email_consent_mutation();
+--rollback DROP TRIGGER trg_crm_consent_immutable ON crm.email_consent_event;
+--rollback DROP FUNCTION crm.reject_email_consent_mutation();
