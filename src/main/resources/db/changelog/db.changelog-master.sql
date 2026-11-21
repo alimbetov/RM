@@ -643,3 +643,114 @@ CREATE INDEX idx_crm_consent_latest ON crm.email_consent_event(tenant_id,contact
 --rollback DROP TABLE crm.customer;
 --rollback DROP SCHEMA crm_pii;
 --rollback DROP SCHEMA crm;
+
+
+--changeset rm:0014-autoorder-r1-foundation
+-- Email identity is global IAM-owned; seller orders remain tenant-owned.
+CREATE TABLE iam_email_identity (
+  id UUID NOT NULL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  lookup_hmac BYTEA NOT NULL,
+  email_envelope BYTEA NOT NULL,
+  verified_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT fk_iam_email_identity_user FOREIGN KEY (user_id) REFERENCES iam_user_account(id),
+  CONSTRAINT uk_iam_email_lookup UNIQUE (lookup_hmac),
+  CONSTRAINT uk_iam_email_identity_user UNIQUE (user_id)
+);
+CREATE TABLE iam_email_verification_challenge (
+  id UUID NOT NULL PRIMARY KEY,
+  email_identity_id UUID NOT NULL,
+  token_sha256 BYTEA NOT NULL,
+  token_envelope BYTEA NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  consumed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT fk_iam_email_challenge_identity FOREIGN KEY (email_identity_id) REFERENCES iam_email_identity(id),
+  CONSTRAINT uk_iam_email_token UNIQUE (token_sha256)
+);
+CREATE INDEX idx_iam_email_challenge_active ON iam_email_verification_challenge(email_identity_id, expires_at);
+CREATE TABLE crm.store_front (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  slug VARCHAR(100) NOT NULL,
+  state VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_store_front PRIMARY KEY (tenant_id,id),
+  CONSTRAINT uk_store_slug UNIQUE (slug),
+  CONSTRAINT uk_store_tenant UNIQUE (tenant_id),
+  CONSTRAINT fk_store_tenant FOREIGN KEY (tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT ck_store_state CHECK (state IN ('DRAFT','PUBLISHED','PAUSED'))
+);
+-- Minimal server-authored offer: prevents client-controlled prices. Superseded by CATALOG integration.
+CREATE TABLE crm.store_offer (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  title VARCHAR(240) NOT NULL,
+  unit_price NUMERIC(19,4) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  state VARCHAR(20) NOT NULL,
+  CONSTRAINT pk_store_offer PRIMARY KEY (tenant_id,id),
+  CONSTRAINT fk_store_offer_tenant FOREIGN KEY (tenant_id) REFERENCES crm.store_front(tenant_id),
+  CONSTRAINT ck_store_offer_price CHECK (unit_price >= 0),
+  CONSTRAINT ck_store_offer_state CHECK (state IN ('PUBLISHED','HIDDEN'))
+);
+CREATE TABLE crm.sales_order (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  pending_email_identity_id UUID NOT NULL,
+  buyer_user_id UUID,
+  status VARCHAR(24) NOT NULL,
+  total_amount NUMERIC(19,4) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_sales_order PRIMARY KEY (tenant_id,id),
+  CONSTRAINT fk_sales_order_tenant FOREIGN KEY (tenant_id) REFERENCES crm.store_front(tenant_id),
+  CONSTRAINT fk_sales_order_email_identity FOREIGN KEY (pending_email_identity_id) REFERENCES iam_email_identity(id),
+  CONSTRAINT fk_sales_order_buyer FOREIGN KEY (buyer_user_id) REFERENCES iam_user_account(id),
+  CONSTRAINT ck_sales_order_amount CHECK (total_amount >= 0),
+  CONSTRAINT ck_sales_order_status CHECK (status IN ('PLACED','CONFIRMED','PREPARING','READY_FOR_PICKUP','OUT_FOR_DELIVERY','COMPLETED','CANCELLED','REJECTED'))
+);
+CREATE INDEX idx_sales_order_buyer ON crm.sales_order(buyer_user_id, created_at);
+CREATE TABLE crm.sales_order_line (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  order_id UUID NOT NULL,
+  offer_id UUID NOT NULL,
+  title_snapshot VARCHAR(240) NOT NULL,
+  quantity INTEGER NOT NULL,
+  unit_price_snapshot NUMERIC(19,4) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  CONSTRAINT pk_sales_order_line PRIMARY KEY (tenant_id,id),
+  CONSTRAINT fk_sales_line_order FOREIGN KEY (tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id),
+  CONSTRAINT fk_sales_line_offer FOREIGN KEY (tenant_id,offer_id) REFERENCES crm.store_offer(tenant_id,id),
+  CONSTRAINT ck_sales_line_qty CHECK (quantity > 0)
+);
+CREATE TABLE crm.sales_checkout_receipt (
+  tenant_id UUID NOT NULL,
+  idempotency_key VARCHAR(100) NOT NULL,
+  request_sha256 BYTEA NOT NULL,
+  order_id UUID NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_sales_checkout_receipt PRIMARY KEY (tenant_id,idempotency_key),
+  CONSTRAINT fk_sales_receipt_order FOREIGN KEY (tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id)
+);
+CREATE TABLE crm.sales_order_status_event (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  order_id UUID NOT NULL,
+  event_type VARCHAR(24) NOT NULL,
+  occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_sales_order_status_event PRIMARY KEY (tenant_id,id),
+  CONSTRAINT fk_sales_order_status_event FOREIGN KEY (tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id)
+);
+--rollback DROP TABLE crm.sales_order_status_event;
+--rollback DROP TABLE crm.sales_checkout_receipt;
+--rollback DROP TABLE crm.sales_order_line;
+--rollback DROP TABLE crm.sales_order;
+--rollback DROP TABLE crm.store_offer;
+--rollback DROP TABLE crm.store_front;
+--rollback DROP TABLE iam_email_verification_challenge;
+--rollback DROP TABLE iam_email_identity;
