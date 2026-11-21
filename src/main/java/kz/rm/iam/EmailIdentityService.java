@@ -170,8 +170,8 @@ public class EmailIdentityService {
             Timestamp now=Timestamp.from(Instant.now());
             jdbc.update("""
                 INSERT INTO public.iam_user_account
-                  (id,display_name,status,created_at,updated_at,row_version)
-                VALUES (?,'Покупатель','PENDING',?,?,0)
+                  (id,status,created_at,updated_at,row_version)
+                VALUES (?,'PENDING',?,?,0)
                 """,userId,now,now);
         }
         jdbc.update("""
