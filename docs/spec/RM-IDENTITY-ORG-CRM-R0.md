@@ -1,12 +1,12 @@
 # RM-IDENTITY-ORG-CRM-R0 — Пользователи, тарифы, организации и CRM
 
-**Статус:** PROPOSED для согласования. Только проектирование сущностей; Liquibase/JPA не изменены.  
+**Статус:** APPROVED — семь пользовательских режимов утверждены; модель сущностей остаётся проектной до реализации. Liquibase/JPA не изменены.  
 **Ветка:** `feat/rm-kms-r1-implementation` (без merge в main).  
 **Архитектура:** Spring Boot modular monolith, PostgreSQL production, H2 dev, multi-pod, KMS tenant-scoped.
 
 ## 1. Семь пользовательских режимов
 
-Пользователь перечислил 6 режимов: platform admin, individual free, individual paid, organization free, organization paid, platform auditor. **Седьмой режим предложен предварительно: сотрудник организации**.
+**Утверждены все семь режимов.** Седьмой режим — сотрудник организации (`ORG_MEMBER`). Это окончательное продуктовое решение для R0; тарифные категории остаются независимыми от security roles.
 
 | Mode | Security Role | Workspace | Billing |
 |---|---|---|---|
@@ -74,6 +74,8 @@ IAM-01 global admin cannot be impersonated by org owner; IAM-02 auditor read-onl
 
 **Acceptance:** H2 dev smoke and isolated PostgreSQL integration, REST authorization negatives, actual multi-pod concurrency tests and backup/recovery for encrypted fields. This document does not imply implementation is complete.
 
-## 8. Pending product decision
+## 8. Approved product decision
 
-**Seven roles ambiguity:** only six modes explicitly named. Proposed seventh = `ORG_MEMBER` (company employee); confirm or replace before freezing the R1 role catalog.
+**APPROVED:** 7 account modes in section 1, including `ORG_MEMBER` (company employee). No ambiguity remains. Do not model FREE/PAID as global security roles; implement workspace-scoped subscription and separate platform/organization authorization. `PLATFORM_AUDITOR` is strictly read-only and has no automatic right to decrypt PII or key material.
+
+**Change control:** any alteration to the seven modes requires an explicit product decision and migration/security impact review.
