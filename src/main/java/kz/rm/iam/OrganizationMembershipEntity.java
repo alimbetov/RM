@@ -24,6 +24,7 @@ public class OrganizationMembershipEntity {
     public UUID getOrganizationId(){return organizationId;}
     public UUID getUserId(){return userId;}
     public Role getRole(){return role;}
+    public Status getStatus(){return status;}
     public enum Role { OWNER, ADMIN, MANAGER, MEMBER, VIEWER }
     public enum Status { INVITED, ACTIVE, SUSPENDED, LEFT }
 }
