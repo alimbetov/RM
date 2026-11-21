@@ -112,3 +112,26 @@ ALTER TABLE security.kms_tenant_key ADD CONSTRAINT ck_kms_next_generation CHECK 
 );
 --rollback ALTER TABLE security.kms_tenant_key DROP CONSTRAINT ck_kms_next_generation;
 --rollback ALTER TABLE security.kms_tenant_key DROP CONSTRAINT ck_kms_single_decrypt_only;
+
+
+--changeset rm:0007-kms-job-fencing
+-- One key-maintenance lease per tenant; existing tenant row is the lock anchor.
+-- Independent customer writers still require a separate generation/epoch barrier.
+ALTER TABLE security.kms_tenant_key
+    ADD COLUMN job_lease_owner UUID NULL;
+ALTER TABLE security.kms_tenant_key
+    ADD COLUMN job_lease_until TIMESTAMP WITH TIME ZONE NULL;
+ALTER TABLE security.kms_tenant_key
+    ADD COLUMN job_fence_token BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE security.kms_tenant_key
+    ADD CONSTRAINT ck_kms_job_lease_pair CHECK (
+        (job_lease_owner IS NULL AND job_lease_until IS NULL) OR
+        (job_lease_owner IS NOT NULL AND job_lease_until IS NOT NULL)
+    );
+ALTER TABLE security.kms_tenant_key
+    ADD CONSTRAINT ck_kms_fence_positive CHECK (job_fence_token >= 0);
+--rollback ALTER TABLE security.kms_tenant_key DROP CONSTRAINT ck_kms_fence_positive;
+--rollback ALTER TABLE security.kms_tenant_key DROP CONSTRAINT ck_kms_job_lease_pair;
+--rollback ALTER TABLE security.kms_tenant_key DROP COLUMN job_fence_token;
+--rollback ALTER TABLE security.kms_tenant_key DROP COLUMN job_lease_until;
+--rollback ALTER TABLE security.kms_tenant_key DROP COLUMN job_lease_owner;
