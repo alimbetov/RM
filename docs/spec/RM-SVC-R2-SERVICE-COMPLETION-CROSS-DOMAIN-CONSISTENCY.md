@@ -106,7 +106,7 @@ RM сохраняет **модульный монолит**, существую�
 ### 6.1 CRM Customer
 
 Методы application facade:
-- `getCustomer(actor,tenant,customerId)`, `searchCustomers(actor,tenant,filter,limit,cursor)`.
+- `getCustomer(actor,tenant,customerId)`, `searchCustomers(actor,tenant,filter,limit,cursor)` с **категорией клиента** (`categoryCode`) и **индикатором окончания договора** (`contractExpiry`, daysRemaining, expiry/status/date filters). Категория tenant-scoped и независима от PERSON/COMPANY; договор — самостоятельный aggregate/read projection (один клиент может иметь несколько договоров), не колонка `crm.customer.end_date`. Полный нормативный контракт — [RM-SVC-R2A §§6.1–6.2](RM-SVC-R2A-FILTERING-PAGINATION-CONTRACT.md).
 - `updateCustomer(actor,tenant,customerId,patch,expectedVersion,requestKey)`: разрешённые имя, KATO/region и утверждённые editable атрибуты, **без** смены `customer_type`, id/tenant и шифрованной модели PERSON.
 - `archiveCustomer(actor,tenant,customerId,expectedVersion,reason,requestKey)`: запрещает новые active-only операции CRM/FILES/SALES; не удаляет записи, существующие attachment и историю.
 - `restoreCustomer(actor,tenant,customerId,expectedVersion,requestKey)`: повторная проверка уникальности, GEO eligibility, прав и политики KMS/PII; terminally blocked legal states не восстанавливаются автоматически.
@@ -162,7 +162,7 @@ RM сохраняет **модульный монолит**, существую�
 
 ### 8.1 CATALOG
 
-Вводить **минимальный** CatalogItem aggregate с `sku`, `tenant`, `displayName`, `status`, `rowVersion`; параметры из уже имеющейся схемы использовать повторно. Команды:
+Вводить **минимальный** CatalogItem aggregate с `sku`, **`modelCode`**, `kind` (`PRODUCT/SERVICE`), `tenant`, `displayName`, `status`, `rowVersion`; **`modelCode` не равен SKU, и одна модель может иметь несколько SKU**. Фильтровать по modelCode equality/prefix и виду товара или услуги; параметры из уже имеющейся схемы использовать повторно. Команды:
 - `createItem`, `getItem`, `searchItems`, `updateItem`, `publishItem`, `archiveItem`
 - `createPriceRevision`, `activatePriceRevision` — неизменяемые ценовые ревизии с ISO currency, effective date, active status.
 - `attachItemMedia` только после typed CATALOG owner policy, без обхода FILES.
