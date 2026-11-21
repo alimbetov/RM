@@ -18,7 +18,7 @@ class SalesOrderQueryService {
     private final TenantAuthorization authorization;
     private final SalesOrderRepository orders;
 
-    @Transactional(readOnly=true)
+    @Transactional // shared IAM row locks require a writable PostgreSQL transaction
     public Page<SalesOrderDto> search(UUID authenticatedActorId,UUID tenantId,
                                       SalesOrderSearch filters,int page,int size) {
         authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.SALES_ORDER_READ);
