@@ -4,21 +4,27 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class KmsDeploymentGuardTest {
-    @Test void singleInstanceDefaultsAreAllowed() {
+    @Test void immutableKeysAllowMultiPod() {
+        assertThatCode(() -> new KmsDeploymentGuard("multi-pod", false, false))
+                .doesNotThrowAnyException();
+    }
+
+    @Test void singleJvmRemainsSupportedForLocalDevelopment() {
         assertThatCode(() -> new KmsDeploymentGuard("single-jvm", false, false))
                 .doesNotThrowAnyException();
     }
 
-    @Test void distributedConfigurationFailsClosed() {
-        assertThatThrownBy(() -> new KmsDeploymentGuard("multi-jvm", false, false))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("single-jvm");
+    @Test void unknownDeploymentConfigurationFailsClosed() {
+        assertThatThrownBy(() -> new KmsDeploymentGuard("unverified-mode", false, false))
+                .isInstanceOf(IllegalStateException.class);
     }
 
-    @Test void rotationCannotBeEnabledWithoutQualification() {
-        assertThatThrownBy(() -> new KmsDeploymentGuard("single-jvm", true, false))
-                .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> new KmsDeploymentGuard("single-jvm", false, true))
-                .isInstanceOf(IllegalStateException.class);
+    @Test void multiPodCannotEnableRotationOrMigrationWithoutFencing() {
+        assertThatThrownBy(() -> new KmsDeploymentGuard("multi-pod", true, false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("distributed");
+        assertThatThrownBy(() -> new KmsDeploymentGuard("multi-pod", false, true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("distributed");
     }
 }
