@@ -179,4 +179,30 @@ class IamUserOnboardingProcessQualificationTest {
                 WHERE tenant_id=? AND action_code='MEMBER_JOINED'
                 """,Integer.class,tenant)).isEqualTo(1);
     }
+
+    @Test void verifiedStatusWithoutOidcLinkCannotBecomeOwnerOrEmployee() {
+        UUID admin=admin(),owner=user("Trusted owner");
+        UUID emailOnly=UUID.randomUUID();
+        Timestamp now=Timestamp.from(Instant.now());
+        jdbc.update("""
+                INSERT INTO public.iam_user_account
+                  (id,display_name,status,created_at,updated_at,row_version)
+                VALUES (?,?,'ACTIVE',?,?,0)
+                """,emailOnly,"Email-only identity",now,now);
+
+        assertThatThrownBy(()->provisioning.provision(actor(admin),UUID.randomUUID(),
+                emailOnly,"Unlinked LLP","Unlinked","KZ"))
+                .isInstanceOf(SecurityException.class);
+        UUID tenant=UUID.randomUUID();
+        provisioning.provision(actor(admin),tenant,owner,
+                "Trusted LLP","Trusted","KZ");
+        assertThatThrownBy(()->enrollment.invite(actor(owner),tenant,emailOnly))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_org_membership m
+                JOIN public.iam_workspace w ON w.organization_id=m.organization_id
+                WHERE w.id=? AND m.user_id=?
+                """,Integer.class,tenant,emailOnly)).isZero();
+    }
+
 }
