@@ -6,10 +6,10 @@
 ## 1. Architecture
 
 - `SalesInventoryCommandService`: seller confirmation, cancellation and one-shot fulfillment. Order status change + inventory reservation or stock debit + immutable order/reservation/movement history commit in **one database transaction**. One order = one tenant; R1.2 uses one warehouse for all order lines.
-- `InventoryAuthorizedCommandService`: RBAC entry point for quantity-only receiving, stock correction, reserve, release, fulfillment. Existing `InventoryReservationService` and `InventoryMovementService` are low-level **internal persistence orchestration**. They must never be exposed as HTTP routes or worker API without the checked facade.
+- `InventoryAuthorizedCommandService`: RBAC entry point for quantity-only receiving and stock correction. It deliberately does **not** expose order-linked reserve/release/fulfill; those require the atomic SALES orchestrator. Existing `InventoryReservationService` and `InventoryMovementService` are low-level **internal persistence orchestration**. They must never be exposed as HTTP routes or worker API without the checked facade.
 - `TenantAuthorization`: requires active user, workspace and membership, plus per-tenant functional permission. Existing unconfigured tenants may read existing data but new write operations deny until RBAC is enabled and granted.
 - Two independent checks protect crossing SALES/INVENTORY boundaries: confirming requires `SALES_ORDER_CONFIRM` and `INVENTORY_RESERVE`; cancelling requires `SALES_ORDER_CANCEL` and `INVENTORY_RELEASE`; fulfilling requires `SALES_ORDER_FULFILL` and `INVENTORY_FULFILL`.
-- Standalone `receive`, `correct`, `reserve`, `release`, `fulfill` require their corresponding `INVENTORY_*` permission. These permissions are explicit enum entries; no wildcard `MANAGER` access.
+- Standalone `receive` / `correct` require `INVENTORY_RECEIVE` / `INVENTORY_ADJUST`. Reservation, release and fulfillment require **both** domain permissions through the SALES application service. These permissions are explicit enum entries; no wildcard `MANAGER` access.
 - **No new SQL tables** in this slice: existing `sales_order_status_event`, `inv_stock_reservation`, `inv_reservation_event`, `inv_stock_movement` are reused.
 
 ## 2. Order state transitions (internal)
@@ -23,7 +23,7 @@
 | fulfill | CONFIRMED/PREPARING | COMPLETED | fulfill all ACTIVE reservations; one stock debit and movement per line |
 | fulfill retry | COMPLETED | unchanged | no extra event |
 
-No cancellation after shipment, completion, or rejection. Completed order is a **minimal vertical milestone** only: do not interpret it as financial settlement, tax issuance, delivery evidence, or confirmed cost of sales. Real transport/delivery progression requires separate states and controlled transitions.
+No cancellation after shipment, completion, or rejection. Idempotent retries of CANCELLED/COMPLETED additionally verify that active/fulfilled reservation counts match the terminal state. Completed order is a **minimal vertical milestone** only: do not interpret it as financial settlement, tax issuance, delivery evidence, or confirmed cost of sales. Real transport/delivery progression requires separate states and controlled transitions.
 
 ## 3. Concurrency
 
