@@ -67,6 +67,12 @@ public class GlobalAccountStatusService {
                     """,Integer.class,targetUserId);
             if (ownerMemberships != null && ownerMemberships > 0)
                 throw new SecurityException("Active owner must relinquish ownership before suspension");
+            Integer platformAdmins = jdbc.queryForObject("""
+                    SELECT count(*) FROM public.iam_global_role_assignment
+                    WHERE user_id=? AND role='PLATFORM_ADMIN' AND revoked_at IS NULL
+                    """,Integer.class,targetUserId);
+            if (platformAdmins != null && platformAdmins > 0)
+                throw new SecurityException("Platform administrator role must be revoked before suspension");
         }
 
         int updated = jdbc.update("""
