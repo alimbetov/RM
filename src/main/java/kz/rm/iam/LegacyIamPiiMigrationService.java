@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -90,13 +89,33 @@ public class LegacyIamPiiMigrationService {
         return true;
     }
 
+    private record CipherProfile(byte[] displayName,byte[] phone) {}
+
     private void migrateProfile(Legacy row) {
-        Integer exists=jdbc.queryForObject("""
-            SELECT count(*) FROM iam_pii.user_profile_secret WHERE user_id=?
-            """,Integer.class,row.id());
-        if(exists!=null&&exists>0)return;
+        CipherProfile stored=jdbc.query("""
+            SELECT display_name_envelope,phone_envelope
+            FROM iam_pii.user_profile_secret WHERE user_id=?
+            """,rs->rs.next()?new CipherProfile(rs.getBytes(1),rs.getBytes(2)):null,row.id());
+        if(stored!=null) {
+            // Never discard a legacy update if it differs from a previously
+            // encrypted profile. Decryption also proves key/AAD availability.
+            String protectedName=profileCrypto.decrypt(row.id(),"display_name",stored.displayName());
+            String protectedPhone=stored.phone()==null?null:
+                    profileCrypto.decrypt(row.id(),"phone_e164",stored.phone());
+            if(row.name()!=null &&
+                    !GlobalUserProfileService.validateName(row.name()).equals(protectedName))
+                throw new SecurityException("Legacy profile conflicts with protected profile");
+            if(row.phone()!=null &&
+                    !java.util.Objects.equals(GlobalUserProfileService.validatePhone(row.phone()),
+                            protectedPhone))
+                throw new SecurityException("Legacy phone conflicts with protected profile");
+            return;
+        }
+        // PENDING checkout identities legitimately have an email and no name.
+        // They must not block migration or invent a personal display name.
+        if(row.name()==null && row.phone()==null)return;
         if(row.name()==null||row.name().isBlank())
-            throw new IllegalStateException("Legacy name missing: profile requires review");
+            throw new SecurityException("Legacy phone has no valid profile name");
         String displayName=GlobalUserProfileService.validateName(row.name());
         String phone=GlobalUserProfileService.validatePhone(row.phone());
         byte[] encryptedName=profileCrypto.encrypt(row.id(),"display_name",displayName);
