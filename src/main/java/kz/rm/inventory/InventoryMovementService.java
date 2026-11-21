@@ -8,6 +8,9 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Arrays;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -35,6 +38,16 @@ public class InventoryMovementService {
                 || delta.precision()>19)
             throw new IllegalArgumentException("Invalid stock movement");
 
+        // Lock tenant-wide request key FIRST: a retry targeting another stock row
+        // must see the existing request and fail deterministically, not on UNIQUE.
+        int stripe;
+        try {
+            stripe=Math.floorMod(Arrays.hashCode(MessageDigest.getInstance("SHA-256")
+                    .digest((tenantId+":"+requestKey).getBytes(StandardCharsets.UTF_8))),64);
+        } catch(Exception e) { throw new IllegalStateException("Cannot hash movement key",e); }
+        jdbc.queryForObject(
+                "SELECT bucket FROM crm.inv_movement_request_lock WHERE bucket=? FOR UPDATE",
+                Integer.class,stripe);
         // Serialize by the exact tenant/location/SKU stock row, across all pods.
         List<BigDecimal[]> balance=jdbc.query("""
             SELECT on_hand,reserved FROM crm.inv_stock_balance
@@ -59,9 +72,6 @@ public class InventoryMovementService {
             return old;
         }
 
-        // Request keys are unique across the tenant, not only this stock row.
-        // A second request with the same key for another stock row must not create
-        // a conflicting movement: query before mutation and serialize key domain.
         BigDecimal before=balance.getFirst()[0],reserved=balance.getFirst()[1];
         BigDecimal after=before.add(delta);
         if(after.precision()>19 || after.scale()>4 || after.signum()<0 ||
