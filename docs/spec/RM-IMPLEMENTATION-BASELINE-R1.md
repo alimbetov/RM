@@ -158,3 +158,8 @@ Migrate per-object with checksum verification at destination, atomic storage poi
 ## Domain foundation coverage (2026-11-21)
 
 All 15 named contexts now have a canonical module registry, Java source package and initial typed contract or pre-existing implementation. **This is not a claim that all tables/controllers/business operations are implemented.** Current coverage, prefix mappings and follow-on vertical-slice gates are maintained in [RM-DOMAIN-IMPLEMENTATION-PLAN-R1](RM-DOMAIN-IMPLEMENTATION-PLAN-R1.md). The `kz.rm.architecture.DomainModule` registry validates prefixes and package uniqueness. Existing IAM, KMS, GEO, CRM and preliminary AUTOORDER persistence are preserved; missing domain persistence is introduced in independent Liquibase changesets with PostgreSQL integration tests.
+
+
+## QUAL-RM-DOMAIN-R1.2 — единая IAM email-идентичность
+
+Зафиксирована кодовая граница: глобальные `EmailIdentityCrypto`, `EmailIdentityService` (email find-or-provision, one-time verification, durable outbox) принадлежат IAM, а `AutoOrderService` координирует seller-owned order и buyer claim, **не является владельцем email account**. Существующие legacy plaintext email, полноценный OIDC и SMTP worker ещё блокируют публичный admission. Состояние реализации, migration gates и acceptance: [QUAL-RM-DOMAIN-R1.2-IAM-IDENTITY-STANDARD](../../docs/implementation/QUAL-RM-DOMAIN-R1.2-IAM-IDENTITY-STANDARD.md). Изменение не создаёт публичные endpoints и не влияет на optional CRM-card rule.
