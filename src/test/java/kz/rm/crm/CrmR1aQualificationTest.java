@@ -485,6 +485,93 @@ class CrmR1aQualificationTest {
                 """,Integer.class,t.tenantId(),key)).isEqualTo(1);
     }
 
+
+    @Test void consentKeyDoesNotSurviveRollbackAndCanBeRetried() {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var company=secureCommands.createCompany(actor,t.tenantId(),"Rollback consent",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),company.id(),
+                "Consent user",null,null);
+        String key="rollback-"+UUID.randomUUID();
+        var tx=new TransactionTemplate(transactions);
+        assertThatThrownBy(()->tx.execute(status->{
+            secureCommands.recordEmailConsentOnce(actor,t.tenantId(),contact.id(),
+                    true,"MARKETING","v1","FORM",key);
+            throw new IllegalStateException("injected before commit");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event WHERE tenant_id=? AND request_key=?
+                """,Integer.class,t.tenantId(),key)).isZero();
+        UUID replay=secureCommands.recordEmailConsentOnce(actor,t.tenantId(),contact.id(),
+                true,"MARKETING","v1","FORM",key);
+        assertThat(secureCommands.recordEmailConsentOnce(actor,t.tenantId(),contact.id(),
+                true,"MARKETING","v1","FORM",key)).isEqualTo(replay);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event WHERE tenant_id=? AND request_key=?
+                """,Integer.class,t.tenantId(),key)).isEqualTo(1);
+    }
+
+    @Test void customerNameFilterEscapesSqlWildcardsAsLiteralText() {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        secureCommands.createCompany(actor,t.tenantId(),"Company_100%",null);
+        secureCommands.createCompany(actor,t.tenantId(),"CompanyX1000",null);
+        assertThat(secureQueries.customers(actor,t.tenantId(),
+                new CustomerSearch("COMPANY",null,null,"_100%"),0,10)
+                .getTotalElements()).isEqualTo(1);
+        assertThat(secureQueries.customers(actor,t.tenantId(),
+                new CustomerSearch("COMPANY",null,null,"\\\\"),
+                0,10).getTotalElements()).isZero();
+        assertThat(secureQueries.customers(actor,t.tenantId(),
+                new CustomerSearch("COMPANY",null,null,"company"),0,1)
+                .getTotalElements()).isEqualTo(2);
+    }
+
+    @Test void contactCiphertextSwapFailsClosedUnderPerRecordAad() {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var company=secureCommands.createCompany(actor,t.tenantId(),"AAD test",null);
+        var first=secureCommands.addContact(actor,t.tenantId(),company.id(),
+                "First secret","first@example.kz",null);
+        var second=secureCommands.addContact(actor,t.tenantId(),company.id(),
+                "Second secret","second@example.kz",null);
+        byte[] stolen=jdbc.queryForObject("""
+                SELECT email_envelope FROM crm_pii.contact_secret WHERE tenant_id=? AND contact_id=?
+                """,byte[].class,t.tenantId(),first.id());
+        jdbc.update("""
+                UPDATE crm_pii.contact_secret SET email_envelope=? WHERE tenant_id=? AND contact_id=?
+                """,stolen,t.tenantId(),second.id());
+        assertThatThrownBy(()->secureQueries.getContact(actor,t.tenantId(),second.id()))
+                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(()->secureQueries.contacts(actor,t.tenantId(),null,0,10))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test void postgresConsentEvidenceRejectsDirectSqlUpdateAndDelete() throws Exception {
+        try(var connection=dataSource.getConnection()){
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var company=secureCommands.createCompany(actor,t.tenantId(),"Audit history",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),company.id(),
+                "Audit",null,null);
+        UUID event=secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),true,"MARKETING","v1","FORM","immutable-"+UUID.randomUUID());
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.email_consent_event SET granted=FALSE WHERE tenant_id=? AND id=?
+                """,t.tenantId(),event)).isInstanceOf(Exception.class)
+                .hasMessageContaining("immutable");
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.email_consent_event WHERE tenant_id=? AND id=?
+                """,t.tenantId(),event)).isInstanceOf(Exception.class)
+                .hasMessageContaining("immutable");
+        assertThat(jdbc.queryForObject("""
+                SELECT granted FROM crm.email_consent_event WHERE tenant_id=? AND id=?
+                """,Boolean.class,t.tenantId(),event)).isTrue();
+    }
+
     @Test void katoRejectsSubdistrictForCustomer() {
         var t=newTenant();
         assertThatThrownBy(()->crm.createCompany(t.actorId(),t.tenantId(),"Client","433243300"))
