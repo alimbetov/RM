@@ -10,5 +10,9 @@ interface FileStoragePort {
     Staged stage(UUID tenant,UUID fileId,InputStream bytes,long declaredSize,String mime) throws IOException;
     String promote(UUID tenant,UUID fileId,Staged staged) throws IOException;
     boolean exists(String key) throws IOException;
+    /** Verify checksum and length on persisted bytes, not merely path existence. */
+    boolean matches(String key,long expectedSize,String sha256) throws IOException;
+    /** Bounded file-scoped enumeration used only by trusted recovery logic. */
+    java.util.List<String> listKeys(UUID tenant,UUID fileId) throws IOException;
     void delete(String key) throws IOException;
 }
