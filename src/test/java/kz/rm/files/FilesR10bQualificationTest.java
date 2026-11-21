@@ -51,12 +51,12 @@ class FilesR10bQualificationTest {
                 "files-b-owner-"+UUID.randomUUID(),"Owner"));
         var uploader=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
                 "files-b-user-"+UUID.randomUUID(),"Uploader"));
-        var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
+        var organization=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
                 "Synthetic Storage","Synthetic","KZ"));
-        var space=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
-        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),
+        var space=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),organization.getId()));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),organization.getId(),
                 owner.getId(),OrganizationMembershipEntity.Role.OWNER));
-        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),organization.getId(),
                 uploader.getId(),OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",space.getId());
         var role=roles.createRole(owner.getId(),space.getId(),
