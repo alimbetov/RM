@@ -5,10 +5,16 @@ import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.*;
@@ -24,6 +30,7 @@ class IamAccessStatusQualificationTest {
     @Autowired OrganizationMembershipRepository members;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource source;
+    @Autowired PlatformTransactionManager manager;
 
     private record Fixture(UUID tenant, UUID owner, UUID coOwner, UUID staff, UUID admin) {}
     private UUID user(String name) {
@@ -161,6 +168,60 @@ class IamAccessStatusQualificationTest {
         assertThatThrownBy(()->jdbc.update("""
                 DELETE FROM public.iam_account_status_event WHERE target_user_id=?
                 """,f.staff())).isInstanceOf(Exception.class);
+    }
+
+
+    @Test void accountSuspensionCommittedFirstBlocksConcurrentMembershipRestore() throws Exception {
+        try(var connection=source.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Fixture f=createFixture();
+        access.suspendMember(actor(f.owner()),f.tenant(),f.staff());
+        var accountStatusLocked=new CountDownLatch(1);
+        var allowSuspendCommit=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var suspension=pool.submit(()->tx.execute(status->{
+                accounts.suspendAccount(actor(f.admin()),f.staff());
+                accountStatusLocked.countDown();
+                try {
+                    if(!allowSuspendCommit.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Timed out awaiting suspension commit");
+                } catch(InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(accountStatusLocked.await(10,TimeUnit.SECONDS)).isTrue();
+            var restoration=pool.submit(()->{
+                try {
+                    access.restoreMember(actor(f.owner()),f.tenant(),f.staff());
+                    return true;
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            });
+            try {
+                assertThatThrownBy(()->restoration.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                allowSuspendCommit.countDown();
+            }
+            assertThat(suspension.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(restoration.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_org_membership m
+                JOIN public.iam_workspace w ON w.organization_id=m.organization_id
+                WHERE w.id=? AND m.user_id=?
+                """,String.class,f.tenant(),f.staff())).isEqualTo("SUSPENDED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND action_code='MEMBER_RESTORED'
+                  AND target_user_id=?
+                """,Integer.class,f.tenant(),f.staff())).isZero();
     }
 
 }
