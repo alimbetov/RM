@@ -419,4 +419,45 @@ class TenantRbacRevocationQualificationTest {
         }
     }
 
+
+    @Test void cachedOwnerMembershipCannotCreateRoleAfterSuspension() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        UUID organizationId=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,f.tenant());
+        UUID otherOwner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "race-co-owner-"+UUID.randomUUID(),"Second owner")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                organizationId,otherOwner,OrganizationMembershipEntity.Role.OWNER));
+        var loaded=new CountDownLatch(1);
+        var proceed=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var roleChange=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
+                        var cached=memberships.findByOrganizationIdAndUserId(
+                                organizationId,f.owner()).orElseThrow();
+                        assertThat(cached.getRole()).isEqualTo(OrganizationMembershipEntity.Role.OWNER);
+                        assertThat(cached.getStatus()).isEqualTo(OrganizationMembershipEntity.Status.ACTIVE);
+                        loaded.countDown();
+                        await(proceed);
+                        roles.createRole(f.owner(),f.tenant(),"STALE_ADMIN","Must be denied");
+                        return true;
+                    });
+                } catch(SecurityException | UnexpectedRollbackException denied) {
+                    return false;
+                }
+            });
+            assertThat(loaded.await(10,TimeUnit.SECONDS)).isTrue();
+            access.suspendMember(actor(otherOwner),f.tenant(),f.owner());
+            proceed.countDown();
+            assertThat(roleChange.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_role WHERE tenant_id=? AND role_code='STALE_ADMIN'
+                """,Integer.class,f.tenant())).isZero();
+    }
+
 }
