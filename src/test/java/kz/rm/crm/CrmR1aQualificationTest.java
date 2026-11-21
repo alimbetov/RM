@@ -34,6 +34,7 @@ class CrmR1aQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired TenantKeyService keys;
     @Autowired CrmCustomerService crm;
+    @Autowired CrmCustomerRepository customerMetadata;
     @Autowired AuthenticatedCrmCommands secureCommands;
     @Autowired AuthenticatedCrmQueries secureQueries;
     @Autowired PlatformTransactionManager transactions;
@@ -53,6 +54,39 @@ class CrmR1aQualificationTest {
         jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         keys.provision(workspace.getId());
         return new Tenant(workspace.getId(),user.getId());
+    }
+
+    @Test void metadataJpaRepositoryUsesCompositeTenantKeyAndNeverExposesPersonSecret() {
+        var one = newTenant();
+        var two = newTenant();
+        var person = secureCommands.createPerson(verified(one.actorId()), one.tenantId(),
+                "Sensitive Person Name", null);
+        var company = secureCommands.createCompany(verified(two.actorId()), two.tenantId(),
+                "Independent Tenant LLC", null);
+
+        // The same UUID must never resolve outside its tenant, even in the
+        // persistence layer, and metadata must not contain decrypted PERSON names.
+        var onePerson = customerMetadata.findByTenantIdAndId(one.tenantId(), person.id());
+        assertThat(onePerson).isPresent();
+        assertThat(onePerson.orElseThrow().getCustomerType())
+                .isEqualTo(CrmCustomerEntity.Type.PERSON);
+        assertThat(onePerson.orElseThrow().getOrganizationLabel()).isNull();
+        assertThat(onePerson.orElseThrow().getTenantId()).isEqualTo(one.tenantId());
+        assertThat(customerMetadata.findByTenantIdAndId(two.tenantId(), person.id()))
+                .isEmpty();
+        assertThat(customerMetadata.findByTenantIdAndId(one.tenantId(), company.id()))
+                .isEmpty();
+        assertThat(customerMetadata.findByTenantIdAndId(two.tenantId(), company.id()))
+                .hasValueSatisfying(row -> {
+                    assertThat(row.getOrganizationLabel()).isEqualTo("Independent Tenant LLC");
+                    assertThat(row.getStatus()).isEqualTo(CrmCustomerEntity.Status.ACTIVE);
+                });
+        assertThat(customerMetadata.findById(new CrmCustomerKey(one.tenantId(), person.id())))
+                .isPresent();
+        assertThat(customerMetadata.findById(new CrmCustomerKey(two.tenantId(), person.id())))
+                .isEmpty();
+        assertThat(customerMetadata.findById(new CrmCustomerKey(one.tenantId(), company.id())))
+                .isEmpty();
     }
 
     @Test void personAndContactSecretsStayEncryptedAndReloadAcrossInstance() {
