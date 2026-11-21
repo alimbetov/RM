@@ -3,6 +3,8 @@ package kz.rm.architecture;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.crm.AuthenticatedCrmCommands;
 import kz.rm.crm.AuthenticatedCrmQueries;
+import kz.rm.crm.dto.CustomerSearch;
+import kz.rm.crm.dto.ContactSearch;
 import kz.rm.crm.CrmCustomerService;
 import kz.rm.organization.AuthenticatedOrganizationLocations;
 import kz.rm.organization.OrganizationLocationEntity;
@@ -90,6 +92,17 @@ class DomainCommandBoundaryQualificationTest {
     @Test void crmAndOrganizationRawEntryPointsStayInternal() throws Exception {
         assertThat(AuthenticatedCrmCommands.class.getDeclaredMethod("createCompany",
                 VerifiedActor.class,UUID.class,String.class,String.class)).isNotNull();
+        assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("customers",
+                VerifiedActor.class,UUID.class,CustomerSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("contacts",
+                VerifiedActor.class,UUID.class,ContactSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(AuthenticatedCrmCommands.class.getDeclaredMethod("recordEmailConsentOnce",
+                VerifiedActor.class,UUID.class,UUID.class,boolean.class,
+                String.class,String.class,String.class,String.class)).isNotNull();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.crm.CrmSearchService").getModifiers()))
+                .isFalse();
         assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("getContact",
                 VerifiedActor.class,UUID.class,UUID.class)).isNotNull();
         assertThat(AuthenticatedOrganizationLocations.class.getDeclaredMethod("create",
