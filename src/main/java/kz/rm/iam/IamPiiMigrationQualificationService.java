@@ -138,6 +138,18 @@ public class IamPiiMigrationQualificationService {
     }
 
     private void verifyEncryptedStorage() {
+        // A genuinely empty database must not pass the cutover gate while the
+        // mandatory global IAM keys are missing or misconfigured.
+        UUID canary=UUID.fromString("00000000-0000-4000-8000-000000000001");
+        byte[] probe=profiles.encrypt(canary,"display_name","iam-pii-probe");
+        if(!"iam-pii-probe".equals(profiles.decrypt(canary,"display_name",probe)))
+            throw new SecurityException("Global IAM profile crypto unavailable");
+        if(profiles.phoneLookup("+77010000000").length!=32)
+            throw new SecurityException("Global IAM phone lookup unavailable");
+        byte[] mailProbe=emails.encrypt("pii-check@example.invalid");
+        if(!"pii-check@example.invalid".equals(emails.decrypt(mailProbe)) ||
+                emails.lookup("pii-check@example.invalid").length!=32)
+            throw new SecurityException("Global IAM email crypto unavailable");
         jdbc.query("""
             SELECT user_id,display_name_envelope,phone_envelope,phone_lookup_hmac
             FROM iam_pii.user_profile_secret
