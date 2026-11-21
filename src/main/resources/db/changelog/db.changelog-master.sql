@@ -34,3 +34,65 @@ CREATE TABLE security.tenant_key (
 );
 
 --rollback DROP TABLE security.tenant_key;
+
+
+--changeset rm:0004-three-slot-kms
+-- Preserve security.tenant_key as the legacy migration source. No destructive transfer is attempted.
+CREATE TABLE security.kms_tenant_key (
+    tenant_id UUID NOT NULL PRIMARY KEY,
+    key_a BYTEA, generation_a BIGINT, status_a VARCHAR(20) NOT NULL DEFAULT 'EMPTY',
+    remaining_a BIGINT NOT NULL DEFAULT 0, migrated_a BIGINT NOT NULL DEFAULT 0,
+    last_scan_a TIMESTAMP WITH TIME ZONE, wrapping_key_id_a VARCHAR(128),
+    key_b BYTEA, generation_b BIGINT, status_b VARCHAR(20) NOT NULL DEFAULT 'EMPTY',
+    remaining_b BIGINT NOT NULL DEFAULT 0, migrated_b BIGINT NOT NULL DEFAULT 0,
+    last_scan_b TIMESTAMP WITH TIME ZONE, wrapping_key_id_b VARCHAR(128),
+    key_c BYTEA, generation_c BIGINT, status_c VARCHAR(20) NOT NULL DEFAULT 'EMPTY',
+    remaining_c BIGINT NOT NULL DEFAULT 0, migrated_c BIGINT NOT NULL DEFAULT 0,
+    last_scan_c TIMESTAMP WITH TIME ZONE, wrapping_key_id_c VARCHAR(128),
+    active_slot CHAR(1) NOT NULL, ready_slot CHAR(1),
+    next_generation BIGINT NOT NULL, rotate_after TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_kms_key_status CHECK (
+        status_a IN ('EMPTY','ACTIVE','DECRYPT_ONLY','READY','REVOKED') AND
+        status_b IN ('EMPTY','ACTIVE','DECRYPT_ONLY','READY','REVOKED') AND
+        status_c IN ('EMPTY','ACTIVE','DECRYPT_ONLY','READY','REVOKED')),
+    CONSTRAINT ck_kms_a_present CHECK (
+        (status_a='EMPTY' AND key_a IS NULL AND generation_a IS NULL AND wrapping_key_id_a IS NULL)
+        OR (status_a<>'EMPTY' AND key_a IS NOT NULL AND generation_a > 0 AND wrapping_key_id_a IS NOT NULL)),
+    CONSTRAINT ck_kms_b_present CHECK (
+        (status_b='EMPTY' AND key_b IS NULL AND generation_b IS NULL AND wrapping_key_id_b IS NULL)
+        OR (status_b<>'EMPTY' AND key_b IS NOT NULL AND generation_b > 0 AND wrapping_key_id_b IS NOT NULL)),
+    CONSTRAINT ck_kms_c_present CHECK (
+        (status_c='EMPTY' AND key_c IS NULL AND generation_c IS NULL AND wrapping_key_id_c IS NULL)
+        OR (status_c<>'EMPTY' AND key_c IS NOT NULL AND generation_c > 0 AND wrapping_key_id_c IS NOT NULL)),
+    CONSTRAINT ck_kms_active CHECK (
+        (active_slot='A' AND status_a='ACTIVE' AND status_b<>'ACTIVE' AND status_c<>'ACTIVE')
+        OR (active_slot='B' AND status_b='ACTIVE' AND status_a<>'ACTIVE' AND status_c<>'ACTIVE')
+        OR (active_slot='C' AND status_c='ACTIVE' AND status_a<>'ACTIVE' AND status_b<>'ACTIVE')),
+    CONSTRAINT ck_kms_ready CHECK (
+        (ready_slot IS NULL AND status_a<>'READY' AND status_b<>'READY' AND status_c<>'READY')
+        OR (ready_slot='A' AND status_a='READY' AND status_b<>'READY' AND status_c<>'READY')
+        OR (ready_slot='B' AND status_b='READY' AND status_a<>'READY' AND status_c<>'READY')
+        OR (ready_slot='C' AND status_c='READY' AND status_a<>'READY' AND status_b<>'READY')),
+    CONSTRAINT ck_kms_positive CHECK (
+        remaining_a >= 0 AND migrated_a >= 0 AND remaining_b >= 0 AND migrated_b >= 0
+        AND remaining_c >= 0 AND migrated_c >= 0 AND next_generation > 1),
+    CONSTRAINT ck_kms_generations_distinct CHECK (
+        (generation_a IS NULL OR generation_b IS NULL OR generation_a <> generation_b)
+        AND (generation_a IS NULL OR generation_c IS NULL OR generation_a <> generation_c)
+        AND (generation_b IS NULL OR generation_c IS NULL OR generation_b <> generation_c))
+);
+--rollback DROP TABLE security.kms_tenant_key;
+
+--changeset rm:0005-kms-archive
+CREATE TABLE security.kms_tenant_key_archive (
+    tenant_id UUID NOT NULL,
+    key_generation BIGINT NOT NULL,
+    wrapped_key BYTEA NOT NULL,
+    wrapping_key_id VARCHAR(128) NOT NULL,
+    archived_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT pk_kms_tenant_key_archive PRIMARY KEY (tenant_id, key_generation),
+    CONSTRAINT ck_kms_archive_generation CHECK (key_generation > 0)
+);
+--rollback DROP TABLE security.kms_tenant_key_archive;
