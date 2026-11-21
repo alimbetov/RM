@@ -33,6 +33,7 @@ public class LegacyIamPiiMigrationService {
     }
 
     private record Legacy(UUID id,String name,String phone,String email) {}
+    private record ActiveEmailClaim(UUID userId,String pendingReason) {}
 
     @Transactional
     public int migrateBatch(int limit) {
@@ -138,15 +139,16 @@ public class LegacyIamPiiMigrationService {
         if(row.email()==null)return;
         String normalized=emailCrypto.normalize(row.email());
         byte[] lookup=emailCrypto.lookup(normalized);
-        List<String> activeClaims=jdbc.query("""
-            SELECT CAST(user_id AS VARCHAR(36)),pending_reason
-            FROM public.iam_email_identity WHERE active_lookup_hmac=?
-            """,(rs,n)->rs.getString(1)+"|"+rs.getString(2),lookup);
+        List<ActiveEmailClaim> activeClaims=jdbc.query("""
+            SELECT user_id,pending_reason FROM public.iam_email_identity
+            WHERE active_lookup_hmac=?
+            """,(rs,n)->new ActiveEmailClaim(
+                rs.getObject(1,UUID.class),rs.getString(2)),lookup);
         if(!activeClaims.isEmpty()) {
-            String[] claim=activeClaims.getFirst().split("\\|",-1);
-            if(!row.id().toString().equals(claim[0]))
+            ActiveEmailClaim claim=activeClaims.getFirst();
+            if(!row.id().equals(claim.userId()))
                 throw new SecurityException("Legacy email is claimed by another identity");
-            if("CHANGE_EMAIL".equals(claim[1]))
+            if("CHANGE_EMAIL".equals(claim.pendingReason()))
                 throw new SecurityException("Pending email change is not legacy email evidence");
             return;
         }
