@@ -892,4 +892,39 @@ class CrmR1aQualificationTest {
                 .isEqualTo(contract.rowVersion()+1);
     }
 
+
+    @Test void crmR12VerifiedActorAndTenantPermissionsCannotBeBypassed() {
+        var t=newTenant();
+        var owner=verified(t.actorId());
+        var customer=secureCommands.createCompany(owner,t.tenantId(),"RBAC customer",null);
+        var category=categoryService.create(owner,t.tenantId(),"RBAC","Protected");
+        var today=java.time.LocalDate.of(2026,11,22);
+        var contract=contractService.create(owner,t.tenantId(),customer.id(),"RBAC-001",
+                today,today.plusDays(60),today);
+        UUID orgId=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,t.tenantId());
+        var viewer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "r12-viewer-"+UUID.randomUUID(),"Viewer"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgId,
+                viewer.getId(),OrganizationMembershipEntity.Role.VIEWER));
+        var readOnlyActor=verified(viewer.getId());
+        assertThat(categoryService.get(readOnlyActor,t.tenantId(),category.id()).id())
+                .isEqualTo(category.id());
+        assertThat(contractService.get(readOnlyActor,t.tenantId(),contract.id(),today,30).id())
+                .isEqualTo(contract.id());
+        assertThatThrownBy(()->categoryService.create(readOnlyActor,t.tenantId(),"X","X"))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->categoryService.assignPrimary(readOnlyActor,t.tenantId(),
+                customer.id(),category.id())).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->contractService.changeStatus(readOnlyActor,t.tenantId(),
+                contract.id(),CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->contractService.create(readOnlyActor,t.tenantId(),
+                customer.id(),"DENIED",today,today,today)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->categoryService.get(null,t.tenantId(),category.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->contractService.list(null,t.tenantId(),null,today,30,0,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
 }
