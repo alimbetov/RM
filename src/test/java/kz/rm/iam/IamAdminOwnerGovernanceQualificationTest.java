@@ -185,7 +185,7 @@ class IamAdminOwnerGovernanceQualificationTest {
 
     @Test void emergencyRecoveryOnlyWithZeroActiveOwnersAndVerifiedTenantEmployee() {
         Fixture f=fixture();
-        assertThatThrownBy(()->recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff()))
+        assertThatThrownBy(()->recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff(),"INCIDENT_2026_RM"))
                 .isInstanceOf(SecurityException.class);
         UUID outsider=user();
         // Legacy broken/imported state is simulated only in test; normal services
@@ -194,9 +194,9 @@ class IamAdminOwnerGovernanceQualificationTest {
                 UPDATE public.iam_org_membership SET status='SUSPENDED'
                 WHERE user_id=? AND role='OWNER'
                 """,f.owner());
-        assertThatThrownBy(()->recovery.recoverOwner(actor(f.admin()),f.tenant(),outsider))
+        assertThatThrownBy(()->recovery.recoverOwner(actor(f.admin()),f.tenant(),outsider,"INCIDENT_2026_RM"))
                 .isInstanceOf(SecurityException.class);
-        recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff());
+        recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff(),"INCIDENT_2026_RM");
         authorization.require(f.staff(),f.tenant(),DomainPermission.TENANT_RBAC_MANAGE);
         assertThatThrownBy(()->authorization.require(f.admin(),f.tenant(),
                 DomainPermission.TENANT_RBAC_MANAGE)).isInstanceOf(SecurityException.class);
@@ -212,6 +212,10 @@ class IamAdminOwnerGovernanceQualificationTest {
                 SELECT count(*) FROM public.iam_tenant_rbac_event
                 WHERE tenant_id=? AND action_code='OWNER_RECOVERED'
                 """,Integer.class,f.tenant())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT reason_code FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND action_code='OWNER_RECOVERED'
+                """,String.class,f.tenant())).isEqualTo("INCIDENT_2026_RM");
     }
 
     @Test void twoConcurrentAcceptsAreIdempotentAndKeepOneOwner() throws Exception {
@@ -273,7 +277,7 @@ class IamAdminOwnerGovernanceQualificationTest {
         jdbc.update("""
                 UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?
                 """,f.tenant());
-        recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff());
+        recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff(),"INCIDENT_2026_RM");
         assertThatThrownBy(()->authorization.require(f.staff(),f.tenant(),
                 DomainPermission.TENANT_RBAC_MANAGE)).isInstanceOf(SecurityException.class);
         access.restoreTenant(actor(f.staff()),f.tenant());
@@ -295,12 +299,12 @@ class IamAdminOwnerGovernanceQualificationTest {
         try(var pool=Executors.newFixedThreadPool(2)) {
             var a=pool.submit(()->{
                 begin.await(5,TimeUnit.SECONDS);
-                try { recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff()); return true; }
+                try { recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff(),"INCIDENT_2026_RM"); return true; }
                 catch(SecurityException conflict) { return false; }
             });
             var b=pool.submit(()->{
                 begin.await(5,TimeUnit.SECONDS);
-                try { recovery.recoverOwner(actor(secondAdmin),f.tenant(),otherEmployee); return true; }
+                try { recovery.recoverOwner(actor(secondAdmin),f.tenant(),otherEmployee,"INCIDENT_2026_RM"); return true; }
                 catch(SecurityException conflict) { return false; }
             });
             begin.countDown();
