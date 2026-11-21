@@ -22,7 +22,7 @@ class OidcActorResolverQualificationTest {
         // In this unit test, verification is simulated by the decoder.
         // Production decoder verifies JWKS signature, issuer, audience and time.
         return token->Jwt.withTokenValue(token).header("alg","RS256")
-                .subject(subject).issuedAt(Instant.now().minusSeconds(1))
+                .subject(subject).issuedAt(Instant.now().minusSeconds(300))
                 .expiresAt(expires).build();
     }
 
