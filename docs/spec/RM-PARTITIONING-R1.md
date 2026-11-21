@@ -143,3 +143,10 @@ FOR VALUES WITH (MODULUS 8, REMAINDER 0);
 The existing audit key becomes `PRIMARY KEY(tenant_id,occurred_at,id)`; existing references by `(tenant_id,id)` alone **must not be introduced**. This is a branch-level physical prototype with automated PostgreSQL integration tests, **not** a production partitioning approval. Before deploying to an existing tenant database, prove there are no inbound audit foreign keys, verify production-scale migration time, counts, backups, PITR and partition-pruning benefit. A new date range overlapping DEFAULT requires an explicit data maintenance plan.
 
 See [RM-LIQUIBASE-PARTITIONING-R1](../implementation/RM-LIQUIBASE-PARTITIONING-R1.md) for the actual SQL migration, test matrix and release HOLD.
+
+
+## 10. Ночной retention 3–5 лет
+
+Нормативное дополнение: [RM-AUDIT-NIGHTLY-RETENTION-R1](../implementation/RM-AUDIT-NIGHTLY-RETENTION-R1.md). `rm:0020-audit-retention-governance` добавляет утверждаемую per-tenant политику `retention_years BETWEEN 3 AND 5`, legal holds и журнал очисток. PostgreSQL worker выполняет **ночной пакетный DELETE** из распределённых RANGE→HASH audit leaf tables, `FOR UPDATE SKIP LOCKED`, глобальный advisory transaction lock, по умолчанию до 10×500 строк на запуск, 02:30 Asia/Almaty. Включение — `RM_RETENTION_ENABLED=true` **после** policy/legal/backup/DB grant qualification; неутверждённый tenant и события с active hold сохраняются.
+
+**Важное разделение:** пакетная очистка строк и `DROP PARTITION` не эквивалентны. При смешении 3/4/5-летних политик и юридических запретов нельзя удалять целый годовой bucket. Retention-R1.2 должен проверять опустошение партиций и допуск detach/drop с DBA-процедурой. Финансовые операции и согласия не охвачены audit worker: их сроки требуют отдельной классификации.
