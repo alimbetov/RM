@@ -28,9 +28,8 @@ public class AutoOrderService {
 
     public record Line(UUID offerId,int quantity){}
     public record OrderReceipt(UUID orderId,String status){}
-    /** This is internal verification email payload, never an HTTP checkout response. */
-    public record VerificationDispatch(UUID challengeId,String email,String token){}
-    public record CheckoutResult(OrderReceipt order, VerificationDispatch verification){}
+    /** Safe to expose only after transport-level anti-abuse checks and authentication are implemented. */
+    public record CheckoutResult(OrderReceipt order){}
 
     @Transactional
     public CheckoutResult checkout(String slug, String email, String idempotencyKey, List<Line> lines) {
@@ -59,7 +58,7 @@ public class AutoOrderService {
                     throw new IllegalArgumentException("Idempotency key reused with different request");
                 return new OrderReceipt(rs.getObject(1,UUID.class),rs.getString(3));
             },tenant,idempotencyKey);
-        if(!existing.isEmpty()) return new CheckoutResult(existing.get(0),null);
+        if(!existing.isEmpty()) return new CheckoutResult(existing.get(0));
 
         // Server-owned prices and availability; no trust in client-provided title, totals or tenant.
         List<Offer> offers=new ArrayList<>();
@@ -98,10 +97,9 @@ public class AutoOrderService {
             INSERT INTO crm.sales_checkout_receipt(tenant_id,idempotency_key,request_sha256,order_id,created_at)
             VALUES (?,?,?,?,?)
             """,tenant,idempotencyKey,requestHash,orderId,now);
-        // Always require fresh proof for this checkout, including an existing verified account.
-        VerificationDispatch dispatch=createChallenge(identity.identityId(),normalized);
-        // Trusted adapter must persist/send dispatch DURABLY before enabling public checkout.
-        return new CheckoutResult(new OrderReceipt(orderId,"PLACED"),dispatch);
+        // Fresh proof is always required; token stays encrypted in an internal durable outbox.
+        createChallenge(identity.identityId());
+        return new CheckoutResult(new OrderReceipt(orderId,"PLACED"));
     }
 
     /**
@@ -187,7 +185,7 @@ public class AutoOrderService {
         return new Identity(identityId,userId,false);
     }
 
-    private VerificationDispatch createChallenge(UUID identityId,String normalized) {
+    private void createChallenge(UUID identityId) {
         String token=identityCrypto.token();
         UUID id=UUID.randomUUID();
         Instant now=Instant.now();
@@ -197,7 +195,12 @@ public class AutoOrderService {
             VALUES (?,?,?,?,?,?)
             """,id,identityId,identityCrypto.tokenHash(token),identityCrypto.encrypt(token),
                 Timestamp.from(now.plus(15,ChronoUnit.MINUTES)),Timestamp.from(now));
-        return new VerificationDispatch(id,normalized,token);
+        jdbc.update("""
+            INSERT INTO iam_email_delivery_outbox
+            (id,challenge_id,email_identity_id,state,next_attempt_at,created_at)
+            VALUES (?,?,?,'PENDING',?,?)
+            """,UUID.randomUUID(),id,identityId,Timestamp.from(now),Timestamp.from(now));
+        // No plaintext email or token leaves this transactional application method.
     }
 
     private static byte[] digest(String text){
