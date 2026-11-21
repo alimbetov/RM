@@ -378,6 +378,35 @@ class FilesR10bQualificationTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+
+    @Test void recoveryBatchIsTenantScopedAndSkipsActiveProcessing() throws Exception {
+        var s=setup();
+        var foreign=setup();
+        byte[] bytes=pdf();
+        var mine=draft(s,bytes);
+        var theirs=draft(foreign,bytes);
+        var myStage=storage.stage(s.tenant(),mine.fileId(),
+                new ByteArrayInputStream(bytes),bytes.length,"application/pdf");
+        var foreignStage=storage.stage(foreign.tenant(),theirs.fileId(),
+                new ByteArrayInputStream(bytes),bytes.length,"application/pdf");
+        assertThat(storage.exists(myStage.key())).isTrue();
+        assertThat(storage.exists(foreignStage.key())).isTrue();
+        var myClaim=metadata.claim(s.uploader(),s.tenant(),mine.fileId());
+        var busy=recovery.reconcileBatch(s.tenant(),10);
+        assertThat(busy.busy()).isEqualTo(1);
+        assertThat(storage.exists(myStage.key())).isTrue();
+        metadata.release(s.uploader(),s.tenant(),mine.fileId(),myClaim.token());
+        var cleaned=recovery.reconcileBatch(s.tenant(),10);
+        assertThat(cleaned.examined()).isEqualTo(1);
+        assertThat(cleaned.cleaned()).isEqualTo(1);
+        assertThat(storage.exists(myStage.key())).isFalse();
+        assertThat(storage.exists(foreignStage.key())).isTrue();
+        assertThatThrownBy(()->recovery.reconcileBatch(s.tenant(),101))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->recovery.reconcileBatch(null,1))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void unavailableDefaultScannerNeverClaimsClean() {
         assertThat(new UnavailableFileScanner().scan("synthetic")).isEqualTo(FileScanPort.Verdict.ERROR);
     }
