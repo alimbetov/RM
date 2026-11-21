@@ -1750,3 +1750,31 @@ BEFORE UPDATE OR DELETE ON crm.email_consent_event
 FOR EACH ROW EXECUTE FUNCTION crm.reject_email_consent_mutation();
 --rollback DROP TRIGGER trg_crm_consent_immutable ON crm.email_consent_event;
 --rollback DROP FUNCTION crm.reject_email_consent_mutation();
+
+--changeset rm:0054-files-r10a-staged-metadata
+-- Existing file IDs and historical rows are retained; no legacy AVAILABLE row
+-- is assumed CLEAN or granted access by this additive migration.
+ALTER TABLE crm.file_object ADD COLUMN uploaded_by UUID;
+ALTER TABLE crm.file_object ADD COLUMN request_key VARCHAR(100);
+ALTER TABLE crm.file_object ADD COLUMN scan_status VARCHAR(20) NOT NULL DEFAULT 'NOT_SCANNED';
+ALTER TABLE crm.file_object ADD COLUMN content_class VARCHAR(32) NOT NULL DEFAULT 'INTERNAL';
+ALTER TABLE crm.file_object ADD COLUMN completed_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE crm.file_object
+ ADD CONSTRAINT ck_files_scan_status CHECK(scan_status IN ('NOT_SCANNED','SCANNING','CLEAN','INFECTED','ERROR'));
+ALTER TABLE crm.file_object
+ ADD CONSTRAINT ck_files_content_class CHECK(content_class IN ('INTERNAL','CONFIDENTIAL','BUSINESS_PUBLIC_CANDIDATE'));
+ALTER TABLE crm.file_object
+ ADD CONSTRAINT fk_file_uploaded_by FOREIGN KEY(uploaded_by) REFERENCES public.iam_user_account(id);
+CREATE UNIQUE INDEX uk_files_tenant_request ON crm.file_object(tenant_id,request_key);
+CREATE INDEX idx_file_tenant_uploader_state
+ ON crm.file_object(tenant_id,uploaded_by,state,created_at DESC,id DESC);
+--rollback DROP INDEX idx_file_tenant_uploader_state;
+--rollback DROP INDEX uk_files_tenant_request;
+--rollback ALTER TABLE crm.file_object DROP CONSTRAINT fk_file_uploaded_by;
+--rollback ALTER TABLE crm.file_object DROP CONSTRAINT ck_files_content_class;
+--rollback ALTER TABLE crm.file_object DROP CONSTRAINT ck_files_scan_status;
+--rollback ALTER TABLE crm.file_object DROP COLUMN completed_at;
+--rollback ALTER TABLE crm.file_object DROP COLUMN content_class;
+--rollback ALTER TABLE crm.file_object DROP COLUMN scan_status;
+--rollback ALTER TABLE crm.file_object DROP COLUMN request_key;
+--rollback ALTER TABLE crm.file_object DROP COLUMN uploaded_by;
