@@ -16,7 +16,7 @@ interface FileStoragePort {
     boolean matches(String key,long expectedSize,String sha256) throws IOException;
     /** Bounded file-scoped enumeration used only by trusted recovery logic. */
     java.util.List<String> listKeys(UUID tenant,UUID fileId) throws IOException;
-    /** Stream authenticated plaintext only from an encrypted final blob. */
+    /** Stream bytes from a private final blob after caller's tenant/owner/hash checks. */
     void streamVerified(UUID tenant,UUID fileId,String key,java.io.OutputStream sink) throws IOException;
     void delete(String key) throws IOException;
 }
