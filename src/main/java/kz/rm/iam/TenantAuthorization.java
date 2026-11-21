@@ -47,9 +47,9 @@ public class TenantAuthorization {
             if (membership.getRole()!=OrganizationMembershipEntity.Role.OWNER)
                 throw new SecurityException("Only organization owner can manage tenant RBAC");
         } else {
-            boolean enforced=Boolean.TRUE.equals(jdbc.queryForObject("""
+            boolean enforced=Boolean.TRUE.equals(jdbc.query("""
                 SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
-                """, (rs,n)->rs.getBoolean(1),tenantId));
+                """,rs->rs.next() && rs.getBoolean(1),tenantId));
             if (enforced) {
                 Integer grants=jdbc.queryForObject("""
                     SELECT count(*) FROM public.iam_tenant_user_role a
