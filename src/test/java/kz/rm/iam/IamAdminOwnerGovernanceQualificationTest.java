@@ -344,4 +344,46 @@ class IamAdminOwnerGovernanceQualificationTest {
                 """,Boolean.class)).isFalse();
     }
 
+
+    @Test void emergencyRecoveryCannotElevatePlatformAdminToOwnTenantOwner() {
+        Fixture f=fixture();
+        enrollment.invite(actor(f.owner()),f.tenant(),f.admin());
+        enrollment.accept(actor(f.admin()),f.tenant());
+        jdbc.update("""
+                UPDATE public.iam_org_membership
+                SET status='SUSPENDED' WHERE user_id=? AND role='OWNER'
+                """,f.owner());
+        assertThatThrownBy(()->recovery.recoverOwner(actor(f.admin()),f.tenant(),
+                f.admin(),"INCIDENT_2026_RM")).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT role FROM public.iam_org_membership m
+                JOIN public.iam_workspace w ON w.organization_id=m.organization_id
+                WHERE w.id=? AND m.user_id=?
+                """,String.class,f.tenant(),f.admin())).isEqualTo("MEMBER");
+    }
+
+    @Test void recoveryCancelsAndAuditsOutstandingOwnerTransfer() {
+        Fixture f=fixture();
+        UUID replacement=user();
+        enrollment.invite(actor(f.owner()),f.tenant(),replacement);
+        enrollment.accept(actor(replacement),f.tenant());
+        var requested=transfers.requestTransfer(actor(f.owner()),f.tenant(),f.staff());
+        jdbc.update("""
+                UPDATE public.iam_org_membership SET status='SUSPENDED'
+                WHERE user_id=? AND role='OWNER'
+                """,f.owner());
+        recovery.recoverOwner(actor(f.admin()),f.tenant(),replacement,"INCIDENT_2026_RM");
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM public.iam_owner_transfer_request WHERE tenant_id=?
+                """,String.class,f.tenant())).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND target_user_id=? AND action_code='OWNER_TRANSFER_CANCELLED'
+                  AND reason_code='INCIDENT_2026_RM'
+                """,Integer.class,f.tenant(),f.staff())).isEqualTo(1);
+        assertThatThrownBy(()->transfers.acceptTransfer(actor(f.staff()),f.tenant(),requested.id()))
+                .isInstanceOf(SecurityException.class);
+        authorization.require(replacement,f.tenant(),DomainPermission.TENANT_RBAC_MANAGE);
+    }
+
 }
