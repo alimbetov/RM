@@ -1,7 +1,7 @@
 package kz.rm.crm;
 
-import kz.rm.iam.OrganizationMembershipRepository;
-import kz.rm.iam.WorkspaceRepository;
+import kz.rm.iam.TenantAuthorization;
+import kz.rm.iam.DomainPermission;
 import kz.rm.security.kms.CryptoContext;
 import kz.rm.security.kms.EncryptedValueCodec;
 import kz.rm.security.kms.TenantCryptoPort;
@@ -21,15 +21,13 @@ import java.util.UUID;
 @Service
 public class CrmCustomerService {
     private final JdbcTemplate jdbc;
-    private final WorkspaceRepository workspaces;
-    private final OrganizationMembershipRepository memberships;
+    private final TenantAuthorization authorization;
     private final TenantCryptoPort crypto;
     private final TenantKeyService keys;
 
-    public CrmCustomerService(JdbcTemplate jdbc, WorkspaceRepository workspaces,
-                              OrganizationMembershipRepository memberships,
+    public CrmCustomerService(JdbcTemplate jdbc, TenantAuthorization authorization,
                               TenantCryptoPort crypto, TenantKeyService keys) {
-        this.jdbc=jdbc; this.workspaces=workspaces; this.memberships=memberships;
+        this.jdbc=jdbc; this.authorization=authorization;
         this.crypto=crypto; this.keys=keys;
     }
 
@@ -189,17 +187,7 @@ public class CrmCustomerService {
                 EncryptedValueCodec.decode(bytes));
     }
 
-    private void requireOrganizationMember(UUID actor,UUID tenant,boolean write) {
-        if(actor==null||tenant==null) throw new SecurityException("Authentication and tenant required");
-        var workspace=workspaces.findById(tenant)
-                .orElseThrow(()->new SecurityException("Tenant not found"));
-        if(workspace.getKind()!=kz.rm.iam.WorkspaceEntity.Kind.ORGANIZATION)
-            throw new SecurityException("CRM-R1A initially supports organization tenants only");
-        var membership=memberships.findByOrganizationIdAndUserId(workspace.getOrganizationId(),actor)
-                .orElseThrow(()->new SecurityException("Membership required"));
-        if(membership.getStatus()!=kz.rm.iam.OrganizationMembershipEntity.Status.ACTIVE)
-            throw new SecurityException("Inactive membership");
-        if(write && membership.getRole()==kz.rm.iam.OrganizationMembershipEntity.Role.VIEWER)
-            throw new SecurityException("Read-only organization member");
+    private void requireOrganizationMember(UUID actor, UUID tenant, boolean write) {
+        authorization.require(actor,tenant,write ? DomainPermission.CRM_WRITE : DomainPermission.CRM_READ);
     }
 }
