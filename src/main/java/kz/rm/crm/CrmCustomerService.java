@@ -19,7 +19,7 @@ import java.util.UUID;
  * a future REST adapter MUST derive userId from an authenticated and verified principal.
  */
 @Service
-class CrmCustomerService {
+public class CrmCustomerService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
     private final TenantCryptoPort crypto;
@@ -36,7 +36,7 @@ class CrmCustomerService {
                           String email, String phone) {}
 
     @Transactional
-    public Customer createPerson(UUID actorId, UUID tenantId, String fullName, String katoCode) {
+    Customer createPerson(UUID actorId, UUID tenantId, String fullName, String katoCode) {
         requireOrganizationMember(actorId, tenantId, true);
         if (fullName == null || fullName.isBlank()) throw new IllegalArgumentException("Name required");
         String zone = zone(katoCode);
@@ -55,7 +55,7 @@ class CrmCustomerService {
     }
 
     @Transactional
-    public Customer createCompany(UUID actorId, UUID tenantId, String name, String katoCode) {
+    Customer createCompany(UUID actorId, UUID tenantId, String name, String katoCode) {
         requireOrganizationMember(actorId, tenantId, true);
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Company name required");
         String zone=zone(katoCode);
@@ -68,7 +68,7 @@ class CrmCustomerService {
     }
 
     @Transactional
-    public Customer getCustomer(UUID actorId, UUID tenantId, UUID id) {
+    Customer getCustomer(UUID actorId, UUID tenantId, UUID id) {
         requireOrganizationMember(actorId,tenantId,false);
         return jdbc.query("""
             SELECT customer_type,organization_label,region_zone_id FROM crm.customer
@@ -92,7 +92,7 @@ class CrmCustomerService {
     }
 
     @Transactional
-    public Contact addContact(UUID actorId, UUID tenantId, UUID customerId,
+    Contact addContact(UUID actorId, UUID tenantId, UUID customerId,
                               String name, String email, String phone) {
         requireOrganizationMember(actorId,tenantId,true);
         if (name==null || name.isBlank()) throw new IllegalArgumentException("Contact name required");
@@ -118,7 +118,7 @@ class CrmCustomerService {
     }
 
     @Transactional
-    public Contact getContact(UUID actorId, UUID tenantId, UUID contactId) {
+    Contact getContact(UUID actorId, UUID tenantId, UUID contactId) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.CRM_PII_READ);
         return jdbc.query("""
             SELECT c.customer_id,s.name_envelope,s.email_envelope,s.phone_envelope
@@ -140,7 +140,7 @@ class CrmCustomerService {
      * Campaign dispatch still needs a fresh, locked eligibility check and an outbox.
      */
     @Transactional
-    public UUID recordEmailConsent(UUID actorId, UUID tenantId, UUID contactId,
+    UUID recordEmailConsent(UUID actorId, UUID tenantId, UUID contactId,
                                    boolean granted, String purpose,String policyVersion,String source) {
         requireOrganizationMember(actorId,tenantId,true);
         if(purpose==null||purpose.isBlank()||policyVersion==null||policyVersion.isBlank()
@@ -159,7 +159,7 @@ class CrmCustomerService {
     }
 
     @Transactional
-    public boolean hasEmailConsent(UUID actorId, UUID tenantId, UUID contactId, String purpose) {
+    boolean hasEmailConsent(UUID actorId, UUID tenantId, UUID contactId, String purpose) {
         requireOrganizationMember(actorId,tenantId,false);
         return Boolean.TRUE.equals(jdbc.query("""
             SELECT granted FROM crm.email_consent_event
