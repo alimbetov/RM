@@ -708,8 +708,8 @@ CREATE TABLE crm.sales_order (
   row_version BIGINT NOT NULL DEFAULT 0,
   CONSTRAINT pk_sales_order PRIMARY KEY (tenant_id,id),
   CONSTRAINT fk_sales_order_tenant FOREIGN KEY (tenant_id) REFERENCES crm.store_front(tenant_id),
-  CONSTRAINT fk_sales_order_email_identity FOREIGN KEY (pending_email_identity_id) REFERENCES iam_email_identity(id),
-  CONSTRAINT fk_sales_order_buyer FOREIGN KEY (buyer_user_id) REFERENCES iam_user_account(id),
+  CONSTRAINT fk_sales_order_email_identity FOREIGN KEY (pending_email_identity_id) REFERENCES public.iam_email_identity(id),
+  CONSTRAINT fk_sales_order_buyer FOREIGN KEY (buyer_user_id) REFERENCES public.iam_user_account(id),
   CONSTRAINT ck_sales_order_amount CHECK (total_amount >= 0),
   CONSTRAINT ck_sales_order_status CHECK (status IN ('PLACED','CONFIRMED','PREPARING','READY_FOR_PICKUP','OUT_FOR_DELIVERY','COMPLETED','CANCELLED','REJECTED'))
 );
