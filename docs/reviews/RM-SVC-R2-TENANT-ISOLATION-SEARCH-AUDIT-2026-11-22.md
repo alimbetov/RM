@@ -78,6 +78,27 @@ Seed **two active organization workspaces** A/B with owners, managers, users and
 | TENANT-P1-09 | P1 | Current offset/COUNT patterns not protected for large datasets | Use R2A cursor/keyset, bounded OFFSET and no global COUNT leakage |
 | TENANT-P1-10 | P1 | Missing tenant-aware filters in category, customer contracts, catalog pricing | Composite FK/joins + two-tenant negative regression on additive migrations |
 
+## 5A. TENANT-ISO-R1 implemented qualification increment (2026-11-22)
+
+**Scope of this increment (new tests):**
+- `CrmR1aQualificationTest.tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped`: separate A/B tenant fixtures with same company labels and identical createdAt timestamps; paged count/order, known foreign UUID filters; BOTH JPA repositories scoped by tenant; PII contact lookup remains tenant-aware.
+- `OrganizationLocationQueryQualificationTest.paginationAndFiltersUseTenantBoundary`: identical searchable warehouse names in different tenants, filter and list isolation.
+- `StockBalanceQueryQualificationTest.verifiedStockSearchPaginatesFiltersAndDeniesCrossTenant`: foreign locationId/itemId filters return zero and both pages contain only requested tenant.
+- `SalesOrderQueryQualificationTest.orderListPaginatesFiltersAndNeverReturnsBuyerIdentity`: foreign order absent from normal/status-filtered results and returned count; other tenant with no matching status sees no results.
+
+**Existing independent FILES gate retained:** `FilesR10bQualificationTest` covers foreign tenant / revoked binary read and owner-bound attachment policies, alongside real RustFS/ClamAV CI. It is not represented as a newly added test in this increment.
+
+**Deferred/unimplemented (explicitly not claimed qualified):**
+- CRM customer categories/contracts and expiry cursor; they require additive DDL/services.
+- CATALOG catalog query permission and typed model/category/price filter.
+- SALES CRM customerId filter; current order relates to IAM buyer, not CRM customer.
+- INVENTORY movement-type/SKU joins and cursor; current `StockSearch` accepts item UUID / warehouse / availability.
+- FILES generic media owner-type pagination; existing COMPANY owner access only.
+- Signed cursor pagination / keyset; current core services use bounded `page/size` and `OFFSET`.
+- All-scope portfolio and warehouse-per-assignee authorization, which require a separately approved product rule.
+
+This is a **two-tenant regression gate for EXISTING filters and repositories**, not certification of absent new features. Its final status must come from exact-HEAD CI output.
+
 ## 6. Release gate
 
 **Suggested named gate: `TENANT-ISO-R1`**: integration tests in real PostgreSQL with TWO tenant fixtures across CRM/CONTACT/ORG/FILES/SALES/INVENTORY and, once implemented, CATALOG, plus future category/contracts/modelCode/owner filters. Test target is `0` unauthorized records, files, counters, cursors and bytes under any combination.
