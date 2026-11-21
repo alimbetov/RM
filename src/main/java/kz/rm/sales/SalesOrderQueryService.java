@@ -14,7 +14,7 @@ import java.util.UUID;
 /** Internal seller order read service; actor identity must come from trusted principal. */
 @Service
 @RequiredArgsConstructor
-public class SalesOrderQueryService {
+class SalesOrderQueryService {
     private final TenantAuthorization authorization;
     private final SalesOrderRepository orders;
 
