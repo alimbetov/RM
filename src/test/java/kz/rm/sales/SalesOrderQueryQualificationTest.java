@@ -12,6 +12,11 @@ import org.springframework.test.context.TestPropertySource;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -80,6 +85,48 @@ class SalesOrderQueryQualificationTest {
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->trustedQueries.search(trusted,owned.tenant(),null,0,101))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void postgresPaginationRemainsTenantIsolatedDuringConcurrentStatusChanges() throws Exception {
+        Shop first=shop(),second=shop();
+        List<UUID> own=new ArrayList<>();
+        for(int i=0;i<12;i++) own.add(order(first));
+        for(int i=0;i<4;i++) order(second);
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var writer=pool.submit(()->{
+                if(!start.await(10,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Writer start timed out");
+                for(int i=0;i<own.size();i++) {
+                    jdbc.update("""
+                        UPDATE crm.sales_order SET status=?,row_version=row_version+1
+                        WHERE tenant_id=? AND id=?
+                        """,i%2==0?"CONFIRMED":"PREPARING",first.tenant(),own.get(i));
+                }
+                return true;
+            });
+            var reader=pool.submit(()->{
+                if(!start.await(10,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Reader start timed out");
+                for(int attempt=0;attempt<8;attempt++) {
+                    var encountered=new HashSet<UUID>();
+                    for(int page=0;page<3;page++) {
+                        var result=service.search(first.actor(),first.tenant(),null,page,5);
+                        assertThat(result.getTotalElements()).isEqualTo(12);
+                        assertThat(result.getContent().size()).isLessThanOrEqualTo(5);
+                        for(var order:result.getContent()) {
+                            assertThat(own).contains(order.id());
+                            assertThat(encountered.add(order.id())).isTrue();
+                        }
+                    }
+                    assertThat(encountered).hasSize(12);
+                }
+                return true;
+            });
+            start.countDown();
+            assertThat(writer.get(35,TimeUnit.SECONDS)).isTrue();
+            assertThat(reader.get(35,TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     @Test void orderListPaginatesFiltersAndNeverReturnsBuyerIdentity() {
