@@ -36,6 +36,10 @@ class CrmR1aQualificationTest {
     @Autowired CrmCustomerService crm;
     @Autowired CrmCustomerRepository customerMetadata;
     @Autowired CrmContactRepository contactMetadata;
+    @Autowired CrmCategoryService categoryService;
+    @Autowired CrmContractService contractService;
+    @Autowired CustomerCategoryRepository categoryMetadata;
+    @Autowired CustomerContractRepository contractMetadata;
     @Autowired AuthenticatedCrmCommands secureCommands;
     @Autowired AuthenticatedCrmQueries secureQueries;
     @Autowired PlatformTransactionManager transactions;
@@ -726,4 +730,106 @@ class CrmR1aQualificationTest {
         assertThatThrownBy(()->crm.createCompany(t.actorId(),t.tenantId(),"Client","433243300"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void tenantIsoR12CategoriesAndContractsScopedPaginationAndCrossTenantFks() {
+        var a=newTenant();
+        var b=newTenant();
+        var actorA=verified(a.actorId());
+        var actorB=verified(b.actorId());
+        var customerA=secureCommands.createCompany(actorA,a.tenantId(),"A client",null);
+        var customerB=secureCommands.createCompany(actorB,b.tenantId(),"B client",null);
+        var categoryA=categoryService.create(actorA,a.tenantId(),"WHOLESALE","Wholesale");
+        var categoryB=categoryService.create(actorB,b.tenantId(),"WHOLESALE","Wholesale B");
+        categoryService.assignPrimary(actorA,a.tenantId(),customerA.id(),categoryA.id());
+        assertThat(customerMetadata.findByTenantIdAndId(a.tenantId(),customerA.id())
+                .orElseThrow().getPrimaryCategoryId()).isEqualTo(categoryA.id());
+        assertThat(categoryService.list(actorA,a.tenantId(),true,0,1).getTotalElements()).isEqualTo(1);
+        assertThat(categoryService.list(actorB,b.tenantId(),true,0,1).getContent())
+                .extracting(CrmCategoryService.Category::id).containsExactly(categoryB.id());
+        assertThat(categoryMetadata.findByTenantIdAndId(a.tenantId(),categoryB.id())).isEmpty();
+        assertThatThrownBy(()->categoryService.assignPrimary(actorA,a.tenantId(),customerA.id(),categoryB.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->categoryService.assignPrimary(actorA,a.tenantId(),customerB.id(),categoryA.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->categoryService.list(actorA,b.tenantId(),true,0,10))
+                .isInstanceOf(SecurityException.class);
+
+        var today=java.time.LocalDate.of(2026,11,22);
+        var first=contractService.create(actorA,a.tenantId(),customerA.id(),"CN-01",
+                today.minusDays(20),today.plusDays(10),today);
+        var second=contractService.create(actorA,a.tenantId(),customerA.id(),"CN-02",
+                today.minusDays(20),today.plusDays(60),today);
+        var foreign=contractService.create(actorB,b.tenantId(),customerB.id(),"CN-01",
+                today.minusDays(20),today.plusDays(3),today);
+        assertThat(first.expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.DRAFT);
+        first=contractService.changeStatus(actorA,a.tenantId(),first.id(),
+                CustomerContractEntity.Status.ACTIVE,first.rowVersion(),today);
+        assertThat(first.expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.EXPIRING_SOON);
+        assertThat(contractService.get(actorA,a.tenantId(),first.id(),today.plusDays(11),30)
+                .expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.EXPIRED);
+        assertThat(contractService.list(actorA,a.tenantId(),customerA.id(),today,30,0,1)
+                .getTotalElements()).isEqualTo(2);
+        assertThat(contractService.list(actorA,a.tenantId(),customerA.id(),today,30,1,1)
+                .getContent()).hasSize(1);
+        assertThat(contractService.list(actorA,a.tenantId(),customerA.id(),today,30,2,1)
+                .getContent()).isEmpty();
+        assertThat(contractMetadata.findByTenantIdAndId(a.tenantId(),foreign.id())).isEmpty();
+        assertThat(contractService.list(actorA,a.tenantId(),customerB.id(),today,30,0,10)
+                .getTotalElements()).isZero();
+        assertThatThrownBy(()->contractService.create(actorA,a.tenantId(),customerB.id(),
+                "FORBIDDEN",today,today.plusDays(1),today)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->contractService.get(actorA,b.tenantId(),foreign.id(),today,30))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->contractService.changeDates(actorA,a.tenantId(),foreign.id(),
+                today,today.plusDays(3),0,today)).isInstanceOf(IllegalArgumentException.class);
+
+        // Neither service validation nor JPA can replace these database-level composite FKs.
+        assertThatThrownBy(()->jdbc.update(
+                "UPDATE crm.customer SET primary_category_id=? WHERE tenant_id=? AND id=?",
+                categoryB.id(),a.tenantId(),customerA.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+                INSERT INTO crm.customer_contract(tenant_id,id,customer_id,contract_code,starts_on,
+                  status,created_at,updated_at) VALUES (?,?,?,'ILLEGAL',?,'DRAFT',now(),now())
+                """,a.tenantId(),UUID.randomUUID(),customerB.id(),today)).isInstanceOf(Exception.class);
+    }
+
+    @Test void crmR12LifecycleVersionAndDateEdgeCases() {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Versioned",null);
+        var cat=categoryService.create(actor,t.tenantId(),"ENTERPRISE","Enterprise");
+        assertThatThrownBy(()->categoryService.rename(actor,t.tenantId(),cat.id(),"Changed",99))
+                .isInstanceOf(IllegalStateException.class);
+        cat=categoryService.archive(actor,t.tenantId(),cat.id(),cat.rowVersion());
+        assertThatThrownBy(()->categoryService.assignPrimary(actor,t.tenantId(),customer.id(),cat.id()))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(categoryService.list(actor,t.tenantId(),true,0,10).getTotalElements()).isZero();
+
+        var today=java.time.LocalDate.of(2026,11,22);
+        assertThatThrownBy(()->contractService.create(actor,t.tenantId(),customer.id(),
+                "BAD-DATES",today,today.minusDays(1),today)).isInstanceOf(IllegalArgumentException.class);
+        var contract=contractService.create(actor,t.tenantId(),customer.id(),"OPEN-01",
+                today.plusDays(1),null,today);
+        assertThatThrownBy(()->contractService.changeStatus(actor,t.tenantId(),contract.id(),
+                CustomerContractEntity.Status.CLOSED,contract.rowVersion(),today))
+                .isInstanceOf(IllegalStateException.class);
+        contract=contractService.changeStatus(actor,t.tenantId(),contract.id(),
+                CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today);
+        assertThat(contract.expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.NOT_STARTED);
+        assertThat(contractService.get(actor,t.tenantId(),contract.id(),today.plusDays(1),30)
+                .expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.OPEN_ENDED);
+        final var stale=contract;
+        assertThatThrownBy(()->contractService.changeDates(actor,t.tenantId(),stale.id(),
+                today,today,stale.rowVersion()-1,today)).isInstanceOf(IllegalStateException.class);
+        contract=contractService.changeStatus(actor,t.tenantId(),contract.id(),
+                CustomerContractEntity.Status.CLOSED,contract.rowVersion(),today);
+        assertThat(contract.expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.CLOSED);
+        final var terminal=contract;
+        assertThatThrownBy(()->contractService.changeDates(actor,t.tenantId(),terminal.id(),
+                today,today,terminal.rowVersion(),today)).isInstanceOf(IllegalStateException.class);
+        assertThat(ContractExpiryPolicy.evaluate(CustomerContractEntity.Status.ACTIVE,
+                today.minusDays(1),today,today,0))
+                .isEqualTo(ContractExpiryPolicy.Indicator.EXPIRING_SOON);
+    }
+
 }
