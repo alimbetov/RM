@@ -107,6 +107,65 @@ class TenantRbacQualificationTest {
                 DomainPermission.CRM_READ)).isInstanceOf(SecurityException.class);
     }
 
+    @Test void soleOwnerCanEnableRbacAfterAssigningAnActiveEmployee() {
+        var org=organizations.saveAndFlush(
+            new OrganizationEntity(UUID.randomUUID(),"One Owner LLP","One Owner","KZ"));
+        var tenant=workspaces.saveAndFlush(
+            WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
+        UUID owner=newUser("sole-owner"),staff=newUser("sole-staff");
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),org.getId(),owner,OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),org.getId(),staff,OrganizationMembershipEntity.Role.MEMBER));
+        jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",tenant.getId());
+        var cashier=roles.createRole(owner,tenant.getId(),"SHOP_CASHIER","Sales cashier");
+        roles.grant(owner,tenant.getId(),cashier.id(),DomainPermission.SALES_ORDER_READ);
+        assertThatThrownBy(()->roles.enable(owner,tenant.getId()))
+            .isInstanceOf(IllegalStateException.class);
+        roles.assign(owner,tenant.getId(),staff,cashier.id());
+        roles.enable(owner,tenant.getId());
+        roles.enable(owner,tenant.getId());
+        authorization.require(staff,tenant.getId(),DomainPermission.SALES_ORDER_READ);
+        authorization.require(owner,tenant.getId(),DomainPermission.TENANT_RBAC_MANAGE);
+        assertThatThrownBy(()->authorization.require(owner,tenant.getId(),
+            DomainPermission.SALES_ORDER_READ)).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM iam_tenant_rbac_event
+            WHERE tenant_id=? AND action_code='RBAC_ENABLED'
+            """,Integer.class,tenant.getId())).isEqualTo(1);
+    }
+
+    @Test void roleSuspensionAndRestorationImmediatelyChangeAccessAndAreAudited() {
+        var t=createTenant();
+        var role=roles.createRole(t.owner1(),t.tenant(),"INVENTORY_CLERK","Warehouse clerk");
+        roles.grant(t.owner1(),t.tenant(),role.id(),DomainPermission.INVENTORY_STOCK_READ);
+        roles.assign(t.owner1(),t.tenant(),t.manager(),role.id());
+        roles.enable(t.owner1(),t.tenant());
+        assertThat(roles.listGrants(t.owner1(),t.tenant(),role.id()))
+            .containsExactly(DomainPermission.INVENTORY_STOCK_READ);
+        assertThat(roles.listAssignments(t.owner1(),t.tenant()))
+            .extracting(TenantRoleService.RoleAssignment::userId).contains(t.manager());
+        assertThatThrownBy(()->roles.listAssignments(t.manager(),t.tenant()))
+            .isInstanceOf(SecurityException.class);
+        authorization.require(t.manager(),t.tenant(),DomainPermission.INVENTORY_STOCK_READ);
+        roles.setRoleActive(t.owner1(),t.tenant(),role.id(),false);
+        roles.setRoleActive(t.owner1(),t.tenant(),role.id(),false); // replay is no-op
+        assertThatThrownBy(()->authorization.require(t.manager(),t.tenant(),
+            DomainPermission.INVENTORY_STOCK_READ)).isInstanceOf(SecurityException.class);
+        roles.setRoleActive(t.owner1(),t.tenant(),role.id(),true);
+        authorization.require(t.manager(),t.tenant(),DomainPermission.INVENTORY_STOCK_READ);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM iam_tenant_rbac_event
+            WHERE tenant_id=? AND role_id=? AND action_code='ROLE_DEACTIVATED'
+            """,Integer.class,t.tenant(),role.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM iam_tenant_rbac_event
+            WHERE tenant_id=? AND role_id=? AND action_code='ROLE_ACTIVATED'
+            """,Integer.class,t.tenant(),role.id())).isEqualTo(1);
+        assertThatThrownBy(()->roles.setRoleActive(t.manager(),t.tenant(),role.id(),false))
+            .isInstanceOf(SecurityException.class);
+    }
+
     @Test void postgresRoleEvidenceCannotBeMutated() throws Exception {
         try(var connection=source.getConnection()){
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
