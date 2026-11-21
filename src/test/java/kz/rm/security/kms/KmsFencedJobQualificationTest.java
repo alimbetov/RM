@@ -116,6 +116,31 @@ class KmsFencedJobQualificationTest {
     }
 
     @Test
+    void callbackThatOutlivesItsLeaseMustRollbackBeforeCommit() {
+        UUID tenant = UUID.randomUUID();
+        keys.provision(tenant);
+        var lease = nodeA.acquire(tenant, Duration.ofSeconds(1));
+        assertThat(lease).isNotNull();
+        assertThatThrownBy(() -> nodeA.executeFenced(lease, db -> {
+            db.update("UPDATE security.kms_tenant_key SET migrated_a=99 WHERE tenant_id=?", tenant);
+            try {
+                Thread.sleep(1300); // Purposeful wall-clock expiry, not a race-ordering assertion.
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted synthetic expiry", interrupted);
+            }
+            return null;
+        })).isInstanceOf(IllegalStateException.class).hasMessageContaining("fencing");
+        assertThat(jdbc.queryForObject(
+                "SELECT migrated_a FROM security.kms_tenant_key WHERE tenant_id=?",
+                Long.class, tenant)).isZero();
+        var next = otherPod().acquire(tenant, Duration.ofMinutes(2));
+        assertThat(next).isNotNull();
+        assertThat(next.fencingToken()).isGreaterThan(lease.fencingToken());
+        otherPod().release(next);
+    }
+
+    @Test
     void callbackFailureRollsBackItsDatabaseMutation() {
         UUID tenant = UUID.randomUUID();
         keys.provision(tenant);
