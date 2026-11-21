@@ -1,7 +1,7 @@
 # RM-DOMAIN-MAP-R1 — Domain-driven modular CRM
 
 **Status:** DRAFT / FOR DESIGN REVIEW.
-**Scope:** business domains, aggregates, ownership, identifiers and cross-domain contracts. No new CRUD/API implementation authorized by this document.
+**Scope:** business domains, aggregates, ownership, identifiers and cross-domain contracts. No new CRUD/API implementation authorized by this document.\n**Mandatory naming standard (proposed):** [RM-MODULAR-DOMAIN-DB-R1](RM-MODULAR-DOMAIN-DB-R1.md) — module prefixes for all new tables; legacy names migrate separately.
 **Architecture:** one Spring Boot modular monolith, one PostgreSQL, KMS as internal port, future modules independently extractable if needed.
 
 ## Universal identity rules
