@@ -34,6 +34,13 @@ class DomainCommandBoundaryQualificationTest {
         assertThat(Modifier.isPublic(InventoryMovementService.class
                 .getDeclaredMethod("adjust",UUID.class,UUID.class,UUID.class,
                         String.class,BigDecimal.class).getModifiers())).isFalse();
+        // Guard every overload, including reason-explicit movement writes.
+        assertThat(InventoryMovementService.class.getDeclaredMethods())
+                .filteredOn(method -> method.getName().equals("adjust"))
+                .isNotEmpty()
+                .allSatisfy(method -> assertThat(Modifier.isPublic(method.getModifiers()))
+                        .as("Raw movement overload must not be public: " + method)
+                        .isFalse());
         assertThat(Modifier.isPublic(InventoryAuthorizedCommandService.class
                 .getDeclaredMethod("receive",UUID.class,UUID.class,UUID.class,UUID.class,
                         String.class,BigDecimal.class).getModifiers())).isFalse();
