@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class SalesInventoryRbacQualificationTest {
     @Autowired SalesInventoryCommandService commands;
+    @Autowired AuthenticatedSalesCommands authenticatedCommands;
     @Autowired AuthenticatedInventoryCommands warehouse;
     @Autowired AutoOrderService checkout;
     @Autowired TenantRoleService roles;
@@ -289,6 +290,20 @@ class SalesInventoryRbacQualificationTest {
                 .isInstanceOf(SecurityException.class);
             return null;
         });
+    }
+
+    @Test void verifiedSalesFacadeIsThePublicCommandEntry() {
+        Context c=context(6);
+        UUID id=order(c,2);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        assertThatThrownBy(()->authenticatedCommands.confirm(null,c.tenant(),id,c.location()))
+            .isInstanceOf(SecurityException.class);
+        var actor=verified(c.staff());
+        assertThat(authenticatedCommands.confirm(actor,c.tenant(),id,c.location()).status())
+            .isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("2");
+        assertThatThrownBy(()->authenticatedCommands.confirm(actor,UUID.randomUUID(),id,c.location()))
+            .isInstanceOf(SecurityException.class);
     }
 
     @Test void standaloneInventoryOperationsRequireExplicitGrants() {
