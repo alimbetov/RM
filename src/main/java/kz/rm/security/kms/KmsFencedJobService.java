@@ -35,7 +35,7 @@ public class KmsFencedJobService {
         // PostgreSQL CURRENT_TIMESTAMP is fixed at transaction start: use clock_timestamp()
         // to reject a paused worker even when row-lock wait was prolonged.
         this.clockSql = db != null && db.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
-                ? "SELECT clock_timestamp()" : "SELECT CURRENT_TIMESTAMP";
+                ? "SELECT clock_timestamp()" : null; // H2 freezes CURRENT_TIMESTAMP per transaction.
     }
 
     /** A lease identity is unique per acquisition; never reuse a fencing token. */
@@ -133,6 +133,8 @@ public class KmsFencedJobService {
     }
 
     private Instant dbNow() {
+        // Test-only H2 fallback: PostgreSQL clock_timestamp() is the sole distributed authority.
+        if (clockSql == null) return Instant.now();
         OffsetDateTime timestamp = jdbc.queryForObject(clockSql, OffsetDateTime.class);
         if (timestamp == null) throw new IllegalStateException("No authoritative DB clock");
         return timestamp.toInstant();
