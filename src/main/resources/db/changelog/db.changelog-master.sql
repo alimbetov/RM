@@ -1714,3 +1714,25 @@ CREATE TRIGGER trg_iam_profile_event_immutable
  BEFORE UPDATE OR DELETE ON iam_pii.user_profile_event
  FOR EACH ROW EXECUTE FUNCTION public.iam_reject_email_verification_event_mutation();
 --rollback DROP TRIGGER trg_iam_profile_event_immutable ON iam_pii.user_profile_event;
+
+--changeset rm:0052-crm-consent-idempotency
+-- Legacy events remain unchanged; only keyed new submissions participate in idempotency.
+ALTER TABLE crm.email_consent_event ADD COLUMN request_key VARCHAR(100);
+CREATE UNIQUE INDEX uk_crm_consent_request_key
+ ON crm.email_consent_event(tenant_id,request_key);
+CREATE TABLE crm.consent_request_lock (
+    bucket INTEGER NOT NULL PRIMARY KEY,
+    CONSTRAINT ck_crm_consent_lock_bucket CHECK (bucket >= 0 AND bucket < 64)
+);
+INSERT INTO crm.consent_request_lock(bucket)
+ SELECT n FROM (
+    SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3
+ ) ones CROSS JOIN (
+    SELECT 0 AS tens UNION ALL SELECT 4 UNION ALL SELECT 8 UNION ALL SELECT 12
+    UNION ALL SELECT 16 UNION ALL SELECT 20 UNION ALL SELECT 24 UNION ALL SELECT 28
+    UNION ALL SELECT 32 UNION ALL SELECT 36 UNION ALL SELECT 40 UNION ALL SELECT 44
+    UNION ALL SELECT 48 UNION ALL SELECT 52 UNION ALL SELECT 56 UNION ALL SELECT 60
+ ) multiples;
+--rollback DROP TABLE crm.consent_request_lock;
+--rollback DROP INDEX uk_crm_consent_request_key;
+--rollback ALTER TABLE crm.email_consent_event DROP COLUMN request_key;
