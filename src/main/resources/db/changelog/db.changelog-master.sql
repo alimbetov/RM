@@ -1901,7 +1901,7 @@ CREATE TABLE crm.customer_change_event (
  CONSTRAINT fk_crm_customer_change_customer FOREIGN KEY(tenant_id,customer_id)
    REFERENCES crm.customer(tenant_id,id),
  CONSTRAINT fk_crm_customer_change_actor FOREIGN KEY(actor_id) REFERENCES public.iam_user_account(id),
- CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','ARCHIVED'))
+ CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED'))
 );
 CREATE INDEX idx_crm_customer_changes ON crm.customer_change_event(tenant_id,customer_id,occurred_at,id);
 CREATE TABLE crm.contract_revision (
