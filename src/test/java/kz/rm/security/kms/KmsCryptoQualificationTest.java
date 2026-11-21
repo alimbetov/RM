@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class KmsCryptoQualificationTest {
     @Autowired TenantKeyService keyService;
-    @Autowired TenantCryptoService crypto;
+    @Autowired TenantCryptoPort crypto;
     @Autowired JdbcTemplate jdbc;
 
     @Test
