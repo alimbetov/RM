@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class StockBalanceQueryService {
+class StockBalanceQueryService {
     private final TenantAuthorization authorization;
     private final StockBalanceRepository repository;
 
