@@ -63,7 +63,7 @@ class KatoTerritoryQualificationTest {
                 "SELECT code FROM ref_kato_territory WHERE level_no > 3 AND is_deleted=FALSE ORDER BY code LIMIT 1",String.class);
         assertThatThrownBy(() -> service.create(workspace.getId(),OrganizationLocationEntity.Type.WAREHOUSE,
                 "Too detailed",settlementCode,null)).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("district-level");
+                .hasMessageContaining("oblast/district level");
         String deletedCode=jdbc.queryForObject(
                 "SELECT code FROM ref_kato_territory WHERE is_deleted=TRUE ORDER BY code LIMIT 1",String.class);
         assertThatThrownBy(() -> service.create(workspace.getId(),OrganizationLocationEntity.Type.BRANCH,
