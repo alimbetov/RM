@@ -322,7 +322,9 @@ class SalesInventoryRbacQualificationTest {
         allow(first,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
         allow(other,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
         var tx=new TransactionTemplate(transactionManager);
-        tx.execute(status->{
+        // Cross-bean @Transactional(MANDATORY) rejects mark the outer transaction rollback-only.
+        // Verify the full rollback as part of the denial contract.
+        assertThatThrownBy(()->tx.execute(status->{
             var sales=authorization.requireForCommand(first.staff(),first.tenant(),
                     DomainPermission.SALES_ORDER_CONFIRM);
             var inventoryDifferentActor=authorization.requireForCommand(first.backupOwner(),
@@ -344,7 +346,7 @@ class SalesInventoryRbacQualificationTest {
                     UUID.randomUUID(),UUID.randomUUID(),first.location(),first.item(),BigDecimal.ONE))
                     .isInstanceOf(SecurityException.class);
             return null;
-        });
+        })).isInstanceOf(org.springframework.transaction.UnexpectedRollbackException.class);
         assertThat(scalar(first,"reserved")).isEqualByComparingTo("0");
         assertThat(scalar(other,"reserved")).isEqualByComparingTo("0");
         assertThat(jdbc.queryForObject(
