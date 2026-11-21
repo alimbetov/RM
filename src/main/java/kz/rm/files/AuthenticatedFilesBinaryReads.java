@@ -25,7 +25,7 @@ public class AuthenticatedFilesBinaryReads {
         if(actor==null)throw new SecurityException("Verified actor required");
         if(sink==null)throw new IllegalArgumentException("Download sink required");
         var ref=attachments.authorizeCustomerBinaryRead(actor.userId(),tenant,attachmentId);
-        if(!storage.matches(ref.key(),ref.size(),ref.sha())) {
+        if(!storage.matches(ref.key(),ref.size(),ref.sha256())) {
             metadata.quarantineIntegrityFailure(tenant,ref.fileId(),ref.key());
             throw new IOException("Encrypted binary integrity verification failed");
         }
