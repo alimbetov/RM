@@ -791,3 +791,157 @@ CREATE TABLE iam_email_identity_lock (
 INSERT INTO iam_email_identity_lock(bucket) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20),(21),(22),(23),(24),(25),(26),(27),(28),(29),(30),(31),(32),(33),(34),(35),(36),(37),(38),(39),(40),(41),(42),(43),(44),(45),(46),(47),(48),(49),(50),(51),(52),(53),(54),(55),(56),(57),(58),(59),(60),(61),(62),(63),(64),(65),(66),(67),(68),(69),(70),(71),(72),(73),(74),(75),(76),(77),(78),(79),(80),(81),(82),(83),(84),(85),(86),(87),(88),(89),(90),(91),(92),(93),(94),(95),(96),(97),(98),(99),(100),(101),(102),(103),(104),(105),(106),(107),(108),(109),(110),(111),(112),(113),(114),(115),(116),(117),(118),(119),(120),(121),(122),(123),(124),(125),(126),(127),(128),(129),(130),(131),(132),(133),(134),(135),(136),(137),(138),(139),(140),(141),(142),(143),(144),(145),(146),(147),(148),(149),(150),(151),(152),(153),(154),(155),(156),(157),(158),(159),(160),(161),(162),(163),(164),(165),(166),(167),(168),(169),(170),(171),(172),(173),(174),(175),(176),(177),(178),(179),(180),(181),(182),(183),(184),(185),(186),(187),(188),(189),(190),(191),(192),(193),(194),(195),(196),(197),(198),(199),(200),(201),(202),(203),(204),(205),(206),(207),(208),(209),(210),(211),(212),(213),(214),(215),(216),(217),(218),(219),(220),(221),(222),(223),(224),(225),(226),(227),(228),(229),(230),(231),(232),(233),(234),(235),(236),(237),(238),(239),(240),(241),(242),(243),(244),(245),(246),(247),(248),(249),(250),(251),(252),(253),(254),(255);
 --rollback DROP TABLE iam_email_identity_lock;
 --rollback DROP TABLE crm.sales_checkout_lock;
+
+
+--changeset rm:0017-domain-persistence-baselines
+-- Minimal tenant-scoped DB foundation for eight domain contexts.
+-- No payments, SMTP, file IO, stock mutations, or public APIs in this changeset.
+CREATE TABLE crm.file_object (
+  tenant_id UUID NOT NULL, id UUID NOT NULL,
+  original_name_envelope BYTEA, mime_type VARCHAR(120) NOT NULL,
+  size_bytes BIGINT NOT NULL, sha256 VARCHAR(64),
+  state VARCHAR(20) NOT NULL, created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_file_object PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_file_object_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT ck_file_object_size CHECK(size_bytes >= 0),
+  CONSTRAINT ck_file_object_state CHECK(state IN ('STAGED','AVAILABLE','REJECTED','DELETING','DELETED'))
+);
+CREATE TABLE crm.file_storage (
+  tenant_id UUID NOT NULL, file_id UUID NOT NULL,
+  provider VARCHAR(20) NOT NULL, storage_key VARCHAR(500) NOT NULL,
+  object_version VARCHAR(160), state VARCHAR(20) NOT NULL,
+  CONSTRAINT pk_file_storage PRIMARY KEY(tenant_id,file_id),
+  CONSTRAINT fk_file_storage_file FOREIGN KEY(tenant_id,file_id) REFERENCES crm.file_object(tenant_id,id),
+  CONSTRAINT ck_file_storage_provider CHECK(provider IN ('LOCAL','RUSTFS')),
+  CONSTRAINT ck_file_storage_state CHECK(state IN ('STAGED','ACTIVE','MIGRATING','DELETING'))
+);
+CREATE TABLE crm.file_attachment (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,file_id UUID NOT NULL,
+  owner_type VARCHAR(32) NOT NULL,owner_id UUID NOT NULL,
+  purpose VARCHAR(48) NOT NULL,created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_file_attachment PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_file_attachment_file FOREIGN KEY(tenant_id,file_id) REFERENCES crm.file_object(tenant_id,id)
+);
+CREATE INDEX idx_file_attachment_owner ON crm.file_attachment(tenant_id,owner_type,owner_id);
+
+CREATE TABLE crm.cat_item (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,
+  sku VARCHAR(80) NOT NULL,kind VARCHAR(20) NOT NULL,
+  source_locale VARCHAR(12) NOT NULL,state VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_cat_item PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_cat_item_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT uk_cat_item_sku UNIQUE(tenant_id,sku),
+  CONSTRAINT ck_cat_item_kind CHECK(kind IN ('PRODUCT','SERVICE')),
+  CONSTRAINT ck_cat_item_state CHECK(state IN ('DRAFT','PUBLISHED','ARCHIVED')),
+  CONSTRAINT ck_cat_item_locale CHECK(source_locale IN ('kk','ru','en','zh-Hans'))
+);
+CREATE TABLE crm.cat_item_i18n (
+  tenant_id UUID NOT NULL,item_id UUID NOT NULL,locale VARCHAR(12) NOT NULL,
+  name VARCHAR(240) NOT NULL,description TEXT,
+  CONSTRAINT pk_cat_item_i18n PRIMARY KEY(tenant_id,item_id,locale),
+  CONSTRAINT fk_cat_item_i18n_item FOREIGN KEY(tenant_id,item_id) REFERENCES crm.cat_item(tenant_id,id),
+  CONSTRAINT ck_cat_item_i18n_locale CHECK(locale IN ('kk','ru','en','zh-Hans'))
+);
+CREATE TABLE crm.cat_price (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,item_id UUID NOT NULL,
+  unit_price NUMERIC(19,4) NOT NULL,currency CHAR(3) NOT NULL,
+  valid_from TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_cat_price PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_cat_price_item FOREIGN KEY(tenant_id,item_id) REFERENCES crm.cat_item(tenant_id,id),
+  CONSTRAINT ck_cat_price_amount CHECK(unit_price >= 0)
+);
+CREATE INDEX idx_cat_price_lookup ON crm.cat_price(tenant_id,item_id,valid_from);
+
+-- Strong tenant-local warehouse references; no cross-tenant location FK.
+ALTER TABLE public.org_location ADD CONSTRAINT uk_org_location_workspace_id UNIQUE(workspace_id,id);
+CREATE TABLE crm.inv_stock_balance (
+  tenant_id UUID NOT NULL,location_id UUID NOT NULL,item_id UUID NOT NULL,
+  on_hand NUMERIC(19,4) NOT NULL DEFAULT 0,
+  reserved NUMERIC(19,4) NOT NULL DEFAULT 0,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_inv_stock_balance PRIMARY KEY(tenant_id,location_id,item_id),
+  CONSTRAINT fk_inv_stock_location FOREIGN KEY(tenant_id,location_id) REFERENCES public.org_location(workspace_id,id),
+  CONSTRAINT fk_inv_stock_item FOREIGN KEY(tenant_id,item_id) REFERENCES crm.cat_item(tenant_id,id),
+  CONSTRAINT ck_inv_stock_balance CHECK(on_hand >= 0 AND reserved >= 0 AND reserved <= on_hand)
+);
+
+CREATE TABLE crm.fin_invoice (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,
+  order_id UUID NOT NULL,document_no VARCHAR(80) NOT NULL,
+  amount NUMERIC(19,4) NOT NULL,currency CHAR(3) NOT NULL,
+  state VARCHAR(20) NOT NULL,created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_fin_invoice PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_fin_invoice_order FOREIGN KEY(tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id),
+  CONSTRAINT uk_fin_invoice_no UNIQUE(tenant_id,document_no),
+  CONSTRAINT ck_fin_invoice_amount CHECK(amount >= 0),
+  CONSTRAINT ck_fin_invoice_state CHECK(state IN ('DRAFT','ISSUED','VOID'))
+);
+
+CREATE TABLE crm.mkt_campaign (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,
+  state VARCHAR(20) NOT NULL,default_locale VARCHAR(12) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_mkt_campaign PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_mkt_campaign_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT ck_mkt_campaign_state CHECK(state IN ('DRAFT','APPROVED','SCHEDULED','SENDING','COMPLETED','CANCELLED')),
+  CONSTRAINT ck_mkt_campaign_locale CHECK(default_locale IN ('kk','ru','en','zh-Hans'))
+);
+
+CREATE TABLE crm.task_item (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,
+  assignee_user_id UUID,status VARCHAR(20) NOT NULL,
+  due_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_task_item PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_task_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT fk_task_assignee FOREIGN KEY(assignee_user_id) REFERENCES public.iam_user_account(id),
+  CONSTRAINT ck_task_status CHECK(status IN ('OPEN','IN_PROGRESS','BLOCKED','COMPLETED','ARCHIVED'))
+);
+CREATE INDEX idx_task_assignee ON crm.task_item(tenant_id,assignee_user_id,status);
+
+CREATE TABLE crm.audit_event (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,
+  actor_user_id UUID NOT NULL,entity_id UUID NOT NULL,
+  action_code VARCHAR(80) NOT NULL,
+  occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_audit_event PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_audit_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT fk_audit_actor FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id)
+);
+CREATE INDEX idx_audit_history ON crm.audit_event(tenant_id,occurred_at);
+
+CREATE TABLE crm.sub_plan (
+  id UUID NOT NULL PRIMARY KEY,code VARCHAR(80) NOT NULL UNIQUE,
+  state VARCHAR(20) NOT NULL,
+  CONSTRAINT ck_sub_plan_state CHECK(state IN ('DRAFT','ACTIVE','RETIRED'))
+);
+CREATE TABLE crm.sub_subscription (
+  tenant_id UUID NOT NULL,id UUID NOT NULL,plan_id UUID NOT NULL,
+  state VARCHAR(20) NOT NULL,started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  ends_at TIMESTAMP WITH TIME ZONE,row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_sub_subscription PRIMARY KEY(tenant_id,id),
+  CONSTRAINT fk_sub_subscription_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT fk_sub_subscription_plan FOREIGN KEY(plan_id) REFERENCES crm.sub_plan(id),
+  CONSTRAINT ck_sub_subscription_state CHECK(state IN ('TRIAL','ACTIVE','PAST_DUE','CANCELLED','EXPIRED')),
+  CONSTRAINT ck_sub_subscription_period CHECK(ends_at IS NULL OR ends_at > started_at)
+);
+CREATE INDEX idx_sub_subscription_tenant ON crm.sub_subscription(tenant_id,state);
+
+--rollback DROP TABLE crm.sub_subscription;
+--rollback DROP TABLE crm.sub_plan;
+--rollback DROP TABLE crm.audit_event;
+--rollback DROP TABLE crm.task_item;
+--rollback DROP TABLE crm.mkt_campaign;
+--rollback DROP TABLE crm.fin_invoice;
+--rollback DROP TABLE crm.inv_stock_balance;
+--rollback ALTER TABLE public.org_location DROP CONSTRAINT uk_org_location_workspace_id;
+--rollback DROP TABLE crm.cat_price;
+--rollback DROP TABLE crm.cat_item_i18n;
+--rollback DROP TABLE crm.cat_item;
+--rollback DROP TABLE crm.file_attachment;
+--rollback DROP TABLE crm.file_storage;
+--rollback DROP TABLE crm.file_object;
