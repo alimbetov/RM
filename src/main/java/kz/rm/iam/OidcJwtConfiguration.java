@@ -27,7 +27,17 @@ public class OidcJwtConfiguration {
             @Value("${rm.security.oidc.audience}") String audience) {
         if(jwks.isBlank() || issuer.isBlank() || audience.isBlank())
             throw new IllegalArgumentException("OIDC issuer, audience and JWKS URL required");
+        if(!java.net.URI.create(jwks).getScheme().equalsIgnoreCase("https"))
+            throw new IllegalArgumentException("OIDC JWKS must use HTTPS");
         NimbusJwtDecoder decoder=NimbusJwtDecoder.withJwkSetUri(jwks).build();
+        configureValidation(decoder,issuer,audience);
+        return decoder;
+    }
+
+    /** Tested with locally signed JWTs; production uses the HTTPS JWKS decoder. */
+    static void configureValidation(NimbusJwtDecoder decoder,String issuer,String audience) {
+        if(issuer==null || issuer.isBlank() || audience==null || audience.isBlank())
+            throw new IllegalArgumentException("OIDC issuer and audience required");
         OAuth2TokenValidator<Jwt> expectedAudience=jwt->
                 jwt.getAudience().contains(audience)
                 ? OAuth2TokenValidatorResult.success()
@@ -35,6 +45,5 @@ public class OidcJwtConfiguration {
                     new OAuth2Error("invalid_token","Untrusted token audience",null));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(issuer),expectedAudience));
-        return decoder;
     }
 }
