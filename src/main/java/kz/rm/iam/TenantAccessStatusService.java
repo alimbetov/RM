@@ -75,8 +75,11 @@ public class TenantAccessStatusService {
                 throw new SecurityException("Cannot suspend the last active owner");
         }
         if (restore) {
+            // An account suspension must not commit between this check and the
+            // membership restoration. Keep the target account locked until the
+            // membership update commits (caller -> tenant -> target ordering).
             String accountStatus = jdbc.query("""
-                    SELECT status FROM public.iam_user_account WHERE id=?
+                    SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
                     """, rs -> rs.next() ? rs.getString(1) : null, targetUserId);
             if (!"ACTIVE".equals(accountStatus))
                 throw new SecurityException("Target account is not active");
