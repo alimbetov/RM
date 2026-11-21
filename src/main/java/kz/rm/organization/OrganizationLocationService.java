@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public class OrganizationLocationService {
+class OrganizationLocationService {
     private final TenantAuthorization authorization;
     private final KatoLocationPolicy kato;
     private final OrganizationLocationRepository locations;
