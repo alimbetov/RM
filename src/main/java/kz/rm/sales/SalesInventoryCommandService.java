@@ -2,7 +2,7 @@ package kz.rm.sales;
 
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
-import kz.rm.inventory.InventoryReservationService;
+import kz.rm.inventory.OrderInventoryPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +25,11 @@ import java.util.UUID;
 @Service
 public class SalesInventoryCommandService {
     private final TenantAuthorization authorization;
-    private final InventoryReservationService inventory;
+    private final OrderInventoryPort inventory;
     private final JdbcTemplate jdbc;
 
     public SalesInventoryCommandService(TenantAuthorization authorization,
-                                        InventoryReservationService inventory,JdbcTemplate jdbc) {
+                                        OrderInventoryPort inventory,JdbcTemplate jdbc) {
         this.authorization=authorization;
         this.inventory=inventory;
         this.jdbc=jdbc;
@@ -40,8 +40,8 @@ public class SalesInventoryCommandService {
 
     @Transactional
     public CommandResult confirm(UUID actorId,UUID tenantId,UUID orderId,UUID locationId) {
-        authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CONFIRM);
-        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RESERVE);
+        var salesPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CONFIRM);
+        var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RESERVE);
         if(orderId==null || locationId==null)
             throw new IllegalArgumentException("Order and warehouse required");
         String status=lockOrder(tenantId,orderId);
@@ -68,7 +68,7 @@ public class SalesInventoryCommandService {
         // State change remains invisible to other transactions until commit.
         updateOrder(tenantId,orderId,"PLACED","CONFIRMED");
         for(Line line:lines) {
-            inventory.reserve(tenantId,orderId,line.id(),locationId,line.itemId(),line.quantity());
+            inventory.reserve(salesPermit,stockPermit,orderId,line.id(),locationId,line.itemId(),line.quantity());
         }
         appendEvent(tenantId,orderId,"CONFIRMED");
         return new CommandResult(orderId,"CONFIRMED",lines.size());
@@ -76,8 +76,8 @@ public class SalesInventoryCommandService {
 
     @Transactional
     public CommandResult cancel(UUID actorId,UUID tenantId,UUID orderId) {
-        authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CANCEL);
-        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
+        var salesPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CANCEL);
+        var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
         if("CANCELLED".equals(state)) {
@@ -102,15 +102,15 @@ public class SalesInventoryCommandService {
             """,Integer.class,tenantId,orderId);
         if(fulfilled!=0)throw new IllegalStateException("Shipped items cannot be cancelled");
         updateOrder(tenantId,orderId,state,"CANCELLED");
-        for(UUID reservation:active)inventory.release(tenantId,reservation);
+        for(UUID reservation:active)inventory.release(salesPermit,stockPermit,reservation);
         appendEvent(tenantId,orderId,"CANCELLED");
         return new CommandResult(orderId,"CANCELLED",active.size());
     }
 
     @Transactional
     public CommandResult fulfill(UUID actorId,UUID tenantId,UUID orderId) {
-        authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_FULFILL);
-        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
+        var salesPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_FULFILL);
+        var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
         if("COMPLETED".equals(state)) {
@@ -133,7 +133,7 @@ public class SalesInventoryCommandService {
             """,(rs,n)->rs.getObject(1,UUID.class),tenantId,orderId);
         if(active.size()!=lineCount || lineCount==0)
             throw new IllegalStateException("Order reservations incomplete");
-        for(UUID reservation:active)inventory.fulfill(tenantId,reservation);
+        for(UUID reservation:active)inventory.fulfill(salesPermit,stockPermit,reservation);
         updateOrder(tenantId,orderId,state,"COMPLETED");
         appendEvent(tenantId,orderId,"COMPLETED");
         return new CommandResult(orderId,"COMPLETED",active.size());
