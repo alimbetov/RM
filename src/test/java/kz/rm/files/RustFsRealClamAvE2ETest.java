@@ -52,14 +52,19 @@ class RustFsRealClamAvE2ETest {
                 assertThat(scanner.scan(staged.key())).isEqualTo(FileScanPort.Verdict.CLEAN);
             } finally {store.delete(staged.key());}
 
-            byte[] infected=pdf(EICAR);
-            var dangerous=store.stage(tenant,UUID.randomUUID(),
-                    new ByteArrayInputStream(infected),infected.length,"application/pdf");
+            // EICAR must be the exact standalone standard bytes: wrapping the
+            // signature in a PDF is NOT a reliable AV qualification fixture.
+            byte[] eicar=EICAR.getBytes(StandardCharsets.US_ASCII);
+            assertThat(eicar.length).isEqualTo(68);
+            String infectedKey="rustfs/"+tenant+"/"+UUID.randomUUID()+"/stage-"+UUID.randomUUID();
+            api.putObject(software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
+                    .bucket(bucket).key(infectedKey.substring(7)).build(),
+                software.amazon.awssdk.core.sync.RequestBody.fromBytes(eicar));
             try {
-                assertThat(scanner.scan(dangerous.key())).isEqualTo(FileScanPort.Verdict.INFECTED);
+                assertThat(scanner.scan(infectedKey)).isEqualTo(FileScanPort.Verdict.INFECTED);
                 assertThat(new ClamAvFileScanner(store,"127.0.0.1",1,26_214_400)
-                    .scan(dangerous.key())).isEqualTo(FileScanPort.Verdict.ERROR);
-            } finally {store.delete(dangerous.key());}
+                    .scan(infectedKey)).isEqualTo(FileScanPort.Verdict.ERROR);
+            } finally {store.delete(infectedKey);}
         }
     }
 }
