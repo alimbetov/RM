@@ -26,9 +26,11 @@ public class PlatformTenantRecoveryService {
     }
 
     @Transactional
-    public void recoverOwner(VerifiedActor administrator,UUID tenantId,UUID replacementUserId) {
+    public void recoverOwner(VerifiedActor administrator,UUID tenantId,UUID replacementUserId,String incidentCode) {
         if(tenantId==null || replacementUserId==null)
             throw new SecurityException("Valid tenant and replacement account required");
+        if(incidentCode==null || !incidentCode.matches("[A-Z0-9_-]{6,80}"))
+            throw new IllegalArgumentException("Approved incident reference required");
         UUID adminId=admins.activeAdministrator(administrator);
         // Target account lock must precede workspace lock, consistent with commands.
         String replacementStatus=jdbc.query("""
@@ -75,7 +77,7 @@ public class PlatformTenantRecoveryService {
                     WHERE organization_id=? AND user_id=? AND role='OWNER'
                     """,organizationId,previous);
             if(changed!=1)throw new IllegalStateException("Concurrent old owner change");
-            audit(tenantId,adminId,previous,"OWNER_DEMOTED_BY_RECOVERY");
+            audit(tenantId,adminId,previous,"OWNER_DEMOTED_BY_RECOVERY",incidentCode);
         }
 
         int changed=jdbc.update("""
@@ -89,15 +91,15 @@ public class PlatformTenantRecoveryService {
                 SET state='CANCELLED',decided_at=?,row_version=row_version+1
                 WHERE tenant_id=? AND state='PENDING'
                 """,Timestamp.from(Instant.now()),tenantId);
-        audit(tenantId,adminId,replacementUserId,"OWNER_RECOVERED");
+        audit(tenantId,adminId,replacementUserId,"OWNER_RECOVERED",incidentCode);
     }
 
-    private void audit(UUID tenantId,UUID actorId,UUID targetId,String action) {
+    private void audit(UUID tenantId,UUID actorId,UUID targetId,String action,String reason) {
         jdbc.update("""
                 INSERT INTO public.iam_tenant_rbac_event
-                  (tenant_id,id,actor_user_id,action_code,target_user_id,occurred_at)
-                VALUES (?,?,?,?,?,?)
+                  (tenant_id,id,actor_user_id,action_code,target_user_id,occurred_at,reason_code)
+                VALUES (?,?,?,?,?,?,?)
                 """,tenantId,UUID.randomUUID(),actorId,action,targetId,
-                Timestamp.from(Instant.now()));
+                Timestamp.from(Instant.now()),reason);
     }
 }
