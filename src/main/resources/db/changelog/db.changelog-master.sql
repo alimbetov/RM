@@ -1916,7 +1916,7 @@ CREATE TABLE crm.contract_revision (
  CONSTRAINT fk_crm_revision_actor FOREIGN KEY(actor_id) REFERENCES public.iam_user_account(id),
  CONSTRAINT ck_crm_revision_period CHECK(ends_on IS NULL OR ends_on>=starts_on),
  CONSTRAINT ck_crm_revision_status CHECK(status IN ('DRAFT','ACTIVE','CLOSED','CANCELLED')),
- CONSTRAINT ck_crm_revision_action CHECK(action_code IN ('CREATED','DATES_CHANGED','STATUS_CHANGED','RENEWED'))
+ CONSTRAINT ck_crm_revision_action CHECK(action_code IN ('CREATED','BASELINE_CAPTURED','DATES_CHANGED','STATUS_CHANGED','RENEWED'))
 );
 CREATE INDEX idx_crm_contract_revision_tenant ON crm.contract_revision(tenant_id,contract_id,revision_no);
 --rollback DROP TABLE crm.contract_revision;
