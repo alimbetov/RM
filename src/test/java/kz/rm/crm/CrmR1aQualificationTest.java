@@ -252,14 +252,22 @@ class CrmR1aQualificationTest {
                 "CRM reader");
         roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_READ);
         roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_PII_READ);
-        roles.assign(t.actorId(),t.tenantId(),t.actorId(),role.id());
+
+        UUID orgId=jdbc.queryForObject(
+                "SELECT organization_id FROM public.iam_workspace WHERE id=?",
+                UUID.class,t.tenantId());
+        var staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "crm-reader-"+UUID.randomUUID(),"CRM reader"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                orgId,staff.getId(),OrganizationMembershipEntity.Role.MEMBER));
+        roles.assign(t.actorId(),t.tenantId(),staff.getId(),role.id());
         roles.enable(t.actorId(),t.tenantId());
         var admitted=new CountDownLatch(1);
         var release=new CountDownLatch(1);
         var tx=new TransactionTemplate(transactions);
         try(var pool=Executors.newFixedThreadPool(2)) {
             var reading=pool.submit(()->tx.execute(s->{
-                assertThat(secureQueries.getCustomer(verified(t.actorId()),
+                assertThat(secureQueries.getCustomer(verified(staff.getId()),
                         t.tenantId(),person).name()).isEqualTo("Private Person");
                 admitted.countDown();
                 try {
@@ -285,7 +293,7 @@ class CrmR1aQualificationTest {
             assertThat(reading.get(20,TimeUnit.SECONDS)).isTrue();
             assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
         }
-        assertThatThrownBy(()->secureQueries.getCustomer(verified(t.actorId()),
+        assertThatThrownBy(()->secureQueries.getCustomer(verified(staff.getId()),
                 t.tenantId(),person)).isInstanceOf(SecurityException.class);
     }
 
