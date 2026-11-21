@@ -31,7 +31,19 @@ class IamUserOnboardingProcessQualificationTest {
     }
 
     private VerifiedActor actor(UUID userId) {
-        return new VerifiedActor(userId,Instant.now().plusSeconds(300));
+        // Process test goes through the identity resolver, not a forged caller UUID.
+        // Signature checking is simulated by JwtDecoder here; real issuer/JWKS is a separate gate.
+        String subject=jdbc.queryForObject("""
+                SELECT external_subject FROM public.iam_user_account WHERE id=?
+                """,String.class,userId);
+        org.springframework.security.oauth2.jwt.JwtDecoder verifiedDecoder=token ->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                    .header("alg","RS256")
+                    .subject(subject)
+                    .issuedAt(Instant.now().minusSeconds(10))
+                    .expiresAt(Instant.now().plusSeconds(300))
+                    .build();
+        return new OidcActorResolver(verifiedDecoder,users).resolve("synthetic-process-only");
     }
 
     private UUID admin() {
