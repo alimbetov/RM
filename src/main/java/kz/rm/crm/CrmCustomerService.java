@@ -282,6 +282,11 @@ public class CrmCustomerService {
     @Transactional
     void archiveCustomer(UUID actorId, UUID tenantId, UUID customerId, long expectedVersion) {
         requireOrganizationMember(actorId,tenantId,true);
+        // Serialize archiving with contract creation on the same customer row.
+        Integer locked=jdbc.queryForObject("""
+          SELECT 1 FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE
+          """,Integer.class,tenantId,customerId);
+        if(locked==null) throw new IllegalStateException("Customer not found");
         Integer activeContracts=jdbc.queryForObject("""
           SELECT count(*) FROM crm.customer_contract
           WHERE tenant_id=? AND customer_id=? AND status='ACTIVE'
