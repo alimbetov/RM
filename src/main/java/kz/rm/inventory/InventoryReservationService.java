@@ -40,8 +40,10 @@ public class InventoryReservationService {
                                UUID locationId, UUID itemId, BigDecimal quantity) {
         requireIds(tenantId,orderId,orderLineId,locationId,itemId);
         positiveQty(quantity);
-        lockRequest(tenantId,orderLineId);
+        // Global lock order: seller order -> request stripe -> stock row.
+        // SALES confirmation/cancellation holds this exact order lock first.
         requireOrderStatus(tenantId,orderId,true);
+        lockRequest(tenantId,orderLineId);
         OrderLine line=jdbc.query("""
             SELECT l.quantity,s.catalog_item_id
             FROM crm.sales_order_line l
@@ -97,8 +99,8 @@ public class InventoryReservationService {
     private Reservation transition(UUID tenantId,UUID reservationId,State target) {
         if(tenantId==null || reservationId==null) throw new IllegalArgumentException("Reservation required");
         Reservation peek=loadById(tenantId,reservationId,false);
-        lockRequest(tenantId,peek.lineId());
         String orderStatus=requireOrderStatus(tenantId,peek.orderId(),false);
+        lockRequest(tenantId,peek.lineId());
         Stock stock=lockStock(tenantId,peek.locationId(),peek.itemId());
         Reservation current=loadById(tenantId,reservationId,true);
         if(current.state()==target) return current; // terminal replay survives later order status changes
