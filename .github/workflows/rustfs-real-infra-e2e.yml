@@ -133,6 +133,18 @@ jobs:
           RM_RUSTFS_E2E_PHASE: outage
         run: mvn -B -ntp test -Dtest=RustFsRestartProbeTest
 
+      - name: Quiesced PostgreSQL binary backup and restored database
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_SERVICE_ID" pg_dump -U rm -d rm_test -Fc -f /tmp/rm-files-rustfs.dump
+          docker exec "$PG_SERVICE_ID" createdb -U rm rm_restore
+          docker exec "$PG_SERVICE_ID" pg_restore --exit-on-error --no-owner --no-acl \
+            -U rm -d rm_restore /tmp/rm-files-rustfs.dump
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_restore \
+            -c "SELECT count(*) FROM crm.file_storage WHERE provider='RUSTFS' AND state='ACTIVE';"
+
       - name: Offline backup RustFS persisted volume
         run: |
           set -euo pipefail
@@ -165,6 +177,12 @@ jobs:
           done
           docker logs --tail 150 rm-rustfs-restored
           exit 1
+
+      - name: Check restored PostgreSQL metadata against restored RustFS object SHA
+        env:
+          RM_RUSTFS_RESTORE_E2E: "true"
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_restore
+        run: mvn -B -ntp test -Dtest=RustFsRestoredDatabaseE2ETest
 
       - name: Verify original object through restored fresh RustFS volume and delete
         env:
