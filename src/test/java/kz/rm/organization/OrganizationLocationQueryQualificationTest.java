@@ -2,7 +2,7 @@ package kz.rm.organization;
 
 import kz.rm.iam.*;
 import kz.rm.organization.dto.LocationSearch;
-import kz.rm.inventory.StockBalanceQueryService;
+import kz.rm.inventory.AuthenticatedInventoryQueries;
 import kz.rm.inventory.dto.StockSearch;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.UUID;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.*;
 class OrganizationLocationQueryQualificationTest {
     @Autowired OrganizationLocationService create;
     @Autowired OrganizationLocationQueryService query;
-    @Autowired StockBalanceQueryService stock;
+    @Autowired AuthenticatedInventoryQueries stock;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
     @Autowired UserAccountRepository users;
@@ -37,6 +38,17 @@ class OrganizationLocationQueryQualificationTest {
                 OrganizationMembershipEntity.Role.OWNER));
         jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         return new Context(user.getId(),workspace.getId());
+    }
+
+    private VerifiedActor verified(UUID id) {
+        String subject=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,id);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                        .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                        .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder,users).resolve("test-only-token");
     }
 
     private String kato() {
@@ -100,11 +112,11 @@ class OrganizationLocationQueryQualificationTest {
             INSERT INTO crm.inv_stock_balance(tenant_id,location_id,item_id,on_hand,reserved)
             VALUES (?,?,?,5,5)
             """,b.tenant(),locB.getId(),itemB);
-        var rows=stock.search(a.actor(),a.tenant(),
+        var rows=stock.search(verified(a.actor()),a.tenant(),
                 new StockSearch(locA.getId(),null,true),0,10);
         assertThat(rows.getTotalElements()).isEqualTo(1);
         assertThat(rows.getContent().getFirst().available()).isEqualByComparingTo("7");
-        assertThat(stock.search(b.actor(),b.tenant(),
+        assertThat(stock.search(verified(b.actor()),b.tenant(),
                 new StockSearch(locB.getId(),null,true),0,10).getTotalElements()).isZero();
         assertThatThrownBy(()->stock.search(a.actor(),b.tenant(),null,0,10))
                 .isInstanceOf(SecurityException.class);
