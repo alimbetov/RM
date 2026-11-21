@@ -248,4 +248,96 @@ class IamAdminOwnerGovernanceQualificationTest {
                 DELETE FROM public.iam_global_role_event WHERE target_user_id=?
                 """,staff)).isInstanceOf(Exception.class);
     }
+
+    @Test void successorSuspendedAfterTransferRequestCannotBecomeOwner() {
+        Fixture f=fixture();
+        var request=transfers.requestTransfer(actor(f.owner()),f.tenant(),f.staff());
+        access.suspendMember(actor(f.owner()),f.tenant(),f.staff());
+        assertThatThrownBy(()->transfers.acceptTransfer(actor(f.staff()),f.tenant(),request.id()))
+                .isInstanceOf(SecurityException.class);
+        authorization.require(f.owner(),f.tenant(),DomainPermission.TENANT_RBAC_MANAGE);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND action_code='OWNER_TRANSFER_ACCEPTED'
+                """,Integer.class,f.tenant())).isZero();
+    }
+
+    @Test void recoveredOwnerMayRestoreSuspendedOrganization() {
+        Fixture f=fixture();
+        // Simulated exceptional legacy state, never reachable through normal
+        // last-OWNER guard. An administrator cannot open CRM via this recovery.
+        jdbc.update("""
+                UPDATE public.iam_org_membership
+                SET status='SUSPENDED' WHERE user_id=? AND role='OWNER'
+                """,f.owner());
+        jdbc.update("""
+                UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?
+                """,f.tenant());
+        recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff());
+        assertThatThrownBy(()->authorization.require(f.staff(),f.tenant(),
+                DomainPermission.TENANT_RBAC_MANAGE)).isInstanceOf(SecurityException.class);
+        access.restoreTenant(actor(f.staff()),f.tenant());
+        authorization.require(f.staff(),f.tenant(),DomainPermission.TENANT_RBAC_MANAGE);
+        assertThatThrownBy(()->authorization.require(f.admin(),f.tenant(),
+                DomainPermission.CRM_READ)).isInstanceOf(SecurityException.class);
+    }
+
+    @Test void concurrentEmergencyRecoveryAdmitsOnlyOneOwner() throws Exception {
+        Fixture f=fixture();
+        UUID otherEmployee=user(),secondAdmin=admin();
+        enrollment.invite(actor(f.owner()),f.tenant(),otherEmployee);
+        enrollment.accept(actor(otherEmployee),f.tenant());
+        jdbc.update("""
+                UPDATE public.iam_org_membership SET status='SUSPENDED'
+                WHERE user_id=? AND role='OWNER'
+                """,f.owner());
+        var begin=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var a=pool.submit(()->{
+                begin.await(5,TimeUnit.SECONDS);
+                try { recovery.recoverOwner(actor(f.admin()),f.tenant(),f.staff()); return true; }
+                catch(SecurityException conflict) { return false; }
+            });
+            var b=pool.submit(()->{
+                begin.await(5,TimeUnit.SECONDS);
+                try { recovery.recoverOwner(actor(secondAdmin),f.tenant(),otherEmployee); return true; }
+                catch(SecurityException conflict) { return false; }
+            });
+            begin.countDown();
+            assertThat((a.get(20,TimeUnit.SECONDS)?1:0)
+                    +(b.get(20,TimeUnit.SECONDS)?1:0)).isEqualTo(1);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND action_code='OWNER_RECOVERED'
+                """,Integer.class,f.tenant())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_org_membership m
+                JOIN public.iam_workspace w ON w.organization_id=m.organization_id
+                WHERE w.id=? AND m.status='ACTIVE' AND m.role='OWNER'
+                """,Integer.class,f.tenant())).isEqualTo(1);
+    }
+
+    @Test @Transactional
+    void initialAdminBootstrapRejectsPreviouslyRevokedGlobalRole() throws Exception {
+        UUID candidate=user(),previous=user();
+        String secret="different-offline-secret-"+UUID.randomUUID()+"-"+UUID.randomUUID();
+        String digest=HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256")
+                        .digest(secret.getBytes(StandardCharsets.UTF_8)));
+        jdbc.update("""
+                INSERT INTO public.iam_global_role_assignment
+                  (id,user_id,role,granted_at,revoked_at)
+                VALUES (?,?,'PLATFORM_ADMIN',?,?)
+                """,UUID.randomUUID(),previous,
+                Timestamp.from(Instant.now().minusSeconds(7200)),
+                Timestamp.from(Instant.now().minusSeconds(3600)));
+        var configured=new PlatformAdminGovernanceService(jdbc,true,digest);
+        assertThatThrownBy(()->configured.bootstrapFirstAdmin(actor(candidate),secret))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT bootstrapped FROM public.iam_global_admin_guard WHERE id=1
+                """,Boolean.class)).isFalse();
+    }
+
 }
