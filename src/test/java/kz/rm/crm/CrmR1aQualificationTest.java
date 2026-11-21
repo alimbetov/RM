@@ -740,6 +740,8 @@ class CrmR1aQualificationTest {
         var customerB=secureCommands.createCompany(actorB,b.tenantId(),"B client",null);
         var categoryA=categoryService.create(actorA,a.tenantId(),"WHOLESALE","Wholesale");
         var categoryB=categoryService.create(actorB,b.tenantId(),"WHOLESALE","Wholesale B");
+        assertThatThrownBy(()->categoryService.create(actorA,a.tenantId(),"WHOLESALE","Duplicate"))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         categoryService.assignPrimary(actorA,a.tenantId(),customerA.id(),categoryA.id());
         assertThat(customerMetadata.findByTenantIdAndId(a.tenantId(),customerA.id())
                 .orElseThrow().getPrimaryCategoryId()).isEqualTo(categoryA.id());
@@ -759,6 +761,9 @@ class CrmR1aQualificationTest {
                 today.minusDays(20),today.plusDays(10),today);
         var second=contractService.create(actorA,a.tenantId(),customerA.id(),"CN-02",
                 today.minusDays(20),today.plusDays(60),today);
+        assertThatThrownBy(()->contractService.create(actorA,a.tenantId(),customerA.id(),
+                "CN-01",today,today.plusDays(2),today))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         var foreign=contractService.create(actorB,b.tenantId(),customerB.id(),"CN-01",
                 today.minusDays(20),today.plusDays(3),today);
         assertThat(first.expiryIndicator()).isEqualTo(ContractExpiryPolicy.Indicator.DRAFT);
