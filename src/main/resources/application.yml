@@ -13,3 +13,13 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+
+# Nightly audit history retention: deliberately opt-in until tenant approvals and
+# PostgreSQL upgrade/backup qualification are complete.
+rm:
+  retention:
+    enabled: ${RM_RETENTION_ENABLED:false}
+    cron: "${RM_RETENTION_CRON:0 30 2 * * *}"
+    time-zone: "${RM_RETENTION_TIME_ZONE:Asia/Almaty}"
+    batch-size: ${RM_RETENTION_BATCH_SIZE:500}
+    max-batches: ${RM_RETENTION_MAX_BATCHES:10}
