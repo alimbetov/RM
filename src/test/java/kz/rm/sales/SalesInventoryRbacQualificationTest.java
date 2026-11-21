@@ -284,12 +284,11 @@ class SalesInventoryRbacQualificationTest {
             authorization.requireForCommand(c.staff(),c.tenant(),DomainPermission.INVENTORY_RESERVE)
         });
         assertThat(stale).isNotNull();
-        template.execute(tx->{
-            assertThatThrownBy(()->crossDomainPort.reserve(stale[0],stale[1],
-                UUID.randomUUID(),UUID.randomUUID(),c.location(),c.item(),BigDecimal.ONE))
-                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->template.execute(tx->{
+            crossDomainPort.reserve(stale[0],stale[1],
+                UUID.randomUUID(),UUID.randomUUID(),c.location(),c.item(),BigDecimal.ONE);
             return null;
-        });
+        })).isInstanceOf(SecurityException.class);
     }
 
     @Test void verifiedSalesFacadeIsThePublicCommandEntry() {
