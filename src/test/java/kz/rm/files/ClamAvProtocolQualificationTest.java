@@ -29,7 +29,7 @@ class ClamAvProtocolQualificationTest {
                 "stream: OK",FileScanPort.Verdict.CLEAN,
                 "stream: Eicar-Test-Signature FOUND",FileScanPort.Verdict.INFECTED,
                 "stream: limit exceeded ERROR",FileScanPort.Verdict.ERROR).entrySet()) {
-            try(var server=new ServerSocket(0,1,InetAddress.getLoopbackAddress());
+            try(var server=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"));
                 var pool=Executors.newSingleThreadExecutor()) {
                 var task=pool.submit(()->{
                     try(var connection=server.accept()) {
