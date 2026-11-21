@@ -1,6 +1,6 @@
 # RM-KMS-R1.7 — PostgreSQL scheduler fencing, first implementation slice
 
-**Branch:** `feat/rm-kms-r1-implementation`. **Status:** BASELINE POSTGRESQL/H2 GREEN on commit `9958973d`; final long-running-expiry test validation pending.  
+**Branch:** `feat/rm-kms-r1-implementation`. **Status:** R1.7 DATABASE FENCING PRIMITIVE GREEN; scheduler integration and end-to-end multi-pod qualification HOLD.  
 **Scope:** one durable KMS key-maintenance lease per tenant, shared by all RM pods. No rotation/nightly migration enabled.
 
 ## Audit of actual RM scheduler
@@ -53,3 +53,16 @@ Run [#44870957733](https://github.com/alimbetov/RM/actions/runs/44870957733) on 
 - Subsequent change adds an additional test `callbackThatOutlivesItsLeaseMustRollbackBeforeCommit`; do not claim this test GREEN until the next CI run completes.
 
 **Gate:** R1.7 DB-backed lease/fencing baseline PASS (27 tests). Scheduler integration, two real pods and complete R1.8 writer barrier remain HOLD.
+
+
+## Final R1.7 DB fencing verification (after time-adapter fix)
+
+Commit `876d43b3f02b8578ecb6617a7519d9c974ba4e39` — GitHub Actions [#44871115085](https://github.com/alimbetov/RM/actions/runs/44871115085):
+- **H2 dev: 28/28 PASS**, failures 0, errors 0, skipped 0, BUILD SUCCESS.
+- **PostgreSQL 17 test: 28/28 PASS**, failures 0, errors 0, skipped 0, BUILD SUCCESS.
+- **6/6** `KmsFencedJobQualificationTest` scenarios per environment. Explicitly includes callback continuing beyond 1-second lease: transaction rolls back before commit; subsequent owner gets a strictly higher token.
+- **7 Liquibase changesets** applied and JPA validated.
+
+During qualification, first H2 run of callback-expiration test failed because H2 `CURRENT_TIMESTAMP` is frozen at transaction start, even when code sleeps within that transaction. Production PostgreSQL correctly uses `clock_timestamp()` (real time). The H2 test adapter now uses `Instant.now()` to model advancing time **only for H2 smoke**; do not treat H2's JVM clock as a distributed authority. This defect was reproduced and fixed, not suppressed.
+
+**The scope of this PASS is intentionally narrow:** database lease acquisition, exclusion, fencing verification and transactional rollback with two service objects sharing an isolated DB. It does not qualify an externally implemented scheduler, Kubernetes pods or concurrent CRM writes across an ACTIVE change. The latter must be implemented and tested in R1.8 before rotation/migration can be enabled.
