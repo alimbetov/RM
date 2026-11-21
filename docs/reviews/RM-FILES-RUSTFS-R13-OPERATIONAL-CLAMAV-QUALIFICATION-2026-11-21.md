@@ -6,7 +6,7 @@
 
 ## Immutable infrastructure versions used by qualification
 
-- RustFS registry reference: `rustfs/rustfs@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c`; observed Linux image ID `sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a`.
+- RustFS registry reference: `rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a`; observed Linux image ID `sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a`.
 - ClamAV registry reference: `clamav/clamav@sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8`; observed image ID `sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8`.
 - CI `.github/workflows/rustfs-real-infra-e2e.yml` validates expected image IDs after immutable-digest pull before tests. A deployment image and scanner signature database must be separately maintained and reviewed.
 
