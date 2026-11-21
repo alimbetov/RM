@@ -485,6 +485,139 @@ class SalesInventoryRbacQualificationTest {
         return sorted.get(Math.max(0,(int)Math.ceil(quantile*sorted.size())-1));
     }
 
+
+    /**
+     * R1.3: simulate a process failure after the domain method returns but before
+     * the outer transaction commits. The retry must recreate exactly one effect.
+     */
+    @Test void r13RollbackAfterSuccessfulDomainCallsCanBeSafelyRetried() {
+        Context c=context(10);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        var tx=new TransactionTemplate(transactionManager);
+
+        assertThatThrownBy(()->tx.execute(s->{
+            assertThat(commands.confirm(c.staff(),c.tenant(),id,c.location()).affectedLines())
+                    .isEqualTo(1);
+            throw new IllegalStateException("synthetic failure before confirm commit");
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("synthetic failure");
+        assertThat(status(c,id)).isEqualTo("PLACED");
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("10");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+        assertThat(reservationCount(c,id,"ACTIVE")).isZero();
+        assertThat(eventCount(c,id,"CONFIRMED")).isZero();
+
+        assertThat(commands.confirm(c.staff(),c.tenant(),id,c.location()).affectedLines())
+                .isEqualTo(1);
+        assertThat(commands.confirm(c.staff(),c.tenant(),id,c.location()).affectedLines())
+                .isZero();
+        assertThat(reservationCount(c,id,"ACTIVE")).isEqualTo(1);
+        assertThat(eventCount(c,id,"CONFIRMED")).isEqualTo(1);
+
+        assertThatThrownBy(()->tx.execute(s->{
+            assertThat(commands.cancel(c.staff(),c.tenant(),id).affectedLines())
+                    .isEqualTo(1);
+            throw new IllegalStateException("synthetic failure before cancel commit");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(status(c,id)).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
+        assertThat(reservationCount(c,id,"ACTIVE")).isEqualTo(1);
+        assertThat(reservationCount(c,id,"RELEASED")).isZero();
+        assertThat(eventCount(c,id,"CANCELLED")).isZero();
+
+        assertThatThrownBy(()->tx.execute(s->{
+            assertThat(commands.fulfill(c.staff(),c.tenant(),id).affectedLines()).isEqualTo(1);
+            throw new IllegalStateException("synthetic failure before fulfill commit");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(status(c,id)).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("10");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
+        assertThat(reservationCount(c,id,"ACTIVE")).isEqualTo(1);
+        assertThat(fulfillmentMovementCount(c,id)).isZero();
+        assertThat(eventCount(c,id,"COMPLETED")).isZero();
+
+        assertThat(commands.fulfill(c.staff(),c.tenant(),id).affectedLines()).isEqualTo(1);
+        assertThat(commands.fulfill(c.staff(),c.tenant(),id).affectedLines()).isZero();
+        assertThat(status(c,id)).isEqualTo("COMPLETED");
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("7");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+        assertThat(fulfillmentMovementCount(c,id)).isEqualTo(1);
+        assertThat(eventCount(c,id,"COMPLETED")).isEqualTo(1);
+    }
+
+    @Test void r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Context c=context(10);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        commands.confirm(c.staff(),c.tenant(),id,c.location());
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var cancellation=pool.submit(()->{
+                if(!start.await(10,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Start barrier");
+                try {
+                    return commands.cancel(c.staff(),c.tenant(),id).affectedLines()==1;
+                } catch(IllegalStateException expected) {
+                    return false;
+                }
+            });
+            var fulfillment=pool.submit(()->{
+                if(!start.await(10,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Start barrier");
+                try {
+                    return commands.fulfill(c.staff(),c.tenant(),id).affectedLines()==1;
+                } catch(IllegalStateException expected) {
+                    return false;
+                }
+            });
+            start.countDown();
+            boolean cancelled=cancellation.get(30,TimeUnit.SECONDS);
+            boolean fulfilled=fulfillment.get(30,TimeUnit.SECONDS);
+            assertThat((cancelled?1:0)+(fulfilled?1:0)).isEqualTo(1);
+            assertThat(status(c,id)).isEqualTo(cancelled?"CANCELLED":"COMPLETED");
+            assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+            assertThat(scalar(c,"on_hand")).isEqualByComparingTo(cancelled?"10":"7");
+            assertThat(reservationCount(c,id,"ACTIVE")).isZero();
+            assertThat(reservationCount(c,id,cancelled?"RELEASED":"FULFILLED"))
+                    .isEqualTo(1);
+            assertThat(fulfillmentMovementCount(c,id)).isEqualTo(fulfilled?1:0);
+            assertThat(eventCount(c,id,"CANCELLED")).isEqualTo(cancelled?1:0);
+            assertThat(eventCount(c,id,"COMPLETED")).isEqualTo(fulfilled?1:0);
+        }
+    }
+
+    private int reservationCount(Context c,UUID orderId,String state) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state=?
+                """,Integer.class,c.tenant(),orderId,state);
+    }
+
+    private int eventCount(Context c,UUID orderId,String event) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=? AND event_type=?
+                """,Integer.class,c.tenant(),orderId,event);
+    }
+
+    private int fulfillmentMovementCount(Context c,UUID orderId) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement m
+                JOIN crm.inv_stock_reservation r
+                  ON r.tenant_id=m.tenant_id AND r.id=m.reservation_id
+                WHERE r.tenant_id=? AND r.order_id=? AND m.movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant(),orderId);
+    }
+
     @Test void finalSecGateRejectsMixedActorTenantAndMissingInventoryPermits() {
         Context first=context(7), other=context(7);
         allow(first,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
