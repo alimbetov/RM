@@ -2,7 +2,6 @@ package kz.rm.iam;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import java.util.EnumSet;
 import java.util.UUID;
 
 /**
@@ -48,7 +47,10 @@ public class TenantAuthorization {
     private boolean permitted(DomainPermission permission, OrganizationMembershipEntity.Role role) {
         if (role == null) return false;
         return switch (permission) {
-            case CRM_READ -> EnumSet.allOf(OrganizationMembershipEntity.Role.class).contains(role);
+            case CRM_READ -> true;
+            case CRM_PII_READ -> role == OrganizationMembershipEntity.Role.OWNER
+                || role == OrganizationMembershipEntity.Role.ADMIN
+                || role == OrganizationMembershipEntity.Role.MANAGER;
             case CRM_WRITE, ORGANIZATION_LOCATION_WRITE, INVENTORY_SETTINGS_MANAGE ->
                 role == OrganizationMembershipEntity.Role.OWNER
                 || role == OrganizationMembershipEntity.Role.ADMIN
