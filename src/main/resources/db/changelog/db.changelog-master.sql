@@ -1669,3 +1669,27 @@ CREATE TRIGGER trg_iam_email_lifecycle_event_immutable
  BEFORE UPDATE OR DELETE ON public.iam_email_lifecycle_event
  FOR EACH ROW EXECUTE FUNCTION public.iam_reject_email_verification_event_mutation();
 --rollback DROP TRIGGER trg_iam_email_lifecycle_event_immutable ON public.iam_email_lifecycle_event;
+
+
+--changeset rm:0049-iam-global-profile-envelopes
+-- Global IAM identity profile is NOT encrypted with a tenant DEK. Application
+-- enforces per-user, per-field AAD. Plaintext legacy columns remain only for
+-- explicitly gated, offline backfill until destructive cutover qualification.
+CREATE SCHEMA IF NOT EXISTS iam_pii;
+CREATE TABLE iam_pii.user_profile_secret (
+ user_id UUID PRIMARY KEY,
+ display_name_envelope BYTEA NOT NULL,
+ phone_envelope BYTEA,
+ phone_lookup_hmac BYTEA,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_iam_profile_user FOREIGN KEY(user_id)
+ REFERENCES public.iam_user_account(id),
+ CONSTRAINT uk_iam_profile_phone_lookup UNIQUE(phone_lookup_hmac),
+ CONSTRAINT ck_iam_profile_version CHECK(row_version>=0)
+);
+ALTER TABLE public.iam_user_account ALTER COLUMN display_name DROP NOT NULL;
+--rollback ALTER TABLE public.iam_user_account ALTER COLUMN display_name SET NOT NULL;
+--rollback DROP TABLE iam_pii.user_profile_secret;
+--rollback DROP SCHEMA iam_pii;
