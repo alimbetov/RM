@@ -11,6 +11,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.UUID;
 import java.time.Instant;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -18,6 +20,8 @@ import static org.assertj.core.api.Assertions.*;
 class OrganizationLocationQueryQualificationTest {
     @Autowired OrganizationLocationService create;
     @Autowired OrganizationLocationQueryService query;
+    @Autowired AuthenticatedOrganizationLocations secured;
+    @Autowired PlatformTransactionManager transactions;
     @Autowired AuthenticatedInventoryQueries stock;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -84,6 +88,37 @@ class OrganizationLocationQueryQualificationTest {
         assertThatThrownBy(()->query.get(b.actor(),b.tenant(),first.getId()))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(()->query.search(a.actor(),a.tenant(),null,0,101))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+
+    @Test void verifiedLocationFacadeAndTransactionRollback() {
+        var a=setup();
+        var b=setup();
+        var actor=verified(a.actor());
+        assertThatThrownBy(()->secured.create(null,a.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"Blocked",kato(),null))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secured.search(null,a.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secured.create(actor,b.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"Wrong tenant",kato(),null))
+                .isInstanceOf(SecurityException.class);
+        var tx=new TransactionTemplate(transactions);
+        assertThatThrownBy(()->tx.execute(s->{
+            secured.create(actor,a.tenant(),OrganizationLocationEntity.Type.WAREHOUSE,
+                    "Uncommitted A",kato(),null);
+            secured.create(actor,a.tenant(),OrganizationLocationEntity.Type.BRANCH,
+                    "Uncommitted B",kato(),null);
+            throw new IllegalStateException("synthetic organization rollback");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(secured.search(actor,a.tenant(),null,0,10).getTotalElements()).isZero();
+        var created=secured.create(actor,a.tenant(),OrganizationLocationEntity.Type.WAREHOUSE,
+                "Committed",kato(),null);
+        assertThat(secured.get(actor,a.tenant(),created.id()).name()).isEqualTo("Committed");
+        assertThat(secured.search(actor,a.tenant(),null,0,10).getTotalElements())
+                .isEqualTo(1);
+        assertThatThrownBy(()->secured.get(verified(b.actor()),b.tenant(),created.id()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
