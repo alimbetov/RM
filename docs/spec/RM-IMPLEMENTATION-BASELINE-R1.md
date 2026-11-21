@@ -163,3 +163,8 @@ All 15 named contexts now have a canonical module registry, Java source package 
 ## QUAL-RM-DOMAIN-R1.2 — единая IAM email-идентичность
 
 Зафиксирована кодовая граница: глобальные `EmailIdentityCrypto`, `EmailIdentityService` (email find-or-provision, one-time verification, durable outbox) принадлежат IAM, а `AutoOrderService` координирует seller-owned order и buyer claim, **не является владельцем email account**. Существующие legacy plaintext email, полноценный OIDC и SMTP worker ещё блокируют публичный admission. Состояние реализации, migration gates и acceptance: [QUAL-RM-DOMAIN-R1.2-IAM-IDENTITY-STANDARD](../../docs/implementation/QUAL-RM-DOMAIN-R1.2-IAM-IDENTITY-STANDARD.md). Изменение не создаёт публичные endpoints и не влияет на optional CRM-card rule.
+
+
+## All-domain standardization / R1 persistence baseline
+
+[RM-ALL-DOMAINS-STANDARDIZATION-R1](../implementation/RM-ALL-DOMAINS-STANDARDIZATION-R1.md) фиксирует внедрение общей политики `DomainStandards`, списка локалей `SupportedLocale` и изменений Liquibase **0017** с базовыми таблицами восьми ранее пустых доменов. При наличии domain contracts + базовых таблиц **нельзя** маркировать бизнес-модуль production-ready: отдельные service/API/authorization/retention/PII E2E и 2-pod qualification обязательны. Legacy changesets 0001–0016 не переписывались, `main` остаётся закрытой до последующих gates.
