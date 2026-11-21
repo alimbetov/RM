@@ -76,7 +76,7 @@ Trusted internal caller (VerifiedActor / trusted system job)
 
 Правила:
 - owner_type — закрытый список из зарегистрированных FileOwnerKind, не произвольная строка из HTTP. owner_id — UUID существующего объекта того же tenant; validated у owning domain. Добавить уникальность (tenant_id,file_id,owner_type,owner_id,purpose) с учётом active/detached semantics.
-- Только AVAILABLE + CLEAN файлы могут быть активными вложениями. При активной привязке необходимо хранить created_by, detached_at/detached_by (adдитивно), order/sort_index по требованию галереи.
+- Только AVAILABLE + CLEAN файлы могут быть активными вложениями. При активной привязке необходимо хранить created_by, detached_at/detached_by (аддитивно), order/sort_index по требованию галереи.
 - Один fileId может иметь N attachments **внутри одного tenant**, но повторное использование запрещено, если новая связь нарушает privacy/classification (например, приватный CRM-документ нельзя привязать в публичную карточку товара).
 - Полиморфный (owner_type,owner_id) невозможно защитить одним обычным FK на произвольные доменные таблицы. Поэтому вызывающий домен предоставляет typed FileOwnerAccessPort: existsSameTenant, canAttach, canRead, canDetach, currentPublicationState. Ошибка owner validation делает операцию fail closed.
 - Отсоединение attachment не равно удалению файла. Физическое удаление запрещено пока есть активные ссылки, legal hold или retention. Повторное attach/detach идемпотентно с устойчивым request key.
@@ -305,7 +305,7 @@ FILES qualified только когда есть проверенный поль
 2. CATALOG — какие материалы действительно можно публиковать, нужна ли ручная модерация изображений? До решения public handler disabled.
 3. Лимиты по tenant/tарифу и retention для документов разных типов — задать до реального production.
 4. Для публичной фотографии: publish только копию после удаления EXIF/личных метаданных, не исходный private file.
-5. Вибор storage: LOCAL dev/UAT; RustFS после security и recovery qualification; отдельный Rust HTTP microservice не нужен без доказанной нагрузки.
+5. Выбор storage: LOCAL dev/UAT; RustFS после security и recovery qualification; отдельный Rust HTTP microservice не нужен без доказанной нагрузки.
 
 **Production and public HTTP admission: HOLD** до квалификации storage/KMS/AV, populated PostgreSQL, role/object access, OIDC/BFF, provider restoration и независимого security review.
 
