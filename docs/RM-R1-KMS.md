@@ -82,3 +82,37 @@ Batch re-encryption: read a bounded batch of encrypted records for a specific ol
 Counters are in the same row, but **do not lock/update that row for every normal data-field write**, which would turn key management into a bottleneck. Use batch delta persistence plus periodic reconciliation; clearly label snapshot counters as advisory between scans. Exact accounting under concurrency needs transactional write discipline or a durable outbox/reconciliation mechanism.
 
 No new SQL or Java is implemented by this section. Next implementation must migrate existing per-version JPA/SQL to three-slot model using a new Liquibase formatted-SQL changeset, without editing applied changesets. Test H2 and PostgreSQL before claiming this is production-ready.
+
+
+## RM-KMS-R1.5 — nightly batch re-encryption, 100 clients (approved design, not yet implemented)
+
+User decision: night-time batch migration, **up to 100 clients per transaction**. This is client-count batch size, not number of encrypted attributes or key rotations. Start schedule proposal: 02:00 to 05:00 in `Asia/Almaty`; configurable via properties. Single worker in MVP, 200-ms inter-batch pacing (configurable), up to three transient-error retries with bounded backoff. Stop at end of maintenance window; resume next night. An interrupted batch must be safely repeatable.
+
+Proposed configuration:
+```yaml
+rm:
+  kms:
+    migration:
+      enabled: false # enable once client/contact envelope migration is implemented and tested
+      cron: "0 0 2 * * *"
+      zone: "Asia/Almaty"
+      batch-size: 100
+      window-end: "05:00"
+      pause-between-batches: 200ms
+      max-retries: 3
+```
+
+Algorithm:
+1. Select tenants requiring migration; acquire a single-worker execution/admission lock. At most one old DECRYPT_ONLY and one current ACTIVE generation are used.
+2. Fetch **up to 100 distinct clients** still referencing the old generation, ordered deterministically by client ID; include any encrypted fields of those client aggregates and contact children. Ensure no unstable OFFSET pagination; query old-version references directly so completed clients are excluded.
+3. Within one transaction per batch, use JPA/SQL row-version checks or row locks, re-read current encrypted envelopes, decrypt using the old generation and re-encrypt with ACTIVE using unique nonce per field and AAD bound to tenant/entity/field. Preserve business values and metadata.
+4. Update data envelopes and *batch-level* per-slot advisory counters in the same transaction, derived from actual changed references; never increment by requested batch size. Retry whole batch on optimistic conflict/deadlock. Failed batch rolls back both data and statistics.
+5. Rescan and reconcile snapshot statistics periodically; counters alone do not authorize reuse. If a client has no old fields, skip without increment.
+6. Stop at configured local end time. Resume by querying remaining old-version records on the next night, rather than relying on in-memory cursor alone.
+7. At zero apparent remaining, fence old-generation writers, scan all encrypted CRM entities (including independent communications, invoices, outbox/jobs), reconcile under a consistency protocol, verify required backups can still decrypt, then allow slot reuse/READY creation. Never overwrite old slot solely because a batch counter says zero.
+
+Do not hold the `security.tenant_key` row lock during the whole night; acquire only around batch counter updates or short control transitions. The normal CRM fast path must remain available. To prevent the night job from repeatedly scanning already-clean clients, require a persisted key-generation reference on each encrypted envelope, not just the company-level slot ID.
+
+Tests required: 100 vs 101 clients, partial contacts, retry/rollback, competing client update, zero-count false positive, timezone window, restart/resume, tenant isolation, recovery from lost root key, zero old-version references across all modules. Future PostgreSQL tests required in addition to dev H2.
+
+**Implementation status**: architecture specification only. RM currently has neither a CRM client entity nor the three-slot schema. Do not enable or advertise the job as running until these prerequisites are delivered and the tests pass.
