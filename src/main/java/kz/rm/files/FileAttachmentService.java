@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Synthetic-only CRM_CUSTOMER attachment metadata. No content streaming until
- * authenticated binary encryption and real scanner are proven.
+ * Synthetic-only CRM_CUSTOMER attachment metadata. Content read requires verified FILES and CRM owner permissions; production
+ * still requires real scanner and deployment admission.
  */
 @Service
 class FileAttachmentService {
