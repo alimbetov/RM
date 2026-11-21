@@ -70,7 +70,7 @@ public class TenantOwnershipTransferService {
         UUID to=successor.userId();
         requireActiveLinked(to); // account lock precedes tenant workspace lock
         Workspace workspace=lockWorkspace(tenantId);
-        if(!"ACTIVE".equals(workspace.status()))
+        if(workspace==null || !"ACTIVE".equals(workspace.status()))
             throw new SecurityException("Organization is not active");
 
         State request=currentRequest(tenantId);
@@ -127,12 +127,13 @@ public class TenantOwnershipTransferService {
     }
 
     private void requireEligibleSuccessor(UUID tenantId,UUID successorId) {
-        // Caller has already locked workspace; target account lock must be held
-        // through acceptance, and is acquired here for owner-initiated requests.
+        // Nonlocking check for a proposed successor. Acceptance separately locks
+        // the successor's account BEFORE the workspace, then rechecks eligibility.
+        // Locking target after workspace here could deadlock request vs acceptance.
         String status=jdbc.query("""
                 SELECT status FROM public.iam_user_account
                 WHERE id=? AND external_subject IS NOT NULL
-                  AND length(trim(external_subject))>0 FOR UPDATE
+                  AND length(trim(external_subject))>0
                 """,rs->rs.next()?rs.getString(1):null,successorId);
         if(!"ACTIVE".equals(status))throw new SecurityException("Successor identity inactive");
         boolean eligible=jdbc.query("""
