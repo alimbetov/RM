@@ -214,7 +214,7 @@ public class TenantRoleService {
                 JOIN public.iam_org_membership m ON m.organization_id=w.organization_id
                 WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
                   AND m.user_id=? AND m.role='OWNER' AND m.status='ACTIVE'
-                """,rs->rs.next(),tenantId,actorId);
+                """,(org.springframework.jdbc.core.ResultSetExtractor<Boolean>)rs->rs.next(),tenantId,actorId);
         if(!activeOwner)throw new SecurityException("Active organization owner required");
     }
 
