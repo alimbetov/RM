@@ -95,6 +95,14 @@ public class CrmContractService {
                     || (current == CustomerContractEntity.Status.ACTIVE &&
                     (next == CustomerContractEntity.Status.CLOSED || next == CustomerContractEntity.Status.CANCELLED));
             if (!allowed) throw new IllegalStateException("Invalid contract state transition");
+            if (next == CustomerContractEntity.Status.ACTIVE) {
+                // Same customer lock ordering as archiveCustomer and create.
+                String customerStatus = jdbc.queryForObject("""
+                    SELECT status FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE
+                    """, String.class, tenant, c.getCustomerId());
+                if (!"ACTIVE".equals(customerStatus))
+                    throw new IllegalStateException("Cannot activate contract for archived customer");
+            }
             captureBaselineIfMissing(c, actor.userId());
             c.status(next, Instant.now());
             var saved=contracts.saveAndFlush(c);
