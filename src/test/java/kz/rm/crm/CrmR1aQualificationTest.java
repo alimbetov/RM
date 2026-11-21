@@ -995,7 +995,8 @@ class CrmR1aQualificationTest {
         var previous=crmHistory.contractHistory(actor,a.tenantId(),contract.id(),20).get(1);
         assertThat(previous.endsOn()).isEqualTo(today.plusDays(30));
         assertThat(crmHistory.contractHistory(actor,a.tenantId(),UUID.randomUUID(),20)).isEmpty();
-        assertThatThrownBy(()->crmHistory.contractHistory(actor,b.tenantId(),contract.id(),20))
+        final var renewedContract=contract;
+        assertThatThrownBy(()->crmHistory.contractHistory(actor,b.tenantId(),renewedContract.id(),20))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->secureCommands.archiveCustomer(actor,a.tenantId(),customer.id(),0))
                 .isInstanceOf(IllegalStateException.class);
