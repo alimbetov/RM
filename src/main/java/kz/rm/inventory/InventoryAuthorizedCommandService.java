@@ -25,7 +25,7 @@ public class InventoryAuthorizedCommandService {
     }
 
     @Transactional
-    public InventoryMovementService.Movement receive(UUID actorId,UUID tenantId,UUID locationId,
+    InventoryMovementService.Movement receive(UUID actorId,UUID tenantId,UUID locationId,
                                                        UUID itemId,String idempotencyKey,
                                                        BigDecimal quantity) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RECEIVE);
@@ -37,7 +37,7 @@ public class InventoryAuthorizedCommandService {
     }
 
     @Transactional
-    public InventoryMovementService.Movement correct(UUID actorId,UUID tenantId,UUID locationId,
+    InventoryMovementService.Movement correct(UUID actorId,UUID tenantId,UUID locationId,
                                                        UUID itemId,String idempotencyKey,
                                                        BigDecimal delta) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
