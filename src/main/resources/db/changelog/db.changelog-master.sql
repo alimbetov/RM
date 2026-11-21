@@ -1693,3 +1693,24 @@ ALTER TABLE public.iam_user_account ALTER COLUMN display_name DROP NOT NULL;
 --rollback ALTER TABLE public.iam_user_account ALTER COLUMN display_name SET NOT NULL;
 --rollback DROP TABLE iam_pii.user_profile_secret;
 --rollback DROP SCHEMA iam_pii;
+
+
+--changeset rm:0050-iam-global-profile-audit
+CREATE TABLE iam_pii.user_profile_event (
+ id UUID PRIMARY KEY,
+ user_id UUID NOT NULL,
+ action_code VARCHAR(30) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_iam_profile_event_user FOREIGN KEY(user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_iam_profile_event_action CHECK(action_code IN
+  ('PROFILE_CREATED','PROFILE_UPDATED','PROFILE_MIGRATED'))
+);
+CREATE INDEX idx_iam_profile_event_user ON iam_pii.user_profile_event(user_id,occurred_at DESC);
+--rollback DROP TABLE iam_pii.user_profile_event;
+
+--changeset rm:0051-iam-global-profile-audit-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_iam_profile_event_immutable
+ BEFORE UPDATE OR DELETE ON iam_pii.user_profile_event
+ FOR EACH ROW EXECUTE FUNCTION public.iam_reject_email_verification_event_mutation();
+--rollback DROP TRIGGER trg_iam_profile_event_immutable ON iam_pii.user_profile_event;
