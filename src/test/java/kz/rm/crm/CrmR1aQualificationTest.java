@@ -443,6 +443,12 @@ class CrmR1aQualificationTest {
         assertThat(revoke).isNotEqualTo(first);
         assertThat(secureQueries.hasEmailConsent(actor,t.tenantId(),contact.id(),"MARKETING"))
                 .isFalse();
+        // A previously valid request key is not an authorization capability.
+        jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",
+                t.actorId());
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),true,"MARKETING","v1","WEB_FORM",request))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void postgresConcurrentConsentSubmissionCreatesExactlyOneEvent() throws Exception {
