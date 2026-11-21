@@ -99,15 +99,15 @@ public class InventoryReservationService {
         Reservation peek=loadById(tenantId,reservationId,false);
         lockRequest(tenantId,peek.lineId());
         String orderStatus=requireOrderStatus(tenantId,peek.orderId(),false);
+        Stock stock=lockStock(tenantId,peek.locationId(),peek.itemId());
+        Reservation current=loadById(tenantId,reservationId,true);
+        if(current.state()==target) return current; // terminal replay survives later order status changes
+        if(current.state()!=State.ACTIVE)
+            throw new IllegalStateException("Cannot change a terminal reservation");
         if(target==State.FULFILLED && !("CONFIRMED".equals(orderStatus)
                 || "PREPARING".equals(orderStatus) || "READY_FOR_PICKUP".equals(orderStatus)
                 || "OUT_FOR_DELIVERY".equals(orderStatus)))
             throw new IllegalStateException("Order cannot be fulfilled");
-        Stock stock=lockStock(tenantId,peek.locationId(),peek.itemId());
-        Reservation current=loadById(tenantId,reservationId,true);
-        if(current.state()==target) return current; // idempotent terminal replay
-        if(current.state()!=State.ACTIVE)
-            throw new IllegalStateException("Cannot change a terminal reservation");
         if(stock.reserved().compareTo(current.quantity())<0)
             throw new IllegalStateException("Reserved balance inconsistent");
         BigDecimal afterOnHand=stock.onHand();
