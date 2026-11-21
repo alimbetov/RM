@@ -211,9 +211,10 @@ class FileMetadataService {
             UPDATE crm.file_object SET state='REJECTED',scan_status='ERROR',
                 row_version=row_version+1
             WHERE tenant_id=? AND id=? AND state='AVAILABLE' AND scan_status='CLEAN'
-              AND EXISTS (SELECT 1 FROM crm.file_storage s
-                          WHERE s.tenant_id=? AND s.file_id=? AND s.storage_key=?)
-            """,tenant,fileId,tenant,fileId,activeKey);
+              AND (?='' OR EXISTS (
+                SELECT 1 FROM crm.file_storage s
+                WHERE s.tenant_id=? AND s.file_id=? AND s.storage_key=?))
+            """,tenant,fileId,activeKey,tenant,fileId,activeKey);
     }
     private record Existing(UUID id,String mime,long size,String state,
                             String scanStatus,UUID uploadedBy) {}
