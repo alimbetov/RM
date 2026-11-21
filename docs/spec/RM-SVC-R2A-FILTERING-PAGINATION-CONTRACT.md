@@ -123,20 +123,51 @@ LIMIT :limit_plus_one;
 
 | Домен / метод | Допустимые фильтры P0/P1 | Сортировка | Security / ограничения |
 |---|---|---|---|
-| CRM Customer | type (PERSON/COMPANY), status, regionZoneId, companyNameContains, created range | created DESC/id DESC | PERSON name is encrypted; **никакого SQL LIKE/decrypt-and-filter** для PERSON; status ANY only with explicit history scope |
+| CRM Customer | type (PERSON/COMPANY), **categoryCode**, status, regionZoneId, companyNameContains, created range, **contractStatus, expiresWithinDays, contractEndDate range** | created DESC/id DESC; contract expiry ASC/id ASC as a separately qualified sort | PERSON name is encrypted; no decrypted PII search; filter by agreed effective contract projection; categories tenant-scoped |
 | CRM Contact | **customerId required by default**, status, primaryOnly, created range | created DESC/id DESC | CRM_PII_READ **и** owner read; не раскрывать contact от чужого клиента; tenant-wide contact lists только отдельным разрешённым сценарием |
 | ORGANIZATION Location | type, status, nameContains, KATO code, activeOnly | created DESC/id DESC | escape LIKE, account for dependent inventory/fulfillment, no access beyond workspace |
 | FILES Media/Attachment | ownerType, **ownerId required**, purpose, MIME/category, state, created range | created DESC/id DESC; gallery position separately | CRM/CATALOG/SALES owner port must admit; no detached, infected or unavailable bytes |
 | SALES Order | status set, created [from,to), seller workspace, customerId where modeled | created DESC/id DESC | tenant + domain object scope; no PII columns or free-text across encrypted data; history past cutoff separately |
 | INVENTORY Stock | SKU/itemId, locationId, availableOnly, status where modeled | qualified stable sort (sku/location/id) | stock state mutable, cursor not a historical valuation snapshot; enforce inventory-location access |
 | INVENTORY Movements/Reservations | SKU, location, movementType/status, created [from,to) | created DESC/id DESC | append-only movements, no unbounded global scans |
-| CATALOG Items | status, category, seller, SKU, prefix/contains name where stored publicly, price range only if pricing index supports it | created DESC/id DESC | published vs draft visibility; snapshot revision for price in SALES |
+| CATALOG Items | status, category, seller, SKU, **modelCode (товар/услуга)**, kind PRODUCT/SERVICE, prefix/contains name where publicly stored, price range only if indexed | created DESC/id DESC; modelCode ASC/itemId ASC after dedicated index/contract | Model code distinct from SKU; tenant uniqueness and normalization; published vs draft visibility; price revision snapshot in SALES |
 | TASKS (P2) | assignee, creator, status, due date range, priority | dueAt/id when explicitly qualified; otherwise created/id | assignment scope and tenant membership |
 | FINANCE (P2) | status, accounting period, currency, counterparty, due date | created/id or postingDate/id per report | financial audit and published revision, no PII leaks |
 | MARKETING (P2) | campaign status, owner, created [from,to) | created/id | consent alone is not campaign authorization |
 | SUBSCRIPTION (P2) | plan/status/effective period | created/id | no tenant entitlement leaks |
 
 Новые поля возможны только через конкретное доменное ADR, тест селективности и инварианты owner access. Фильтры каталога/финансов/тасков пока **проектные**, не утверждение о существующих полях в БД.
+
+## 6.1 CRM Customer — категория клиента и индикатор срока договора (новое требование)
+
+**Модель категорий.** `customer_type` (`PERSON/COMPANY`) **не является** бизнес-категорией. Новый `categoryCode` — отдельное tenant-scoped классификационное значение, например `VIP`, `STANDARD`, `PARTNER`, `PROSPECT`; это только примеры, а не фиксированные hardcoded роли. Категории должны назначаться из управляемого tenant-справочника с `code`, `displayName`, `active`, `sortOrder`; конкретные коды задаёт организация, не IAM. Для минимального R1 — **одна основная категория на клиента**, `null` допустим до классификации. Если позже требуются несколько категорий одновременно, отдельное бизнес-решение и таблица связей; не закладывать заранее чрезмерную M:N-модель.
+
+**Договоры клиента.** `crm.customer` не содержит договора или его `endDate` на проверенном baseline. Не превращать `customer.status=ACTIVE` в `contract.status=ACTIVE`: клиент может быть активным без договора, либо иметь несколько договоров. Создать минимальный `CRM Customer Contract` aggregate, **только если** проектное обследование не обнаружит существующий договорный authoritative source: `tenantId`, `contractId`, `customerId`, `contractNumber`, `startDate`, `endDate` (nullable для бессрочного), `state` (`DRAFT/ACTIVE/EXPIRED/TERMINATED`), `rowVersion`, `createdAt`, `updatedAt`. При наличии юридического договора из другого домена CRM вместо дублирования должна использовать typed read projection.
+
+**Индикатор срока** вычисляется в tenant business timezone на дату `asOfDate`:
+- `daysRemaining = DAYS.between(asOfDate, endDate)`, когда `endDate` есть и договор имеет действующее сроковое состояние; `0` означает заканчивается **сегодня**; отрицательное — уже просрочен. Не использовать арифметику по секундам UTC, чтобы не получить off-by-one при смене суток.
+- `NO_CONTRACT` — нет договоров; `OPEN_ENDED` — бессрочный; `EXPIRED` — дата истекла; `EXPIRING_SOON` — `0..warningDays`; `ACTIVE` — срок больше порога; `TERMINATED` — прекращён по явной бизнес-команде, даже если календарная дата в будущем.
+- `warningDays` — tenant setting, **по умолчанию 30**, разрешённый диапазон `1..365`; дополнительный critical threshold по умолчанию 7, `1..warningDays`. Вычисляемый индикатор **не сохранять ежедневно** в основной таблице.
+- Если договоров несколько, клиентский индикатор отражает **ближайший endDate действующего договора**; одновременно возвращать `activeContractCount` и выбранный `contractId`. Бессрочные договоры не скрываются; при отсутствии срочных действующих договоров и наличии бессрочного показать `OPEN_ENDED`. При только завершённых/прекращённых договорах возвращать соответствующий terminal status, а не фиктивное активное состояние. Порядок приоритетов для разнородных состояний необходимо покрыть отдельными сценариями.
+- Если требуется определить юридически истёкший договор (`EXPIRED`) независимо от batch status update, читать effective state по `endDate`; расчётная визуализация не должна самовольно изменять юридический persisted status.
+
+**Контракт DTO:** `CustomerContractExpiry(contractId,endDate,daysRemaining,indicator,warningDays,activeContractCount,asOfDate)`; в `CustomerSummary` добавить `categoryCode` и nullable `contractExpiry` (для клиентов без договора — `NO_CONTRACT` без выдуманной даты). Поля `contractNumber`/договорный PDF — только через проверенный ACL, не в массовой выдаче.
+
+**Фильтрация:** `categoryCode` (= / IN c max 20), `contractIndicator`, `expiresWithinDays` (0..365), `contractEndFromInclusive`/`contractEndToExclusive` (`LocalDate`), `hasActiveContract` (tri-state). Все условия входят **в SQL до LIMIT** через `EXISTS`/scoped projection, не через N+1 по каждому клиенту. Если требуется сортировка по сроку — `endDate ASC, contractId/id ASC` с отдельным keyset cursor и явной политикой `NULLS LAST`; `createdAt DESC,id DESC` остаётся стандартом по умолчанию. В ответе результат для одного `asOfDate` стабилен при запросе; cursor должен включать или привязывать его к filter fingerprint, чтобы смена дня не давала незаметных несовпадений.
+
+**Особые проверки:** 29/30/31 число месяца; дата сегодня; отсутствие договора; бессрочный; несколько договоров; прекращённый до окончания; 0/7/30 дней; foreign tenant; отсутствие доступа к договору; смена категории или договора между cursor-страницами; отсутствие PII в фильтрах/логах; не допускать использования client-provided `asOfDate` для обхода прав или backdating бизнес-команд.
+
+## 6.2 CATALOG — отдельный код модели товара или услуги (новое требование)
+
+Сейчас `crm.cat_item` содержит `sku`, `kind`, `state`, но **не содержит** отдельного `modelCode`. Ввести `modelCode` как необязательный при создании DRAFT и обязательный по утверждаемой бизнес-политике перед PUBLISHED (для SERVICE допускается код типа услуги, например `INSTALLATION_BASIC`; для PRODUCT — модель изготовителя/внутренняя модель).
+
+- **Различие:** `itemId` — UUID идентичности, `sku` — tenant-уникальная продаваемая/учётная единица, `modelCode` — классифицирующий код модели, **одна модель может иметь несколько SKU**, например размер/цвет/комплектацию. Поэтому не навязывать `UNIQUE(tenant_id,model_code)` в `cat_item`. Для строгого справочника моделей позже можно ввести отдельный `CatalogModel`, но только если появятся доказанные M:N или общие атрибуты.
+- Канонизация: trim, Unicode NFC, ограничение длины 80, разрешённый набор `[A-Z0-9][A-Z0-9._/-]{0,79}` после `Locale.ROOT` uppercase, без управляющих символов и SQL-синтаксиса.
+- Индекс поиска `(tenant_id,kind,model_code,id)` (после проверки существующих индексов и EXPLAIN); equality и **anchored prefix** `modelCodeStartsWith`, но не неограниченный `'%substring%'` по умолчанию. Запрос `modelCode` может возвращать много SKU; результаты остаются cursor-пагинированными и фильтруемыми по `kind`, `category`, `status`.
+- При публикации CATALOG проверяет согласованность `modelCode`/SKU/price revision; бизнес-события SALES сохраняют `sku`, `itemId`, `modelCode` и ревизию цены как immutable snapshot для истории. Переприсвоение `modelCode` опубликованного товара — только через утверждённый update + revision/audit, без переписывания подтверждённых заказов.
+- В поисковом DTO добавить `modelCode` отдельно от `sku`, `kind`, `category`. Не смешивать с кодами ТН ВЭД, barcode/GTIN или производственным серийным номером: это разные атрибуты, если понадобятся — отдельные поля и правила.
+
+**Тесты:** одинаковый `modelCode` у двух SKU одного tenant — допустим; одинаковый SKU — отклонение по существующей уникальности; товар/услуга с разными `kind`; prefix/equality, malformed/oversize code, cross-tenant, stable keyset при нескольких SKU одного modelCode, immutable SALES snapshot.
 
 ## 7. Semantics при изменении данных между страницами
 
