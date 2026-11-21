@@ -11,6 +11,9 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
@@ -149,6 +152,58 @@ class AutoOrderR1QualificationTest {
                 challenge(email).token())).isEqualTo(existingId);
         assertThat(orders.buyerOrders(existingId)).extracting(AutoOrderService.OrderReceipt::orderId)
                 .contains(placed.order().orderId());
+    }
+
+    @Test void concurrentSameCheckoutKeyCreatesOneOrderAndOneIdentity() throws Exception {
+        var st=store();
+        String email="race-"+UUID.randomUUID()+"@example.kz";
+        var release=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->{
+                release.await(5,TimeUnit.SECONDS);
+                return orders.checkout(st.slug(),email,"race-key-001",
+                        List.of(new AutoOrderService.Line(st.offerId(),2))).order().orderId();
+            });
+            var second=pool.submit(()->{
+                release.await(5,TimeUnit.SECONDS);
+                return orders.checkout(st.slug(),email,"race-key-001",
+                        List.of(new AutoOrderService.Line(st.offerId(),2))).order().orderId();
+            });
+            release.countDown();
+            assertThat(first.get(20,TimeUnit.SECONDS)).isEqualTo(second.get(20,TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,st.tenantId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM iam_email_identity WHERE lookup_hmac=?",
+                Integer.class,crypto.lookup(email))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM iam_email_delivery_outbox o JOIN iam_email_identity e ON o.email_identity_id=e.id WHERE e.lookup_hmac=?",
+                Integer.class,crypto.lookup(email))).isEqualTo(1);
+    }
+
+    @Test void concurrentDifferentTenantsSameEmailReuseGlobalAccount() throws Exception {
+        var firstStore=store();var secondStore=store();
+        String email="shared-"+UUID.randomUUID()+"@example.kz";
+        var release=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->{
+                release.await(5,TimeUnit.SECONDS);
+                return orders.checkout(firstStore.slug(),email,"shared-key-001",
+                        List.of(new AutoOrderService.Line(firstStore.offerId(),1))).order().orderId();
+            });
+            var second=pool.submit(()->{
+                release.await(5,TimeUnit.SECONDS);
+                return orders.checkout(secondStore.slug(),email,"shared-key-001",
+                        List.of(new AutoOrderService.Line(secondStore.offerId(),1))).order().orderId();
+            });
+            release.countDown();
+            assertThat(first.get(20,TimeUnit.SECONDS)).isNotEqualTo(second.get(20,TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM iam_email_identity WHERE lookup_hmac=?",
+                Integer.class,crypto.lookup(email))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,firstStore.tenantId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,secondStore.tenantId())).isEqualTo(1);
     }
 
     @Test void badEmailAndForgedOfferCannotCreateOrder() {
