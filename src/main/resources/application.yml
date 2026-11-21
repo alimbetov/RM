@@ -17,6 +17,19 @@ server:
 # Nightly audit history retention: deliberately opt-in until tenant approvals and
 # PostgreSQL upgrade/backup qualification are complete.
 rm:
+  files:
+    # Deployment-time switch: false = LOCAL writes; true = RustFS writes.
+    # Existing blobs keep their provider; never silently migrate on flip.
+    rustfs:
+      enabled: ${RM_FILES_RUSTFS_ENABLED:false}
+      # Endpoint only provided by the operator; no implicit local S3 connection.
+      # endpoint: ${RM_FILES_RUSTFS_ENDPOINT}
+      region: ${RM_FILES_RUSTFS_REGION:us-east-1}
+      bucket: ${RM_FILES_RUSTFS_BUCKET:rm-files}
+      access-key: ${RM_FILES_RUSTFS_ACCESS_KEY:}
+      secret-key: ${RM_FILES_RUSTFS_SECRET_KEY:}
+    encrypted-local:
+      enabled: false
   retention:
     enabled: ${RM_RETENTION_ENABLED:false}
     cron: "${RM_RETENTION_CRON:0 30 2 * * *}"
