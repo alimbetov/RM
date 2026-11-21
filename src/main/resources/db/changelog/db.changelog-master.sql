@@ -1434,3 +1434,17 @@ BEFORE UPDATE OR DELETE ON public.iam_account_status_event
 FOR EACH ROW EXECUTE FUNCTION public.iam_reject_account_status_event_mutation();
 --rollback DROP TRIGGER trg_iam_account_status_event_immutable ON public.iam_account_status_event;
 --rollback DROP FUNCTION public.iam_reject_account_status_event_mutation();
+
+--changeset rm:0037-iam-user-onboarding-evidence
+-- Extend immutable tenant event actions; applied changesets are not modified.
+ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+ ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+  'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
+  'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED',
+  'TENANT_PROVISIONED','MEMBER_INVITED','MEMBER_JOINED'));
+--rollback ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+--rollback ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+--rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+--rollback   'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
+--rollback   'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED'));
