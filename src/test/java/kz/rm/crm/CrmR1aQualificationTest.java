@@ -326,7 +326,8 @@ class CrmR1aQualificationTest {
 
 
     @Test void customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized() {
-        var t=newTenant(),other=newTenant();
+        var t=newTenant();
+        var other=newTenant();
         var person=secureCommands.createPerson(verified(t.actorId()),t.tenantId(),
                 "Private Person",null);
         var company=secureCommands.createCompany(verified(t.actorId()),t.tenantId(),
