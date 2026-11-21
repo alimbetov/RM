@@ -116,3 +116,18 @@ Do not hold the `security.tenant_key` row lock during the whole night; acquire o
 Tests required: 100 vs 101 clients, partial contacts, retry/rollback, competing client update, zero-count false positive, timezone window, restart/resume, tenant isolation, recovery from lost root key, zero old-version references across all modules. Future PostgreSQL tests required in addition to dev H2.
 
 **Implementation status**: architecture specification only. RM currently has neither a CRM client entity nor the three-slot schema. Do not enable or advertise the job as running until these prerequisites are delivered and the tests pass.
+
+
+## RM-KMS-R1.7 — tenant_id partitioning proposal (design, not implemented)
+
+Use bounded PostgreSQL `HASH(tenant_id)` buckets, **not one physical partition per tenant**. New companies are routed automatically to existing buckets; creating a physical partition at company signup is unnecessary.
+
+Decision for MVP:
+- `security.tenant_key`: one row per tenant, ordinary indexed table. A PK lookup over one row per tenant is unlikely to justify declarative partitioning initially.
+- `security.tenant_key_archive`: PostgreSQL `PARTITION BY HASH (tenant_id)` with **8 buckets** initially, subject to actual query/load/volume evidence. Parent PK `(tenant_id, key_version)` includes the partition key. Both remain logically tenant-addressed.
+- If business explicitly requires BOTH physically partitioned, use the same 8-bucket strategy for `tenant_key` too, but only at PostgreSQL migration and after assessing trade-offs. Do not create per-company physical partitions.
+- On H2 development, use equivalent **non-partitioned tables** and identical JPA entities. H2 PostgreSQL mode does not implement PostgreSQL's declarative hash-partition DDL. PostgreSQL integration tests are mandatory to qualify native partitioning.
+- Liquibase changesets MUST be SQL-only; use DB-specific contexts/dbms selectors to keep H2 and PostgreSQL DDL separate. Do not edit applied changesets. Do not introduce PostgreSQL `PARTITION BY` into H2 changelogs.
+- No security guarantee from partition placement: tenant isolation requires tenant-aware authorization and PostgreSQL RLS. The KMS fast path and a separate restricted archive read path remain unchanged.
+- Don't promise partitions speed up a tiny key table. Initial partition count is a benchmark hypothesis; changing hash-bucket layout later entails data movement and a migration plan.
+- **Existing code is still per-version `tenant_key` and the archive table does not yet exist.** No KMS partition DDL has been deployed or tested.
