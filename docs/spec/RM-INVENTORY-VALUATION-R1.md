@@ -57,3 +57,27 @@
 10. PostgreSQL E2E + upgrade with historical stock + failure injection + 2-process load.
 
 **Priority:** complete INV-R1.1 reserve/release/fulfill GREEN, then INV-R1.2 receipts + FIFO + moving-average with immutable valuation and FINANCE integration.
+
+
+## 6. Реализованные настройки tenant — INV-SETTINGS-R1.0 (2026-11-21)
+
+**Физическая схема Liquibase 0029, 0030; не переписывать прежние изменения.**
+
+| Таблица | Поля и гарантии |
+|---|---|
+| `crm.inv_tenant_setting` | `tenant_id UUID PRIMARY KEY` FK → IAM workspace, `picking_strategy` FIFO/FEFO/MANUAL, `auto_reserve_on_confirm` default FALSE, `allow_negative_stock` enforced FALSE, `active_policy_version_id` nullable, `row_version`, timestamps |
+| `crm.inv_cost_policy_version` | составной PK `(tenant_id,id)`, уникальная `(tenant_id,revision_no)`, `valuation_method` FIFO/MOVING_WEIGHTED_AVERAGE/SPECIFIC_IDENTIFICATION, `functional_currency CHAR(3)`, `effective_from`, `approved_by`, `approved_at`, `created_at`. FK назад к tenant settings, FK approver IAM |
+| Именованные ограничения | `fk_inv_setting_active_policy(tenant_id,active_policy_version_id)` запрещает ссылку на чужую ревизию; PostgreSQL trigger 0030 запрещает UPDATE и DELETE утверждённой версии |
+
+**Архитектурные правила:**
+
+1. Настройка существует **не более чем одна на tenant**. Создание выполняется с lock на IAM workspace (без дубликатов при конкурентных вызовах).
+2. Настройка метода оценки отсутствует, пока администратор не утвердил версию. Отсутствие политики = **запрет стоимостного проведения**, а не скрытый fallback.
+3. Метод оценки **не может быть LIFO** в проводимой политике IFRS. Физический выбор партии FIFO/FEFO/MANUAL от метода себестоимости независим.
+4. Смена метода — новая **неизменяемая утверждённая версия**, а не UPDATE прежней. К ней привязываются будущие стоимостные события по ID версии и утверждённой дате; старые события не пересчитывать.
+5. Пока не реализовано перенесение стоимости входящих остатков, утверждение политики **запрещено**, если в tenant есть ненулевые остатки или история движений. Для действующих tenants нужен квалифицированный opening-valuation reconciliation.
+6. Доступ через `InventoryTenantSettingsService` предоставлен только активным OWNER/ADMIN/MANAGER организации. `actorId` должен происходить из доверенной principal, а не клиентского тела запроса; публичный REST endpoint пока отсутствует.
+7. `row_version` — optimistic revision для изменений; настройка остается непартиционированной из-за FK/уникальности. `auto_reserve_on_confirm` пока только договорённость конфигурации: автоматическое исполнение требует законченного SALES integration.
+8. PostgreSQL E2E: FK/tenant boundary, version/revision, no mutation, stale writes, валюта, отказ при старом неоценённом балансе. H2 проверяет основные доменные сценарии, без PostgreSQL trigger.
+
+**Статус:** schema/settings management implemented, но FIFO layers, weighted-average calculation, approved FX, cost posting и интеграция с FINANCE ещё не реализованы. Включать финансовые проводки до полной INV-R1.2 нельзя.
