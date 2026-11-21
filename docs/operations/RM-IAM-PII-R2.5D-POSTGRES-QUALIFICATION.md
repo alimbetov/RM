@@ -38,11 +38,11 @@
 - **INV-D01:** new email-only accounts can be migrated without inventing a name; their `emailVerified` remains `false`.
 - **INV-D02:** encrypted profile already exists with identical plaintext → only scrub old columns; different plaintext → fail and retain old values, **do not silently prefer one source**.
 - **INV-D03:** normalized email claimed by two global identities (including case-only variants) → preflight FAIL; no arbitrary assignment by query ordering.
-- **INV-D04:** corrupted ciphertext, changed AAD/key, inconsistent phone HMAC or damaged email envelope → fail closed before any seal.
+- **INV-D04:** corrupted ciphertext, changed AAD/key, inconsistent phone HMAC or damaged email envelope → fail closed before any seal, including when stored encrypted tables are empty (cryptographic canary).
 - **INV-D05:** migration of a batch with any conflict is atomic; no partial plaintext deletion.
 - **INV-D06:** 200 synthetic populated users migrate across several bounded batches; 0 legacy plaintext, protected-name/phone integrity, no implicit verification, no duplicates, exactly once `PROFILE_MIGRATED` evidence.
 - **INV-D07:** before manual seal, a legacy direct SQL writer could still write plaintext; after sealed CHECK, PostgreSQL rejects it. Test the DDL **inside a rolled-back PG transaction**, never persist seal in shared CI.
-- **INV-D08:** existing historical email identities and order references remain immutable; neither shared email nor global profile migration transfers a buyer’s prior orders.
+- **INV-D08:** existing historical email identities and order references remain immutable; neither shared email nor global profile migration transfers a buyer’s prior orders. A pending `CHANGE_EMAIL` identity is never accepted as verified legacy source data.
 - **INV-D09:** new and existing global IAM PII is not encrypted with tenant keys, and no tenant OWNER/PLATFORM_ADMIN gains another person's plaintext profile through the self-only service.
 
 ## 4. Completion definition and limitations
