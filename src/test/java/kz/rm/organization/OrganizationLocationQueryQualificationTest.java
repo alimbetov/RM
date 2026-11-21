@@ -80,8 +80,8 @@ class OrganizationLocationQueryQualificationTest {
                 "Central Office",kato,null);
         create.create(a.actor(),a.tenant(),OrganizationLocationEntity.Type.WAREHOUSE,
                 "East Warehouse",kato,null);
-        create.create(b.actor(),b.tenant(),OrganizationLocationEntity.Type.WAREHOUSE,
-                "Other Tenant",kato,null);
+        var foreign=create.create(b.actor(),b.tenant(),OrganizationLocationEntity.Type.WAREHOUSE,
+                "Central Warehouse",kato,null);
         var all=query.search(a.actor(),a.tenant(),null,0,2);
         assertThat(all.getTotalElements()).isEqualTo(3);
         assertThat(all.getContent()).hasSize(2);
@@ -89,6 +89,15 @@ class OrganizationLocationQueryQualificationTest {
         assertThat(second.getContent()).hasSize(1);
         var warehouses=query.search(a.actor(),a.tenant(),
                 new LocationSearch(OrganizationLocationEntity.Type.WAREHOUSE,null,"Warehouse"),0,10);
+        assertThat(warehouses.getContent()).extracting(x->x.id())
+                .doesNotContain(foreign.getId());
+        assertThat(query.search(a.actor(),a.tenant(),
+                new LocationSearch(OrganizationLocationEntity.Type.WAREHOUSE,null,"Central"),0,10)
+                .getContent()).extracting(x->x.id()).contains(first.getId())
+                .doesNotContain(foreign.getId());
+        assertThat(query.search(b.actor(),b.tenant(),
+                new LocationSearch(OrganizationLocationEntity.Type.WAREHOUSE,null,"Central"),0,10)
+                .getContent()).extracting(x->x.id()).containsExactly(foreign.getId());
         assertThat(warehouses.getContent()).hasSize(2);
         assertThat(warehouses.getContent()).allSatisfy(x->
                 assertThat(x.type()).isEqualTo(OrganizationLocationEntity.Type.WAREHOUSE));
