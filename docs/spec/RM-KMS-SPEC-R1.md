@@ -3,7 +3,7 @@
 **Репозиторий:** `alimbetov/RM`  
 **Ветка проекта ТЗ:** `docs/rm-kms-consolidated-spec`  
 **Дата:** 2026-11-21  
-**Статус:** PROPOSED / design freeze candidate; реализация не начата  
+**Статус:** PROPOSED R1.1 / упрощённый MVP-контракт; реализация модели не начата  
 **Зона ответственности:** Embedded Tenant KMS для CRM MVP  
 **Приоритет:** сначала исправление модели данных и испытания H2, затем Fast Path, потом миграция, только затем авто-ротация и PostgreSQL qualification.
 
@@ -12,8 +12,8 @@
 Разработать собственный безопасный сервис шифрования **внутри одного Spring Boot приложения**. При регистрации компании создаётся индивидуальный случайный AES-256 data encryption key (DEK). CRM шифрует чувствительные поля посредством AES-256-GCM и использует Caffeine для быстрого доступа к распакованным разрешённым DEK.
 
 Две рабочие таблицы:
-1. `security.tenant_key` — **ровно одна строка на `tenant_id`**, три физических ключевых слота A/B/C, статусы, поколения, сроки, статистика.
-2. `security.tenant_key_archive` — зашифрованные исторические поколения ключей, которые остаются необходимыми для восстановления резервных копий / архивов.
+1. `security.kms_tenant_key` — **ровно одна строка на `tenant_id`**, три физических ключевых слота A/B/C, статусы, поколения, сроки, статистика.
+2. `security.kms_tenant_key_archive` — зашифрованные исторические поколения ключей, которые остаются необходимыми для восстановления резервных копий / архивов.
 
 Не создаём таблицы для кэша, журнала ротаций, ночных заданий и отдельный KMS-микросервис. Не применяем самодельную криптографию, Redis или Vault в MVP. Отдельные таблицы CRM (клиенты, контакты, заказы и т.д.) будут разработаны по бизнес-требованиям позднее: запрет касается раздувания **KMS**, а не нормализации финансовых данных.
 
@@ -40,7 +40,7 @@
 
 ## 4. Модель данных
 
-### 4.1 `security.tenant_key` — одна строка на компанию
+### 4.1 `security.kms_tenant_key` — одна строка на компанию
 
 Предполагаемые колонки:
 ```text
@@ -89,10 +89,10 @@ updated_at          TIMESTAMPTZ NOT NULL
 
 Предостережение: счётчики — **телеметрия прогресса на момент последней сверки**, а не абсолютная истина между проверками. Их нельзя использовать как единственное основание для перезаписи ключевого материала.
 
-### 4.2 `security.tenant_key_archive` — архив поколений
+### 4.2 `security.kms_tenant_key_archive` — архив поколений
 
 ```sql
-CREATE TABLE security.tenant_key_archive (
+CREATE TABLE security.kms_tenant_key_archive (
     tenant_id UUID NOT NULL,
     key_generation BIGINT NOT NULL,
     wrapped_key BYTEA NOT NULL,
@@ -128,10 +128,10 @@ CREATE TABLE security.tenant_key_archive (
 
 ## 7. Быстрый путь
 
-- Единый сервис `TenantCryptoService.encrypt/decrypt` с доверенным tenant context и авторизацией.
+- **Единый** `TenantCryptoService` для encrypt/decrypt с доверенным tenant context; CRM-контроллер сначала проверяет право доступа, затем вызывает криптосервис. Нет отдельных сервисов дешифрования для каждого модуля.
 - Caffeine key: `(tenantId, generation)`; максимум 1 000 записей и `expireAfterAccess=10m` как стартовые тестовые параметры.
 - Cache HIT: **нет SQL за ключом**, только локальная проверка допуска и AES-GCM.
-- Cache MISS: загрузить занятую версию из единственной строки `tenant_key`, проверить generation и status, unwrap, single-flight загрузка.
+- Cache MISS: загрузить занятую версию из единственной строки `security.kms_tenant_key`, проверить generation и status, unwrap, single-flight загрузка.
 - Нормальное шифрование берёт только текущее поколение ACTIVE; старое DECRYPT_ONLY используется исключительно для расшифровки.
 - AAD шифрования CRM: `tenant_id + entityType + entityId + fieldName + generation + formatVersion`; nonce уникальный для каждой операции с конкретным ключом.
 - События смены ACTIVE немедленно инвалидируют active-generation metadata и неподходящие cache entries.
@@ -177,7 +177,7 @@ rm:
 1. Worker выбирает компанию с DECRYPT_ONLY поколением и доступным ACTIVE; единственный worker в MVP.
 2. Выбрать до 100 ещё нуждающихся в миграции клиентов по `tenant_id + old generation`, с устойчивым порядком, без `OFFSET` над изменяющейся выборкой.
 3. Для каждого клиента перечитать envelope и row version; decrypt(old), encrypt(active) с новым nonce и корректным AAD; сохранить с защитой от конкурентной перезаписи.
-4. **Один пакет — одна транзакция**. Счётчики в `tenant_key` обновлять один раз на пакет исходя из реального количества успешно изменённых *полей*, в той же транзакции. На rollback счётчики не меняются. При повторе ранее перенесённые поля не учитываются заново.
+4. **Один пакет — одна транзакция**. Счётчики в `security.kms_tenant_key` обновлять один раз на пакет исходя из реального количества успешно изменённых *полей*, в той же транзакции. На rollback счётчики не меняются. При повторе ранее перенесённые поля не учитываются заново.
 5. После commit сделать паузу (предварительно 200 мс), затем следующий пакет. На ошибке — ограниченные повторы; после исчерпания попыток зафиксировать отказ, не уничтожать старые ключи.
 6. В 05:00 прекратить запуск новых пакетов, уже начатую транзакцию корректно завершить; на следующую ночь продолжить с фактических оставшихся ссылок в БД. Никакого доверия к исключительно in-memory cursor.
 7. После предполагаемого `remaining_old=0` провести финальную сверку всех CRM таблиц, сообщений/outbox и активных writers под согласованной защитой. Только подтверждённая проверка плюс доступность необходимых архивов позволяет освободить слот.
@@ -229,9 +229,9 @@ rm:
 
 - **R1.6 (schema)**: новый SQL changeset миграции прежней per-version модели к single-row three-slot, JPA `TenantKeyEntity` (одна строка), archive Entity, ограничения, rollback strategy. Не править уже применённый `rm:0003`. Если существующие данные неизвестны — остановить destructive migration и квалифицировать путь переноса.
 - **R1.7 (cryptography)**: проверяемый generation envelope, Fast Path Caffeine, AAD, root wrapping key version, negative tests.
-- **R1.8 (rotation)**: transactionally safe three-slot promotion/archiving, idempotent control transitions, concurrency.
-- **R1.9 (batch)**: nightly worker по 100 клиентов, stats по полям, crash/retry/resume/optimistic conflict.
-- **R2.0 (recovery)**: encrypted archive access/recovery, backups, root-key rotation scenario.
+- **R1.8 (batch)**: один nightly worker по 100 клиентов, stats по полям, crash/retry/resume/optimistic conflict; без lazy re-encryption.
+- **R1.9 (rotation)**: безопасное переключение трёх слотов только после реализации миграции и проверок; без дополнительных фоновых координаторов.
+- **R2.0 (recovery)**: отдельная авторизованная процедура чтения архивных поколений, backups, root-key rotation scenario.
 - **QUAL-R2.1**: H2 smoke + PostgreSQL Testcontainers, concurrency, cross-tenant, crypto correctness, migration proof, failure recovery, JMH/p95/p99.
 
 ## 15. Матрица приёмки
@@ -318,3 +318,141 @@ Conventions:
 6. Prefix naming is an organizational convention and **not** a security boundary or performance optimization. Existing Liquibase metadata tables `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK` are infrastructure-owned and exempt.
 
 **Acceptance gate:** all new DDL, JPA `@Table`, SQL queries, tests and docs reference canonical prefixed tables; H2 `dev` smoke and PostgreSQL `test` integration pass. This section documents a design decision only; migration/code not yet implemented.
+
+
+## 20. Упрощённый контракт дешифрования и план реализации RM-KMS MVP (решение R1.1)
+
+Этот раздел **уточняет и имеет приоритет** при расхождениях с более ранними разделами. Цель: один проверяемый путь шифрования, один путь дешифрования и один ночной worker, без дополнительных сервисов, автоматических эвристик и перерасчётов при обычном редактировании.
+
+### 20.1 Минимальный набор компонентов
+
+| Компонент | Назначение | Не делает |
+|---|---|---|
+| `TenantCryptoService` | `encrypt/decrypt`, выбор поколения, AES-GCM | Не принимает решений об авторизации пользователя |
+| `TenantKeyService` | Читает три слота tenant, выдаёт только разрешённый DEK | Не расшифровывает CRM-поля |
+| `TenantKeyCache` (Caffeine) | Кэширует распакованный DEK по `(tenantId, generation)` | Не хранит архивные ключи |
+| `NightlyKeyMigrationJob` | Ночью переводит поля старого поколения пакетами по 100 клиентов | Не запускается при обычном CRUD |
+| `TenantKeyRecoveryService` | Отдельная, строго авторизованная операция восстановления | Не используется в обычных запросах CRM |
+
+Не создавать дополнительные сервисы по модулю или entity. Один Spring Boot процесс и один рабочий экземпляр JVM в MVP. Разрешены небольшие внутренние классы (envelope codec, repository, crypto utilities), но никакие отдельные сетевые компоненты.
+
+### 20.2 Минимальный Java API и доверенная граница
+
+```java
+public interface TenantCryptoService {
+    EncryptedValue encrypt(
+        CryptoContext context,
+        String plaintext
+    );
+
+    String decrypt(
+        CryptoContext context,
+        EncryptedValue encrypted
+    );
+}
+
+public record CryptoContext(
+    UUID tenantId,
+    String entityType,
+    UUID entityId,
+    String fieldName
+) {}
+```
+
+`CryptoContext` создаётся **только из проверенного backend-контекста** и идентификатора реально загруженной записи, а не напрямую из непроверенного JSON запроса. Пользователь не имеет API для выбора key slot, DEK или ключевого поколения. Вызывающий application service обязан проверить доступ к компании и объекту до вызова. Дешифрование само проверяет совпадение tenant, generation и AAD; ошибка — fail closed.
+
+**Почему в API есть контекст:** вариант `decrypt(tenantId, encrypted)` недостаточен для защиты от перестановки корректного шифротекста между клиентами и полями одной компании. `CryptoContext` остаётся маленьким, но обязательным.
+
+### 20.3 Контракт EncryptedValue (независим от физического слота)
+
+```java
+public record EncryptedValue(
+    int formatVersion,
+    long keyGeneration,
+    byte[] nonce,
+    byte[] ciphertextAndTag
+) {}
+```
+
+- `formatVersion = 1`; явно определённый, сериализация и десериализация строго детерминированны.
+- `keyGeneration > 0` и монотонен внутри компании.
+- `nonce`: 12 байт от `SecureRandom`, новый для каждого шифрования с данным DEK.
+- `ciphertextAndTag`: результат `AES/GCM/NoPadding` с tag 128 бит; библиотека Java хранит tag в конце результата.
+- AAD: однозначно закодированные с границами байтов версии формата, `tenantId`, `entityType`, `entityId`, `fieldName`, `keyGeneration`. Не использовать простую конкатенацию без разграничителей или длины.
+- Проверка формата, размера nonce, generation и алгоритма выполняется **до** GCM decrypt.
+- В БД каждая защищённая колонка/значение имеет неизменяемый формат envelope; запрещено хранить plaintext fallback при ошибках.
+
+### 20.4 Точный алгоритм encrypt/decrypt
+
+**encrypt:**
+1. Проверить доверенный `CryptoContext`; вызывающий сервис уже проверил права.
+2. Определить текущий ACTIVE generation компании, получить DEK из Caffeine или распаковать из рабочего слота.
+3. Сгенерировать новый 96-bit nonce и построить AAD.
+4. Выполнить AES-256-GCM, вернуть `EncryptedValue`; plaintext не записывать в лог.
+5. Сохранение бизнес-объекта и конверта относится к транзакции вызывающего сервиса.
+
+**decrypt:**
+1. Проверить разрешения на уровне вызывающего CRM-сервиса и доверенный `CryptoContext`.
+2. Из `EncryptedValue` взять `keyGeneration`. **Никогда не перебрать A/B/C**.
+3. Сначала найти `(tenantId,generation)` в Caffeine; при MISS — одну строку `security.kms_tenant_key`, соответствующий занятый слот, допустимые `ACTIVE/DECRYPT_ONLY`, unwrap под KEK.
+4. Построить тот же AAD; проверить 12-byte nonce и выполнить GCM decrypt с проверкой tag.
+5. При любом несоответствии или отсутствии разрешённого поколения — отказ, без fallback на архив, другой слот или plaintext.
+
+Fast Path означает **нет SQL именно за DEK при cache HIT**, но не обещает отсутствия SQL на чтение клиентской записи/проверку доступа. Для активного поколения допускается локальный кэш метаданных текущего ACTIVE в одном экземпляре JVM; смена ACTIVE должна немедленно инвалидировать его **после commit**.
+
+### 20.5 Упрощённая политика ротации без гонок
+
+- `READY` заранее хранит **только wrapped DEK** и не используется до promotion.
+- Переключение ACTIVE и его версии — одна короткая DB-транзакция под блокировкой строки компании.
+- **Критичная тонкость:** проверка актуальности ACTIVE для операции encrypt должна быть согласована с commit записи. Если часть операций уже выбрала старое поколение, переход обязан дождаться их завершения либо отклонить/перезапустить запись; одного `@Transactional` на `TenantKeyService.rotate` недостаточно. В MVP — простой согласованный write admission внутри одного экземпляра JVM плюс повторная проверка generation при сохранении. Без реализации и тестирования этой гарантии автоматически переключать ACTIVE запрещено.
+- После commit инвалидация Caffeine active metadata; DECRYPT_ONLY остаётся доступен для чтения.
+- Запрет повторного использования слота, пока он имеет живые ссылки, пока не проверена сохранность архивного поколения и пока выполняются прежние writers.
+- Если контрольные условия не выполнены к 90-му дню — статус `OVERDUE` как состояние мониторинга, а **не** насильственная перезапись ключа. Не добавлять новое состояние ключевого слота ради этого.
+
+### 20.6 Nightly job: однозначный batch-контракт
+
+- Запуск `02:00 Asia/Almaty`, остановка создания новых пакетов в `05:00`; оба значения настраиваемые.
+- Не более **100 уникальных клиентов** за пакет; включить все зашифрованные поля их клиентского агрегата и контактов, которые используют old generation.
+- Одна транзакция на пакет. Строгий порядок клиентов, select старого поколения без `OFFSET`, row-version compare / optimistic lock, один commit.
+- Для каждого изменённого поля выполняются `decrypt(old)` и `encrypt(active)`; plaintext не сохраняется и не логируется. **Не делать lazy re-encryption** при CRUD или обычном чтении.
+- В рамках той же транзакции один раз обновить `remaining_old` / `migrated_old` на количество **реально изменённых field envelopes**. Ошибочный/повторный пакет не прибавляет счётчики.
+- На ошибке транзакции: rollback данных и stats, максимум три попытки для временных ошибок, затем остановка по проблемной компании и сигнал оператору.
+- Незаполненный `remaining` или значение 0 **не считается** разрешением на освобождение ключа. Финальный полный scan всех CRM-модулей / jobs, блокировка новых зависимостей от old generation, проверка архива и только затем освобождение слота.
+- После рестарта выборка снова опирается на реальные версии envelope; отдельная таблица checkpoint в MVP не нужна.
+- Когда появятся независимые зашифрованные документы/сообщения за пределами клиента, их миграционные выборки добавляются в общий `NightlyKeyMigrationJob` **до** разрешения safe-reuse. Иначе safe-reuse блокируется.
+
+### 20.7 Минимальная операция Recovery
+
+- В `security.kms_tenant_key_archive` хранить `tenantId`, поколение, wrapped DEK, `wrappingKeyId`, время архивации. **Архивный KEK и восстановление отдельно от обычного crypto path**.
+- Recovery запускается только отдельным авторизованным административным сценарием с audit trail.
+- Загрузить требуемое поколение, расшифровать архивный wrapped DEK под историческим/архивным KEK, проверить envelope из архивного snapshot и расшифровать только в контролируемой recovery-сессии.
+- Архивные поколения **не кладутся в Caffeine обычного криптосервиса**. Завершение recovery очищает временные данные и закрывает доступ.
+- Перед освобождением слота подтвердить, что его зашифрованная архивная копия **транзакционно сохранена** и её независимая backup/restore процедура проверена. Не удалять архивные ключи по TTL.
+
+### 20.8 Что НЕ реализовывать в MVP
+
+1. Lazy re-encryption при изменении или чтении клиента.
+2. Отдельный микросервис, Redis, distributed locking, несколько JVM.
+3. Публичный REST API получения DEK или выбора конкретного key slot.
+4. Новые служебные KMS таблицы ради progress, scheduler, cache.
+5. Автоматическую очистку архивных ключей или форсированную ротацию при незавершённой миграции.
+6. Самописные криптографические примитивы; использовать JCA/JCE.
+
+### 20.9 Расширение матрицы приёмки (обязательные P0)
+
+| ID | Проверка | PASS |
+|---|---|---|
+| KMS-21 | Подмена encrypted поля между клиентами одного tenant | GCM/AAD отвергает |
+| KMS-22 | Подмена между полями `email` и `phone` | GCM/AAD отвергает |
+| KMS-23 | Ciphertext generation=v2, slot физически занят v4 | Нет попытки decrypt v4, controlled fail |
+| KMS-24 | 100 клиентов, часть без старых полей | Stats равны фактически перенесённым field envelopes |
+| KMS-25 | 101 клиент и restart между батчами | Все данные мигрированы ровно один раз |
+| KMS-26 | Ночное задание и конкурентный edit | Нет lost update и устаревшего envelope после commit |
+| KMS-27 | Строка KMS с remaining=0, но есть ссылка в msg | Safe-reuse запрещён |
+| KMS-28 | Архивный ключ доступен только в Recovery | Обычный decrypt не читает архив |
+| KMS-29 | Неправильный Root KEK или GCM tag | Fail closed, без plaintext fallback |
+| KMS-30 | Cache hit | Нет SQL за DEK, но допустим SQL за самим CRM объектом |
+| KMS-31 | Rotation while encrypt transaction in-flight | Не возникает новых committed данных на выведенном поколении |
+| KMS-32 | Batch rollback и повтор | Нет двойного счёта, нет частично мигрированного пакета |
+
+**Граница готовности:** проектирование R1.1 не означает работающий код. Сначала DDL/JPA и envelope, потом тесты decrypt и Caffeine, потом nightly, затем promotion и recovery. `migration.enabled=false` и автоматическая перезапись слотов запрещена до подтверждения KMS-21..KMS-32 на H2 и PostgreSQL.
