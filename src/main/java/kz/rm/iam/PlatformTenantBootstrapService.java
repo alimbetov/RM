@@ -49,7 +49,9 @@ public class PlatformTenantBootstrapService {
 
         // No tenant creation for an unverified/inactive account.
         String ownerStatus = jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
+                SELECT status FROM public.iam_user_account
+                WHERE id=? AND external_subject IS NOT NULL
+                  AND length(trim(external_subject))>0 FOR UPDATE
                 """,rs -> rs.next() ? rs.getString(1) : null,ownerUserId);
         if (!"ACTIVE".equals(ownerStatus)) throw new SecurityException("Owner account inactive");
 
