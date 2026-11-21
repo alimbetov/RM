@@ -17,6 +17,11 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.Duration;
+import java.sql.Timestamp;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -49,6 +54,8 @@ class FilesR10bQualificationTest {
     @Autowired FileUploadCompletionService completion;
     @Autowired FileStoragePort storage;
     @Autowired SyntheticScanner scanner;
+    @Autowired FileRecoveryService recovery;
+    @Autowired FileMetadataService metadata;
     @Autowired JdbcTemplate jdbc;
     @Value("${rm.files.local-root:${java.io.tmpdir}/rm-files-synthetic}") String localRoot;
 
@@ -239,6 +246,136 @@ class FilesR10bQualificationTest {
         assertThat(jdbc.queryForObject("""
                 SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
                 """,String.class,s.tenant(),intent.fileId())).isEqualTo("STAGED");
+    }
+
+
+    @Test void concurrentCompletionIsFencedBeforeSecondStreamIsRead() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        CountDownLatch scanned=new CountDownLatch(1);
+        CountDownLatch release=new CountDownLatch(1);
+        scanner.beforeVerdict.set(()->{
+            scanned.countDown();
+            try {
+                if(!release.await(15,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Concurrent test synchronization timed out");
+            } catch(InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(ex);
+            }
+        });
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->completion.acceptAndComplete(
+                    s.actor(),s.tenant(),intent.fileId(),new ByteArrayInputStream(bytes)));
+            assertThat(scanned.await(15,TimeUnit.SECONDS)).isTrue();
+            InputStream forbidden=new InputStream(){
+                @Override public int read(){throw new AssertionError("Concurrent loser must not read bytes");}
+            };
+            assertThatThrownBy(()->completion.acceptAndComplete(
+                    s.actor(),s.tenant(),intent.fileId(),forbidden))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("already processing");
+            release.countDown();
+            assertThat(first.get(15,TimeUnit.SECONDS).state()).isEqualTo("AVAILABLE");
+        } finally {
+            release.countDown();
+            scanner.beforeVerdict.set(null);
+        }
+        assertThat(storageCount(s,intent.fileId())).isEqualTo(1);
+        assertThat(completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(new byte[0])).state()).isEqualTo("AVAILABLE");
+    }
+
+    @Test void crashAfterPromoteBeforeSqlCommitIsReconciledAndRetrySucceeds() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        var claim=metadata.claim(s.uploader(),s.tenant(),intent.fileId());
+        var staged=storage.stage(s.tenant(),intent.fileId(),new ByteArrayInputStream(bytes),
+                bytes.length,"application/pdf");
+        String orphan=storage.promote(s.tenant(),intent.fileId(),staged);
+        assertThat(new LocalFileStorage(localRoot).exists(orphan)).isTrue();
+        assertThat(storageCount(s,intent.fileId())).isZero();
+        // Simulates process death and passage of the configured processing TTL.
+        jdbc.update("""
+                UPDATE crm.file_object SET processing_started_at=?
+                WHERE tenant_id=? AND id=?
+                """,Timestamp.from(Instant.now().minus(Duration.ofMinutes(20))),
+                s.tenant(),intent.fileId());
+        var swept=recovery.reconcileOne(s.tenant(),intent.fileId());
+        assertThat(swept.outcome()).isEqualTo("CLEANED");
+        assertThat(swept.removed()).isGreaterThanOrEqualTo(1);
+        assertThat(storage.exists(orphan)).isFalse();
+        assertThatThrownBy(()->metadata.finalizeClean(s.uploader(),s.tenant(),
+                intent.fileId(),claim.token(),staged,orphan))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT scan_status FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),intent.fileId())).isEqualTo("NOT_SCANNED");
+        assertThat(completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes)).state()).isEqualTo("AVAILABLE");
+        assertThat(storageCount(s,intent.fileId())).isEqualTo(1);
+    }
+
+    @Test void activeClaimIsNotSweptAndStaleWorkerCannotCommit() throws Exception {
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        var claim=metadata.claim(s.uploader(),s.tenant(),intent.fileId());
+        assertThat(recovery.reconcileOne(s.tenant(),intent.fileId()).outcome()).isEqualTo("BUSY");
+        assertThatThrownBy(()->metadata.claim(s.uploader(),s.tenant(),intent.fileId()))
+                .isInstanceOf(IllegalStateException.class);
+        metadata.release(s.uploader(),s.tenant(),intent.fileId(),claim.token());
+        assertThat(metadata.claim(s.uploader(),s.tenant(),intent.fileId()).token())
+                .isNotEqualTo(claim.token());
+    }
+
+    @Test void corruptAvailableBlobIsQuarantinedWithoutFalseSuccess() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes));
+        String key=jdbc.queryForObject("""
+                SELECT storage_key FROM crm.file_storage WHERE tenant_id=? AND file_id=?
+                """,String.class,s.tenant(),intent.fileId());
+        byte[] changed=bytes.clone();
+        changed[changed.length-1]^=1; // same size, different digest
+        java.nio.file.Files.write(java.nio.file.Path.of(localRoot).resolve(key),changed);
+        assertThatThrownBy(()->completion.acceptAndComplete(s.actor(),s.tenant(),
+                intent.fileId(),new ByteArrayInputStream(bytes)))
+                .isInstanceOf(IOException.class).hasMessageContaining("integrity");
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),intent.fileId())).isEqualTo("REJECTED");
+        assertThat(jdbc.queryForObject("""
+                SELECT scan_status FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),intent.fileId())).isEqualTo("ERROR");
+    }
+
+    @Test void missingAvailableBlobIsQuarantinedByRecovery() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes));
+        String key=jdbc.queryForObject("""
+                SELECT storage_key FROM crm.file_storage WHERE tenant_id=? AND file_id=?
+                """,String.class,s.tenant(),intent.fileId());
+        storage.delete(key);
+        assertThat(recovery.reconcileOne(s.tenant(),intent.fileId()).outcome())
+                .isEqualTo("QUARANTINED");
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),intent.fileId())).isEqualTo("REJECTED");
+        assertThatThrownBy(()->completion.acceptAndComplete(s.actor(),s.tenant(),
+                intent.fileId(),new ByteArrayInputStream(bytes)))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test void unavailableDefaultScannerNeverClaimsClean() {
