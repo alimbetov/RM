@@ -200,6 +200,58 @@ class SalesInventoryRbacQualificationTest {
             .isInstanceOf(SecurityException.class);
     }
 
+    @Test void opposingMultiSkuOrdersReserveWithoutDeadlock() throws Exception {
+        Context c=context(10);
+        UUID otherItem=UUID.randomUUID(),otherOffer=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,c.tenant(),otherItem,"sku-"+UUID.randomUUID());
+        jdbc.update("""
+            INSERT INTO crm.inv_stock_balance(tenant_id,location_id,item_id,on_hand,reserved)
+            VALUES (?,?,?,10,0)
+            """,c.tenant(),c.location(),otherItem);
+        jdbc.update("""
+            INSERT INTO crm.store_offer
+              (tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+            VALUES (?,?,'Second SKU',100,'KZT','PUBLISHED',?)
+            """,c.tenant(),otherOffer,otherItem);
+        UUID orderA=checkout.checkout(c.slug(),"buyer-"+UUID.randomUUID()+"@example.kz",
+            "checkout-"+UUID.randomUUID(),List.of(
+                new AutoOrderService.Line(c.offer(),2),
+                new AutoOrderService.Line(otherOffer,2))).order().orderId();
+        UUID orderB=checkout.checkout(c.slug(),"buyer-"+UUID.randomUUID()+"@example.kz",
+            "checkout-"+UUID.randomUUID(),List.of(
+                new AutoOrderService.Line(otherOffer,2),
+                new AutoOrderService.Line(c.offer(),2))).order().orderId();
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var left=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return commands.confirm(c.staff(),c.tenant(),orderA,c.location());
+            });
+            var right=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return commands.confirm(c.staff(),c.tenant(),orderB,c.location());
+            });
+            start.countDown();
+            assertThat(left.get(30,TimeUnit.SECONDS).affectedLines()).isEqualTo(2);
+            assertThat(right.get(30,TimeUnit.SECONDS).affectedLines()).isEqualTo(2);
+        }
+        assertThat(status(c,orderA)).isEqualTo("CONFIRMED");
+        assertThat(status(c,orderB)).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("4");
+        assertThat(jdbc.queryForObject("""
+            SELECT reserved FROM crm.inv_stock_balance
+            WHERE tenant_id=? AND location_id=? AND item_id=?
+            """,BigDecimal.class,c.tenant(),c.location(),otherItem)).isEqualByComparingTo("4");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_reservation
+            WHERE tenant_id=? AND state='ACTIVE'
+            """,Integer.class,c.tenant())).isEqualTo(4);
+    }
+
     @Test void standaloneInventoryOperationsRequireExplicitGrants() {
         Context c=context(3);
         allow(c,DomainPermission.INVENTORY_RECEIVE);
