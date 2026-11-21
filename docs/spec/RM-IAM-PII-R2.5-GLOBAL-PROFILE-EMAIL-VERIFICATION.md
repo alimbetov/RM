@@ -1,6 +1,6 @@
 # RM IAM-PII-R2.5 — защищённый глобальный профиль и обязательное подтверждение email
 
-**Статус:** R2.5A сервисы + миграции + тесты реализованы в `base_dev` (PR #9, ещё не `main`); R2.5B/C — DESIGN и не реализованы; весь релиз — HOLD · **Дата:** 2026-11-21 · **Ветка:** `base_dev` · **Основа:** [RM-PLATFORM-STANDARD-R2, §25](../architecture/RM-PLATFORM-STANDARD-R2.md).
+**Статус:** R2.5A/B internal services + тесты реализованы в `base_dev`; R2.5C — encrypted profile + opt-in offline migration реализованы, но физический populated-PG cutover, контроль альтернативных writers и production qualification — HOLD; всё ещё PR #9, не `main` · **Дата:** 2026-11-21 · **Ветка:** `base_dev` · **Основа:** [RM-PLATFORM-STANDARD-R2, §25](../architecture/RM-PLATFORM-STANDARD-R2.md).
 **Объём:** внутренние Java/Spring Boot сервисы, данные, безопасные миграции Liquibase, процессные H2/PostgreSQL-тесты. **Нет** REST-контроллеров, UI, SMTP-включения, production approval или переработки всех доменов.
 
 ## 1. Цель и подтверждённая исходная база
@@ -138,3 +138,18 @@ RM использует **один глобальный аккаунт** (`iam_u
 - Первый proof: `verifyRegistration(challengeId,token)` требует purpose `REGISTRATION`, TTL 15 минут, single-use, ACTIVE/PENDING account; создаёт событие `iam_email_verification_event` и не выдаёт OIDC-сессию. `verifyEmail` для checkout теперь допускает только purpose `CHECKOUT`, а legacy challenge получают CHECKOUT по умолчанию.
 - Liquibase `0044–0045`: additive purpose, append-only proof evidence и PG trigger. Новые сервисные тесты — `IamInitialEmailRegistrationQualificationTest` (9 случаев, включая двухпоточные). Cooldown на повтор регистрации — 60 секунд.
 - **НЕ сделано в R2.5A:** смена email CURRENT/PENDING/HISTORICAL; шифрование `display_name` и `phone_e164`, миграция plaintext в заполненной БД, real email sender, внешняя HTTP/OIDC-интеграция, независимая security-квалификация. **Не считать всю IAM-PII-R2.5 завершённой.**
+
+## 11. Подтверждённая реализация R2.5B (кандидат в base_dev)
+
+- `requestEmailChange/confirmEmailChange/cancelEmailChange` требуют `VerifiedActor` владельца; новая почта проходит отдельный `CHANGE_EMAIL` proof, а старый `CURRENT` остаётся verified до атомарного переключения.
+- Liquibase 0046–0048: раздельные `PENDING`/`CURRENT`/`HISTORICAL`, уникальный active HMAC индекс при сохранённом историческом lookup, no duplicate active/current/pending owner, immutable transition evidence.
+- `AutoOrderService` не связывает заказы через HISTORICAL identity; исходный `email_identity_id` и `buyer_user_id` сохраняются. Старый email может быть заново подтверждён другим человеком **без автоматической передачи старых заказов**.
+- Сервисные тесты `IamEmailChangeQualificationTest` и `IamEmailChangeOrderHistoryQualificationTest` — обязательные, включая конкурентные подтверждения и связь с реальным Sales order.
+
+## 12. Подтверждённая реализация R2.5C и границы backfill
+
+- `GlobalUserProfileCrypto`: AES-256-GCM + AAD по `userId/field`; отдельные глобальные IAM 32-byte ключи для профиля и HMAC телефона. Не использовать tenant DEK. Невалидный ключ, неверный AAD или повреждённый ciphertext → отказ.
+- `GlobalUserProfileService`: self-only чтение и изменение имени/телефона; версионированный encrypted profile и аудит без plaintext.
+- `UserAccountEntity` исключает legacy поля `display_name`, `email_normalized`, `phone_e164` из JPA-мэппинга. Код checkout не пишет открытую строку имени. Миграции 0049–0051 создают `iam_pii.user_profile_secret`, аудит и допускают NULL для `display_name` до окончания cutover.
+- `LegacyIamPiiMigrationService` работает **только при явно активированном offline maintenance flag**, шифрует и очищает старые plaintext-поля транзакционно после проверки email collision; legacy email не становится verified по факту миграции. При ошибке полный rollback, старые данные сохраняются. Нельзя запускать одновременно с online checkout/legacy writers.
+- **Отложено до отдельной квалификации:** прогон в обезличенной копии наполненной PostgreSQL, выявление дублей и запрет альтернативных прямых SQL-writers, DB-level запрет plaintext/удаление старых колонок, восстановление из backup и ротация global IAM ключей. Пока это не завершено, R2.5C — internal implementation / technical tests, **не** production confidentiality admission.
