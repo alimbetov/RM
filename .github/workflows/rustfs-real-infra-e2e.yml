@@ -83,9 +83,11 @@ jobs:
         run: |
           set -euo pipefail
           docker pull clamav/clamav:stable
-          docker image inspect clamav/clamav:stable --format='ClamAV CI image ID: {{.Id}}'
+          CLAM_ID=$(docker image inspect clamav/clamav:stable --format='{{.Id}}')
+          echo "ClamAV CI image ID: $CLAM_ID"
+          test "$CLAM_ID" = 'sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8'
           docker run -d --name rm-clamd-e2e --restart no \
-            -p 127.0.0.1:3310:3310 clamav/clamav:stable
+            -p 127.0.0.1:3310:3310 "$CLAM_ID"
           for n in $(seq 1 210); do
             if timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/3310; printf "zPING\\0" >&3; IFS= read -r -d "" response <&3; [[ "$response" == PONG ]]' 2>/dev/null; then
               echo "Live ClamAV PONG, signature daemon ready"
