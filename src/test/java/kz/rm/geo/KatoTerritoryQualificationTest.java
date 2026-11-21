@@ -35,7 +35,7 @@ class KatoTerritoryQualificationTest {
         var org=orgs.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),"Example LLP","Example","KZ"));
         var workspace=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
         String activeCode=jdbc.queryForObject(
-                "SELECT code FROM ref_kato_territory WHERE is_deleted=FALSE ORDER BY code LIMIT 1",String.class);
+                "SELECT code FROM ref_kato_territory WHERE is_deleted=FALSE AND level_no <= 3 ORDER BY code LIMIT 1",String.class);
         var branch=service.create(workspace.getId(),OrganizationLocationEntity.Type.BRANCH,
                 "Head office",activeCode,"Office 1");
         var warehouse=service.create(workspace.getId(),OrganizationLocationEntity.Type.WAREHOUSE,
