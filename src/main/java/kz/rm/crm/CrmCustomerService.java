@@ -19,7 +19,7 @@ import java.util.UUID;
  * a future REST adapter MUST derive userId from an authenticated and verified principal.
  */
 @Service
-public class CrmCustomerService {
+class CrmCustomerService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
     private final TenantCryptoPort crypto;
@@ -67,7 +67,7 @@ public class CrmCustomerService {
         return new Customer(tenantId,id,"COMPANY",name,zone);
     }
 
-    @Transactional(readOnly=true)
+    @Transactional
     public Customer getCustomer(UUID actorId, UUID tenantId, UUID id) {
         requireOrganizationMember(actorId,tenantId,false);
         return jdbc.query("""
@@ -79,7 +79,7 @@ public class CrmCustomerService {
                 String name=rs.getString(2);
                 String zone=rs.getString(3);
                 if ("PERSON".equals(type)) {
-                    authorization.require(actorId,tenantId,DomainPermission.CRM_PII_READ);
+                    authorization.requireForCommand(actorId,tenantId,DomainPermission.CRM_PII_READ);
                     byte[] envelope=jdbc.queryForObject("""
                         SELECT name_envelope FROM crm_pii.customer_secret
                         WHERE tenant_id=? AND customer_id=?
@@ -117,9 +117,9 @@ public class CrmCustomerService {
         return new Contact(tenantId,id,customerId,name,email,phone);
     }
 
-    @Transactional(readOnly=true)
+    @Transactional
     public Contact getContact(UUID actorId, UUID tenantId, UUID contactId) {
-        authorization.require(actorId,tenantId,DomainPermission.CRM_PII_READ);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.CRM_PII_READ);
         return jdbc.query("""
             SELECT c.customer_id,s.name_envelope,s.email_envelope,s.phone_envelope
               FROM crm.contact c JOIN crm_pii.contact_secret s
@@ -158,7 +158,7 @@ public class CrmCustomerService {
         return id;
     }
 
-    @Transactional(readOnly=true)
+    @Transactional
     public boolean hasEmailConsent(UUID actorId, UUID tenantId, UUID contactId, String purpose) {
         requireOrganizationMember(actorId,tenantId,false);
         return Boolean.TRUE.equals(jdbc.query("""
@@ -190,6 +190,6 @@ public class CrmCustomerService {
 
     private void requireOrganizationMember(UUID actor, UUID tenant, boolean write) {
         if(write) authorization.requireForCommand(actor,tenant,DomainPermission.CRM_WRITE);
-        else authorization.require(actor,tenant,DomainPermission.CRM_READ);
+        else authorization.requireForCommand(actor,tenant,DomainPermission.CRM_READ);
     }
 }
