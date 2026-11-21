@@ -142,14 +142,22 @@ class OrganizationLocationQueryQualificationTest {
                 "Organization location manager");
         roles.grant(t.actor(),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
         roles.grant(t.actor(),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
-        roles.assign(t.actor(),t.tenant(),t.actor(),role.id());
+
+        UUID orgId=jdbc.queryForObject(
+                "SELECT organization_id FROM public.iam_workspace WHERE id=?",
+                UUID.class,t.tenant());
+        var staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "org-staff-"+UUID.randomUUID(),"Location staff"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                orgId,staff.getId(),OrganizationMembershipEntity.Role.MEMBER));
+        roles.assign(t.actor(),t.tenant(),staff.getId(),role.id());
         roles.enable(t.actor(),t.tenant());
         var admitted=new CountDownLatch(1);
         var release=new CountDownLatch(1);
         var tx=new TransactionTemplate(transactions);
         try(var pool=Executors.newFixedThreadPool(2)) {
             var writer=pool.submit(()->tx.execute(s->{
-                secured.create(verified(t.actor()),t.tenant(),
+                secured.create(verified(staff.getId()),t.tenant(),
                         OrganizationLocationEntity.Type.WAREHOUSE,
                         "Admitted before revocation",kato(),null);
                 admitted.countDown();
@@ -177,9 +185,9 @@ class OrganizationLocationQueryQualificationTest {
             assertThat(writer.get(20,TimeUnit.SECONDS)).isTrue();
             assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
         }
-        assertThat(secured.search(verified(t.actor()),t.tenant(),null,0,10)
+        assertThat(secured.search(verified(staff.getId()),t.tenant(),null,0,10)
                 .getTotalElements()).isEqualTo(1);
-        assertThatThrownBy(()->secured.create(verified(t.actor()),t.tenant(),
+        assertThatThrownBy(()->secured.create(verified(staff.getId()),t.tenant(),
                 OrganizationLocationEntity.Type.WAREHOUSE,"After revocation",kato(),null))
                 .isInstanceOf(SecurityException.class);
     }
