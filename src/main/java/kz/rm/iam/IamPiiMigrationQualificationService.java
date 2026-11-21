@@ -69,19 +69,21 @@ public class IamPiiMigrationQualificationService {
      * Validation precedes any optional offline plaintext scrub and detects
      * legacy normalized-email duplicates that SQL case-sensitive UNIQUE misses.
      */
+    private record Claim(UUID userId,String pendingReason) {}
+
     @Transactional(readOnly=true)
     public Inventory assertBackfillAdmissible() {
         // Only keyed hashes/UUIDs; never persist or report any source PII.
-        Map<ByteBuffer,UUID> claims=new HashMap<>();
+        Map<ByteBuffer,Claim> claims=new HashMap<>();
         jdbc.query("""
-            SELECT user_id,active_lookup_hmac FROM public.iam_email_identity
+            SELECT user_id,active_lookup_hmac,pending_reason FROM public.iam_email_identity
             WHERE active_lookup_hmac IS NOT NULL
             """,rs->{
                 while(rs.next()) {
                     ByteBuffer index=ByteBuffer.wrap(rs.getBytes(2));
                     UUID userId=rs.getObject(1,UUID.class);
-                    UUID previous=claims.putIfAbsent(index,userId);
-                    if(previous!=null&&!previous.equals(userId))
+                    Claim previous=claims.putIfAbsent(index,new Claim(userId,rs.getString(3)));
+                    if(previous!=null&&!previous.userId().equals(userId))
                         throw new SecurityException("Duplicate active email identity");
                 }
                 return null;
@@ -118,9 +120,11 @@ public class IamPiiMigrationQualificationService {
                     if(email!=null) {
                         String normalized=emails.normalize(email);
                         ByteBuffer index=ByteBuffer.wrap(emails.lookup(normalized));
-                        UUID previous=claims.putIfAbsent(index,id);
-                        if(previous!=null&&!previous.equals(id))
+                        Claim previous=claims.putIfAbsent(index,new Claim(id,null));
+                        if(previous!=null&&!previous.userId().equals(id))
                             throw new SecurityException("Normalized legacy email owner conflict");
+                        if(previous!=null && "CHANGE_EMAIL".equals(previous.pendingReason()))
+                            throw new SecurityException("Pending email change conflicts with legacy source");
                     }
                 }
                 return null;
