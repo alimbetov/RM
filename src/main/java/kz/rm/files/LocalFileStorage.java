@@ -87,6 +87,15 @@ class LocalFileStorage implements FileStoragePort {
         }
         return new Staged(key,bytes,HexFormat.of().formatHex(sha.digest()),mime);
     }
+    @Override public InputStream openStagedForScan(String stagingKey) throws IOException {
+        if(stagingKey==null || !stagingKey.matches(
+                "[0-9a-f-]{36}/[0-9a-f-]{36}/stage-[0-9a-f-]{36}"))
+            throw new IOException("Scanner can only read private staging");
+        Path p=resolve(stagingKey);
+        if(!Files.isRegularFile(p,LinkOption.NOFOLLOW_LINKS))
+            throw new IOException("Staging content missing");
+        return Files.newInputStream(p,LinkOption.NOFOLLOW_LINKS);
+    }
     @Override public String promote(UUID tenant,UUID fileId,Staged staged) throws IOException {
         Path from=resolve(staged.key());
         if(!staged.key().startsWith(tenant+"/"+fileId+"/stage-"))
