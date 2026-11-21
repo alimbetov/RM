@@ -27,7 +27,7 @@ public class OrganizationLocationQueryService {
         if (page < 0 || size < 1 || size > 100)
             throw new IllegalArgumentException("Page must be nonnegative, size 1..100");
         var query = filters == null ? new LocationSearch(null,null,null) : filters;
-        return repository.search(tenantId,query.type(),query.status(),query.name(),
+        return repository.search(tenantId,query.type(),query.status(),query.name()==null?"":query.name(),
                 PageRequest.of(page,size,Sort.by(Sort.Direction.DESC,"createdAt")
                         .and(Sort.by("id")))).map(mapper::toDto);
     }
