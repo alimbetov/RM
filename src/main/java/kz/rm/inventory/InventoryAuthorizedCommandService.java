@@ -28,7 +28,7 @@ public class InventoryAuthorizedCommandService {
     public InventoryMovementService.Movement receive(UUID actorId,UUID tenantId,UUID locationId,
                                                        UUID itemId,String idempotencyKey,
                                                        BigDecimal quantity) {
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_RECEIVE);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RECEIVE);
         if(quantity==null || quantity.signum()<=0)
             throw new IllegalArgumentException("Receipt quantity must be positive");
         // This is quantity-only receiving; accounting valuation awaits INV-VAL-R1.2.
@@ -40,7 +40,7 @@ public class InventoryAuthorizedCommandService {
     public InventoryMovementService.Movement correct(UUID actorId,UUID tenantId,UUID locationId,
                                                        UUID itemId,String idempotencyKey,
                                                        BigDecimal delta) {
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,delta,
                 InventoryMovementService.Reason.CORRECTION);
     }
