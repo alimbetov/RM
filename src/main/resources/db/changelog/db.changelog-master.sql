@@ -1529,3 +1529,13 @@ ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHE
 --rollback   'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
 --rollback   'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED',
 --rollback   'TENANT_PROVISIONED','MEMBER_INVITED','MEMBER_JOINED'));
+
+
+--changeset rm:0042-legacy-global-admin-bootstrap-closure
+-- When upgrading a populated DB with pre-existing administrators, prevent
+-- a newly enabled offline bootstrap from granting an additional first admin.
+UPDATE public.iam_global_admin_guard
+SET bootstrapped=TRUE,bootstrapped_at=CURRENT_TIMESTAMP
+WHERE id=1 AND bootstrapped=FALSE
+  AND EXISTS (SELECT 1 FROM public.iam_global_role_assignment WHERE role='PLATFORM_ADMIN');
+--rollback SELECT 1;
