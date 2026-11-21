@@ -8,7 +8,7 @@ import java.util.UUID;
 
 /**
  * Trusted service-only binary read. Never gives out filesystem key or plaintext
- * byte[]; checks current owner permissions and authenticated encrypted content.
+ * byte[]; checks current owner permissions and authenticated plaintext content.
  */
 @Service
 public class AuthenticatedFilesBinaryReads {
@@ -27,7 +27,7 @@ public class AuthenticatedFilesBinaryReads {
         var ref=attachments.authorizeCustomerBinaryRead(actor.userId(),tenant,attachmentId);
         if(!storage.matches(ref.key(),ref.size(),ref.sha256())) {
             metadata.quarantineIntegrityFailure(tenant,ref.fileId(),ref.key());
-            throw new IOException("Encrypted binary integrity verification failed");
+            throw new IOException("File integrity verification failed");
         }
         storage.streamVerified(tenant,ref.fileId(),ref.key(),sink);
         return ref.size();
