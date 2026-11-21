@@ -152,3 +152,8 @@ kz.rm.crm/
 
 
 **I18N-R1.0A:** язык `zh-Hans` (упрощённый китайский) добавлен как четвёртый к `kk/ru/en`. Все новые `*_i18n.locale` и `source_locale` используют `VARCHAR(12)`, а не `VARCHAR(2)`. Язык не участвует в tenant/region/partition keys. См. [RM-I18N-R1](RM-I18N-R1.md).
+
+
+## Поля, шифрование и жизненный цикл удаления
+
+**Нормативная проектная матрица:** [RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1](RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1.md). Для каждого модуля определены обязательные бизнес/технические поля, классификация PII/секретов, KMS-envelopes и blind-index candidates, а также differentiated lifecycle: soft-delete для изменяемых карточек/черновиков, correction/void для проведённых операций и append-only для финансовых/аудитных событий. Soft delete **не** является privacy erasure. `deleted_at` добавлять только по обоснованному use case; не дублировать его с `ARCHIVED` без различия семантики.
