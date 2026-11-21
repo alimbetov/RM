@@ -2,7 +2,7 @@
 
 **Approved architectural standard:** [RM-PLATFORM-STANDARD-R2](docs/architecture/RM-PLATFORM-STANDARD-R2.md) — the sole normative design/security reference.
 **Current implemented code baseline:** [Domain Layer Baseline](docs/architecture/RM-DOMAIN-LAYER-BASELINE.md).
-**Integration:** PR #2 was merged to `main` at `126e312e82791a68d689cbcbef287163858e7859`.
+**Integration:** PR #2 (domain baseline), PR #4 (IAM/RBAC security hardening), and the approved RM-R2 standard are merged into `main`. This does not imply production admission.
 **Deployment:** production and public HTTP/OIDC admission **HOLD**.
 
 ## Implemented
@@ -13,13 +13,18 @@
 - Verified-actor OIDC library boundary and synthetic RSA JWT tests. **No real public login or HTTP endpoint admission yet.**
 
 ## Current entrypoints
-`AuthenticatedSalesCommands` and `AuthenticatedInventoryCommands` are typed internal adapters. Order-linked stock operations flow through `OrderInventoryPort`; raw reservation methods are package-private; the public reason-specific stock adjustment overload is a known P0 in `main`, fixed by proposed [PR #4](https://github.com/alimbetov/RM/pull/4). `TenantAuthorization.requireForCommand` holds a tenant lock during business mutations.
+`AuthenticatedSalesCommands` and `AuthenticatedInventoryCommands` are typed internal adapters. Order-linked stock operations flow through `OrderInventoryPort`; raw reservation methods are package-private; all raw stock movement adjustment overloads are package-private after merged [PR #4](https://github.com/alimbetov/RM/pull/4). `TenantAuthorization.requireForCommand` holds a tenant lock during business mutations.
 
 ## Not yet delivered or qualified
 - Real issuer/BFF/HTTP security chain and actual onboarding;
-- coordinated user/membership suspension under the transactional authorization barrier;
+- independent production security sign-off for IAM suspension/recovery, even though internal transaction tests are GREEN;
 - least-privilege DB role, filled-DB Liquibase rehearsal, production recovery and performance benchmarks;
 - settlement/valuation/COGS and full delivery workflow.
+
+## Branch workflow
+- `main`: reviewed integration baseline; do not develop directly in it.
+- `base_dev`: **single active development branch** for RM-R2 tasks (starting with Inventory), with automatic H2 + PostgreSQL checks on push.
+- Merge from `base_dev` to `main` through a reviewed pull request after exact-head CI; keep historical feature/audit branches read-only. No new feature branches unless explicitly approved for a risky or isolated experiment.
 
 ## Documentation
 - [RM-R2 unified platform standard — normative](docs/architecture/RM-PLATFORM-STANDARD-R2.md)
