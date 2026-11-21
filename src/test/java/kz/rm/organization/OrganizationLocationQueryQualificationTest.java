@@ -13,6 +13,12 @@ import java.util.UUID;
 import java.time.Instant;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.Assumptions;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -22,6 +28,8 @@ class OrganizationLocationQueryQualificationTest {
     @Autowired OrganizationLocationQueryService query;
     @Autowired AuthenticatedOrganizationLocations secured;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired TenantRoleService roles;
+    @Autowired DataSource dataSource;
     @Autowired AuthenticatedInventoryQueries stock;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -120,6 +128,60 @@ class OrganizationLocationQueryQualificationTest {
                 .isEqualTo(1);
         assertThatThrownBy(()->secured.get(verified(b.actor()),b.tenant(),created.id()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+
+    @Test void postgresLocationCreationFencesConcurrentPermissionRevocation() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var t=setup();
+        var role=roles.createRole(t.actor(),t.tenant(),
+                "ORG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Organization location manager");
+        roles.grant(t.actor(),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
+        roles.grant(t.actor(),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
+        roles.assign(t.actor(),t.tenant(),t.actor(),role.id());
+        roles.enable(t.actor(),t.tenant());
+        var admitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var writer=pool.submit(()->tx.execute(s->{
+                secured.create(verified(t.actor()),t.tenant(),
+                        OrganizationLocationEntity.Type.WAREHOUSE,
+                        "Admitted before revocation",kato(),null);
+                admitted.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Location write timeout");
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+                return true;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                roles.revoke(t.actor(),t.tenant(),role.id(),
+                        DomainPermission.ORGANIZATION_LOCATION_WRITE);
+                return true;
+            });
+            try {
+                assertThatThrownBy(()->revoke.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(writer.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(secured.search(verified(t.actor()),t.tenant(),null,0,10)
+                .getTotalElements()).isEqualTo(1);
+        assertThatThrownBy(()->secured.create(verified(t.actor()),t.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"After revocation",kato(),null))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void stockQueryIsTenantScopedAndSupportsLocationAndAvailableFilter() {
