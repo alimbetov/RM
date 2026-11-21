@@ -12,7 +12,7 @@ New `rm:0031-tenant-scoped-rbac`:
 - `iam_tenant_role`: `(tenant_id,id)` PK; `(tenant_id,role_code)` unique; display name, active, timestamp. Role codes are caller-defined, normalized uppercase, e.g. `WAREHOUSE_OPERATOR`, `SALES_MANAGER`, `ACCOUNTANT`.
 - `iam_tenant_role_permission`: `(tenant_id,role_id,permission_code)` PK, role composite FK; codes validated against Java `DomainPermission`.
 - `iam_tenant_user_role`: `(tenant_id,user_id,role_id)` PK; composite FK to tenant role and FK to IAM global user. Membership to same organization is also validated by service.
-- `iam_tenant_rbac_config`: `tenant_id` PK, `enforced`, row_version. No row or `false` = existing SEC-R1.0 compatibility mode. Activation is explicit and requires a second active OWNER holding a functional grant, because a user may not grant themselves roles.
+- `iam_tenant_rbac_config`: `tenant_id` PK, `enforced`, row_version. No row or `false` = existing SEC-R1.0 compatibility mode. Activation is explicit and requires at least one active organization member assigned an active functional role with a real permission. A single OWNER may activate RBAC; the non-delegable management right remains available for recovery.
 - `iam_tenant_rbac_event`: immutable append-only role administration evidence (actor, action, target, role, permission, timestamp).
 
 New PostgreSQL-only `rm:0032-tenant-rbac-event-immutable`: UPDATE/DELETE trigger on RBAC evidence.
@@ -30,14 +30,15 @@ No existing Liquibase changeset is rewritten.
 - `grant/revoke(actor,tenant,role,DomainPermission)`
 - `assign/unassign(actor,tenant,targetUser,role)`
 - `enable(actor,tenant)`
-- `listRoles(actor,tenant)`
+- `setRoleActive(actor,tenant,roleId,active)` — disable/re-enable a role with immediate effect at the next permission check
+- `listRoles(actor,tenant)`, `listGrants(actor,tenant,roleId)`, `listAssignments(actor,tenant)` — bounded administration reads
 
 Rules: no role assignment/revocation for oneself; target must have active IAM user and active membership in this tenant; roles and permissions must refer to the *same* tenant; duplicate grants/assignments are no-op; audit events only for committed changes. API actorId must be derived from verified principal; **no HTTP adapter has been opened**. Data changes by privileged DBA bypass business authorization, so separate DB grants/RLS and operational procedures are required for production.
 
 ### Provisioning and rollout
 
 1. Keep mode off for existing tenants; enumerate existing OWNER/ADMIN/MANAGER/MEMBER/VIEWER.
-2. OWNER creates functional tenant roles with explicit grants; another active OWNER is assigned at least one such role to avoid lockout.
+2. OWNER creates functional tenant roles with explicit grants; at least one active employee receives an active role and permission before activation. A second OWNER is **not** required. The OWNER retains non-delegable TENANT_RBAC_MANAGE for recovery but gains no wildcard operational rights.
 3. Assign only to verified active employees. Compare effective privileges and run dry-run against existing permissions.
 4. OWNER enables RBAC; from then onward, non-admin operations require assigned functional grants. Existing base roles do not implicitly elevate permissions. `TENANT_RBAC_MANAGE` stays OWNER-only as recovery root.
 5. Test revocation, user suspension, tenant suspension, cross-tenant UUID substitution and two-pod racing administration.
@@ -52,9 +53,20 @@ Current permissions: `CRM_READ`, `CRM_PII_READ`, `CRM_WRITE`, `ORGANIZATION_LOCA
 - H2 + PostgreSQL tests on fresh DB.
 - RBAC mode disabled: original permissions preserved; new mutating actions deny.
 - Enabled: assigned permission allows, absent permission denies, union across roles.
-- OWNER admin ability is nondelegable; self-assign, cross-tenant role ID and outsider reject.
+- OWNER admin ability is nondelegable; self-assign, cross-tenant role ID and outsider reject; sole OWNER activation works after assigning an active member.
 - A grant removed or member suspended becomes ineffective on next check.
 - PostgreSQL forbids changing/removing role administration events.
 - Additional pending gates: real OIDC principal, signed session/claims, DB least-privilege, multi-process revocation races, migration on populated DB, authorization cache/invalidation load, approvals for financial write operations.
 
 **Release:** internal API built; public endpoints and production admission remain HOLD.
+
+## SEC-R1.1 stabilization — no overengineering (2026-11-21)
+
+**Pragmatic contract:** retain the five existing tables, the single `TenantRoleService`, one `TenantAuthorization`, and one enum of permissions. **No generic policy engine, permission cache, role inheritance, nested groups or new RBAC tables.** New optional UI adapters will consume the same internal read/write service methods once trusted OIDC identity exists.
+
+- A tenant with one OWNER is supported; the OWNER can manage roles at all times, but cannot directly assign themselves a functional role and does not inherit all operational permissions.
+- `enable()` refuses an empty policy (zero usable grants to active employees). Repeated activation is idempotent.
+- `setRoleActive(false/true)` suspends/restores all permissions of that role without deleting grants or assignments. Additional actions `ROLE_DEACTIVATED` and `ROLE_ACTIVATED` are recorded using additive Liquibase `0033`, without changing applied migrations.
+- `listGrants()` and `listAssignments()` let the OWNER inspect actual state; they do not expose PII.
+- No cron job, external authorization microservice, Redis, Keycloak-specific role mapping or complex ABAC is required for the internal R1.1 implementation.
+- Current limit: authorization is performed for new operations and reflects committed RBAC edits on subsequent checks. Full atomic revocation against an already-running business transaction, OIDC principal binding and database least-privilege remain independent production gates and must **not** be silently declared passed.
