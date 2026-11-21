@@ -117,3 +117,8 @@ UI `kk/ru/en/zh-Hans` переводит **представление**, а не
 **QUAL-R1:** PostgreSQL/H2, negative cross-tenant, recovery/restore, rotation safety и load p95/p99.
 
 Это **архитектурное ТЗ**, а не утверждение, что все описанные функции уже закодированы.
+
+
+## 8. Уточнение R1 перед реализацией
+
+Каноническая трактовка **soft delete** зафиксирована в [RM-IMPLEMENTATION-BASELINE-R1](RM-IMPLEMENTATION-BASELINE-R1.md): `ARCHIVED` — бизнес-состояние, `deleted_at` — только когда реально требуется отдельная корзина/восстановление. Для Customer/Contact/Location/Catalog/Task на R1 достаточно явной архивации и проверки видимости; не добавлять оба механизма без описанной разницы. Физические FILES таблицы целевого R1: `crm.file_object`, `crm.file_storage`, `crm.file_attachment`.
