@@ -10,6 +10,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
 import java.util.UUID;
+import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest
 class TenantRbacRevocationQualificationTest {
     @Autowired TenantAuthorization authorization;
+    @Autowired TenantAccessStatusService access;
     @Autowired TenantRoleService roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -201,6 +203,143 @@ class TenantRbacRevocationQualificationTest {
                     return tx.execute(status->{
                         authorization.requireForCommand(f.staff(),f.tenant(),
                                 DomainPermission.INVENTORY_RECEIVE);
+                        return true;
+                    });
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            });
+            try {
+                assertThatThrownBy(()->command.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(suspend.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+    }
+
+
+    private VerifiedActor actor(UUID user) {
+        return new VerifiedActor(user,Instant.now().plusSeconds(120));
+    }
+
+    @Test void membershipSuspensionWaitsForAdmittedCommandAndDeniesLaterCommands() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var admitted=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                admitted.countDown();
+                await(finish);
+                return true;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var suspend=pool.submit(()->{
+                access.suspendMember(actor(f.owner()),f.tenant(),f.staff());
+                return true;
+            });
+            try {
+                assertThatThrownBy(()->suspend.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(command.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(suspend.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThatThrownBy(()->authorization.require(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void membershipSuspensionCommittedFirstDeniesWaitingCommand() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var fenced=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var suspend=pool.submit(()->tx.execute(status->{
+                access.suspendMember(actor(f.owner()),f.tenant(),f.staff());
+                fenced.countDown();
+                await(finish);
+                return true;
+            }));
+            assertThat(fenced.await(10,TimeUnit.SECONDS)).isTrue();
+            var command=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
+                        authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                        return true;
+                    });
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            });
+            try {
+                assertThatThrownBy(()->command.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(suspend.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+    }
+
+    @Test void tenantSuspensionWaitsForAdmittedCommandAndDeniesLaterCommands() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var admitted=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                admitted.countDown();
+                await(finish);
+                return true;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var suspend=pool.submit(()->{
+                access.suspendTenant(actor(f.owner()),f.tenant());
+                return true;
+            });
+            try {
+                assertThatThrownBy(()->suspend.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(command.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(suspend.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThatThrownBy(()->authorization.require(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void tenantSuspensionCommittedFirstDeniesWaitingCommand() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var fenced=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var suspend=pool.submit(()->tx.execute(status->{
+                access.suspendTenant(actor(f.owner()),f.tenant());
+                fenced.countDown();
+                await(finish);
+                return true;
+            }));
+            assertThat(fenced.await(10,TimeUnit.SECONDS)).isTrue();
+            var command=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
+                        authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
                         return true;
                     });
                 } catch(SecurityException denied) {
