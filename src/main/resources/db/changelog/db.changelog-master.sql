@@ -1082,3 +1082,30 @@ FOR EACH STATEMENT EXECUTE FUNCTION crm.audit_retention_governance_lock();
 --rollback DROP TRIGGER trg_audit_retention_hold_lock ON crm.audit_retention_hold;
 --rollback DROP TRIGGER trg_audit_retention_policy_lock ON crm.audit_retention_policy;
 --rollback DROP FUNCTION crm.audit_retention_governance_lock();
+
+
+--changeset rm:0022-inventory-immutable-stock-movement
+-- Append-only stock movements; no automatic purge under the AUDIT retention policy.
+-- The balance row and movement are committed atomically by INVENTORY application service.
+CREATE TABLE crm.inv_stock_movement (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  location_id UUID NOT NULL,
+  item_id UUID NOT NULL,
+  request_key VARCHAR(100) NOT NULL,
+  delta_quantity NUMERIC(19,4) NOT NULL,
+  balance_before NUMERIC(19,4) NOT NULL,
+  balance_after NUMERIC(19,4) NOT NULL,
+  occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_inv_stock_movement PRIMARY KEY(tenant_id,id),
+  CONSTRAINT uk_inv_stock_movement_request UNIQUE(tenant_id,request_key),
+  CONSTRAINT fk_inv_stock_movement_balance FOREIGN KEY(tenant_id,location_id,item_id)
+    REFERENCES crm.inv_stock_balance(tenant_id,location_id,item_id),
+  CONSTRAINT ck_inv_stock_movement_nonzero CHECK(delta_quantity <> 0),
+  CONSTRAINT ck_inv_stock_movement_nonnegative CHECK(balance_before >= 0 AND balance_after >= 0),
+  CONSTRAINT ck_inv_stock_movement_math CHECK(balance_after = balance_before + delta_quantity)
+);
+CREATE INDEX idx_inv_movement_tenant_location_time
+ ON crm.inv_stock_movement(tenant_id,location_id,occurred_at DESC);
+--rollback DROP TABLE crm.inv_stock_movement;
