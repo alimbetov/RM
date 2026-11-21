@@ -25,8 +25,11 @@ class DomainModuleQualificationTest {
         assertThat(DomainModule.modules()).hasSize(15);
         assertThat(DomainModule.modules().stream().map(DomainModule::prefix).collect(Collectors.toSet()))
                 .hasSize(15);
-        assertThat(DomainModule.FILES.table("file_object")).isEqualTo("file_file_object");
+        assertThatThrownBy(()->DomainModule.FILES.table("file_object"))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThat(DomainModule.FILES.table("object")).isEqualTo("file_object");
+        assertThatThrownBy(()->DomainModule.CATALOG.table("x".repeat(64)))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThat(DomainModule.CATALOG.table("item_i18n")).isEqualTo("cat_item_i18n");
         assertThat(DomainModule.STOREFRONT.table("front")).isEqualTo("store_front");
         assertThatThrownBy(()->DomainModule.CRM.table("WrongName"))
