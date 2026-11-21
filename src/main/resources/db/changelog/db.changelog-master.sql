@@ -1196,3 +1196,46 @@ CREATE UNIQUE INDEX uk_inv_movement_fulfilled_reservation
 --rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN movement_kind;
 --rollback DROP TABLE crm.inv_stock_reservation;
 --rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT uk_sales_order_line_tenant_order_id;
+
+
+--changeset rm:0026-store-offer-catalog-identity
+-- Provisional storefront offers must resolve to an actual tenant-owned catalog SKU.
+-- Existing offers remain unmapped and cannot enter inventory reservation until backfilled.
+ALTER TABLE crm.store_offer ADD COLUMN catalog_item_id UUID;
+ALTER TABLE crm.store_offer ADD CONSTRAINT fk_store_offer_catalog_item
+ FOREIGN KEY (tenant_id,catalog_item_id) REFERENCES crm.cat_item(tenant_id,id);
+CREATE INDEX idx_store_offer_catalog ON crm.store_offer(tenant_id,catalog_item_id);
+--rollback DROP INDEX idx_store_offer_catalog;
+--rollback ALTER TABLE crm.store_offer DROP CONSTRAINT fk_store_offer_catalog_item;
+--rollback ALTER TABLE crm.store_offer DROP COLUMN catalog_item_id;
+
+--changeset rm:0027-inventory-reservation-evidence
+-- Reservation lifecycle evidence is independent of balance-change movements.
+CREATE TABLE crm.inv_reservation_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ reservation_id UUID NOT NULL,
+ event_type VARCHAR(16) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_inv_reservation_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_inv_reservation_event_state UNIQUE(tenant_id,reservation_id,event_type),
+ CONSTRAINT fk_inv_reservation_event_reservation FOREIGN KEY(tenant_id,reservation_id)
+  REFERENCES crm.inv_stock_reservation(tenant_id,id),
+ CONSTRAINT ck_inv_reservation_event_type CHECK(event_type IN ('RESERVED','RELEASED','FULFILLED'))
+);
+CREATE INDEX idx_inv_reservation_event_history
+ ON crm.inv_reservation_event(tenant_id,reservation_id,occurred_at);
+--rollback DROP TABLE crm.inv_reservation_event;
+
+--changeset rm:0028-inventory-reservation-evidence-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.inv_reject_reservation_event_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Inventory reservation history is immutable';
+END;
+$$;
+CREATE TRIGGER trg_inv_reservation_event_immutable
+BEFORE UPDATE OR DELETE ON crm.inv_reservation_event
+FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_reservation_event_mutation();
+--rollback DROP TRIGGER trg_inv_reservation_event_immutable ON crm.inv_reservation_event;
+--rollback DROP FUNCTION crm.inv_reject_reservation_event_mutation();
