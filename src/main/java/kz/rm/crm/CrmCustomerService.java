@@ -79,6 +79,7 @@ public class CrmCustomerService {
                 String name=rs.getString(2);
                 String zone=rs.getString(3);
                 if ("PERSON".equals(type)) {
+                    authorization.require(actorId,tenantId,DomainPermission.CRM_PII_READ);
                     byte[] envelope=jdbc.queryForObject("""
                         SELECT name_envelope FROM crm_pii.customer_secret
                         WHERE tenant_id=? AND customer_id=?
@@ -118,7 +119,7 @@ public class CrmCustomerService {
 
     @Transactional(readOnly=true)
     public Contact getContact(UUID actorId, UUID tenantId, UUID contactId) {
-        requireOrganizationMember(actorId,tenantId,false);
+        authorization.require(actorId,tenantId,DomainPermission.CRM_PII_READ);
         return jdbc.query("""
             SELECT c.customer_id,s.name_envelope,s.email_envelope,s.phone_envelope
               FROM crm.contact c JOIN crm_pii.contact_secret s
