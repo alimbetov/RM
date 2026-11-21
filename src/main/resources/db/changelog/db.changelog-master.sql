@@ -945,3 +945,78 @@ CREATE INDEX idx_sub_subscription_tenant ON crm.sub_subscription(tenant_id,state
 --rollback DROP TABLE crm.file_attachment;
 --rollback DROP TABLE crm.file_storage;
 --rollback DROP TABLE crm.file_object;
+
+
+--changeset rm:0018-audit-range-hash-postgresql dbms:postgresql
+-- PostgreSQL-only online-admission HOLD: transactional, data-preserving shadow table swap.
+-- Partition key is (occurred_at, tenant_id), and BOTH must be in the parent PK.
+-- No external FK may point to crm.audit_event before running this migration.
+ALTER TABLE crm.audit_event RENAME TO audit_event_prepart_0018;
+CREATE TABLE crm.audit_event (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  actor_user_id UUID NOT NULL,
+  entity_id UUID NOT NULL,
+  action_code VARCHAR(80) NOT NULL,
+  occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT pk_audit_event_partitioned PRIMARY KEY(tenant_id,occurred_at,id),
+  CONSTRAINT fk_audit_event_partitioned_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT fk_audit_event_partitioned_actor FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id)
+) PARTITION BY RANGE (occurred_at);
+
+-- Annual partitions are a conservative initial sizing; monthly partitions require workload proof.
+CREATE TABLE crm.audit_event_2025 PARTITION OF crm.audit_event
+  FOR VALUES FROM ('2025-01-01 00:00:00+00') TO ('2026-01-01 00:00:00+00')
+  PARTITION BY HASH (tenant_id);
+CREATE TABLE crm.audit_event_2026 PARTITION OF crm.audit_event
+  FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2027-01-01 00:00:00+00')
+  PARTITION BY HASH (tenant_id);
+CREATE TABLE crm.audit_event_2027 PARTITION OF crm.audit_event
+  FOR VALUES FROM ('2027-01-01 00:00:00+00') TO ('2028-01-01 00:00:00+00')
+  PARTITION BY HASH (tenant_id);
+CREATE TABLE crm.audit_event_other PARTITION OF crm.audit_event DEFAULT
+  PARTITION BY HASH (tenant_id);
+
+CREATE TABLE crm.audit_event_2025_h0 PARTITION OF crm.audit_event_2025 FOR VALUES WITH (MODULUS 4,REMAINDER 0);
+CREATE TABLE crm.audit_event_2025_h1 PARTITION OF crm.audit_event_2025 FOR VALUES WITH (MODULUS 4,REMAINDER 1);
+CREATE TABLE crm.audit_event_2025_h2 PARTITION OF crm.audit_event_2025 FOR VALUES WITH (MODULUS 4,REMAINDER 2);
+CREATE TABLE crm.audit_event_2025_h3 PARTITION OF crm.audit_event_2025 FOR VALUES WITH (MODULUS 4,REMAINDER 3);
+CREATE TABLE crm.audit_event_2026_h0 PARTITION OF crm.audit_event_2026 FOR VALUES WITH (MODULUS 4,REMAINDER 0);
+CREATE TABLE crm.audit_event_2026_h1 PARTITION OF crm.audit_event_2026 FOR VALUES WITH (MODULUS 4,REMAINDER 1);
+CREATE TABLE crm.audit_event_2026_h2 PARTITION OF crm.audit_event_2026 FOR VALUES WITH (MODULUS 4,REMAINDER 2);
+CREATE TABLE crm.audit_event_2026_h3 PARTITION OF crm.audit_event_2026 FOR VALUES WITH (MODULUS 4,REMAINDER 3);
+CREATE TABLE crm.audit_event_2027_h0 PARTITION OF crm.audit_event_2027 FOR VALUES WITH (MODULUS 4,REMAINDER 0);
+CREATE TABLE crm.audit_event_2027_h1 PARTITION OF crm.audit_event_2027 FOR VALUES WITH (MODULUS 4,REMAINDER 1);
+CREATE TABLE crm.audit_event_2027_h2 PARTITION OF crm.audit_event_2027 FOR VALUES WITH (MODULUS 4,REMAINDER 2);
+CREATE TABLE crm.audit_event_2027_h3 PARTITION OF crm.audit_event_2027 FOR VALUES WITH (MODULUS 4,REMAINDER 3);
+CREATE TABLE crm.audit_event_other_h0 PARTITION OF crm.audit_event_other FOR VALUES WITH (MODULUS 4,REMAINDER 0);
+CREATE TABLE crm.audit_event_other_h1 PARTITION OF crm.audit_event_other FOR VALUES WITH (MODULUS 4,REMAINDER 1);
+CREATE TABLE crm.audit_event_other_h2 PARTITION OF crm.audit_event_other FOR VALUES WITH (MODULUS 4,REMAINDER 2);
+CREATE TABLE crm.audit_event_other_h3 PARTITION OF crm.audit_event_other FOR VALUES WITH (MODULUS 4,REMAINDER 3);
+
+CREATE INDEX idx_audit_partitioned_tenant_time ON crm.audit_event(tenant_id,occurred_at DESC);
+-- The old table remains exclusively a transactional migration source, never a dual-write destination.
+INSERT INTO crm.audit_event(tenant_id,id,actor_user_id,entity_id,action_code,occurred_at)
+SELECT tenant_id,id,actor_user_id,entity_id,action_code,occurred_at
+FROM crm.audit_event_prepart_0018;
+-- Verify preserved source/target row counts before retiring the original table.
+-- Preconditions on inbound foreign keys and migration volume must be reviewed before production admission.
+DROP TABLE crm.audit_event_prepart_0018;
+-- Rollback is intentionally not automated: forward migration requires PITR/verified backup policy.
+
+--changeset rm:0019-partition-aware-query-indexes
+-- These are deliberately ordinary composite indexes on unpartitioned mutable aggregates.
+CREATE INDEX idx_sales_order_tenant_created ON crm.sales_order(tenant_id,created_at DESC);
+CREATE INDEX idx_sales_order_tenant_buyer_created ON crm.sales_order(tenant_id,buyer_user_id,created_at DESC);
+CREATE INDEX idx_sales_status_tenant_order_time ON crm.sales_order_status_event(tenant_id,order_id,occurred_at DESC);
+CREATE INDEX idx_crm_customer_tenant_created ON crm.customer(tenant_id,created_at DESC);
+CREATE INDEX idx_crm_contact_tenant_created ON crm.contact(tenant_id,created_at DESC);
+CREATE INDEX idx_files_tenant_state_created ON crm.file_object(tenant_id,state,created_at DESC);
+CREATE INDEX idx_fin_invoice_tenant_created ON crm.fin_invoice(tenant_id,created_at DESC);
+--rollback DROP INDEX idx_fin_invoice_tenant_created;
+--rollback DROP INDEX idx_files_tenant_state_created;
+--rollback DROP INDEX idx_crm_contact_tenant_created;
+--rollback DROP INDEX idx_crm_customer_tenant_created;
+--rollback DROP INDEX idx_sales_status_tenant_order_time;
+--rollback DROP INDEX idx_sales_order_tenant_buyer_created;
+--rollback DROP INDEX idx_sales_order_tenant_created;
