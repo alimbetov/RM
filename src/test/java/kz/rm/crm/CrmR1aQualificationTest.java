@@ -1037,4 +1037,20 @@ class CrmR1aQualificationTest {
         assertThat(revisions.get(1).revisionNo()).isEqualTo(0);
     }
 
+
+    @Test void crmR13CannotActivateDraftAfterCustomerIsArchived() {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var client=secureCommands.createCompany(actor,t.tenantId(),"Draft owner",null);
+        var today=java.time.LocalDate.of(2026,11,22);
+        var draft=contractService.create(actor,t.tenantId(),client.id(),"DRAFT-ARCHIVE",
+                today,today.plusDays(30),today);
+        secureCommands.archiveCustomer(actor,t.tenantId(),client.id(),0);
+        assertThatThrownBy(()->contractService.changeStatus(actor,t.tenantId(),draft.id(),
+                CustomerContractEntity.Status.ACTIVE,draft.rowVersion(),today))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(contractService.get(actor,t.tenantId(),draft.id(),today,30).status())
+                .isEqualTo(CustomerContractEntity.Status.DRAFT);
+    }
+
 }
