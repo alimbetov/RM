@@ -798,10 +798,12 @@ class CrmR1aQualificationTest {
         var actor=verified(t.actorId());
         var customer=secureCommands.createCompany(actor,t.tenantId(),"Versioned",null);
         var cat=categoryService.create(actor,t.tenantId(),"ENTERPRISE","Enterprise");
-        assertThatThrownBy(()->categoryService.rename(actor,t.tenantId(),cat.id(),"Changed",99))
+        var originalCat=cat;
+        assertThatThrownBy(()->categoryService.rename(actor,t.tenantId(),originalCat.id(),"Changed",99))
                 .isInstanceOf(IllegalStateException.class);
         cat=categoryService.archive(actor,t.tenantId(),cat.id(),cat.rowVersion());
-        assertThatThrownBy(()->categoryService.assignPrimary(actor,t.tenantId(),customer.id(),cat.id()))
+        var archivedCat=cat;
+        assertThatThrownBy(()->categoryService.assignPrimary(actor,t.tenantId(),customer.id(),archivedCat.id()))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(categoryService.list(actor,t.tenantId(),true,0,10).getTotalElements()).isZero();
 
