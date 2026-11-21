@@ -1,5 +1,7 @@
 package kz.rm.autoorder;
 
+import kz.rm.iam.EmailIdentityCrypto;
+
 import kz.rm.iam.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
