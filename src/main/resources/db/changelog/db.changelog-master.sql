@@ -1824,3 +1824,11 @@ CREATE UNIQUE INDEX uk_file_active_owner_purpose
  ON crm.file_attachment(tenant_id,file_id,owner_type,owner_id,purpose)
  WHERE detached_at IS NULL;
 --rollback DROP INDEX uk_file_active_owner_purpose;
+
+--changeset rm:0058-files-r11-encrypted-storage-format
+-- Legacy plaintext records remain version zero and cannot enter secure read.
+ALTER TABLE crm.file_storage ADD COLUMN encrypted_format_version SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE crm.file_storage ADD CONSTRAINT ck_file_storage_crypto_version
+  CHECK (encrypted_format_version IN (0,1));
+--rollback ALTER TABLE crm.file_storage DROP CONSTRAINT ck_file_storage_crypto_version;
+--rollback ALTER TABLE crm.file_storage DROP COLUMN encrypted_format_version;
