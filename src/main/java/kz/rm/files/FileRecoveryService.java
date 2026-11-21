@@ -41,10 +41,10 @@ class FileRecoveryService {
         Claim claim=transactions.execute(status-> {
             Snapshot snap=jdbc.query("""
                 SELECT f.state,f.scan_status,f.processing_token,f.processing_started_at,
-                       s.storage_key,f.size_bytes,f.sha256
+                       (SELECT s.storage_key FROM crm.file_storage s
+                         WHERE s.tenant_id=f.tenant_id AND s.file_id=f.id AND s.state='ACTIVE'),
+                       f.size_bytes,f.sha256
                   FROM crm.file_object f
-                  LEFT JOIN crm.file_storage s ON s.tenant_id=f.tenant_id
-                       AND s.file_id=f.id AND s.state='ACTIVE'
                  WHERE f.tenant_id=? AND f.id=? FOR UPDATE
                 """,rs->{
                     if(!rs.next())return null;
