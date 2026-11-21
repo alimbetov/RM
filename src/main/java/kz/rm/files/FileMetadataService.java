@@ -190,8 +190,9 @@ class FileMetadataService {
             throw new IllegalStateException("File storage pointer already exists");
         jdbc.update("""
             INSERT INTO crm.file_storage(tenant_id,file_id,provider,storage_key,state,encrypted_format_version)
-            VALUES (?,?,'LOCAL',?,'ACTIVE',?)
-            """,tenant,fileId,finalKey,staged.cryptoVersion());
+            VALUES (?,?,?,?, 'ACTIVE',?)
+            """,tenant,fileId,staged.key().startsWith("rustfs/")?"RUSTFS":"LOCAL",
+                finalKey,staged.cryptoVersion());
         int changed=jdbc.update("""
             UPDATE crm.file_object
                SET state='AVAILABLE',scan_status='CLEAN',sha256=?,completed_at=?,
