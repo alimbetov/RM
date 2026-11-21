@@ -121,33 +121,24 @@ public class TenantRoleService {
             """,Integer.class,tenantId,actorId);
         if(otherOwner==null || otherOwner==0)
             throw new IllegalStateException("Another active owner must have a functional role before RBAC enforcement");
-        int updated=jdbc.update("""
+        Boolean already=jdbc.query("""
+            SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
+            """,rs->rs.next()&&rs.getBoolean(1),tenantId);
+        if(Boolean.TRUE.equals(already))return;
+        Integer exists=jdbc.queryForObject(
+                "SELECT count(*) FROM public.iam_tenant_rbac_config WHERE tenant_id=?",
+                Integer.class,tenantId);
+        Timestamp now=Timestamp.from(Instant.now());
+        if(exists==0)jdbc.update("""
+            INSERT INTO public.iam_tenant_rbac_config(tenant_id,enforced,updated_at)
+            VALUES (?,TRUE,?)
+            """,tenantId,now);
+        else jdbc.update("""
             UPDATE public.iam_tenant_rbac_config
             SET enforced=TRUE,row_version=row_version+1,updated_at=?
             WHERE tenant_id=? AND enforced=FALSE
-            """,Timestamp.from(Instant.now()),tenantId);
-        if(updated==0) {
-            Integer exists=jdbc.queryForObject(
-                "SELECT count(*) FROM public.iam_tenant_rbac_config WHERE tenant_id=?",
-                Integer.class,tenantId);
-            if(exists==0)jdbc.update("""
-                INSERT INTO public.iam_tenant_rbac_config
-                  (tenant_id,enforced,updated_at) VALUES (?,TRUE,?)
-                """,tenantId,Timestamp.from(Instant.now()));
-        }
-        if(updated!=0 || Boolean.TRUE.equals(jdbc.query("""
-                SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
-                """,rs->rs.next()&&rs.getBoolean(1),tenantId))) {
-            // Duplicated activation calls may produce an extra audit event;
-            // this is harmless for authorization, but do not duplicate event
-            // for an already enabled tenant.
-            if(updated!=0 || Integer.valueOf(1).equals(
-                    jdbc.queryForObject("""
-                        SELECT count(*) FROM public.iam_tenant_rbac_event
-                        WHERE tenant_id=? AND action_code='RBAC_ENABLED'
-                        """,Integer.class,tenantId))==false)
-                evidence(tenantId,actorId,"RBAC_ENABLED",null,null,null);
-        }
+            """,now,tenantId);
+        evidence(tenantId,actorId,"RBAC_ENABLED",null,null,null);
     }
 
     @Transactional(readOnly=true)
