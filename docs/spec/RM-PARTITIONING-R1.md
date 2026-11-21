@@ -134,3 +134,12 @@ FOR VALUES WITH (MODULUS 8, REMAINDER 0);
 ## 8. Базовый порядок внедрения
 
 [RM-IMPLEMENTATION-BASELINE-R1](RM-IMPLEMENTATION-BASELINE-R1.md) — единый порядок реализации до принятия решения о физическом партиционировании. В R1 проектируем partition-safe идентификаторы и временные/географические поля, используем индексы; нативные партиции запускаем только после PostgreSQL квалификации. Для FILES на R1 целевые таблицы `crm.file_*`, отдельная PostgreSQL схема `files` не создаётся.
+
+
+## 9. Implemented qualification candidate: PostgreSQL audit RANGE → HASH
+
+**Updated 2026-11-21.** Previous sections describe selection and constraints; the earlier statement that no physical partitions exist is now **outdated for the feature branch**. PostgreSQL-specific Liquibase changeset `rm:0018-audit-range-hash-postgresql` converts `crm.audit_event` into annual `RANGE(occurred_at)` parents for 2025, 2026, 2027 and DEFAULT, each with four `HASH(tenant_id)` leaf partitions. H2 remains unpartitioned. `rm:0019-partition-aware-query-indexes` supplies composite indexes to nonpartitioned domains without changing order, invoice, SKU or KMS uniqueness.
+
+The existing audit key becomes `PRIMARY KEY(tenant_id,occurred_at,id)`; existing references by `(tenant_id,id)` alone **must not be introduced**. This is a branch-level physical prototype with automated PostgreSQL integration tests, **not** a production partitioning approval. Before deploying to an existing tenant database, prove there are no inbound audit foreign keys, verify production-scale migration time, counts, backups, PITR and partition-pruning benefit. A new date range overlapping DEFAULT requires an explicit data maintenance plan.
+
+See [RM-LIQUIBASE-PARTITIONING-R1](../implementation/RM-LIQUIBASE-PARTITIONING-R1.md) for the actual SQL migration, test matrix and release HOLD.
