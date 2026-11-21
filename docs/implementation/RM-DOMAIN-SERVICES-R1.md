@@ -10,4 +10,4 @@
 
 **Limitations:** no real OIDC HTTP adapter, no consistent cross-query snapshot export, no warehouse-level ABAC restrictions; legacy read compatibility rights need business approval before external exposure.
 
-For the canonical post-merge implementation map and release gates see [RM Domain Layer Baseline](../architecture/RM-DOMAIN-LAYER-BASELINE.md). Earlier branch-specific and future-tense statements have been removed.
+Normative architecture and security policy: [RM-PLATFORM-STANDARD-R2](../architecture/RM-PLATFORM-STANDARD-R2.md). For the SHA-tied post-merge implementation map and release gates see [RM Domain Layer Baseline](../architecture/RM-DOMAIN-LAYER-BASELINE.md). Earlier branch-specific and future-tense statements have been removed.
