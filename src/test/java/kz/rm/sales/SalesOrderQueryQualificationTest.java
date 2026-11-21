@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class SalesOrderQueryQualificationTest {
     @Autowired SalesOrderQueryService service;
+    @Autowired AuthenticatedSalesQueries trustedQueries;
     @Autowired AutoOrderService checkout;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -57,6 +58,28 @@ class SalesOrderQueryQualificationTest {
         return checkout.checkout(s.slug(),"search-"+UUID.randomUUID()+"@example.kz",
                 "order-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(s.offer(),1)))
                 .order().orderId();
+    }
+
+    @Test void verifiedReadFacadeEnforcesActorTenantAndPagination() {
+        Shop owned=shop(), other=shop();
+        UUID ownOrder=order(owned);
+        order(other);
+        String subject=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,owned.actor());
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                        .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                        .expiresAt(Instant.now().plusSeconds(120)).build();
+        var trusted=new OidcActorResolver(decoder,users).resolve("test-only-token");
+        assertThat(trustedQueries.search(trusted,owned.tenant(),null,0,20)
+                .getContent()).extracting(item->item.id()).containsExactly(ownOrder);
+        assertThatThrownBy(()->trustedQueries.search(null,owned.tenant(),null,0,20))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedQueries.search(trusted,other.tenant(),null,0,20))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedQueries.search(trusted,owned.tenant(),null,0,101))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test void orderListPaginatesFiltersAndNeverReturnsBuyerIdentity() {
