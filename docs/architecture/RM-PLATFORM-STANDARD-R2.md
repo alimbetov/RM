@@ -658,9 +658,9 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 
 ### 24.4 Аварийное восстановление (OWN-02)
 
-**Участник:** проверенный `PLATFORM_ADMIN`. **Строгий допуск:** в целевой организации **нет ни одного действующего OWNER** (одновременно ACTIVE membership + ACTIVE global account).
+**Участник:** проверенный `PLATFORM_ADMIN` с документированным incident/ticket ID (`incidentCode` формата `[A-Z0-9_-]{6,80}`). **Строгий допуск:** в целевой организации **нет ни одного действующего OWNER** (одновременно ACTIVE membership + ACTIVE global account).
 
-- `PlatformTenantRecoveryService.recoverOwner(admin,tenantId,targetUserId)` доступен только для ORGANIZATION workspace в состоянии ACTIVE или SUSPENDED, и только если кандидат — **уже существующий ACTIVE участник данного tenant** с OIDC-linked account, **не OWNER**. Стороннего человека он присоединить не может.
+- `PlatformTenantRecoveryService.recoverOwner(admin,tenantId,targetUserId,incidentCode)` доступен только для ORGANIZATION workspace в состоянии ACTIVE или SUSPENDED, и только если кандидат — **уже существующий ACTIVE участник данного tenant** с OIDC-linked account, **не OWNER**. Стороннего человека он присоединить не может.
 - Под блокировкой глобальной роли, учётной записи кандидата и workspace транзакция демотирует прежние неработоспособные OWNER в MEMBER, делает кандидата OWNER, аннулирует ожидающий перевод и фиксирует `OWNER_DEMOTED_BY_RECOVERY` / `OWNER_RECOVERED`. Это гарантирует, что восстановление старого аккаунта не вернёт ему право OWNER автоматически.
 - Если workspace SUSPENDED, новый владелец восстанавливает его **отдельной** командой `TenantAccessStatusService.restoreTenant`. Восстановление не превращает PLATFORM_ADMIN в сотрудника, владельца либо получателя клиентских данных.
 - Если хотя бы один владелец всё ещё активен, либо нет действующего сотрудника, сервис отказывает: первый случай требует обычной передачи OWN-01, второй — отдельного offline emergency-runbook (пока HOLD).
@@ -682,6 +682,6 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 | SEC-T01 | Глобальный администратор пытается читать CRM/PII tenant | DENY без tenant membership/permission |
 | PG-T01 | Вмешательство в глобальную audit-history | PostgreSQL trigger отклоняет UPDATE и DELETE |
 
-**Техническая реализация:** Liquibase `0038–0042` аддитивно добавляет guard, append-only evidence, состояние запроса передачи и дополнительные коды tenant audit. Уже применённые миграции `0001–0037` не переписываются. Не вводить Redis, серверные сессии, брокер или универсальный workflow engine.
+**Техническая реализация:** Liquibase `0038–0043` аддитивно добавляет guard, append-only evidence, состояние запроса передачи и дополнительные коды tenant audit. Уже применённые миграции `0001–0037` не переписываются. Не вводить Redis, серверные сессии, брокер или универсальный workflow engine.
 
 **Не открывать production:** даже после H2/PG service GREEN остаются независимый security-review, реальный trusted issuer/OIDC/BFF, физическое хранение и доставка operator bootstrap secret, least-privilege DB, populated-upgrade/recovery и подготовленный offline recovery runbook.
