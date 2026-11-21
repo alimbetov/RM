@@ -57,6 +57,18 @@ class RustFsRestartProbeTest {
         }
     }
 
+    @Test void outageDoesNotMisclassifyPersistedObjectAsCorrupt() throws Exception {
+        Assumptions.assumeTrue("outage".equals(System.getenv("RM_RUSTFS_E2E_PHASE")));
+        Properties props=new Properties();
+        try(var in=Files.newInputStream(CHECKPOINT)){props.load(in);}
+        try(var api=client()) {
+            var rust=new RustFsFileStorage(api,System.getenv("RM_RUSTFS_E2E_BUCKET"));
+            assertThatThrownBy(()->rust.matches(props.getProperty("key"),
+                    Integer.parseInt(props.getProperty("size")),props.getProperty("sha")))
+                    .isInstanceOf(IOException.class);
+        }
+    }
+
     @Test void verifyAfterContainerRestart() throws Exception {
         Assumptions.assumeTrue("verify".equals(System.getenv("RM_RUSTFS_E2E_PHASE")));
         assertThat(Files.isRegularFile(CHECKPOINT)).as("Required seed from previous Maven process").isTrue();
@@ -74,9 +86,12 @@ class RustFsRestartProbeTest {
             assertThat(copy.size()).isEqualTo(size);
             assertThat(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(copy.toByteArray()))).isEqualTo(sha);
-            rust.delete(key);
-            assertThat(rust.exists(key)).isFalse();
+            if(!"true".equals(System.getenv("RM_RUSTFS_E2E_KEEP_OBJECT"))) {
+                rust.delete(key);
+                assertThat(rust.exists(key)).isFalse();
+            }
         }
-        Files.delete(CHECKPOINT);
+        if(!"true".equals(System.getenv("RM_RUSTFS_E2E_KEEP_OBJECT")))
+            Files.delete(CHECKPOINT);
     }
 }
