@@ -31,6 +31,7 @@ class CrmR1aQualificationTest {
         var workspace=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),
                 user.getId(),OrganizationMembershipEntity.Role.OWNER));
+        jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         keys.provision(workspace.getId());
         return new Tenant(workspace.getId(),user.getId());
     }
@@ -98,6 +99,7 @@ class CrmR1aQualificationTest {
         var workspace=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),
                 user.getId(),OrganizationMembershipEntity.Role.OWNER));
+        jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         assertThatThrownBy(()->crm.createPerson(user.getId(),workspace.getId(),"Must not persist",null))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("""
