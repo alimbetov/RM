@@ -165,12 +165,20 @@ public class AutoOrderService {
             """,(rs,n)->new Identity(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                 rs.getTimestamp(3)!=null),lookup);
         if(!found.isEmpty())return found.getFirst();
-        UUID userId=UUID.randomUUID(), identityId=UUID.randomUUID();
-        // Legacy IAM display_name is NOT NULL; never fabricate a person's real name.
-        jdbc.update("""
-            INSERT INTO iam_user_account(id,display_name,status,created_at,updated_at,row_version)
-            VALUES (?,'Покупатель','PENDING',?,?,0)
-            """,userId,Timestamp.from(Instant.now()),Timestamp.from(Instant.now()));
+        // Backward-compatible association with existing IAM records.
+        // Never authenticate/link orders from this lookup: a fresh email proof is still required.
+        List<UUID> legacy=jdbc.query("""
+            SELECT id FROM iam_user_account WHERE email_normalized=? AND status <> 'DELETED'
+            """,(rs,n)->rs.getObject(1,UUID.class),normalized);
+        UUID userId=legacy.isEmpty()?UUID.randomUUID():legacy.getFirst();
+        UUID identityId=UUID.randomUUID();
+        if(legacy.isEmpty()) {
+            // Placeholder is technical only, not a person's name or mandatory checkout input.
+            jdbc.update("""
+                INSERT INTO iam_user_account(id,display_name,status,created_at,updated_at,row_version)
+                VALUES (?,'Покупатель','PENDING',?,?,0)
+                """,userId,Timestamp.from(Instant.now()),Timestamp.from(Instant.now()));
+        }
         jdbc.update("""
             INSERT INTO iam_email_identity(id,user_id,lookup_hmac,email_envelope,created_at)
             VALUES (?,?,?,?,?)
