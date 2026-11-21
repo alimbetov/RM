@@ -402,7 +402,8 @@ class CrmR1aQualificationTest {
     }
 
     @Test void consentRequestKeyIsIdempotentAndRejectsConflictingPayload() {
-        var t=newTenant(),other=newTenant();
+        var t=newTenant();
+        var other=newTenant();
         var actor=verified(t.actorId());
         var customer=secureCommands.createCompany(actor,t.tenantId(),"Consent Customer",null);
         var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),
