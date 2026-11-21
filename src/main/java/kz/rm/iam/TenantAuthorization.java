@@ -77,7 +77,8 @@ public class TenantAuthorization {
     public Decision requireForCommand(UUID actorId,UUID tenantId,DomainPermission permission) {
         if(actorId==null || tenantId==null || permission==null)
             throw new SecurityException("Authenticated actor, tenant and permission required");
-        UUID locked=jdbc.queryForObject(commandTenantLockSql,UUID.class,tenantId);
+        UUID locked=jdbc.query(commandTenantLockSql,rs->
+                rs.next()?rs.getObject(1,UUID.class):null,tenantId);
         if(locked==null || !locked.equals(tenantId))
             throw new SecurityException("Tenant unavailable");
         Decision checked=require(actorId,tenantId,permission);
