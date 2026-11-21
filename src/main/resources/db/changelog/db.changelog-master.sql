@@ -1832,3 +1832,59 @@ ALTER TABLE crm.file_storage ADD CONSTRAINT ck_file_storage_crypto_version
   CHECK (encrypted_format_version IN (0,1));
 --rollback ALTER TABLE crm.file_storage DROP CONSTRAINT ck_file_storage_crypto_version;
 --rollback ALTER TABLE crm.file_storage DROP COLUMN encrypted_format_version;
+
+
+--changeset rm:0059-crm-categories-contracts
+-- Tenant-first keys and same-tenant composite FKs are authoritative.
+-- A customer has zero or one primary category in R1.2.
+CREATE TABLE crm.customer_category (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ code VARCHAR(40) NOT NULL,
+ name VARCHAR(120) NOT NULL,
+ status VARCHAR(20) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_crm_customer_category PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_crm_category_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT uk_crm_category_code UNIQUE(tenant_id,code),
+ CONSTRAINT ck_crm_category_status CHECK(status IN ('ACTIVE','ARCHIVED')),
+ CONSTRAINT ck_crm_category_name CHECK(length(trim(name)) > 0)
+);
+CREATE INDEX idx_crm_category_tenant_status
+ ON crm.customer_category(tenant_id,status,code,id);
+ALTER TABLE crm.customer ADD COLUMN primary_category_id UUID;
+ALTER TABLE crm.customer ADD CONSTRAINT fk_crm_customer_primary_category
+ FOREIGN KEY(tenant_id,primary_category_id)
+ REFERENCES crm.customer_category(tenant_id,id);
+CREATE INDEX idx_crm_customer_tenant_category
+ ON crm.customer(tenant_id,primary_category_id,id);
+
+CREATE TABLE crm.customer_contract (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ customer_id UUID NOT NULL,
+ contract_code VARCHAR(80) NOT NULL,
+ starts_on DATE NOT NULL,
+ ends_on DATE,
+ status VARCHAR(20) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_crm_customer_contract PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_crm_contract_customer FOREIGN KEY(tenant_id,customer_id)
+   REFERENCES crm.customer(tenant_id,id),
+ CONSTRAINT uk_crm_contract_code UNIQUE(tenant_id,contract_code),
+ CONSTRAINT ck_crm_contract_dates CHECK(ends_on IS NULL OR starts_on <= ends_on),
+ CONSTRAINT ck_crm_contract_status CHECK(status IN ('DRAFT','ACTIVE','CLOSED','CANCELLED'))
+);
+CREATE INDEX idx_crm_contract_tenant_customer
+ ON crm.customer_contract(tenant_id,customer_id,created_at DESC,id);
+CREATE INDEX idx_crm_contract_tenant_expiry
+ ON crm.customer_contract(tenant_id,status,ends_on,id);
+--rollback DROP TABLE crm.customer_contract;
+--rollback DROP INDEX idx_crm_customer_tenant_category;
+--rollback ALTER TABLE crm.customer DROP CONSTRAINT fk_crm_customer_primary_category;
+--rollback ALTER TABLE crm.customer DROP COLUMN primary_category_id;
+--rollback DROP TABLE crm.customer_category;
