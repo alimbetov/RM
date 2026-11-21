@@ -29,6 +29,7 @@
 | TASKS | `Task` | `CommunicationActivity` | Due dates, assignees and task lifecycle, customer/order references |
 | AUDIT | `AuditEvent` | immutable metadata | Tamper-evident, append-only change log without plaintext PII |
 | KMS | `TenantKey` | wrapped DEK, generation, encrypted envelope | Tenant-context encryption/decryption; no ability to grant CRM access |
+| FILES | `StoredFile`, `FileAttachment` | `FileStorageLocation`, checksum, file state | Tenant-scoped metadata and secure binary storage via replaceable LOCAL/RustFS adapter |
 
 **Billing/Subscriptions:** `Plan`, `Subscription`, `UsageCounter` are a future separate domain (commercial entitlements), not role enums. Do not implement until IAM access is established.
 
@@ -42,6 +43,7 @@
 - MARKETING never treats contact creation as `consent_email=true`. Check current purpose-specific consent and unsubscribe **at send time**.
 - TASKS links by `(tenantId, targetType, targetId)`, with application resolution/permission validation; no arbitrary cross-tenant polymorphic reference without checks.
 - AUDIT records actor/tenant/action IDs, timestamps, correlation, *sanitized metadata*. PII body and raw encryption keys are excluded.
+- FILES is the only owner of storage keys/paths. CRM, CATALOG, SALES, FINANCE and TASKS store tenant-scoped file references, never blob URLs. Initial binaries on durable server disk; RustFS later via a provider adapter without changing `file_id`.
 - KMS `CryptoContext.tenantId` uses stable tenant UUID only; location/region cannot derive DEKs.
 - All new domain services accept authorized actor context from a future security adapter; never expose public API that trusts `actorId` provided by caller.
 
@@ -58,18 +60,20 @@
 
 1. **IAM-R1** — identity, tenant, membership, global role, authoritative authorization; existing `iam_workspace` renamed later by deliberate migration, never UUID replacement.
 2. **GEO-R1** — KATO 3-language labels, level <=3, location branch/warehouse/POS, region zoning.
-3. **CRM-R1A** — customer, contact, consent with encrypted PII and tenant isolation; **first implementation currently under CI**, not fully admitted.
-4. **CATALOG-R1A.5** — service/product category, variants/SKU, price lists, versioned effective prices; inventory optional.
-5. **SALES-R1B/C** — orders, lines, pipeline, estimates and revisions; snapshots.
-6. **FINANCE-R1D** — invoice/payment/allocation/receivables/margin with reconciled test numbers.
-7. **MARKETING/TASKS/AUDIT/RPT-R1E–G** — consent-gated campaigns, tasks, audit and read-only dashboards.
-8. **PERF-R2** — load measurement and partition selection after data volumes are known.
+3. **FILES-R1.0** — minimal PostgreSQL file metadata, attachment links, local disk adapter, staged upload/download and tenant authorization; [file domain spec](RM-FILES-R1.md). Sensitive file bytes require encryption-at-rest before production.
+4. **CRM-R1A** — customer, contact, consent with encrypted PII and tenant isolation; **first implementation currently under CI**, not fully admitted.
+5. **CATALOG-R1A.5** — service/product category, variants/SKU, price lists, versioned effective prices; inventory optional.
+6. **SALES-R1B/C** — orders, lines, pipeline, estimates and revisions; snapshots.
+7. **FINANCE-R1D** — invoice/payment/allocation/receivables/margin with reconciled test numbers.
+8. **MARKETING/TASKS/AUDIT/RPT-R1E–G** — consent-gated campaigns, tasks, audit and read-only dashboards.
+9. **PERF-R2** — load measurement and partition selection after data volumes are known.
 
 ## Mandatory quality gates by domain
 
 - Cross-tenant guessed UUID denied in reads, writes and reference linking.
 - Viewer cannot mutate; auditor does not automatically decrypt PII; inactive membership denied.
-- All sensitive fields stored as authenticated encrypted envelopes, no plaintext in audit or application logs.
+- All sensitive fields and sensitive file payloads protected via appropriate KMS-backed encryption, no plaintext in audit or application logs.
+- FILES local storage rollback/recovery, path traversal, cross-tenant attachments and restart persistence are verified before use.
 - Consent opt-in/withdrawal and delivery gating tested with conflicts.
 - SKU uniqueness per tenant; accepted estimate/order snapshots stable after catalog price changes.
 - Payment allocations cannot exceed settled payment or issued invoice and preserve currency.
