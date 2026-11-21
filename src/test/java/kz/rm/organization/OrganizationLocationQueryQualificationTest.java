@@ -118,9 +118,9 @@ class OrganizationLocationQueryQualificationTest {
         assertThat(rows.getContent().getFirst().available()).isEqualByComparingTo("7");
         assertThat(stock.search(verified(b.actor()),b.tenant(),
                 new StockSearch(locB.getId(),null,true),0,10).getTotalElements()).isZero();
-        assertThatThrownBy(()->stock.search(a.actor(),b.tenant(),null,0,10))
+        assertThatThrownBy(()->stock.search(verified(a.actor()),b.tenant(),null,0,10))
                 .isInstanceOf(SecurityException.class);
-        assertThatThrownBy(()->stock.search(a.actor(),a.tenant(),null,0,101))
+        assertThatThrownBy(()->stock.search(verified(a.actor()),a.tenant(),null,0,101))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
