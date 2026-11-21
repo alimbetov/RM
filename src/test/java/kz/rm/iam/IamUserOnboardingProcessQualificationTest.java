@@ -262,4 +262,35 @@ class IamUserOnboardingProcessQualificationTest {
                 .isInstanceOf(SecurityException.class);
     }
 
+
+    @Test void ownerRevokesAssignmentsAndDeactivatesRolesWithoutChangingGlobalIdentity() {
+        UUID admin=admin(),owner=user("Owner"),employee=user("Employee");
+        UUID tenant=UUID.randomUUID();
+        provisioning.provision(actor(admin),tenant,owner,"Review LLP","Review","KZ");
+        enrollment.invite(actor(owner),tenant,employee);
+        enrollment.accept(actor(employee),tenant);
+        var role=roleCommands.createRole(actor(owner),tenant,"CRM_OPERATOR","CRM operator");
+        roleCommands.grant(actor(owner),tenant,role.id(),DomainPermission.CRM_READ);
+        roleCommands.assign(actor(owner),tenant,employee,role.id());
+        authorization.require(employee,tenant,DomainPermission.CRM_READ);
+
+        roleCommands.unassign(actor(owner),tenant,employee,role.id());
+        assertThatThrownBy(()->authorization.require(employee,tenant,DomainPermission.CRM_READ))
+                .isInstanceOf(SecurityException.class);
+        roleCommands.assign(actor(owner),tenant,employee,role.id());
+        authorization.require(employee,tenant,DomainPermission.CRM_READ);
+
+        roleCommands.activateRole(actor(owner),tenant,role.id(),false);
+        assertThat(myAccess.myFunctionalRoles(actor(employee),tenant)).isEmpty();
+        assertThatThrownBy(()->authorization.require(employee,tenant,DomainPermission.CRM_READ))
+                .isInstanceOf(SecurityException.class);
+        roleCommands.activateRole(actor(owner),tenant,role.id(),true);
+        authorization.require(employee,tenant,DomainPermission.CRM_READ);
+
+        roleCommands.revoke(actor(owner),tenant,role.id(),DomainPermission.CRM_READ);
+        assertThatThrownBy(()->authorization.require(employee,tenant,DomainPermission.CRM_READ))
+                .isInstanceOf(SecurityException.class);
+        assertThat(myAccess.myTenants(actor(employee))).hasSize(1);
+    }
+
 }
