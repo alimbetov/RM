@@ -4,49 +4,46 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
+/** Phase R1.6: provisioning only. Rotation is explicitly disabled until admission gate is implemented. */
 @Service
 @RequiredArgsConstructor
 public class TenantKeyService {
-
-    private static final Duration ROTATION_INTERVAL = Duration.ofDays(90);
+    private static final String ROOT_KEY_ID = "root-v1";
     private final TenantKeyRepository repository;
     private final KeyWrappingService wrapping;
 
-    // For now, caller supplies a validated company ID. A future Tenant
-    // entity must be committed atomically with this provisioning operation.
     @Transactional
-    public TenantKeyId provision(UUID tenantId) {
-        if (tenantId == null) {
-            throw new IllegalArgumentException("tenantId is required");
-        }
-        return repository.findByIdTenantIdAndStatus(tenantId, KeyStatus.ACTIVE)
-                .map(TenantKeyEntity::getId)
-                .orElseGet(() -> {
-                    var key = wrapping.generateTenantKey();
-                    Instant now = Instant.now();
-                    return repository.saveAndFlush(TenantKeyEntity.active(
-                            tenantId, 1, wrapping.wrap(tenantId, 1, key),
-                            "root-v1", now, now.plus(ROTATION_INTERVAL))).getId();
-                });
+    public UUID provision(UUID tenantId) {
+        if (tenantId == null) throw new IllegalArgumentException("tenantId required");
+        if (repository.existsById(tenantId)) return tenantId;
+        // PK also rejects concurrent duplicate provisioning; caller may retry in a new transaction.
+        var dek = wrapping.generateTenantKey();
+        var wrapped = wrapping.wrap(tenantId, 1L, dek);
+        repository.saveAndFlush(TenantKeyEntity.first(tenantId, wrapped, ROOT_KEY_ID, Instant.now()));
+        return tenantId;
     }
 
-    @Transactional
-    public TenantKeyId rotate(UUID tenantId) {
-        TenantKeyEntity current = repository
-                .lockByTenantIdAndStatus(tenantId, KeyStatus.ACTIVE)
-                .orElseThrow(() -> new IllegalStateException("No ACTIVE key for tenant"));
-        int next = Math.addExact(current.getId().getVersion(), 1);
-        current.markDecryptOnly();
-        repository.saveAndFlush(current);
-        Instant now = Instant.now();
-        var dek = wrapping.generateTenantKey();
-        return repository.saveAndFlush(TenantKeyEntity.active(
-                tenantId, next, wrapping.wrap(tenantId, next, dek),
-                "root-v1", now, now.plus(ROTATION_INTERVAL))).getId();
+    @Transactional(readOnly = true)
+    public TenantKeyEntity.Slot active(UUID tenantId) {
+        return repository.findById(tenantId).orElseThrow(() ->
+                new IllegalStateException("Tenant key not provisioned")).active();
+    }
+
+    @Transactional(readOnly = true)
+    public TenantKeyEntity.Slot forDecrypt(UUID tenantId, long generation) {
+        var slot = repository.findById(tenantId).orElseThrow(() ->
+                new IllegalStateException("Tenant key not provisioned")).forGeneration(generation);
+        if (slot.status() != KeyStatus.ACTIVE && slot.status() != KeyStatus.DECRYPT_ONLY) {
+            throw new IllegalStateException("Generation is not available for normal decryption");
+        }
+        return slot;
+    }
+
+    /** Fail closed while transaction/admission and archive restore gates are not implemented. */
+    public void rotate(UUID tenantId) {
+        throw new UnsupportedOperationException("Rotation requires KMS-R1.8 admission and recovery qualification");
     }
 }
