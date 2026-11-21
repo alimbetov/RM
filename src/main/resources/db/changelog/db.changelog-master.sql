@@ -559,3 +559,87 @@ UPDATE ref_kato_territory SET name_en='KARAKUMSKIY S.O.' WHERE code='433243000';
 UPDATE ref_kato_territory SET name_en='S.ABAY' WHERE code='433243100';
 UPDATE ref_kato_territory SET name_en='S.ERIMBETZHAGA' WHERE code='433243300';
 --rollback SELECT 1;
+
+
+--changeset rm:0013-crm-r1a-private-customer-contact-consent
+-- Multi-tenant CRM metadata is kept apart from encrypted person/contact fields.
+CREATE SCHEMA IF NOT EXISTS crm;
+CREATE SCHEMA IF NOT EXISTS crm_pii;
+CREATE TABLE crm.customer (
+    tenant_id UUID NOT NULL,
+    id UUID NOT NULL,
+    customer_type VARCHAR(20) NOT NULL,
+    organization_label VARCHAR(200),
+    region_zone_id VARCHAR(2),
+    kato_code VARCHAR(16),
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT pk_crm_customer PRIMARY KEY (tenant_id, id),
+    CONSTRAINT fk_crm_customer_tenant FOREIGN KEY (tenant_id) REFERENCES iam_workspace(id),
+    CONSTRAINT fk_crm_customer_kato FOREIGN KEY (kato_code) REFERENCES ref_kato_territory(code),
+    CONSTRAINT ck_crm_customer_type CHECK (customer_type IN ('PERSON','COMPANY')),
+    CONSTRAINT ck_crm_customer_label CHECK (
+      (customer_type='PERSON' AND organization_label IS NULL)
+      OR (customer_type='COMPANY' AND organization_label IS NOT NULL)),
+    CONSTRAINT ck_crm_customer_status CHECK (status IN ('ACTIVE','ARCHIVED')),
+    CONSTRAINT ck_crm_customer_region CHECK (
+      (kato_code IS NULL AND region_zone_id IS NULL)
+      OR (kato_code IS NOT NULL AND region_zone_id IS NOT NULL))
+);
+CREATE INDEX idx_crm_customer_tenant_region ON crm.customer(tenant_id,region_zone_id);
+CREATE TABLE crm_pii.customer_secret (
+    tenant_id UUID NOT NULL,
+    customer_id UUID NOT NULL,
+    name_envelope BYTEA NOT NULL,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT pk_crm_customer_secret PRIMARY KEY (tenant_id,customer_id),
+    CONSTRAINT fk_crm_customer_secret FOREIGN KEY (tenant_id,customer_id)
+      REFERENCES crm.customer(tenant_id,id)
+);
+CREATE TABLE crm.contact (
+    tenant_id UUID NOT NULL,
+    id UUID NOT NULL,
+    customer_id UUID NOT NULL,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT pk_crm_contact PRIMARY KEY (tenant_id,id),
+    CONSTRAINT fk_crm_contact_customer FOREIGN KEY (tenant_id,customer_id)
+      REFERENCES crm.customer(tenant_id,id),
+    CONSTRAINT ck_crm_contact_status CHECK (status IN ('ACTIVE','ARCHIVED'))
+);
+CREATE INDEX idx_crm_contact_customer ON crm.contact(tenant_id,customer_id);
+CREATE TABLE crm_pii.contact_secret (
+    tenant_id UUID NOT NULL,
+    contact_id UUID NOT NULL,
+    name_envelope BYTEA NOT NULL,
+    email_envelope BYTEA,
+    phone_envelope BYTEA,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT pk_crm_contact_secret PRIMARY KEY(tenant_id,contact_id),
+    CONSTRAINT fk_crm_contact_secret FOREIGN KEY (tenant_id,contact_id)
+      REFERENCES crm.contact(tenant_id,id)
+);
+CREATE TABLE crm.email_consent_event (
+    tenant_id UUID NOT NULL,
+    id UUID NOT NULL,
+    contact_id UUID NOT NULL,
+    granted BOOLEAN NOT NULL,
+    purpose VARCHAR(80) NOT NULL,
+    policy_version VARCHAR(40) NOT NULL,
+    source VARCHAR(100) NOT NULL,
+    occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT pk_crm_email_consent PRIMARY KEY (tenant_id,id),
+    CONSTRAINT fk_crm_email_consent_contact FOREIGN KEY (tenant_id,contact_id)
+      REFERENCES crm.contact(tenant_id,id)
+);
+CREATE INDEX idx_crm_consent_latest ON crm.email_consent_event(tenant_id,contact_id,purpose,occurred_at);
+--rollback DROP TABLE crm.email_consent_event;
+--rollback DROP TABLE crm_pii.contact_secret;
+--rollback DROP TABLE crm.contact;
+--rollback DROP TABLE crm_pii.customer_secret;
+--rollback DROP TABLE crm.customer;
+--rollback DROP SCHEMA crm_pii;
+--rollback DROP SCHEMA crm;
