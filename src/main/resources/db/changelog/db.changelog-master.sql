@@ -1888,3 +1888,50 @@ CREATE INDEX idx_crm_contract_tenant_expiry
 --rollback ALTER TABLE crm.customer DROP CONSTRAINT fk_crm_customer_primary_category;
 --rollback ALTER TABLE crm.customer DROP COLUMN primary_category_id;
 --rollback DROP TABLE crm.customer_category;
+
+
+--changeset rm:0060-crm-r13-audit-revisions
+-- Immutable minimal business audit and original contract terms. No PII or free text.
+CREATE TABLE crm.customer_change_event (
+ tenant_id UUID NOT NULL, id UUID NOT NULL, customer_id UUID NOT NULL,
+ actor_id UUID NOT NULL, action_code VARCHAR(32) NOT NULL,
+ previous_version BIGINT, new_version BIGINT NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_crm_customer_change_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_crm_customer_change_customer FOREIGN KEY(tenant_id,customer_id)
+   REFERENCES crm.customer(tenant_id,id),
+ CONSTRAINT fk_crm_customer_change_actor FOREIGN KEY(actor_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','ARCHIVED'))
+);
+CREATE INDEX idx_crm_customer_changes ON crm.customer_change_event(tenant_id,customer_id,occurred_at,id);
+CREATE TABLE crm.contract_revision (
+ tenant_id UUID NOT NULL, id UUID NOT NULL, contract_id UUID NOT NULL,
+ revision_no BIGINT NOT NULL, actor_id UUID NOT NULL,
+ action_code VARCHAR(32) NOT NULL, starts_on DATE NOT NULL, ends_on DATE,
+ status VARCHAR(20) NOT NULL, occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_crm_contract_revision PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_crm_contract_revision UNIQUE(tenant_id,contract_id,revision_no),
+ CONSTRAINT fk_crm_revision_contract FOREIGN KEY(tenant_id,contract_id)
+   REFERENCES crm.customer_contract(tenant_id,id),
+ CONSTRAINT fk_crm_revision_actor FOREIGN KEY(actor_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_revision_period CHECK(ends_on IS NULL OR ends_on>=starts_on),
+ CONSTRAINT ck_crm_revision_status CHECK(status IN ('DRAFT','ACTIVE','CLOSED','CANCELLED')),
+ CONSTRAINT ck_crm_revision_action CHECK(action_code IN ('CREATED','DATES_CHANGED','STATUS_CHANGED','RENEWED'))
+);
+CREATE INDEX idx_crm_contract_revision_tenant ON crm.contract_revision(tenant_id,contract_id,revision_no);
+--rollback DROP TABLE crm.contract_revision;
+--rollback DROP TABLE crm.customer_change_event;
+
+--changeset rm:0061-crm-r13-immutable-events dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_r13_history_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CRM R1.3 history is immutable';
+END;
+$$;
+CREATE TRIGGER trg_customer_change_immutable BEFORE UPDATE OR DELETE ON crm.customer_change_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_contract_revision_immutable BEFORE UPDATE OR DELETE ON crm.contract_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_contract_revision_immutable ON crm.contract_revision;
+--rollback DROP TRIGGER trg_customer_change_immutable ON crm.customer_change_event;
+--rollback DROP FUNCTION crm.reject_r13_history_mutation();
