@@ -10,6 +10,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.Assumptions;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest
 class InventoryMovementQualificationTest {
     @Autowired InventoryMovementService movements;
+    @Autowired DataSource dataSource;
     @Autowired JdbcTemplate jdbc;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -94,6 +97,24 @@ class InventoryMovementQualificationTest {
                 "invalid-cross",BigDecimal.ONE,BigDecimal.ZERO,BigDecimal.ONE,
                 Timestamp.from(Instant.now()),Timestamp.from(Instant.now())))
                 .isInstanceOf(Exception.class);
+    }
+
+    @Test void postgresForbidsChangingOrDeletingPostedMovement() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var p=position();
+        var movement=movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-immutable-001",BigDecimal.ONE);
+        assertThatThrownBy(()->jdbc.update("""
+            UPDATE crm.inv_stock_movement SET delta_quantity=2
+            WHERE tenant_id=? AND id=?
+            """,p.tenant(),movement.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+            DELETE FROM crm.inv_stock_movement WHERE tenant_id=? AND id=?
+            """,p.tenant(),movement.id())).isInstanceOf(Exception.class);
+        assertThat(onHand(p)).isEqualByComparingTo("11");
     }
 
     @Test void concurrentSameKeyPostsExactlyOneMovement() throws Exception {
