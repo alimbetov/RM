@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * Internal owner-only membership and workspace lifecycle. No HTTP endpoint.
- * Lock order: caller account SHARE -> tenant workspace UPDATE -> membership.
+ * Lock order: caller account UPDATE -> tenant workspace UPDATE -> membership.
  * Mutations are serialized with TenantAuthorization.requireForCommand.
  */
 @Service
@@ -118,7 +118,7 @@ public class TenantAccessStatusService {
     private WorkspaceState lockAndRequireOwner(UUID callerId, UUID tenantId, boolean permitSuspended) {
         if (tenantId == null) throw new SecurityException("Tenant required");
         String actorStatus = jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE
+                SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
                 """, rs -> rs.next() ? rs.getString(1) : null, callerId);
         if (!"ACTIVE".equals(actorStatus)) throw new SecurityException("Actor inactive");
 
