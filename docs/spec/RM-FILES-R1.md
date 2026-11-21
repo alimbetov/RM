@@ -2,7 +2,7 @@
 
 **Status:** PROPOSED — DOMAIN DESIGN; no file tables, controllers or storage implementation deployed yet.
 **Branch:** `feat/rm-kms-r1-implementation`
-**Priority:** Foundation alongside CRM-R1A and CATALOG-R1A.5, not after SALES.\n**Naming convention:** [RM-MODULAR-DOMAIN-DB-R1](RM-MODULAR-DOMAIN-DB-R1.md) — module-owned tables use `file_` prefix; physical schema choice decided before first FILES migration. The `files.file_*` names below are conceptual and are not yet deployed.
+**Priority:** Foundation alongside CRM-R1A and CATALOG-R1A.5, not after SALES.\n**Naming convention:** [RM-MODULAR-DOMAIN-DB-R1](RM-MODULAR-DOMAIN-DB-R1.md) — module-owned tables use `file_` prefix; physical schema choice decided before first FILES migration. The `files.file_*` names below are conceptual and are not yet deployed. **R1 naming resolution:** physical tables will be `crm.file_object`, `crm.file_storage`, `crm.file_attachment`, following [RM-IMPLEMENTATION-BASELINE-R1](RM-IMPLEMENTATION-BASELINE-R1.md); not separate `files` schema.
 **Deployment:** one Spring Boot modular monolith / PostgreSQL, initial local filesystem; RustFS (S3-compatible object storage) behind one Java storage port later.
 
 ## 1. Non-negotiable boundary
@@ -17,9 +17,9 @@ Use **logical metadata in PostgreSQL and binary content outside PostgreSQL**. Av
 
 | Table | Key/fields | Responsibility |
 |---|---|---|
-| `files.file_object` | `(tenant_id,id)` PK; `original_name`, `declared_content_type`, `detected_content_type`, `size_bytes`, `sha256`, `kind`, `state`, `created_by`, `created_at`, `completed_at`, `deleted_at`, `row_version` | Logical immutable file identity, verification, lifecycle |
-| `files.file_storage` | `(tenant_id,file_id)` FK; `provider` LOCAL/RUSTFS; `storage_key`, `bucket` nullable, `object_version` nullable, `storage_state`, `migrated_at` | Current physical location, privately owned by FILES |
-| `files.file_attachment` | `(tenant_id,id)` PK; `file_id`, `owner_type`, `owner_id`, `purpose`, `created_by`, `created_at`, `deleted_at` | Logical association to customer/contact/product/order/estimate/invoice/task |
+| `crm.file_object` | `(tenant_id,id)` PK; `original_name`, `declared_content_type`, `detected_content_type`, `size_bytes`, `sha256`, `kind`, `state`, `created_by`, `created_at`, `completed_at`, `deleted_at`, `row_version` | Logical immutable file identity, verification, lifecycle |
+| `crm.file_storage` | `(tenant_id,file_id)` FK; `provider` LOCAL/RUSTFS; `storage_key`, `bucket` nullable, `object_version` nullable, `storage_state`, `migrated_at` | Current physical location, privately owned by FILES |
+| `crm.file_attachment` | `(tenant_id,id)` PK; `file_id`, `owner_type`, `owner_id`, `purpose`, `created_by`, `created_at`, `deleted_at` | Logical association to customer/contact/product/order/estimate/invoice/task |
 
 Use composite FK `(tenant_id,file_id)` from storage and attachment to file. Enforce authorized owner lookup in the corresponding domain; a polymorphic `owner_type/owner_id` alone **cannot** be made referentially safe by one FK and needs explicit tenant/owner validation. If attachment relation count becomes large, use separate typed link tables (`crm_customer_file`, `catalog_item_file`, etc.) with composite FK on both sides. Do not introduce all typed tables now.
 
