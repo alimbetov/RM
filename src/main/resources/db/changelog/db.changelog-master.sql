@@ -754,3 +754,25 @@ CREATE TABLE crm.sales_order_status_event (
 --rollback DROP TABLE crm.store_front;
 --rollback DROP TABLE iam_email_verification_challenge;
 --rollback DROP TABLE iam_email_identity;
+
+
+--changeset rm:0015-iam-email-verification-durable-delivery
+-- Delivery jobs read encrypted email + token using IAM service credentials only.
+-- Never expose challenge data in checkout responses or logs.
+CREATE TABLE iam_email_delivery_outbox (
+  id UUID NOT NULL PRIMARY KEY,
+  challenge_id UUID NOT NULL,
+  email_identity_id UUID NOT NULL,
+  state VARCHAR(20) NOT NULL,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  sent_at TIMESTAMP WITH TIME ZONE,
+  CONSTRAINT fk_iam_delivery_challenge FOREIGN KEY (challenge_id) REFERENCES iam_email_verification_challenge(id),
+  CONSTRAINT fk_iam_delivery_identity FOREIGN KEY (email_identity_id) REFERENCES iam_email_identity(id),
+  CONSTRAINT uk_iam_delivery_challenge UNIQUE (challenge_id),
+  CONSTRAINT ck_iam_delivery_state CHECK (state IN ('PENDING','SENT','FAILED')),
+  CONSTRAINT ck_iam_delivery_attempts CHECK (attempt_count >= 0)
+);
+CREATE INDEX idx_iam_delivery_due ON iam_email_delivery_outbox(state,next_attempt_at);
+--rollback DROP TABLE iam_email_delivery_outbox;
