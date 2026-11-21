@@ -145,7 +145,8 @@ public class AutoOrderService {
     public List<OrderReceipt> buyerOrders(UUID authenticatedUserId) {
         if(authenticatedUserId==null)throw new SecurityException("Authentication required");
         Integer verified=jdbc.queryForObject("""
-            SELECT count(*) FROM iam_email_identity WHERE user_id=? AND verified_at IS NOT NULL
+            SELECT count(*) FROM iam_email_identity e JOIN iam_user_account u ON u.id=e.user_id
+            WHERE e.user_id=? AND e.verified_at IS NOT NULL AND u.status='ACTIVE'
             """,Integer.class,authenticatedUserId);
         if(verified==null||verified==0)throw new SecurityException("Verified email required");
         return jdbc.query("""
