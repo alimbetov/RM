@@ -93,10 +93,9 @@ class InventoryReservationQualificationTest {
     private BigDecimal stock(Store s,String field) {
         if(!field.equals("on_hand") && !field.equals("reserved"))
             throw new IllegalArgumentException("Field not allowed");
-        return jdbc.queryForObject("""
-            SELECT """+field+"""
-             FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?
-            """,BigDecimal.class,s.tenant(),s.location(),s.item());
+        return jdbc.queryForObject("SELECT "+field+
+                " FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",
+                BigDecimal.class,s.tenant(),s.location(),s.item());
     }
 
     @Test void reservationReleaseAndIdempotentReplay() {
