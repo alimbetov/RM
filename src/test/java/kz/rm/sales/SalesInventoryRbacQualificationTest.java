@@ -2,7 +2,12 @@ package kz.rm.sales;
 
 import kz.rm.autoorder.AutoOrderService;
 import kz.rm.iam.*;
-import kz.rm.inventory.InventoryAuthorizedCommandService;
+import kz.rm.inventory.AuthenticatedInventoryCommands;
+import kz.rm.iam.OidcActorResolver;
+import kz.rm.iam.VerifiedActor;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,7 +30,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class SalesInventoryRbacQualificationTest {
     @Autowired SalesInventoryCommandService commands;
-    @Autowired InventoryAuthorizedCommandService warehouse;
+    @Autowired AuthenticatedInventoryCommands warehouse;
     @Autowired AutoOrderService checkout;
     @Autowired TenantRoleService roles;
     @Autowired OrganizationRepository organizations;
@@ -33,6 +38,17 @@ class SalesInventoryRbacQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+
+    private VerifiedActor verified(UUID userId) {
+        String subject=jdbc.queryForObject(
+            "SELECT external_subject FROM iam_user_account WHERE id=?",
+            String.class,userId);
+        // Synthetic verified decoder ONLY in a test. Production uses JWKS/issuer/aud.
+        JwtDecoder decoder=token->Jwt.withTokenValue(token)
+            .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+            .expiresAt(Instant.now().plusSeconds(600)).build();
+        return new OidcActorResolver(decoder,users).resolve("test-only-token");
+    }
 
     private record Context(UUID tenant,UUID owner,UUID backupOwner,UUID staff,
                            UUID location,UUID item,UUID offer,String slug) {}
@@ -255,12 +271,12 @@ class SalesInventoryRbacQualificationTest {
     @Test void standaloneInventoryOperationsRequireExplicitGrants() {
         Context c=context(3);
         allow(c,DomainPermission.INVENTORY_RECEIVE);
-        assertThat(warehouse.receive(c.staff(),c.tenant(),c.location(),c.item(),
+        assertThat(warehouse.receive(verified(c.staff()),c.tenant(),c.location(),c.item(),
             "receive-001",BigDecimal.valueOf(2)).after()).isEqualByComparingTo("5");
-        assertThatThrownBy(()->warehouse.correct(c.staff(),c.tenant(),c.location(),c.item(),
+        assertThatThrownBy(()->warehouse.correct(verified(c.staff()),c.tenant(),c.location(),c.item(),
             "correct-001",BigDecimal.valueOf(-1))).isInstanceOf(SecurityException.class);
         assertThat(scalar(c,"on_hand")).isEqualByComparingTo("5");
-        assertThatThrownBy(()->warehouse.receive(c.owner(),c.tenant(),c.location(),c.item(),
+        assertThatThrownBy(()->warehouse.receive(verified(c.owner()),c.tenant(),c.location(),c.item(),
             "receive-002",BigDecimal.ONE)).isInstanceOf(SecurityException.class);
     }
 }
