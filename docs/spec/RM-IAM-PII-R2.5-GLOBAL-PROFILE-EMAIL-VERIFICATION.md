@@ -1,6 +1,6 @@
 # RM IAM-PII-R2.5 — защищённый глобальный профиль и обязательное подтверждение email
 
-**Статус:** ТЗ / DESIGN, к реализации после согласования · **Дата:** 2026-11-21 · **Ветка:** `base_dev` · **Основа:** [RM-PLATFORM-STANDARD-R2, §25](../architecture/RM-PLATFORM-STANDARD-R2.md).
+**Статус:** R2.5A сервисы + миграции + тесты реализованы в `base_dev` (PR #9, ещё не `main`); R2.5B/C — DESIGN и не реализованы; весь релиз — HOLD · **Дата:** 2026-11-21 · **Ветка:** `base_dev` · **Основа:** [RM-PLATFORM-STANDARD-R2, §25](../architecture/RM-PLATFORM-STANDARD-R2.md).
 **Объём:** внутренние Java/Spring Boot сервисы, данные, безопасные миграции Liquibase, процессные H2/PostgreSQL-тесты. **Нет** REST-контроллеров, UI, SMTP-включения, production approval или переработки всех доменов.
 
 ## 1. Цель и подтверждённая исходная база
@@ -129,3 +129,12 @@ RM использует **один глобальный аккаунт** (`iam_u
 Новых REST-контроллеров, SMS-провайдеров, Redis, универсального privacy-engine, второго аккаунта на tenant или произвольного администратора с raw userId API **не создавать**. Любое изменение email проходит по одному механизму и требует нового независимого proof.
 
 **Зависимости:** [§23 — enrollment и роли](../architecture/RM-PLATFORM-STANDARD-R2.md#23-iam--внутренний-процесс-входа-и-раздачи-ролей-service-only-r23), [§24 — governance и recovery](../architecture/RM-PLATFORM-STANDARD-R2.md#24-iam--первичный-администратор-двухсторонняя-передача-owner-и-emergency-recovery), существующие `EmailIdentityService`, `EmailIdentityCrypto`, `AutoOrderService`, Liquibase 0014–0016.
+
+
+## 10. Технический результат R2.5A (кандидат в base_dev)
+
+- Регистрация: `EmailIdentityService.registerPendingEmail(rawEmail)` создаёт `PENDING` user/email identity только при отсутствии ранее зарегистрированного адреса; возвращает нейтральный результат, который не раскрывает наличие ACTIVE учётной записи. Хранение email уже AES-256-GCM + глобальный IAM HMAC.
+- Для ACTIVE OIDC-linked аккаунта: `requestInitialVerification(VerifiedActor,email)` привязывает **только первый** адрес; если другой уже привязан — отказ до реализации безопасной смены R2.5B. `myVerificationStatus(VerifiedActor)` вычисляет `emailVerified` без нового булевого поля.
+- Первый proof: `verifyRegistration(challengeId,token)` требует purpose `REGISTRATION`, TTL 15 минут, single-use, ACTIVE/PENDING account; создаёт событие `iam_email_verification_event` и не выдаёт OIDC-сессию. `verifyEmail` для checkout теперь допускает только purpose `CHECKOUT`, а legacy challenge получают CHECKOUT по умолчанию.
+- Liquibase `0044–0045`: additive purpose, append-only proof evidence и PG trigger. Новые сервисные тесты — `IamInitialEmailRegistrationQualificationTest` (9 случаев, включая двухпоточные). Cooldown на повтор регистрации — 60 секунд.
+- **НЕ сделано в R2.5A:** смена email CURRENT/PENDING/HISTORICAL; шифрование `display_name` и `phone_e164`, миграция plaintext в заполненной БД, real email sender, внешняя HTTP/OIDC-интеграция, независимая security-квалификация. **Не считать всю IAM-PII-R2.5 завершённой.**
