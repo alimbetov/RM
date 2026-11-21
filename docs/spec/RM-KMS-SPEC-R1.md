@@ -20,7 +20,7 @@
 ## 2. Технологический стек
 
 - Java 21, Spring Boot 4.1.x, Spring Data JPA/Hibernate, Lombok, Maven.
-- H2 in-memory в `dev`, PostgreSQL — целевая СУБД.
+- Два профиля Spring Boot: `dev` = H2 in-memory (локальные smoke-тесты), `test` = PostgreSQL (разработка, интеграционные тесты, нативные SQL и квалификация). PostgreSQL остаётся целевой СУБД.
 - Liquibase **formatted SQL** — единственный механизм схемных миграций; `spring.jpa.hibernate.ddl-auto=validate`.
 - Caffeine `LoadingCache` для разрешённых рабочих ключей.
 - Java JCA/JCE `AES/GCM/NoPadding`, 256-bit DEK, 96-bit уникальный случайный nonce для каждой операции, 128-bit authentication tag.
@@ -270,3 +270,20 @@ rm:
 ## 17. Решение на старт разработки
 
 **ТЗ единое, исходный код менять только после ревью DDL и миграционного пути.** До выполнения QUAL-R2.1 НЕ утверждать production-ready. На первом этапе оставить `migration.enabled=false`, без автоматической перезаписи ключевых слотов.
+
+
+## 18. Среды выполнения: два профиля Spring Boot (новое согласованное решение)
+
+| Параметр | `dev` | `test` |
+|---|---|---|
+| СУБД | H2 in-memory | PostgreSQL `rm_test` |
+| Назначение | Быстрый запуск и smoke | Разработка, интеграция, SQL/JPA qualification |
+| Hibernate DDL | `validate` | `validate` |
+| Миграции | Liquibase formatted SQL | Liquibase formatted SQL |
+| H2 console | Только локально | Выключена |
+| Данные | Эфемерные | Сохраняются между перезапусками |
+| Партиционирование | Нет, структурный аналог | PostgreSQL HASH по tenant_id в архиве (после реализации) |
+
+Файлы: `application.yml` (общее), `application-dev.yml`, `application-test.yml`. Старый отдельный профиль `postgres` упразднён. Параметры подключения к test PostgreSQL — `RM_TEST_DB_URL`, `RM_TEST_DB_USERNAME`, `RM_TEST_DB_PASSWORD`; никогда не в Git. Значение по умолчанию остаётся `dev`. Все SQL changesets должны быть совместимы с обеими СУБД либо явно ограничены по `dbms`; **PostgreSQL-native SQL подтверждается на test, а не H2**. CI требуется явный запуск PostgreSQL интеграционного набора, иначе обычный `mvn test` с dev-профилем не доказывает квалификацию PostgreSQL.
+
+**Статус:** конфигурационные файлы профилей обновлены в этой ветке; реальный запуск H2/PostgreSQL и тестов не подтверждён. Это изменение профилей не означает выполнения миграции старой KMS-модели в трёхслотовую.
