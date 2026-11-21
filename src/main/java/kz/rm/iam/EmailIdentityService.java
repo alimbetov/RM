@@ -14,8 +14,8 @@ import java.util.UUID;
 
 /**
  * Global IAM owner of encrypted email identities, proof challenges and delivery outbox.
- * REGISTRATION and CHECKOUT proof have different purposes and never mint a session.
- * R2.5A does not implement changes to an existing email address.
+ * REGISTRATION, CHECKOUT and CHANGE_EMAIL proof have different purposes.
+ * An email proof never mints an OIDC session or a business permission.
  */
 @Service
 public class EmailIdentityService {
@@ -28,6 +28,7 @@ public class EmailIdentityService {
     }
 
     public record Identity(UUID identityId, UUID userId) {}
+    private record Existing(UUID id,UUID userId,String pendingReason) {}
     public record EmailVerificationStatus(boolean emailVerified) {}
 
     public String normalize(String email) {
@@ -83,14 +84,15 @@ public class EmailIdentityService {
         if(legacyCollision)throw new SecurityException("Email registration unavailable");
 
         List<Identity> collision=jdbc.query("""
-            SELECT id,user_id FROM public.iam_email_identity WHERE lookup_hmac=?
+            SELECT id,user_id FROM public.iam_email_identity WHERE active_lookup_hmac=?
             """,(rs,n)->new Identity(rs.getObject(1,UUID.class),
                 rs.getObject(2,UUID.class)),lookup);
         if(!collision.isEmpty()&&!collision.getFirst().userId().equals(userId))
             throw new SecurityException("Email registration unavailable");
 
         List<UUID> owned=jdbc.query("""
-            SELECT id FROM public.iam_email_identity WHERE user_id=?
+            SELECT id FROM public.iam_email_identity
+            WHERE user_id=? AND lifecycle_state IN ('CURRENT','PENDING')
             """,(rs,n)->rs.getObject(1,UUID.class),userId);
         if(!owned.isEmpty() && (collision.isEmpty()
                 || !owned.getFirst().equals(collision.getFirst().identityId())))
@@ -100,17 +102,19 @@ public class EmailIdentityService {
         if(!collision.isEmpty()) {
             identityId=collision.getFirst().identityId();
             boolean verified=Boolean.TRUE.equals(jdbc.queryForObject("""
-                SELECT verified_at IS NOT NULL FROM public.iam_email_identity WHERE id=?
+                SELECT verified_at IS NOT NULL FROM public.iam_email_identity
+                WHERE id=? AND lifecycle_state='CURRENT'
                 """,Boolean.class,identityId));
             if(verified)return new EmailVerificationStatus(true);
         } else {
             identityId=UUID.randomUUID();
             jdbc.update("""
                 INSERT INTO public.iam_email_identity
-                  (id,user_id,lookup_hmac,email_envelope,created_at)
-                VALUES (?,?,?,?,?)
+                  (id,user_id,lookup_hmac,email_envelope,created_at,
+                    lifecycle_state,pending_reason,active_lookup_hmac,pending_owner_id)
+                VALUES (?,?,?,?,?,'PENDING','REGISTRATION',?,?)
                 """,identityId,userId,lookup,crypto.encrypt(normalized),
-                Timestamp.from(Instant.now()));
+                Timestamp.from(Instant.now()),lookup,userId);
         }
         queueChallenge(identityId,"REGISTRATION",true);
         return new EmailVerificationStatus(false);
@@ -128,7 +132,7 @@ public class EmailIdentityService {
             throw new SecurityException("Active account required");
         boolean verified=jdbc.query("""
             SELECT 1 FROM public.iam_email_identity
-            WHERE user_id=? AND verified_at IS NOT NULL
+            WHERE user_id=? AND lifecycle_state='CURRENT' AND verified_at IS NOT NULL
             """,(org.springframework.jdbc.core.ResultSetExtractor<Boolean>)rs->rs.next(),userId);
         return new EmailVerificationStatus(verified);
     }
@@ -168,10 +172,11 @@ public class EmailIdentityService {
         }
         jdbc.update("""
             INSERT INTO public.iam_email_identity
-              (id,user_id,lookup_hmac,email_envelope,created_at)
-            VALUES (?,?,?,?,?)
+              (id,user_id,lookup_hmac,email_envelope,created_at,
+               lifecycle_state,pending_reason,active_lookup_hmac,pending_owner_id)
+            VALUES (?,?,?,?,?,'PENDING','REGISTRATION',?,?)
             """,identityId,userId,lookup,crypto.encrypt(normalized),
-                Timestamp.from(Instant.now()));
+                Timestamp.from(Instant.now()),lookup,userId);
         return new Identity(identityId,userId);
     }
 
