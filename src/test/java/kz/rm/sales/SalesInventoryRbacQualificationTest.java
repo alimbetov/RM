@@ -3,6 +3,9 @@ package kz.rm.sales;
 import kz.rm.autoorder.AutoOrderService;
 import kz.rm.iam.*;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
+import kz.rm.inventory.OrderInventoryPort;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import kz.rm.iam.OidcActorResolver;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -38,6 +41,9 @@ class SalesInventoryRbacQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+    @Autowired TenantAuthorization authorization;
+    @Autowired OrderInventoryPort crossDomainPort;
+    @Autowired PlatformTransactionManager transactionManager;
 
     private VerifiedActor verified(UUID userId) {
         String subject=jdbc.queryForObject(
@@ -266,6 +272,23 @@ class SalesInventoryRbacQualificationTest {
             SELECT count(*) FROM crm.inv_stock_reservation
             WHERE tenant_id=? AND state='ACTIVE'
             """,Integer.class,c.tenant())).isEqualTo(4);
+    }
+
+    @Test void staleSalesAndStockPermitsCannotMutateAnotherTransaction() {
+        Context c=context(5);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        var template=new TransactionTemplate(transactionManager);
+        TenantAuthorization.Decision[] stale=template.execute(tx->new TenantAuthorization.Decision[] {
+            authorization.requireForCommand(c.staff(),c.tenant(),DomainPermission.SALES_ORDER_CONFIRM),
+            authorization.requireForCommand(c.staff(),c.tenant(),DomainPermission.INVENTORY_RESERVE)
+        });
+        assertThat(stale).isNotNull();
+        template.execute(tx->{
+            assertThatThrownBy(()->crossDomainPort.reserve(stale[0],stale[1],
+                UUID.randomUUID(),UUID.randomUUID(),c.location(),c.item(),BigDecimal.ONE))
+                .isInstanceOf(SecurityException.class);
+            return null;
+        });
     }
 
     @Test void standaloneInventoryOperationsRequireExplicitGrants() {
