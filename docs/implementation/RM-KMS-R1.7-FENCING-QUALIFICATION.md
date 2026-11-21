@@ -1,6 +1,6 @@
 # RM-KMS-R1.7 — PostgreSQL scheduler fencing, first implementation slice
 
-**Branch:** `feat/rm-kms-r1-implementation`. **Status:** IMPLEMENTED IN TEST BRANCH; CI evidence must be read before PASS.  
+**Branch:** `feat/rm-kms-r1-implementation`. **Status:** BASELINE POSTGRESQL/H2 GREEN on commit `9958973d`; final long-running-expiry test validation pending.  
 **Scope:** one durable KMS key-maintenance lease per tenant, shared by all RM pods. No rotation/nightly migration enabled.
 
 ## Audit of actual RM scheduler
@@ -42,3 +42,14 @@ Lease duration 1 second to 15 minutes. For Postgres, authoritative time is `cloc
 - Record exact CI run/test count before changing status to PASS.
 
 **R1.7 gate distinction:** protocol implemented and DB-tested does **not** equal a qualified scheduled multi-pod migration worker. No production admission.
+
+
+## Verified CI evidence
+
+Run [#44870957733](https://github.com/alimbetov/RM/actions/runs/44870957733) on commit `9958973d1db25b66dd671db1abb3da892eb1bade`:
+- H2 / `dev`: 27 tests, 0 failures/errors/skipped, `BUILD SUCCESS`, 7 Liquibase changesets.
+- PostgreSQL 17 / `test`: 27 tests, 0 failures/errors/skipped, `BUILD SUCCESS`, 7 Liquibase changesets.
+- `KmsFencedJobQualificationTest`: 5 cases PASS in both environments (two contenders, expired token handoff, renewal/service reconstruction, independent callback rollback, single-tenant acquisition).
+- Subsequent change adds an additional test `callbackThatOutlivesItsLeaseMustRollbackBeforeCommit`; do not claim this test GREEN until the next CI run completes.
+
+**Gate:** R1.7 DB-backed lease/fencing baseline PASS (27 tests). Scheduler integration, two real pods and complete R1.8 writer barrier remain HOLD.
