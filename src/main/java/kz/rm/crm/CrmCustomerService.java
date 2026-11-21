@@ -13,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * CRM-R1A application boundary. Do not expose a controller accepting arbitrary actor IDs:
@@ -157,6 +160,66 @@ public class CrmCustomerService {
             """,tenantId,id,contactId,granted,purpose,policyVersion,source,Timestamp.from(Instant.now()));
         return id;
     }
+
+    /**
+     * Keyed consent command. Authorization happens before replay evaluation;
+     * the original immutable event ID is returned only for an identical request.
+     * Stripe locks serialize the unique tenant/request key across transactions.
+     */
+    @Transactional
+    UUID recordEmailConsentOnce(UUID actorId, UUID tenantId, UUID contactId,
+                                boolean granted, String purpose, String policyVersion,
+                                String source, String requestKey) {
+        requireOrganizationMember(actorId,tenantId,true);
+        if(tenantId==null || contactId==null || requestKey==null
+                || !requestKey.matches("[A-Za-z0-9_-]{8,100}")
+                || purpose==null || purpose.isBlank() || purpose.length()>80
+                || policyVersion==null || policyVersion.isBlank() || policyVersion.length()>40
+                || source==null || source.isBlank() || source.length()>100)
+            throw new IllegalArgumentException("Consent request fields required");
+        final int stripe;
+        try {
+            byte[] hash=MessageDigest.getInstance("SHA-256")
+                    .digest((tenantId+":"+requestKey).getBytes(StandardCharsets.UTF_8));
+            stripe=Math.floorMod(Arrays.hashCode(hash),64);
+        } catch(Exception ex) {
+            throw new IllegalStateException("Cannot hash consent request key",ex);
+        }
+        jdbc.queryForObject("SELECT bucket FROM crm.consent_request_lock WHERE bucket=? FOR UPDATE",
+                Integer.class,stripe);
+        var existing=jdbc.query("""
+                SELECT id,contact_id,granted,purpose,policy_version,source
+                FROM crm.email_consent_event
+                WHERE tenant_id=? AND request_key=?
+                """,(rs,n)->new ConsentReplay(rs.getObject(1,UUID.class),
+                    rs.getObject(2,UUID.class),rs.getBoolean(3),rs.getString(4),
+                    rs.getString(5),rs.getString(6)),tenantId,requestKey);
+        if(!existing.isEmpty()) {
+            var previous=existing.getFirst();
+            if(!previous.contactId().equals(contactId) || previous.granted()!=granted
+                    || !previous.purpose().equals(purpose)
+                    || !previous.policyVersion().equals(policyVersion)
+                    || !previous.source().equals(source))
+                throw new IllegalArgumentException("Consent idempotency key reused with different payload");
+            return previous.id();
+        }
+        Integer count=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.contact
+            WHERE tenant_id=? AND id=? AND status='ACTIVE'
+            """,Integer.class,tenantId,contactId);
+        if(count==null || count!=1) throw new IllegalArgumentException("Contact not found in tenant");
+        UUID id=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.email_consent_event
+            (tenant_id,id,contact_id,granted,purpose,policy_version,source,occurred_at,request_key)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            """,tenantId,id,contactId,granted,purpose,policyVersion,source,
+                Timestamp.from(Instant.now()),requestKey);
+        return id;
+    }
+
+    private record ConsentReplay(UUID id,UUID contactId,boolean granted,String purpose,
+                                 String policyVersion,String source) {}
 
     @Transactional
     boolean hasEmailConsent(UUID actorId, UUID tenantId, UUID contactId, String purpose) {
