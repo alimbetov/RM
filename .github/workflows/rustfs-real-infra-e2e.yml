@@ -48,8 +48,8 @@ jobs:
       - name: Start actual RustFS with persisted Docker volume
         run: |
           set -euo pipefail
-          docker pull rustfs/rustfs@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
-          IMAGE_ID=$(docker image inspect rustfs/rustfs@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c --format='{{.Id}}')
+          docker pull rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
+          IMAGE_ID=$(docker image inspect rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a --format='{{.Id}}')
           echo "Qualified RustFS image ID: $IMAGE_ID"
           test "$IMAGE_ID" = 'sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a'
           export RM_RUSTFS_IMAGE_ID="$IMAGE_ID"
