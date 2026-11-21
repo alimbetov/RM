@@ -189,6 +189,7 @@ public class CrmCustomerService {
     }
 
     private void requireOrganizationMember(UUID actor, UUID tenant, boolean write) {
-        authorization.require(actor,tenant,write ? DomainPermission.CRM_WRITE : DomainPermission.CRM_READ);
+        if(write) authorization.requireForCommand(actor,tenant,DomainPermission.CRM_WRITE);
+        else authorization.require(actor,tenant,DomainPermission.CRM_READ);
     }
 }
