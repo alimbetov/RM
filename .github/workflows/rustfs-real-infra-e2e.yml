@@ -52,6 +52,7 @@ jobs:
           IMAGE_ID=$(docker image inspect rustfs/rustfs:latest --format='{{.Id}}')
           echo "Qualified RustFS image ID: $IMAGE_ID"
           test "$IMAGE_ID" = 'sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a'
+          export RM_RUSTFS_IMAGE_ID="$IMAGE_ID"
           echo "RM_RUSTFS_IMAGE_ID=$IMAGE_ID" >> "$GITHUB_ENV"
           docker volume create rm-rustfs-e2e-data
           docker run -d --name rm-rustfs-e2e --restart no \
