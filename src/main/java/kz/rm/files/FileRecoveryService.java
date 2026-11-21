@@ -35,6 +35,27 @@ class FileRecoveryService {
     private record Claim(String outcome,UUID token,String activeKey,
                          long size,String sha256) {}
 
+
+    /** A bounded, explicit tenant-scoped maintenance operation. No global scans. */
+    record BatchResult(int examined,int cleaned,int quarantined,int busy) {}
+    BatchResult reconcileBatch(UUID tenant,int maxFiles) throws IOException {
+        if(tenant==null || maxFiles<1 || maxFiles>100)
+            throw new IllegalArgumentException("Tenant and batch size 1..100 required");
+        java.util.List<UUID> ids=jdbc.query("""
+                SELECT id FROM crm.file_object
+                 WHERE tenant_id=? AND state IN ('STAGED','AVAILABLE','REJECTED')
+                 ORDER BY created_at,id LIMIT ?
+                """,(rs,n)->rs.getObject(1,UUID.class),tenant,maxFiles);
+        int cleaned=0,quarantined=0,busy=0;
+        for(UUID id:ids) {
+            Result result=reconcileOne(tenant,id);
+            cleaned+=result.removed();
+            if("QUARANTINED".equals(result.outcome()))quarantined++;
+            if("BUSY".equals(result.outcome()))busy++;
+        }
+        return new BatchResult(ids.size(),cleaned,quarantined,busy);
+    }
+
     Result reconcileOne(UUID tenant,UUID fileId) throws IOException {
         if(tenant==null || fileId==null)throw new IllegalArgumentException("Tenant/file required");
         // The narrow PG transaction fences stale workers; filesystem IO happens later.
