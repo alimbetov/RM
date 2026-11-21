@@ -1588,3 +1588,84 @@ CREATE TRIGGER trg_iam_email_verification_event_immutable
  FOR EACH ROW EXECUTE FUNCTION public.iam_reject_email_verification_event_mutation();
 --rollback DROP TRIGGER trg_iam_email_verification_event_immutable ON public.iam_email_verification_event;
 --rollback DROP FUNCTION public.iam_reject_email_verification_event_mutation();
+
+
+--changeset rm:0046-iam-email-lifecycle-and-active-lookup
+-- Keep historical email envelopes and order foreign keys immutable. NULLs in
+-- unique columns allow arbitrary histories but only one live email owner.
+ALTER TABLE public.iam_email_identity
+ ADD COLUMN lifecycle_state VARCHAR(16) NOT NULL DEFAULT 'PENDING';
+ALTER TABLE public.iam_email_identity ADD COLUMN pending_reason VARCHAR(20);
+ALTER TABLE public.iam_email_identity ADD COLUMN active_lookup_hmac BYTEA;
+ALTER TABLE public.iam_email_identity ADD COLUMN current_owner_id UUID;
+ALTER TABLE public.iam_email_identity ADD COLUMN pending_owner_id UUID;
+UPDATE public.iam_email_identity
+SET lifecycle_state=CASE WHEN verified_at IS NOT NULL THEN 'CURRENT' ELSE 'PENDING' END,
+    pending_reason=CASE WHEN verified_at IS NULL THEN 'REGISTRATION' ELSE NULL END,
+    active_lookup_hmac=lookup_hmac,
+    current_owner_id=CASE WHEN verified_at IS NOT NULL THEN user_id ELSE NULL END,
+    pending_owner_id=CASE WHEN verified_at IS NULL THEN user_id ELSE NULL END;
+ALTER TABLE public.iam_email_identity DROP CONSTRAINT uk_iam_email_lookup;
+ALTER TABLE public.iam_email_identity DROP CONSTRAINT uk_iam_email_identity_user;
+ALTER TABLE public.iam_email_identity
+ ADD CONSTRAINT uk_iam_email_active_lookup UNIQUE(active_lookup_hmac);
+ALTER TABLE public.iam_email_identity
+ ADD CONSTRAINT uk_iam_email_current_owner UNIQUE(current_owner_id);
+ALTER TABLE public.iam_email_identity
+ ADD CONSTRAINT uk_iam_email_pending_owner UNIQUE(pending_owner_id);
+ALTER TABLE public.iam_email_identity
+ ADD CONSTRAINT ck_iam_email_lifecycle CHECK(
+  (lifecycle_state='CURRENT' AND current_owner_id=user_id AND pending_owner_id IS NULL
+    AND pending_reason IS NULL AND active_lookup_hmac IS NOT NULL AND verified_at IS NOT NULL)
+  OR (lifecycle_state='PENDING' AND pending_owner_id=user_id AND current_owner_id IS NULL
+    AND pending_reason IN ('REGISTRATION','CHANGE_EMAIL')
+    AND active_lookup_hmac IS NOT NULL AND verified_at IS NULL)
+  OR (lifecycle_state='HISTORICAL' AND current_owner_id IS NULL
+    AND pending_owner_id IS NULL AND active_lookup_hmac IS NULL
+    AND pending_reason IS NULL)
+ );
+ALTER TABLE public.iam_email_verification_challenge DROP CONSTRAINT ck_iam_email_challenge_purpose;
+ALTER TABLE public.iam_email_verification_challenge
+ ADD CONSTRAINT ck_iam_email_challenge_purpose CHECK(purpose IN ('CHECKOUT','REGISTRATION','CHANGE_EMAIL'));
+ALTER TABLE public.iam_email_verification_event DROP CONSTRAINT ck_iam_verification_event_purpose;
+ALTER TABLE public.iam_email_verification_event
+ ADD CONSTRAINT ck_iam_verification_event_purpose CHECK(purpose IN ('CHECKOUT','REGISTRATION','CHANGE_EMAIL'));
+--rollback ALTER TABLE public.iam_email_verification_event DROP CONSTRAINT ck_iam_verification_event_purpose;
+--rollback ALTER TABLE public.iam_email_verification_event ADD CONSTRAINT ck_iam_verification_event_purpose CHECK(purpose IN ('CHECKOUT','REGISTRATION'));
+--rollback ALTER TABLE public.iam_email_verification_challenge DROP CONSTRAINT ck_iam_email_challenge_purpose;
+--rollback ALTER TABLE public.iam_email_verification_challenge ADD CONSTRAINT ck_iam_email_challenge_purpose CHECK(purpose IN ('CHECKOUT','REGISTRATION'));
+--rollback ALTER TABLE public.iam_email_identity DROP CONSTRAINT ck_iam_email_lifecycle;
+--rollback ALTER TABLE public.iam_email_identity DROP CONSTRAINT uk_iam_email_pending_owner;
+--rollback ALTER TABLE public.iam_email_identity DROP CONSTRAINT uk_iam_email_current_owner;
+--rollback ALTER TABLE public.iam_email_identity DROP CONSTRAINT uk_iam_email_active_lookup;
+--rollback ALTER TABLE public.iam_email_identity ADD CONSTRAINT uk_iam_email_identity_user UNIQUE(user_id);
+--rollback ALTER TABLE public.iam_email_identity ADD CONSTRAINT uk_iam_email_lookup UNIQUE(lookup_hmac);
+--rollback ALTER TABLE public.iam_email_identity DROP COLUMN pending_owner_id;
+--rollback ALTER TABLE public.iam_email_identity DROP COLUMN current_owner_id;
+--rollback ALTER TABLE public.iam_email_identity DROP COLUMN active_lookup_hmac;
+--rollback ALTER TABLE public.iam_email_identity DROP COLUMN pending_reason;
+--rollback ALTER TABLE public.iam_email_identity DROP COLUMN lifecycle_state;
+
+--changeset rm:0047-iam-email-lifecycle-audit
+CREATE TABLE public.iam_email_lifecycle_event (
+ id UUID NOT NULL PRIMARY KEY,
+ email_identity_id UUID NOT NULL,
+ user_id UUID NOT NULL,
+ action_code VARCHAR(28) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_iam_email_lifecycle_identity FOREIGN KEY(email_identity_id)
+ REFERENCES public.iam_email_identity(id),
+ CONSTRAINT fk_iam_email_lifecycle_user FOREIGN KEY(user_id)
+ REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_iam_email_lifecycle_action CHECK(action_code IN
+   ('CHANGE_REQUESTED','CHANGE_CANCELLED','CHANGE_CONFIRMED'))
+);
+CREATE INDEX idx_iam_email_lifecycle_user
+ ON public.iam_email_lifecycle_event(user_id,occurred_at DESC);
+--rollback DROP TABLE public.iam_email_lifecycle_event;
+
+--changeset rm:0048-iam-email-lifecycle-audit-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_iam_email_lifecycle_event_immutable
+ BEFORE UPDATE OR DELETE ON public.iam_email_lifecycle_event
+ FOR EACH ROW EXECUTE FUNCTION public.iam_reject_email_verification_event_mutation();
+--rollback DROP TRIGGER trg_iam_email_lifecycle_event_immutable ON public.iam_email_lifecycle_event;
