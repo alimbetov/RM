@@ -48,3 +48,9 @@
 **Keep PR #2 Draft and main unchanged.** Once exact-head H2+PostgreSQL CI is GREEN, FRZ-1 source changes can be accepted as **internal security hardening**, but production/public admission is still HOLD. For a release merge, obtain independent review of actor mapping, account/membership revocation convention, DB privileges, and filled-DB migration safety. Do not represent a real OIDC login as tested when only synthetic JWTs are used.
 
 **No overengineering:** one permission catalog, one TenantAuthorization, one TenantRoleService, one narrow inventory port, no Redis, no separate policy service, and zero new tables for FRZ-1.
+
+## Post-review defect correction
+
+The verified SALES facade negative scenario exposed a nonuniform denial for a nonexistent tenant: the transaction admission code used `JdbcTemplate.queryForObject` and emitted `EmptyResultDataAccessException`. The query now uses a nullable extractor and returns the same `SecurityException` as other invalid tenant inputs, without leaking persistence topology. The regression test verifies this path.
+
+Synthetic cryptographic JWT tests are **not** proof of identity-provider deployment; only the library-level verifier is qualified. Likewise, synthetic PG two-session tests prove the `TenantRoleService` lock protocol, not every legacy IAM status mutation. Remaining production gates above remain unchanged.
