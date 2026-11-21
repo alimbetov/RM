@@ -38,6 +38,7 @@ class CrmR1aQualificationTest {
     @Autowired CrmContactRepository contactMetadata;
     @Autowired CrmCategoryService categoryService;
     @Autowired CrmContractService contractService;
+    @Autowired CrmHistoryService crmHistory;
     @Autowired CustomerCategoryRepository categoryMetadata;
     @Autowired CustomerContractRepository contractMetadata;
     @Autowired AuthenticatedCrmCommands secureCommands;
@@ -925,6 +926,88 @@ class CrmR1aQualificationTest {
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->contractService.list(null,t.tenantId(),null,today,30,0,10))
                 .isInstanceOf(SecurityException.class);
+    }
+
+
+    @Test void crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation() {
+        var a=newTenant(); var b=newTenant();
+        var actorA=verified(a.actorId()); var actorB=verified(b.actorId());
+        var person=secureCommands.createPerson(actorA,a.tenantId(),"Original private name",null);
+        var company=secureCommands.createCompany(actorA,a.tenantId(),"Original business",null);
+        var foreign=secureCommands.createCompany(actorB,b.tenantId(),"Foreign business",null);
+        long personV=customerMetadata.findByTenantIdAndId(a.tenantId(),person.id()).orElseThrow().getRowVersion();
+        secureCommands.updatePerson(actorA,a.tenantId(),person.id(),"Revised private name",null,personV);
+        assertThat(secureQueries.getCustomer(actorA,a.tenantId(),person.id()).name())
+                .isEqualTo("Revised private name");
+        byte[] stored=jdbc.queryForObject("""
+          SELECT name_envelope FROM crm_pii.customer_secret WHERE tenant_id=? AND customer_id=?
+          """,byte[].class,a.tenantId(),person.id());
+        assertThat(new String(stored,java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain("Revised private name");
+        long companyV=customerMetadata.findByTenantIdAndId(a.tenantId(),company.id()).orElseThrow().getRowVersion();
+        secureCommands.updateCompany(actorA,a.tenantId(),company.id(),"Revised business",null,companyV);
+        assertThat(secureQueries.getCustomer(actorA,a.tenantId(),company.id()).name())
+                .isEqualTo("Revised business");
+        var changes=crmHistory.customerHistory(actorA,a.tenantId(),company.id(),20);
+        assertThat(changes).hasSize(1);
+        assertThat(changes.getFirst().actorId()).isEqualTo(a.actorId());
+        assertThat(changes.getFirst().action()).isEqualTo("METADATA_UPDATED");
+        assertThat(crmHistory.customerHistory(actorA,a.tenantId(),foreign.id(),20)).isEmpty();
+        assertThatThrownBy(()->secureCommands.updateCompany(actorA,a.tenantId(),foreign.id(),
+                "No",null,0)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->secureCommands.updateCompany(actorA,b.tenantId(),foreign.id(),
+                "No",null,0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.updateCompany(actorA,a.tenantId(),company.id(),
+                "Stale",null,companyV)).isInstanceOf(IllegalStateException.class);
+        secureCommands.archiveCustomer(actorA,a.tenantId(),company.id(),companyV+1);
+        assertThat(customerMetadata.findByTenantIdAndId(a.tenantId(),company.id()).orElseThrow()
+                .getStatus()).isEqualTo(CrmCustomerEntity.Status.ARCHIVED);
+        assertThat(crmHistory.customerHistory(actorA,a.tenantId(),company.id(),20))
+                .extracting(CrmHistoryService.CustomerChange::action)
+                .containsExactly("ARCHIVED","METADATA_UPDATED");
+        assertThatThrownBy(()->secureCommands.updateCompany(actorA,a.tenantId(),company.id(),
+                "No",null,companyV+2)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test void crmR13ContractRenewalImmutableRevisionsAndArchiveGuard() {
+        var a=newTenant(); var b=newTenant();
+        var actor=verified(a.actorId()); var actorB=verified(b.actorId());
+        var customer=secureCommands.createCompany(actor,a.tenantId(),"Term customer",null);
+        var foreign=secureCommands.createCompany(actorB,b.tenantId(),"Foreign",null);
+        var today=java.time.LocalDate.of(2026,11,22);
+        var contract=contractService.create(actor,a.tenantId(),customer.id(),"RENEW-01",
+                today,today.plusDays(30),today);
+        assertThat(crmHistory.contractHistory(actor,a.tenantId(),contract.id(),20))
+                .extracting(CrmHistoryService.ContractRevision::action)
+                .containsExactly("CREATED");
+        contract=contractService.changeStatus(actor,a.tenantId(),contract.id(),
+                CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today);
+        final var active=contract;
+        assertThatThrownBy(()->contractService.renew(actor,a.tenantId(),active.id(),
+                today.plusDays(25),active.rowVersion(),today))
+                .isInstanceOf(IllegalStateException.class);
+        contract=contractService.renew(actor,a.tenantId(),contract.id(),
+                today.plusDays(90),contract.rowVersion(),today);
+        assertThat(contract.endsOn()).isEqualTo(today.plusDays(90));
+        assertThat(crmHistory.contractHistory(actor,a.tenantId(),contract.id(),20))
+                .extracting(CrmHistoryService.ContractRevision::action)
+                .containsExactly("RENEWED","STATUS_CHANGED","CREATED");
+        var previous=crmHistory.contractHistory(actor,a.tenantId(),contract.id(),20).get(1);
+        assertThat(previous.endsOn()).isEqualTo(today.plusDays(30));
+        assertThat(crmHistory.contractHistory(actor,a.tenantId(),UUID.randomUUID(),20)).isEmpty();
+        assertThatThrownBy(()->crmHistory.contractHistory(actor,b.tenantId(),contract.id(),20))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.archiveCustomer(actor,a.tenantId(),customer.id(),0))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->contractService.create(actor,a.tenantId(),foreign.id(),
+                "CROSS",today,today.plusDays(3),today)).isInstanceOf(RuntimeException.class);
+        var immutable=crmHistory.contractHistory(actor,a.tenantId(),contract.id(),20).getFirst();
+        assertThatThrownBy(()->jdbc.update("""
+          DELETE FROM crm.contract_revision WHERE tenant_id=? AND id=?
+          """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+          UPDATE crm.contract_revision SET action_code='CREATED' WHERE tenant_id=? AND id=?
+          """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
     }
 
 }
