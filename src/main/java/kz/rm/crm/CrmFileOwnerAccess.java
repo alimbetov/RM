@@ -37,7 +37,7 @@ class CrmFileOwnerAccess implements FileOwnerAccessPort {
         // Lock prevents archive/tenant move during the attachment mutation.
         String type=jdbc.query("""
                 SELECT customer_type FROM crm.customer
-                 WHERE tenant_id=? AND id=? AND status='ACTIVE' FOR SHARE
+                 WHERE tenant_id=? AND id=? AND status='ACTIVE' FOR UPDATE
                 """,rs->rs.next()?rs.getString(1):null,tenant,customerId);
         if(!"COMPANY".equals(type))
             throw new SecurityException("CRM document owner is not admitted");
