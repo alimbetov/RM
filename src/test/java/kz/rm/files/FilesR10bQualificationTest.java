@@ -407,6 +407,30 @@ class FilesR10bQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test void boundedRecoveryCursorVisitsAllCandidateFiles() throws Exception {
+        var s=setup();
+        byte[] bytes=pdf();
+        var first=draft(s,bytes);
+        var second=draft(s,bytes);
+        var stagedFirst=storage.stage(s.tenant(),first.fileId(),
+                new ByteArrayInputStream(bytes),bytes.length,"application/pdf");
+        var stagedSecond=storage.stage(s.tenant(),second.fileId(),
+                new ByteArrayInputStream(bytes),bytes.length,"application/pdf");
+        var pageOne=recovery.reconcileBatch(s.tenant(),1);
+        assertThat(pageOne.examined()).isEqualTo(1);
+        assertThat(pageOne.nextCreatedAt()).isNotNull();
+        assertThat(pageOne.nextFileId()).isNotNull();
+        var pageTwo=recovery.reconcileBatch(s.tenant(),
+                pageOne.nextCreatedAt(),pageOne.nextFileId(),1);
+        assertThat(pageTwo.examined()).isEqualTo(1);
+        assertThat(pageTwo.nextFileId()).isNotEqualTo(pageOne.nextFileId());
+        var empty=recovery.reconcileBatch(s.tenant(),
+                pageTwo.nextCreatedAt(),pageTwo.nextFileId(),1);
+        assertThat(empty.examined()).isZero();
+        assertThat(storage.exists(stagedFirst.key())).isFalse();
+        assertThat(storage.exists(stagedSecond.key())).isFalse();
+    }
+
     @Test void unavailableDefaultScannerNeverClaimsClean() {
         assertThat(new UnavailableFileScanner().scan("synthetic")).isEqualTo(FileScanPort.Verdict.ERROR);
     }
