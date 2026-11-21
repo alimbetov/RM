@@ -48,8 +48,8 @@ jobs:
       - name: Start actual RustFS with persisted Docker volume
         run: |
           set -euo pipefail
-          docker pull rustfs/rustfs:latest
-          IMAGE_ID=$(docker image inspect rustfs/rustfs:latest --format='{{.Id}}')
+          docker pull rustfs/rustfs@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
+          IMAGE_ID=$(docker image inspect rustfs/rustfs@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c --format='{{.Id}}')
           echo "Qualified RustFS image ID: $IMAGE_ID"
           test "$IMAGE_ID" = 'sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a'
           export RM_RUSTFS_IMAGE_ID="$IMAGE_ID"
@@ -82,8 +82,8 @@ jobs:
       - name: Start actual ClamAV daemon with signature database
         run: |
           set -euo pipefail
-          docker pull clamav/clamav:stable
-          CLAM_ID=$(docker image inspect clamav/clamav:stable --format='{{.Id}}')
+          docker pull clamav/clamav@sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8
+          CLAM_ID=$(docker image inspect clamav/clamav@sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8 --format='{{.Id}}')
           echo "ClamAV CI image ID: $CLAM_ID"
           test "$CLAM_ID" = 'sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8'
           docker run -d --name rm-clamd-e2e --restart no \
