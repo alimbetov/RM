@@ -316,4 +316,40 @@ class SalesInventoryRbacQualificationTest {
         assertThatThrownBy(()->warehouse.receive(verified(c.owner()),c.tenant(),c.location(),c.item(),
             "receive-002",BigDecimal.ONE)).isInstanceOf(SecurityException.class);
     }
+
+    @Test void finalSecGateRejectsMixedActorTenantAndMissingInventoryPermits() {
+        Context first=context(7), other=context(7);
+        allow(first,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        allow(other,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        var tx=new TransactionTemplate(transactionManager);
+        tx.execute(status->{
+            var sales=authorization.requireForCommand(first.staff(),first.tenant(),
+                    DomainPermission.SALES_ORDER_CONFIRM);
+            var inventoryDifferentActor=authorization.requireForCommand(first.backupOwner(),
+                    first.tenant(),DomainPermission.INVENTORY_RESERVE);
+            var inventoryDifferentTenant=authorization.requireForCommand(other.staff(),
+                    other.tenant(),DomainPermission.INVENTORY_RESERVE);
+            var wrongAction=authorization.requireForCommand(first.staff(),first.tenant(),
+                    DomainPermission.SALES_ORDER_CONFIRM);
+            assertThatThrownBy(()->crossDomainPort.reserve(sales,inventoryDifferentActor,
+                    UUID.randomUUID(),UUID.randomUUID(),first.location(),first.item(),BigDecimal.ONE))
+                    .isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->crossDomainPort.reserve(sales,inventoryDifferentTenant,
+                    UUID.randomUUID(),UUID.randomUUID(),first.location(),first.item(),BigDecimal.ONE))
+                    .isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->crossDomainPort.reserve(sales,wrongAction,
+                    UUID.randomUUID(),UUID.randomUUID(),first.location(),first.item(),BigDecimal.ONE))
+                    .isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->crossDomainPort.reserve(null,inventoryDifferentActor,
+                    UUID.randomUUID(),UUID.randomUUID(),first.location(),first.item(),BigDecimal.ONE))
+                    .isInstanceOf(SecurityException.class);
+            return null;
+        });
+        assertThat(scalar(first,"reserved")).isEqualByComparingTo("0");
+        assertThat(scalar(other,"reserved")).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id IN (?,?)",
+                Integer.class,first.tenant(),other.tenant())).isZero();
+    }
+
 }
