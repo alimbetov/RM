@@ -1,7 +1,7 @@
 # RM-PLATFORM-STANDARD-R2 — единый стандарт CRM-платформы
 
-**Версия:** R2.1 (расширение R2.0 пользовательскими сценариями) · **Базовая версия утверждена и включена в `main`:** 2026-11-21, PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae`. **Статус дополнения:** нормативный сценарный контракт после merge соответствующего документационного PR; не равен выпуску функциональности.
-**Источник фактической реализации:** код и точный SHA `main`; на дату утверждения — `126e312e82791a68d689cbcbef287163858e7859`. Изменения IAM из [PR #4](https://github.com/alimbetov/RM/pull/4) — **кандидат**, не часть `main` до merge.
+**Версия:** R2.2 (R2.0 + пользовательские сценарии + базовый DTO-контракт) · **Базовая версия R2.0:** PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae` · **Сценарии R2.1:** PR #5, merge `378dba6ccbd79687ea979dab2ad952ef2fbbbd51` · **DTO R2.2:** становится нормативным после merge отдельного документационного PR. Статус описания не означает реализацию API или production.
+**Источник фактической реализации:** код и точный SHA `main`, а не версия ТЗ. Базовый внедрённый R2-код: PR #2; изменения IAM из [PR #4](https://github.com/alimbetov/RM/pull/4) на дату ревизии — **кандидат**, не часть `main` до merge.
 **Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`.
 
 ## 1. Назначение и продукт
@@ -450,3 +450,114 @@ CRM решает видимость клиентов/контактов и ра�
 **Последовательность:** PR #4 security gate → R2.1 Inventory → R2.2 Sales → R2.3 CRM → доверенные adapters/покупательский E2E → остальные домены по приоритету. Переход между этапами — только с тестами user journey, отрицательными сценариями и доказательством инвариантов.
 
 **Нормативное правило:** если сценарий записан здесь, но сервис или тест отсутствует, его статус — TARGET, а не готовая функция. Для каждого реализуемого UC планировать только нужные методы, миграции и тесты, без дополнительного архитектурного слоя.
+
+
+---
+
+## 21. Минимальный DTO-стандарт RM-R2
+
+**Цель:** единообразные границы данных между будущим HTTP/BFF, прикладными сервисами и UI без дублирования доменной модели и инфраструктурных обёрток. Это **контракт на следующую реализацию**, а не требование переписывать все существующие Java records или открывать REST-контроллеры сейчас.
+
+### 21.1 Четыре вида DTO, не больше
+
+| Назначение | Имя | Пример | Правило |
+|---|---|---|---|
+| Изменяющая команда | `*Request` | `ReceiveStockRequest`, `ConfirmOrderRequest` | Только поля, которые вправе выбирать пользователь; **без `actorId` / `tenantId` / роли** |
+| Результат команды | `*Response` либо `*Result` внутри Java | `StockMovementResponse`, `OrderCommandResult` | ID, подтверждённый статус и фактически сохранённые значения; не возвращать JPA Entity |
+| Чтение / карточка | `*Dto` | существующие `LocationDto`, `StockBalanceDto`, `SalesOrderDto` | Только необходимые поля по конкретному permission и правилам PII |
+| Фильтр списка | `*Search` | `LocationSearch`, `StockSearch`, `SalesOrderSearch` | Неизменяемые, ограниченные фильтры; null означает «фильтр отсутствует», если иное явно не оговорено |
+
+Не создавать классы `BaseRequest/BaseResponse`, DTO inheritance, `Map<String,Object>` для бизнес-состояний, универсальный CRUD service или собственный serialization engine. **Один DTO на один осмысленный контракт**, а не один DTO на каждую таблицу. Для внутренних сервисов допустимы небольшие локальные `record`/value object без суффикса DTO.
+
+### 21.2 Стиль Java и владение контрактами
+
+- По умолчанию **Java 21 `record`** для immutable request/response/search; `class` только при реальной необходимости. DTO не является `@Entity`, не содержит `JdbcTemplate`, lazy relation, SQL/crypto ключей или бизнес-транзакций.
+- Размещать в `kz.rm.<domain>.dto`; общую инфраструктуру заводить **только при двух фактически одинаковых контрактах**. Домены не импортируют DTO других доменов как свою persistence-модель; взаимодействие — через узкие application contracts.
+- Называть поля `camelCase` в Java/JSON, ID — `UUID`, количество/суммы — `BigDecimal` (не `double`/`float`), деньги — `amount + currency` с проверкой валюты; дата-время события — `Instant` (ISO-8601 UTC), календарная дата без времени — `LocalDate`.
+- Запрещено произвольно переводить `BigDecimal` в `double`, округлять суммы на уровне DTO или смешивать количество и стоимость. Денежное округление и единица количества принадлежат доменной методике.
+- Внешний DTO должен быть **независим от JPA Entity и enum сущности**, если публичная схема иначе станет зависеть от persistence. Внутренние существующие `LocationDto` и поисковые фильтры могут пока использовать entity enum — это **legacy internal**, а не окончательная публичная схема.
+- Простое отображение JDBC → record делается конструктором; MapStruct применять выборочно для повторяемого entity→DTO отображения (как существующий `LocationMapper`). Не добавлять обязательный mapper-слой ради двух полей.
+
+### 21.3 Доверенная идентичность и безопасность ответа
+
+- `actorId`, `userId` вызывающего и права **не принимаются из клиентского тела/фильтра**. Verified principal приходит только из доверенного IAM adapter. `tenantId` может быть идентификатором выбранного workspace в маршруте/context, но на сервере заново проверяется активное членство; он **не** становится доверенным лишь потому, что передан клиентом.
+- `locationId`, `itemId`, `customerId`, `orderId` из запроса — **ссылки на объекты, не доказательство доступа**. Домен подтверждает tenant ownership, object scope и статус перед чтением/изменением.
+- В ответах: минимум необходимых полей, **без токенов, JWT, ключей, шифроконтейнеров, внутренних хэшей, персональных данных по умолчанию и stack trace**. Права `CRM_WRITE` **не подразумевают** `CRM_PII_READ`; ответ createPerson/addContact должен отдельно пройти PII response policy до публичного API.
+- Роли, grants и effective permissions из IAM выдаются только в разрешённой области tenant. OWNER не получает скрыто доступ к клиентским PII.
+- `tenantId` допустим во **внутренних** результатах и для трассируемости, например существующем `StockBalanceDto`; в публичных ответах передавать его **только по реальной потребности**, не как способ расширить доступ.
+
+### 21.4 Валидация и контракт полей
+
+- На будущей границе HTTP: `jakarta.validation` (`@NotNull`, `@NotBlank`, `@Size`, `@DecimalMin` и т.п.) для формата/простого диапазона; **сервис повторно** проверяет существенные инварианты и разрешения. Валидация DTO не заменяет транзакцию, FK, check constraint и RBAC.
+- Trim, case normalization, email normalization выполняются по явно определённым правилам **в одном месте**; не изменять произвольно имя клиента. Неизвестное enum/status и неверный тип/UUID — ошибка, а не молчаливый default.
+- `null` и отсутствие необязательного поля эквивалентны **только** там, где так определяет контракт, например search filters. В командах **не интерпретировать `null` как «обнулить» без явного правила**. Использовать отдельные команды для существенных изменений статусов; generic PATCH пока не нужен.
+- Для изменяемых карточек, где это нужно, включать `rowVersion` в response и `expectedVersion` в update request; устаревшая версия → конфликт без перезаписи. Для складских остатков применять уже существующую транзакционную модель блокировок, не навязывать optimistic locking поверх неё.
+- Корректное `createdAt/updatedAt` задаётся сервером. **Не принимать** из клиентского request `createdAt`, `status` существующего заказа, `unitPriceSnapshot`, `reserved`, `onHand` как авторитетное состояние.
+
+### 21.5 Пагинация и ошибки: использовать штатный Spring
+
+- Существующие внутренние списки возвращают `Page<T>`/DTO с **page ≥ 0, 1 ≤ size ≤ 100**, стабильной сортировкой и обязательным `tenant_id` в SQL/JPA predicate. Не переписывать их без необходимости.
+- Для будущего стабильного публичного API, **не сериализовать JPA Entity или внутренний `PageImpl` как официальный контракт**. Достаточно простого `PageResponse<T>(items,page,size,totalElements)`; реализация только при появлении HTTP adapter. COUNT и PAGE не гарантируют единый snapshot при конкурентной записи.
+- Для HTTP-ошибок использовать **Spring `ProblemDetail` (RFC 9457)**, а не новый `ErrorDto` и не персональные exception messages. Минимум: `status`, `title`, безопасный `detail`, стабильный `code` extension и `traceId` при наличии трассировки.
+- Соглашение API после появления транспорта: **400** — неверный ввод, **401** — не аутентифицирован, **403** — нет права, **404** — объект отсутствует **или недоступен без раскрытия его существования**, **409** — недопустимый переход/конфликт версии или idempotency key, **5xx** — инфраструктурная ошибка. Не сообщать чужие `tenantId`/PII в `detail`.
+- Retry-sensitive mutating API получает один `Idempotency-Key` (HTTP header в будущем; во внутренних командах — `String idempotencyKey`). Повтор с тем же каноническим payload возвращает прежний результат; иное тело с тем же ключом — 409 без побочных эффектов. Не вводить общий распределённый idempotency сервис.
+
+### 21.6 Минимальные образцы (TARGET, не утверждение существующих REST endpoints)
+
+```java
+// INVENTORY: request body contains only business input.
+// Tenant and actor are resolved in a trusted adapter, never from this record.
+public record ReceiveStockRequest(
+        @NotNull UUID locationId,
+        @NotNull UUID itemId,
+        @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal quantity
+) {}
+
+// SALES: orderId is a validated route identifier; body only selects location.
+public record ConfirmOrderRequest(@NotNull UUID locationId) {}
+
+// CRM: do not return a fullName to a caller lacking CRM_PII_READ.
+public record CustomerSummaryDto(UUID id, String type, String displayName) {}
+
+// Only when a public API exists: a stable, minimal list projection.
+public record PageResponse<T>(List<T> items, int page, int size, long totalElements) {}
+```
+
+Это **иллюстрации контракта**, не предложение добавить четыре `record` сейчас и не замена доменным результатам уже реализованных сервисов. Реальный response проектируется по действующему permission и предметным полям. Для CRM при отсутствии `CRM_PII_READ` поле `displayName` физлица должно отсутствовать/быть безопасно замаскировано согласно утверждённой политике; **нельзя передавать plaintext и рассчитывать на скрытие на UI**.
+
+## 22. Привязка DTO к пользовательским сценариям и доработка ТЗ
+
+| Сценарий | Минимальный вход (только бизнес-данные) | Минимальный результат | Граница и реализация |
+|---|---|---|---|
+| UC-IAM-04 RBAC | roleCode, displayName; отдельно `roleId + permission`; отдельно `targetUserId + roleId` | roleId/roleCode/active либо подтверждение назначения | OWNER-only; существующие `TenantRoleService` внутренние методы, HTTP TARGET |
+| UC-IAM-05 отзыв | targetUserId + явная команда suspend/restore; tenantId проверяет trusted context | статус, время, audit reference при наличии | PR #4 до merge; не принимать actorId/role из тела |
+| UC-ORG-01 location | type, name, katoCode, addressLine | LocationDto с id/status/rowVersion | `ORGANIZATION_LOCATION_WRITE`; существующий DTO/Mapper BASE |
+| UC-CRM-01 customer | type, name, katoCode | id/type/status, **PII только после PII permission** | `CRM_WRITE` не равно PII_READ; исправление response policy требуется до HTTP |
+| UC-CRM-02 contact | customerId, name, optional email/phone | contactId + безопасное подтверждение; детальное чтение отдельно | `CRM_WRITE`/отдельно `CRM_PII_READ` |
+| UC-CRM-03 consent | contactId, granted, purpose, policyVersion, source | consentEventId | сейчас CRM_WRITE; отдельная consent policy TARGET |
+| UC-STORE-01 checkout | slug, email, lines(offerId,quantity), idempotency key | orderId/status=PLACED | цена/currency/tenant вычисляются сервером; internal AUTOORDER BASE, публичный adapter TARGET |
+| UC-INV-02 receive | locationId, itemId, quantity; idempotency key | movementId, persisted quantity, новый баланс/история при наличии | `INVENTORY_RECEIVE`; текущий internal Movement, HTTP TARGET |
+| UC-INV-03 adjust | locationId, itemId, signed delta, reason/idempotency key по утверждённому контракту | movementId, persisted delta, сохранённый остаток | `INVENTORY_ADJUST`; лимиты и approval DECISION REQUIRED |
+| UC-INV-04 balances | StockSearch(locationId,itemId,availableOnly), page,size | `Page<StockBalanceDto>` internal | `INVENTORY_STOCK_READ`, только tenant rows, не valuation |
+| UC-SALES-01 list | SalesOrderSearch(status,fromInclusive,toExclusive), page,size | `Page<SalesOrderDto>` internal | `SALES_ORDER_READ`, без buyer PII |
+| UC-SALES-02 confirm | route orderId, body locationId | orderId,status=CONFIRMED,affectedLines | `SALES_ORDER_CONFIRM + INVENTORY_RESERVE`, одна transaction |
+| UC-SALES-03 cancel | route orderId; request key только когда контракт требует | orderId,status=CANCELLED,affectedLines | `SALES_ORDER_CANCEL + INVENTORY_RELEASE` |
+| UC-SALES-04 fulfill | route orderId; подтверждение пользователя/warehouse по будущей policy | orderId,status=COMPLETED,affectedLines | `SALES_ORDER_FULFILL + INVENTORY_FULFILL`, не «оплачено» |
+| UC-FIN-01 и остальные TARGET | Только после отдельной доменной квалификации | Минимальная projection по permissions | **Не создавать пустые DTO-классы для 15 доменов заранее** |
+
+### 22.1 Критерии приёмки DTO-стандарта
+
+1. **Никакой JPA Entity в публичном request/response**; существующие internal DTO не переписывать автоматически.
+2. При подмене user/tenant/object ID — отказ без изменения БД/утечки. **Не принимать** `actorId` из пользовательских данных.
+3. `CRM_WRITE` без `CRM_PII_READ`: ни create/read/contact response, ни error не раскрывают закрытые поля. Проверять **не только GET, но и ответ мутации**.
+4. `BigDecimal` проходит round-trip без потери точности; количества и денежные суммы не смешиваются.
+5. Неизвестный статус, некорректный диапазон/страница, пустое имя, чужой ID и конфликт версии имеют предсказуемую ошибку без SQL side effect.
+6. `Page` стабилен по порядку и tenant-filter; **не утверждать** консистентность COUNT и PAGE без snapshot.
+7. Повторение mutating request с тем же idempotency key соблюдает фактический доменный контракт; другой payload не меняет ledger/order вторично.
+8. При появлении публичного адаптера — сериализационные/контрактные тесты для camelCase, `Instant`, `BigDecimal`, ошибочного payload, отсутствующих полей и sanitized ProblemDetail; **до появления адаптера не создавать фиктивные web-layer тесты**.
+
+### 22.2 Границы текущего изменения
+
+**Только стандарт и ТЗ**: `DomainPermission`, сервисы, существующие `LocationDto`/`StockBalanceDto`/`SalesOrderDto`, SQL, Liquibase и API не менять. Пакеты существующих DTO считать базой. Новые DTO создавать **внутри соответствующей функциональной вертикали R2.1/R2.2/R2.3** с её тестами и только если публичный или межсервисный контракт действительно в них нуждается.
+
+**Открытые решения неизменны:** D-01..D-10 в §19; DTO не должен молча принять вместо них бизнес-политику.
