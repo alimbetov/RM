@@ -195,7 +195,7 @@ class IamPiiPopulatedDatabaseQualificationTest {
         var qualifierWithMissingKey=new IamPiiMigrationQualificationService(
                 jdbc,missing,emailCrypto);
         assertThatThrownBy(qualifierWithMissingKey::assertReadyForPlaintextSeal)
-                .isInstanceOf(SecurityException.class,IllegalStateException.class);
+                .isInstanceOfAny(SecurityException.class,IllegalStateException.class);
         byte[] bogus=new byte[32];
         Arrays.fill(bogus,(byte)99);
         jdbc.update("""
