@@ -8,6 +8,7 @@ import kz.rm.architecture.DomainModule;
  */
 public enum DomainPermission {
     CRM_READ(DomainModule.CRM),
+    CRM_PII_READ(DomainModule.CRM),
     CRM_WRITE(DomainModule.CRM),
     ORGANIZATION_LOCATION_WRITE(DomainModule.ORG),
     INVENTORY_SETTINGS_MANAGE(DomainModule.INVENTORY);
