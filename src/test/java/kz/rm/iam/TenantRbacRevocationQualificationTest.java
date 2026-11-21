@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
@@ -368,19 +369,21 @@ class TenantRbacRevocationQualificationTest {
         var proceed=new CountDownLatch(1);
         var tx=new TransactionTemplate(manager);
         try(var pool=Executors.newFixedThreadPool(2)) {
-            var command=pool.submit(()->tx.execute(status->{
+            var command=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
                 var cached=memberships.findByOrganizationIdAndUserId(organizationId,f.staff())
                         .orElseThrow();
                 assertThat(cached.getStatus()).isEqualTo(OrganizationMembershipEntity.Status.ACTIVE);
                 loaded.countDown();
                 await(proceed);
-                try {
                     authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
                     return true;
-                } catch(SecurityException denied) {
-                    return false;
+                    });
+                } catch(SecurityException | UnexpectedRollbackException denied) {
+                    return false; // rejected command transaction is rolled back
                 }
-            }));
+            });
             assertThat(loaded.await(10,TimeUnit.SECONDS)).isTrue();
             access.suspendMember(actor(f.owner()),f.tenant(),f.staff());
             proceed.countDown();
@@ -395,18 +398,20 @@ class TenantRbacRevocationQualificationTest {
         var proceed=new CountDownLatch(1);
         var tx=new TransactionTemplate(manager);
         try(var pool=Executors.newFixedThreadPool(2)) {
-            var command=pool.submit(()->tx.execute(status->{
+            var command=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
                 var cached=workspaces.findById(f.tenant()).orElseThrow();
                 assertThat(cached.getStatus()).isEqualTo(WorkspaceEntity.Status.ACTIVE);
                 loaded.countDown();
                 await(proceed);
-                try {
                     authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
                     return true;
-                } catch(SecurityException denied) {
-                    return false;
+                    });
+                } catch(SecurityException | UnexpectedRollbackException denied) {
+                    return false; // rejected command transaction is rolled back
                 }
-            }));
+            });
             assertThat(loaded.await(10,TimeUnit.SECONDS)).isTrue();
             access.suspendTenant(actor(f.owner()),f.tenant());
             proceed.countDown();
