@@ -168,10 +168,14 @@ class IamAdminOwnerGovernanceQualificationTest {
                 .isInstanceOf(SecurityException.class);
 
         var next=transfers.requestTransfer(actor(f.owner()),f.tenant(),f.staff());
+        // Simulate an expired but structurally valid pending request.
+        // Both timestamps must preserve the DB check expires_at > requested_at.
         jdbc.update("""
-                UPDATE public.iam_owner_transfer_request SET expires_at=?
+                UPDATE public.iam_owner_transfer_request
+                SET requested_at=?,expires_at=?
                 WHERE tenant_id=?
-                """,Timestamp.from(Instant.now().minusSeconds(1)),f.tenant());
+                """,Timestamp.from(Instant.now().minusSeconds(48*3600)),
+                Timestamp.from(Instant.now().minusSeconds(24*3600)),f.tenant());
         assertThatThrownBy(()->transfers.acceptTransfer(actor(f.staff()),f.tenant(),next.id()))
                 .isInstanceOf(SecurityException.class);
         authorization.require(f.owner(),f.tenant(),DomainPermission.TENANT_RBAC_MANAGE);
