@@ -50,7 +50,7 @@ class FilesR10bQualificationTest {
     @Autowired FileStoragePort storage;
     @Autowired SyntheticScanner scanner;
     @Autowired JdbcTemplate jdbc;
-    @Value("\${rm.files.local-root:\${java.io.tmpdir}/rm-files-synthetic}") String localRoot;
+    @Value("${rm.files.local-root:${java.io.tmpdir}/rm-files-synthetic}") String localRoot;
 
     private record Setup(UUID owner,UUID uploader,UUID tenant,VerifiedActor actor) {}
     private Setup setup() {
