@@ -42,6 +42,9 @@ public class CrmCustomerEntity {
     @Column(name = "organization_label", length = 200)
     private String organizationLabel;
 
+    @Column(name = "primary_category_id")
+    private UUID primaryCategoryId;
+
     @Column(name = "region_zone_id", length = 2)
     private String regionZoneId;
 
@@ -65,6 +68,8 @@ public class CrmCustomerEntity {
     public UUID getId() { return id; }
     public Type getCustomerType() { return customerType; }
     public String getOrganizationLabel() { return organizationLabel; }
+    public UUID getPrimaryCategoryId() { return primaryCategoryId; }
+    void setPrimaryCategoryId(UUID value) { this.primaryCategoryId = value; }
     public String getRegionZoneId() { return regionZoneId; }
     public String getKatoCode() { return katoCode; }
     public Status getStatus() { return status; }
