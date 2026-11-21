@@ -23,3 +23,10 @@ rm:
     time-zone: "${RM_RETENTION_TIME_ZONE:Asia/Almaty}"
     batch-size: ${RM_RETENTION_BATCH_SIZE:500}
     max-batches: ${RM_RETENTION_MAX_BATCHES:10}
+
+# First global administrator: off by default, operator-only. Keep the 256-bit
+# setup secret out of files/logs; only SHA-256 hex is exposed as configuration.
+  iam:
+    bootstrap:
+      enabled: ${RM_IAM_BOOTSTRAP_ENABLED:false}
+      token-sha256: "${RM_IAM_BOOTSTRAP_TOKEN_SHA256:}"
