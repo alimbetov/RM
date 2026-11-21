@@ -1,6 +1,8 @@
 package kz.rm.security.kms;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -42,7 +44,9 @@ public class TenantKeyEntity {
     @Column(name = "last_scan_c") private Instant lastScanC;
     @Column(name = "wrapping_key_id_c", length = 128) private String wrappingKeyIdC;
 
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "active_slot", nullable = false, length = 1) private String activeSlot;
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "ready_slot", length = 1) private String readySlot;
     @Column(name = "next_generation", nullable = false) private long nextGeneration;
     @Column(name = "rotate_after", nullable = false) private Instant rotateAfter;
