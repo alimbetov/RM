@@ -74,3 +74,19 @@ CREATE TABLE crm_pii.contact_secret_p00
 - PII plaintext never persisted in business, logs, outbox, audit, cache keys or dashboard materialization.
 - KMS continues to use workspace-scoped random DEKs, independent of any territory code. Rotation/migration remain gated as previously.
 - HASH partitioning and logical split are **architecture design only** until implemented, migrated and qualified in PostgreSQL. H2 smoke is not evidence of native PostgreSQL partition behavior.
+
+
+## Decision 5: KATO regional zoning and region-local client operation search
+
+**Product decision confirmed:** a separate `region_zone_id VARCHAR(2)` may be derived from the first two digits of a KATO code to support **regional access paths**. `workspace_id UUID` remains independent, is never overwritten with the geographic prefix, and remains the tenant identity for IAM/KMS. Region zone is a non-secret derived attribute.
+
+- For codes like `110000000` → `11`, `433200000` → `43`, the two-digit zone must be cross-checked against a complete authoritative KATO dataset before global production adoption. No inference of a missing KATO ancestor from a prefix.
+- `org_location` can carry `region_zone_id` as a validated derived field, but one organization can span many zones. The operation's zone is **its location at event time**, not merely the customer's registered address; retain snapshots on immutable business events when territories or store assignments change.
+- Use regional zoning **only for high-volume geographically scoped operations** such as sales, orders, service visits, warehouse movements and regional analytics. In each row keep `workspace_id`, `region_zone_id`, `kato_code`, `location_id`, `customer_id`, `operation_type` and `occurred_at` where appropriate.
+- Region-local query predicates must always include both `workspace_id` (authorization) and `region_zone_id` (partition pruning). Candidate index: `(workspace_id, region_zone_id, customer_id, occurred_at DESC)`; confirm via `EXPLAIN (ANALYZE, BUFFERS)` and realistic distributions.
+- Candidate physical hierarchy: `PARTITION BY LIST(region_zone_id)`, optionally `PARTITION BY HASH(workspace_id)` in each regional child **only after benchmark**. This is NOT automatic DDL for each tenant/region. Partition count, DDL, PK/UNIQUE including partition keys, cross-tenant FK integrity, fallback/default partition, reassignment/migration, lock contention and maintenance overhead must be qualified first.
+- **Geographically nearby** means administrative proximity by default (same province/district); the prefix cannot determine road distance or a radius in km. Genuine nearest-branch/radius search requires validated coordinates and a separate spatial index (PostGIS). **Similar customer transactions** (items, amounts, time patterns) require transactional indexes or analytical/search features and are not guaranteed by region partitioning.
+- If most queries are `workspace_id + customer_id` without region, regional LIST partitions may *worsen* performance by scattering a customer's activity across partitions. Keep an unpartitioned or hash-only baseline and compare regional and customer-centric workloads before selecting storage topology.
+- **Qualification cases:** overlapping tenant UUIDs in same region never leak; multi-region organization history is complete; same customer in multiple regions; missing/obsolete KATO; region reassignment without changing historical snapshots; customer-by-date search without region; region filtered search uses partition pruning; p95/p99 benchmarks across 1/5/20 million operations and multiple pods.
+
+**Implementation status:** architectural decision only. No `region_zone_id` column or regional partition DDL is included in current RM source; do not report as implemented.
