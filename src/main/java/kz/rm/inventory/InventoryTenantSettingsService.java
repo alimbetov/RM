@@ -1,6 +1,7 @@
 package kz.rm.inventory;
 
 import kz.rm.iam.TenantAuthorization;
+import kz.rm.iam.DomainPermission;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -125,7 +126,7 @@ public class InventoryTenantSettingsService {
     }
 
     private void authorize(UUID actor,UUID tenant) {
-        authorization.requireOrganizationWriter(actor,tenant);
+        authorization.require(actor,tenant,DomainPermission.INVENTORY_SETTINGS_MANAGE);
     }
 
     private Settings load(UUID tenant,boolean lock) {
