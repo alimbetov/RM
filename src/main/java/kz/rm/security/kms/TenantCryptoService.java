@@ -21,7 +21,7 @@ import java.util.UUID;
  * Rotation/revocation remains disabled until in-flight transaction fencing is qualified.
  */
 @Service
-public class TenantCryptoService {
+public class TenantCryptoService implements TenantCryptoPort {
     private final TenantKeyService keys;
     private final KeyWrappingService wrapping;
     private final SecureRandom random = new SecureRandom();
@@ -33,6 +33,7 @@ public class TenantCryptoService {
         this.wrapping = wrapping;
     }
 
+    @Override
     public EncryptedValue encrypt(CryptoContext context, String plaintext) {
         if (context == null || plaintext == null) throw new IllegalArgumentException("Context and plaintext required");
         var active = keys.active(context.tenantId());
@@ -51,6 +52,7 @@ public class TenantCryptoService {
         }
     }
 
+    @Override
     public String decrypt(CryptoContext context, EncryptedValue encrypted) {
         if (context == null || encrypted == null) throw new IllegalArgumentException("Context and envelope required");
         try {
