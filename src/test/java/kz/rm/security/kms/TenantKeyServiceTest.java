@@ -3,6 +3,8 @@ package kz.rm.security.kms;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.context.TestPropertySource;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
@@ -15,6 +17,7 @@ class TenantKeyServiceTest {
     @Autowired TenantKeyService keys;
     @Autowired TenantKeyRepository repository;
     @Autowired TenantCryptoService crypto;
+    @Autowired JdbcTemplate jdbc;
 
     @Test
     void provisionsOneRowWithThreeSlots() {
@@ -50,6 +53,23 @@ class TenantKeyServiceTest {
         tampered[0] ^= 1;
         var bad = new EncryptedValue(1, a.keyGeneration(), a.nonce(), tampered);
         assertThatThrownBy(() -> crypto.decrypt(c, bad)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @Transactional
+    void doesNotReplaceLegacyKeyWithNewGeneration() {
+        UUID tenant = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO security.tenant_key (
+                  tenant_id, version, wrapped_key, status, created_at, rotate_after,
+                  wrapping_key_id, active_slot, row_version)
+                VALUES (?, 1, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                        'root-v1', 1, 0)
+                """, tenant, new byte[] {1, 2, 3});
+        assertThatThrownBy(() -> keys.provision(tenant))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Legacy tenant keys");
+        assertThat(repository.findById(tenant)).isEmpty();
     }
 
     @Test
