@@ -36,24 +36,48 @@ class FileRecoveryService {
                          long size,String sha256) {}
 
 
-    /** A bounded, explicit tenant-scoped maintenance operation. No global scans. */
-    record BatchResult(int examined,int cleaned,int quarantined,int busy) {}
+    /** Caller persists the last cursor; the next run can continue without OFFSET drift. */
+    record BatchResult(int examined,int cleaned,int quarantined,int busy,
+                       Instant nextCreatedAt,UUID nextFileId) {}
+    private record Candidate(UUID id,Instant createdAt) {}
     BatchResult reconcileBatch(UUID tenant,int maxFiles) throws IOException {
-        if(tenant==null || maxFiles<1 || maxFiles>100)
-            throw new IllegalArgumentException("Tenant and batch size 1..100 required");
-        java.util.List<UUID> ids=jdbc.query("""
-                SELECT id FROM crm.file_object
+        return reconcileBatch(tenant,null,null,maxFiles);
+    }
+    BatchResult reconcileBatch(UUID tenant,Instant afterCreatedAt,UUID afterId,
+                               int maxFiles) throws IOException {
+        if(tenant==null || maxFiles<1 || maxFiles>100
+                || (afterCreatedAt==null)!=(afterId==null))
+            throw new IllegalArgumentException("Tenant, consistent cursor and batch size 1..100 required");
+        java.util.List<Candidate> rows;
+        if(afterCreatedAt==null) {
+            rows=jdbc.query("""
+                SELECT id,created_at FROM crm.file_object
                  WHERE tenant_id=? AND state IN ('STAGED','AVAILABLE','REJECTED')
                  ORDER BY created_at,id LIMIT ?
-                """,(rs,n)->rs.getObject(1,UUID.class),tenant,maxFiles);
+                """,(rs,n)->new Candidate(rs.getObject(1,UUID.class),
+                    rs.getTimestamp(2).toInstant()),tenant,maxFiles);
+        } else {
+            rows=jdbc.query("""
+                SELECT id,created_at FROM crm.file_object
+                 WHERE tenant_id=? AND state IN ('STAGED','AVAILABLE','REJECTED')
+                   AND (created_at>? OR (created_at=? AND id>?))
+                 ORDER BY created_at,id LIMIT ?
+                """,(rs,n)->new Candidate(rs.getObject(1,UUID.class),
+                    rs.getTimestamp(2).toInstant()),
+                    tenant,Timestamp.from(afterCreatedAt),Timestamp.from(afterCreatedAt),
+                    afterId,maxFiles);
+        }
         int cleaned=0,quarantined=0,busy=0;
-        for(UUID id:ids) {
-            Result result=reconcileOne(tenant,id);
+        for(Candidate candidate:rows) {
+            Result result=reconcileOne(tenant,candidate.id());
             cleaned+=result.removed();
             if("QUARANTINED".equals(result.outcome()))quarantined++;
             if("BUSY".equals(result.outcome()))busy++;
         }
-        return new BatchResult(ids.size(),cleaned,quarantined,busy);
+        Candidate last=rows.isEmpty()?null:rows.getLast();
+        return new BatchResult(rows.size(),cleaned,quarantined,busy,
+                last==null?afterCreatedAt:last.createdAt(),
+                last==null?afterId:last.id());
     }
 
     Result reconcileOne(UUID tenant,UUID fileId) throws IOException {
