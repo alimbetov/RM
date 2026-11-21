@@ -1,7 +1,7 @@
 # RM-PLATFORM-STANDARD-R2 — единый стандарт CRM-платформы
 
-**Версия:** R2.2 (R2.0 + пользовательские сценарии + базовый DTO-контракт) · **Базовая версия R2.0:** PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae` · **Сценарии R2.1:** PR #5, merge `378dba6ccbd79687ea979dab2ad952ef2fbbbd51` · **DTO R2.2:** становится нормативным после merge отдельного документационного PR. Статус описания не означает реализацию API или production.
-**Источник фактической реализации:** код и точный SHA `main`, а не версия ТЗ. Базовый внедрённый R2-код: PR #2; изменения IAM из [PR #4](https://github.com/alimbetov/RM/pull/4) на дату ревизии — **кандидат**, не часть `main` до merge.
+**Версия:** R2.2 (R2.0 + пользовательские сценарии + базовый DTO-контракт) · **Базовая версия R2.0:** PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae` · **Сценарии R2.1:** PR #5, merge `378dba6ccbd79687ea979dab2ad952ef2fbbbd51` · **DTO R2.2:** включён в `main` через PR #6 (`27373aca6bdb9a36396e7396ca411bf30b8af362`). Статус описания не означает реализацию API или production.
+**Источник фактической реализации:** код и точный SHA `main`, а не версия ТЗ. Базовый внедрённый R2-код: PR #2; IAM hardening из [PR #4](https://github.com/alimbetov/RM/pull/4) включён в `main` (`bb6baf3392943525c29cc49232509e47591a54dd`). Отдельное независимое security-одобрение и production admission — **HOLD**.
 **Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`.
 
 ## 1. Назначение и продукт
@@ -26,7 +26,7 @@ RM — **CRM-first business platform**: единая рабочая среда �
 
 | Контекст | Владеет данными и поведением | R2-доставка |
 |---|---|---|
-| IAM | global identity, account status, membership, tenant roles, grants | Ядро в main; lifecycle hardening PR #4 до merge — кандидат |
+| IAM | global identity, account status, membership, tenant roles, grants | Ядро и IAM lifecycle в main; независимый production security sign-off HOLD |
 | ORG | организация, подразделения/локации | Базовые сервисы и чтение реализованы |
 | GEO | справочник КАТО/территорий | Справочные контракты, реальная полнота определяется тестами |
 | FILES | метаданные и доступ к файлам, хранение | Расширение по отдельной вертикали |
@@ -78,7 +78,7 @@ CRM решает видимость клиентов/контактов и ра�
 
 Команда изменяющего сервиса получает транзакционный допуск через `TenantAuthorization.requireForCommand`; политика блокировок PostgreSQL должна исключать пересечение зафиксированного отзыва с уже допущенной изменяющей командой. Тот же порядок блокировок обязателен для изменения ролей, membership, account и workspace; отказ/rollback проверяются двухсоединительными PG-тестами, включая stale JPA state.
 
-В `main` доказан прежде всего tenant/RBAC role barrier; account/member/tenant lifecycle, actor-row locking и проверка stale JPA — **изменения PR #4, не считать доставленными до его merge**. Восстановление заблокированной организации — отдельный доверенный admin-path, а не обход всех обычных команд.
+В `main` реализованы tenant/RBAC role barrier, account/member/tenant lifecycle, actor-row locking и защита от stale JPA из PR #4. Это квалифицированное внутреннее ядро, **не** реальная HTTP/OIDC-граница и не production security approval. Восстановление заблокированной организации — отдельный доверенный admin-path, а не обход всех обычных команд.
 
 ## 6. Доменные границы и пользовательский процесс
 
@@ -111,7 +111,7 @@ CRM решает видимость клиентов/контактов и ра�
 
 Для **каждой** вертикали: работающий сценарий сотрудника, actor/tenant/permission, проверка конкретного объекта, идемпотентность там где нужно, транзакция, журнал, безопасное чтение результата и PostgreSQL отрицательные/конкурентные испытания. **Нельзя** выводить production-ready из `mvn test` или существования пакета.
 
-**На дату ревизии:** PR #2 и документационный PR #3 слиты в `main`; PR #4 — IAM security hardening, **ещё не слит**. Публичный OIDC/BFF, least-privilege, миграции заполненной базы и production gate остаются HOLD.
+**На дату ревизии:** PR #2 и документационный PR #3 слиты в `main`; PR #4 — IAM security hardening, **слит в main**. Публичный OIDC/BFF, least-privilege, миграции заполненной базы и production gate остаются HOLD.
 
 ## 9. Порядок разработки R2
 
@@ -140,7 +140,7 @@ CRM решает видимость клиентов/контактов и ра�
 
 Этот раздел определяет **ожидаемое поведение продукта**, а не перечень уже готовых экранов. Каждый сценарий одновременно является входом для ТЗ доменного сервиса, отрицательных тестов, интеграционной приёмки и будущего интерфейса. **Не строить** отдельный workflow-engine, ACL-framework или новые API только потому, что сценарий документирован.
 
-**Статусы:** **BASE** — существующее внутреннее ядро в `main` с ограничениями, а не готовый пользовательский E2E; **PR4** — предложено в IAM PR #4, до merge не считать базой; **TARGET** — утверждённый целевой пользовательский результат, разработка и приёмка ещё требуются; **DECISION REQUIRED** — бизнес-политика намеренно не утверждена и не должна «додумываться» в коде.
+**Статусы:** **BASE** — существующее внутреннее ядро в `main` с ограничениями, а не готовый пользовательский E2E; **PR4** — историческая маркировка IAM-кандидата; после merge PR #4 считать его внутренним **BASE** (без HTTP/production); **TARGET** — утверждённый целевой пользовательский результат, разработка и приёмка ещё требуются; **DECISION REQUIRED** — бизнес-политика намеренно не утверждена и не должна «додумываться» в коде.
 
 **Общий минимальный шаблон приёмки для каждого сценария:**
 1. **Actor/tenant:** источник проверенной идентичности, выбранная организация, необходимые permissions и при необходимости ограничение конкретного объекта.
@@ -209,14 +209,14 @@ CRM решает видимость клиентов/контактов и ра�
 - **Отказы:** назначение себе, grant TENANT_RBAC_MANAGE, outsider, чужая роль, несуществующий permission, пустая конфигурация, duplicate grant; повтор создания одной и той же роли по code не создаёт дубликат.
 - **Приёмка:** role/permission/assignment isolation, включение, revoke, disable/enable роли, audit; существующие сервисы BASE, пользовательский UI — TARGET.
 
-### UC-IAM-05 — Блокировка, отзыв прав и восстановление [BASE role revoke; PR4 lifecycle; TARGET recovery]
+### UC-IAM-05 — Блокировка, отзыв прав и восстановление [BASE role revoke + lifecycle; TARGET recovery]
 
 **Actor:** OWNER для доступа к своей организации; PLATFORM_ADMIN для глобального аккаунта.
 
 - **Шаги:** отозвать grant/роль **либо** приостановить membership/tenant/account → открыть новую команду → проверить DENY → восстановить статус только в разрешённом административном пути → повторно вычислить текущие permissions.
 - **После:** уже допущенная транзакция и транзакция отзыва сериализованы в PostgreSQL; после commit отзыва новая команда не проходит; события отзыва/восстановления неизменяемы.
 - **Отказы:** одновременный revoke/command, stale JPA entity, восстановление учётной записи без полномочия, самоблокировка владельца, блокировка последнего OWNER/администратора, попытка доступа к SUSPENDED tenant.
-- **Приёмка:** обе очередности двух реальных PG-транзакций, rollback-on-deny, account/member/tenant и назначенные роли; расширенный код находится в **PR #4 до merge**. Transfer ownership, emergency recovery и законная деактивация администраторов — **DECISION REQUIRED**, не импровизировать.
+- **Приёмка:** обе очередности двух реальных PG-транзакций, rollback-on-deny, account/member/tenant и назначенные роли; расширенный внутренний код реализован в **merged PR #4**, однако независимый production sign-off отсутствует. Transfer ownership, emergency recovery и законная деактивация администраторов — **DECISION REQUIRED**, не импровизировать.
 
 ### UC-ORG-01 — Создание и поиск бизнес-локации [BASE; lifecycle TARGET]
 
@@ -442,12 +442,12 @@ CRM решает видимость клиентов/контактов и ра�
 **Проверено по исходникам main на 2026-11-21:** `TenantRoleService`, `TenantAuthorization`, `CrmCustomerService`, `AutoOrderService`, `SalesInventoryCommandService`, `InventoryAuthorizedCommandService`, `StockBalanceQueryService`, `OrganizationLocationService`, `DomainPermission`. Положительные возможности помечены BASE **только** при наличии соответствующего internal Java сервиса. Утверждение документа не изменяет deployed runtime.
 
 **Выявленные расхождения, требующие отдельной разработки, а не документального переименования:**
-- IAM member/account/tenant status, transactional revoke и stale JPA admission — PR #4, до merge не main.
+- IAM member/account/tenant status, transactional revoke и stale JPA admission включены из PR #4 в `main`; реальные HTTP/OIDC/BFF и независимое security approval остаются HOLD.
 - CRM потребует явной политики read-after-create PII и ответственностей/воронки; contact consent в `main` использует общий CRM_WRITE, а не специально согласованный CONSENT permission.
 - Catalog publish/price management, полноценная пользовательская карточка заказа, складская нулевая инициализация и подробная история движения не считаются принятыми E2E.
 - Реальный OIDC/BFF/public checkout email, абонентские лимиты, платежи, доставка и междоменные уведомления — отдельные вертикали и production HOLD.
 
-**Последовательность:** PR #4 security gate → R2.1 Inventory → R2.2 Sales → R2.3 CRM → доверенные adapters/покупательский E2E → остальные домены по приоритету. Переход между этапами — только с тестами user journey, отрицательными сценариями и доказательством инвариантов.
+**Последовательность:** внутреннее IAM ядро merged, production security gate HOLD → R2.1 Inventory → R2.2 Sales → R2.3 CRM → доверенные adapters/покупательский E2E → остальные домены по приоритету. Переход между этапами — только с тестами user journey, отрицательными сценариями и доказательством инвариантов.
 
 **Нормативное правило:** если сценарий записан здесь, но сервис или тест отсутствует, его статус — TARGET, а не готовая функция. Для каждого реализуемого UC планировать только нужные методы, миграции и тесты, без дополнительного архитектурного слоя.
 
@@ -542,7 +542,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 | Сценарий | Минимальный вход (только бизнес-данные) | Минимальный результат | Граница и реализация |
 |---|---|---|---|
 | UC-IAM-04 RBAC | roleCode, displayName; отдельно `roleId + permission`; отдельно `targetUserId + roleId` | roleId/roleCode/active либо подтверждение назначения | OWNER-only; существующие `TenantRoleService` внутренние методы, HTTP TARGET |
-| UC-IAM-05 отзыв | targetUserId + явная команда suspend/restore; tenantId проверяет trusted context | статус, время, audit reference при наличии | PR #4 до merge; не принимать actorId/role из тела |
+| UC-IAM-05 отзыв | targetUserId + явная команда suspend/restore; tenantId проверяет trusted context | статус, время, audit reference при наличии | PR #4 merged как internal port; не принимать actorId/role из тела; внешний admission HOLD |
 | UC-ORG-01 location | type, name, katoCode, addressLine | LocationDto с id/status/rowVersion | `ORGANIZATION_LOCATION_WRITE`; существующий DTO/Mapper BASE |
 | UC-CRM-01 customer | type, name, katoCode | id/type/status, **PII только после PII permission** | `CRM_WRITE` не равно PII_READ; исправление response policy требуется до HTTP |
 | UC-CRM-02 contact | customerId, name, optional email/phone | contactId + безопасное подтверждение; детальное чтение отдельно | `CRM_WRITE`/отдельно `CRM_PII_READ` |
@@ -573,3 +573,6 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 **Только стандарт и ТЗ**: `DomainPermission`, сервисы, существующие `LocationDto`/`StockBalanceDto`/`SalesOrderDto`, SQL, Liquibase и API не менять. Пакеты существующих DTO считать базой. Новые DTO создавать **внутри соответствующей функциональной вертикали R2.1/R2.2/R2.3** с её тестами и только если публичный или межсервисный контракт действительно в них нуждается.
 
 **Открытые решения неизменны:** D-01..D-10 в §19; DTO не должен молча принять вместо них бизнес-политику.
+
+
+**Git workflow (2026-11-21):** `main` — проверенная интеграционная ветка; `base_dev` — единственная постоянная ветка разработки. H2 и PostgreSQL запускаются на push в обе ветки и на PR. Допуск изменений в `main` — по PR с review и точным CI. Архивные ветки не считаются активной разработкой.
