@@ -130,3 +130,25 @@ Store settings are one-per-seller-tenant, unpartitioned master data with unique 
 7. **Приёмочные сценарии:** email-only checkout создаёт заказ без customer/contact; повтор с тем же ключом идемпотентен; существующий email не даёт доступа без доказательства владения; заполнение/редактирование профиля позднее не изменяет историческую цену и ID заказа; отсутствие имени/телефона не прерывает самовывоз.
 
 **IAM boundary:** текущая `iam_user_account` использует `display_name NOT NULL` и `email_normalized` plaintext. Реализация AUTOORDER требует отдельной квалифицированной миграции IAM identity/verification и privacy, не использовать это старое поле для хранения открытого пользовательского email из автозаказа без пересмотра требований к шифрованию.
+
+## 10. Фактический статус первой реализации (2026-11-21)
+
+**Выполнено в ветке (code, не product-ready):**
+- Liquibase `rm:0014-autoorder-r1-foundation`: `iam_email_identity`, `iam_email_verification_challenge`, `crm.store_front`, `crm.store_offer` (временная серверная витринная цена до CATALOG), `crm.sales_order`, `crm.sales_order_line`, `crm.sales_checkout_receipt`, `crm.sales_order_status_event`.
+- `EmailIdentityCrypto`: независимые global IAM AES-256-GCM / HMAC-SHA256 keys из secrets конфигурации, email-only normalization, PII не сохраняется plaintext в новых identity таблицах.
+- `AutoOrderService`: серверный расчёт по offer, email-only создание `PENDING` пользователя, одноразовый email challenge, order placement + idempotency receipt, verified buyer history. CRM карточка и контакты **не создаются** автоматически.
+- Existing IAM legacy `email_normalized` account lookup с повторным использованием стабильного `user_id`, но **без** доступа/авторизации до нового подтверждения email.
+- H2 и PostgreSQL qualification tests (включая existing account и повторный заказ) через CI; фактический результат последнего коммита проверять перед заявлением GREEN.
+
+**Не реализовано / blocked for public exposure:**
+1. SMTP/email provider и **durable transactional outbox**, генерация/доставка корректных ссылок подтверждения. Текущий внутренний `CheckoutResult` содержит secret verification payload **для доверенного уровня приложения**; категорически запрещено возвращать его через публичный HTTP API или логировать.
+2. Реальный OIDC/PKCE login/account claim для auto-provisioned пользователей и authenticated principal extraction. Подтверждение email само по себе ещё не заменяет полноценную аутентификацию.
+3. Anti-abuse rate-limit, account enumeration checks, CAPTCHA, per-email attempt limits; durable retry/outbox on mail-provider failures.
+4. Конкурентный multi-pod find-or-create/idempotency winner/loser/retry semantics и fencing; уникальные ключи предотвращают двойной commit при конфликте, но вызывающий слой обязан корректно обрабатывать гонки и повторять транзакцию.
+5. CATALOG price publication / SKU / inventory / stock reservation, доставка, платежи, legal terms and consent revision snapshots, buyer address.
+6. Рабочий REST API и UI витрины/кабинета; **не запускать публичный checkout** до завершения пунктов 1–5.
+7. Добровольный buyer profile/contact CRUD, поле `preferred_locale`, encrypted PII for optional profile, optional delivery recipient per order.
+
+**Доменное правило необязательного профиля:** `iam_user_account` создаётся по email; профиль покупателя ведётся отдельно и может вообще отсутствовать. Вне checkout пользователь позже может добавить `display_name`, `phone`, дополнительные контакты и адреса; они не участвуют в hash/idempotency и их отсутствие не препятствует `PLACED`.
+
+**Следующая безопасная вертикаль:** AUTOORDER-R1.1 — durable verification email outbox + sender, OIDC account claim, suspended/deleted account checks и rate limiting, затем REST с чёткой границей публичного ответа и Q/A по многоподовой идемпотентности.
