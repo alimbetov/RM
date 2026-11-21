@@ -1,14 +1,18 @@
 package kz.rm.security.kms;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.UUID;
 
-/** Phase R1.6: provisioning only. Rotation is explicitly disabled until admission gate is implemented. */
+/** Provisioning is idempotent across pods; rotation remains disabled. */
 @Service
 @RequiredArgsConstructor
 public class TenantKeyService {
@@ -16,23 +20,47 @@ public class TenantKeyService {
     private final TenantKeyRepository repository;
     private final KeyWrappingService wrapping;
     private final JdbcTemplate jdbc;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional
+    /**
+     * Two contenders may generate different provisional keys; only the committed
+     * winner's wrapped DEK persists. On PK conflict the losing transaction rolls
+     * back and reads the winning row in a fresh transaction.
+     *
+     * This standalone operation uses REQUIRES_NEW; tenant onboarding must not
+     * assume atomicity with a separate service's registration transaction.
+     */
     public UUID provision(UUID tenantId) {
         if (tenantId == null) throw new IllegalArgumentException("tenantId required");
-        if (repository.existsById(tenantId)) return tenantId;
-        // Do not silently generate an unrelated v1 when ciphertext uses the legacy key table.
-        Long legacy = jdbc.queryForObject(
-                "select count(*) from security.tenant_key where tenant_id = ?",
-                Long.class, tenantId);
-        if (legacy != null && legacy > 0) {
-            throw new IllegalStateException("Legacy tenant keys require an explicitly qualified migration");
+        try {
+            return inNewTransaction(() -> {
+                if (repository.existsById(tenantId)) return tenantId;
+                Long legacy = jdbc.queryForObject(
+                        "select count(*) from security.tenant_key where tenant_id = ?",
+                        Long.class, tenantId);
+                if (legacy != null && legacy > 0) {
+                    throw new IllegalStateException(
+                            "Legacy tenant keys require an explicitly qualified migration");
+                }
+                var dek = wrapping.generateTenantKey();
+                var wrapped = wrapping.wrap(tenantId, 1L, dek);
+                repository.saveAndFlush(
+                        TenantKeyEntity.first(tenantId, wrapped, ROOT_KEY_ID, Instant.now()));
+                return tenantId;
+            });
+        } catch (DataIntegrityViolationException conflict) {
+            // Never catch arbitrary failures as proof that provisioning succeeded.
+            return inNewTransaction(() -> {
+                if (!repository.existsById(tenantId)) throw conflict;
+                return tenantId;
+            });
         }
-        // PK also rejects concurrent duplicate provisioning; caller may retry in a new transaction.
-        var dek = wrapping.generateTenantKey();
-        var wrapped = wrapping.wrap(tenantId, 1L, dek);
-        repository.saveAndFlush(TenantKeyEntity.first(tenantId, wrapped, ROOT_KEY_ID, Instant.now()));
-        return tenantId;
+    }
+
+    private UUID inNewTransaction(java.util.function.Supplier<UUID> callback) {
+        var template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template.execute(status -> callback.get());
     }
 
     @Transactional(readOnly = true)
@@ -51,8 +79,9 @@ public class TenantKeyService {
         return slot;
     }
 
-    /** Fail closed while transaction/admission and archive restore gates are not implemented. */
+    /** Fail closed until the distributed generation/epoch admission gate is tested. */
     public void rotate(UUID tenantId) {
-        throw new UnsupportedOperationException("Rotation requires KMS-R1.8 admission and recovery qualification");
+        throw new UnsupportedOperationException(
+                "Rotation requires distributed fencing and recovery qualification");
     }
 }
