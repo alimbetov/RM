@@ -1725,7 +1725,7 @@ CREATE TABLE crm.consent_request_lock (
     CONSTRAINT ck_crm_consent_lock_bucket CHECK (bucket >= 0 AND bucket < 64)
 );
 INSERT INTO crm.consent_request_lock(bucket)
- SELECT n FROM (
+ SELECT ones.n + multiples.tens FROM (
     SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3
  ) ones CROSS JOIN (
     SELECT 0 AS tens UNION ALL SELECT 4 UNION ALL SELECT 8 UNION ALL SELECT 12
