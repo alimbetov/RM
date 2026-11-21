@@ -19,7 +19,7 @@ public class AuthenticatedFilesAttachments {
         if(actor==null)throw new SecurityException("Verified actor required");
         service.detachCustomer(actor.userId(),tenant,attachmentId);
     }
-    public List<FileAttachmentService.AttachmentSummary> listCustomer(
+    public List<FileAttachmentSummary> listCustomer(
             VerifiedActor actor,UUID tenant,UUID customerId,int limit) {
         if(actor==null)throw new SecurityException("Verified actor required");
         return service.listCustomer(actor.userId(),tenant,customerId,limit);
