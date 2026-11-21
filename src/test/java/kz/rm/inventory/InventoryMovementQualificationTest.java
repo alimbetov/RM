@@ -81,6 +81,31 @@ class InventoryMovementQualificationTest {
                 "stock-req-001",BigDecimal.ONE)).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test void receiptWriteOffAndCorrectionCarryImmutableReasons() {
+        var p=position();
+        var receipt=movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-receipt-001",new BigDecimal("4"),InventoryMovementService.Reason.RECEIPT);
+        assertThat(receipt.after()).isEqualByComparingTo("14");
+        var writeOff=movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-writeoff-001",new BigDecimal("-2"),InventoryMovementService.Reason.WRITE_OFF);
+        assertThat(writeOff.after()).isEqualByComparingTo("12");
+        var correction=movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-correct-001",new BigDecimal("-1"),InventoryMovementService.Reason.CORRECTION);
+        assertThat(correction.after()).isEqualByComparingTo("11");
+        assertThat(jdbc.queryForObject("""
+            SELECT reason_code FROM crm.inv_stock_movement WHERE tenant_id=? AND id=?
+            """,String.class,p.tenant(),correction.id())).isEqualTo("CORRECTION");
+        assertThatThrownBy(()->movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-correct-001",new BigDecimal("-1"),InventoryMovementService.Reason.WRITE_OFF))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-reverse-001",BigDecimal.ONE,InventoryMovementService.Reason.WRITE_OFF))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->movements.adjust(p.tenant(),p.location(),p.item(),
+                "stock-reverse-002",new BigDecimal("-1"),InventoryMovementService.Reason.RECEIPT))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void cannotReduceBelowReservedOrCrossTenantReference() {
         var p=position();
         assertThatThrownBy(()->movements.adjust(p.tenant(),p.location(),p.item(),
