@@ -357,4 +357,61 @@ class TenantRbacRevocationQualificationTest {
         }
     }
 
+
+    @Test void cachedJpaMembershipCannotAuthorizeAfterCommittedSuspension() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        UUID organizationId=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,f.tenant());
+        var loaded=new CountDownLatch(1);
+        var proceed=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                var cached=memberships.findByOrganizationIdAndUserId(organizationId,f.staff())
+                        .orElseThrow();
+                assertThat(cached.getStatus()).isEqualTo(OrganizationMembershipEntity.Status.ACTIVE);
+                loaded.countDown();
+                await(proceed);
+                try {
+                    authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                    return true;
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            }));
+            assertThat(loaded.await(10,TimeUnit.SECONDS)).isTrue();
+            access.suspendMember(actor(f.owner()),f.tenant(),f.staff());
+            proceed.countDown();
+            assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+    }
+
+    @Test void cachedJpaWorkspaceCannotAuthorizeAfterCommittedSuspension() throws Exception {
+        pgOnly();
+        Fixture f=setup();
+        var loaded=new CountDownLatch(1);
+        var proceed=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                var cached=workspaces.findById(f.tenant()).orElseThrow();
+                assertThat(cached.getStatus()).isEqualTo(WorkspaceEntity.Status.ACTIVE);
+                loaded.countDown();
+                await(proceed);
+                try {
+                    authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                    return true;
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            }));
+            assertThat(loaded.await(10,TimeUnit.SECONDS)).isTrue();
+            access.suspendTenant(actor(f.owner()),f.tenant());
+            proceed.countDown();
+            assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+    }
+
 }
