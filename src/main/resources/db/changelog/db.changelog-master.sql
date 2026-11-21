@@ -1239,3 +1239,65 @@ BEFORE UPDATE OR DELETE ON crm.inv_reservation_event
 FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_reservation_event_mutation();
 --rollback DROP TRIGGER trg_inv_reservation_event_immutable ON crm.inv_reservation_event;
 --rollback DROP FUNCTION crm.inv_reject_reservation_event_mutation();
+
+
+--changeset rm:0029-inventory-tenant-valuation-settings
+-- One tenant configuration; accounting valuation must reference an approved immutable revision.
+-- Unapproved/new tenants have NO active cost method (fail closed for cost posting).
+CREATE TABLE crm.inv_tenant_setting (
+ tenant_id UUID NOT NULL PRIMARY KEY,
+ picking_strategy VARCHAR(20) NOT NULL DEFAULT 'FIFO',
+ auto_reserve_on_confirm BOOLEAN NOT NULL DEFAULT FALSE,
+ allow_negative_stock BOOLEAN NOT NULL DEFAULT FALSE,
+ active_policy_version_id UUID,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_inv_setting_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT ck_inv_setting_pick CHECK(picking_strategy IN ('FIFO','FEFO','MANUAL')),
+ CONSTRAINT ck_inv_setting_no_negative CHECK(allow_negative_stock=FALSE),
+ CONSTRAINT ck_inv_setting_row_version CHECK(row_version>=0)
+);
+CREATE TABLE crm.inv_cost_policy_version (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ revision_no INTEGER NOT NULL,
+ valuation_method VARCHAR(40) NOT NULL,
+ functional_currency CHAR(3) NOT NULL,
+ effective_from TIMESTAMP WITH TIME ZONE NOT NULL,
+ approved_by UUID NOT NULL,
+ approved_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_inv_cost_policy_version PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_inv_cost_policy_setting FOREIGN KEY(tenant_id)
+   REFERENCES crm.inv_tenant_setting(tenant_id),
+ CONSTRAINT fk_inv_cost_policy_approver FOREIGN KEY(approved_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uk_inv_cost_policy_revision UNIQUE(tenant_id,revision_no),
+ CONSTRAINT ck_inv_cost_policy_revision CHECK(revision_no>0),
+ CONSTRAINT ck_inv_cost_policy_method CHECK(valuation_method IN
+   ('FIFO','MOVING_WEIGHTED_AVERAGE','SPECIFIC_IDENTIFICATION')),
+ CONSTRAINT ck_inv_cost_policy_currency CHECK(
+   length(trim(functional_currency))=3 AND upper(functional_currency)=functional_currency)
+);
+ALTER TABLE crm.inv_tenant_setting
+ ADD CONSTRAINT fk_inv_setting_active_policy
+ FOREIGN KEY(tenant_id,active_policy_version_id)
+ REFERENCES crm.inv_cost_policy_version(tenant_id,id);
+--rollback ALTER TABLE crm.inv_tenant_setting DROP CONSTRAINT fk_inv_setting_active_policy;
+--rollback DROP TABLE crm.inv_cost_policy_version;
+--rollback DROP TABLE crm.inv_tenant_setting;
+
+--changeset rm:0030-inventory-cost-policy-immutable dbms:postgresql splitStatements:false
+-- Approved methods cannot be rewritten or deleted; new approval = new revision.
+CREATE FUNCTION crm.inv_reject_cost_policy_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Approved inventory cost policy is immutable';
+END;
+$$;
+CREATE TRIGGER trg_inv_cost_policy_immutable
+BEFORE UPDATE OR DELETE ON crm.inv_cost_policy_version
+FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_cost_policy_mutation();
+--rollback DROP TRIGGER trg_inv_cost_policy_immutable ON crm.inv_cost_policy_version;
+--rollback DROP FUNCTION crm.inv_reject_cost_policy_mutation();
