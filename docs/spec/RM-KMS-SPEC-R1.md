@@ -494,3 +494,18 @@ Fast Path означает **нет SQL именно за DEK при cache HIT**
 **Новые acceptance tests:** MICRO-01 интерфейсный контракт внедряется без зависимости потребителя от JPA; MICRO-02 single-jvm допускается; MICRO-03 multi-jvm конфигурация fail closed; MICRO-04 rotation/migration flags fail closed; MICRO-05 незарегистрированный tenant и неверный CryptoContext не дают plaintext; MICRO-06 после будущего выделения версионированный encrypted envelope переносится побайтно и проходит decrypt в другой реализации порта; MICRO-07 конкурентные реплики + crash/partition после введения распределённого контракта не допускают устаревшей записи/отзыва. MICRO-06/07 — будущие gated тесты, не утверждать выполнение сейчас.
 
 **Приоритет работ:** сначала R1.6B persisted encrypt→reload→decrypt и legacy-key migration, затем transactional fencing/restore; только потом рассматривать физическое разделение и горизонтальное масштабирование.
+
+
+## 23. Многоподовый RM: scheduler и предотвращение гонок (уточнение архитектуры)
+
+**Исходное требование:** RM запускается в нескольких pod, фоновые задачи выполняются scheduler. Правила этого раздела **заменяют** прежние ограничения `single-jvm` в разделах 7/20/22. Полный контракт зафиксирован в [ADR-RM-KMS-004](../adr/ADR-RM-KMS-004-microservice-readiness.md).
+
+1. Текущая R1.6 допускает `rm.kms.deployment.mode=multi-pod` **только для неизменяемых поколений ключей**, с `rotation.enabled=false` и `migration.enabled=false`. Локальный Caffeine в каждом pod допустим как кэш immutable DEK; **не** обеспечивает согласованного REVOKED/ACTIVE после ротации.
+2. Existing scheduler отвечает за эксклюзивное плановое задание; перед применением к KMS проверить **распределённую аренду lease, timeout, owner и fencing token**. Запуск одного cron на pod или одна блокировка без fencing не считается доказательством отсутствия гонок.
+3. Каждая batch-транзакция должна проверять актуальный fencing token в PostgreSQL; если worker потерял lease или появился новый владелец, старая транзакция не вправе commit изменения. Если в существующем scheduler нет такой гарантии — сначала доработать.
+4. Независимые CRM writes требуют **transactional generation/epoch barrier**. Scheduler не может заменить синхронизацию API writers: изменение ACTIVE допускается лишь когда старые writes завершились/отклонены и новые используют новый generation.
+5. Provisioning одинакового `tenantId` на разных pod должен быть идемпотентным; `existsById` + insert без корректного retry на другой транзакции — пока P1.
+6. До включения migration/rotation необходимы многоподовые PostgreSQL испытания: два конкурирующих scheduler workers, остановка владельца/lease expiry, paused-worker-resume, pod restart, временное отключение БД, конфликт CRUD с promotion, одинаковый tenant provisioning, нарушение и восстановление cache consistency.
+7. Физическое выделение KMS в самостоятельный микросервис и выдача raw DEK остаются запрещены до отдельного security review.
+
+**Статус:** multi-pod immutable-key compatibility — реализуется; scheduler-based rotation/migration — **HOLD до доказательств**. Тестирование H2/PG обычных crypto-операций не доказывает распределённую безопасность.
