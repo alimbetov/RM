@@ -840,4 +840,56 @@ class CrmR1aQualificationTest {
                 .isEqualTo(ContractExpiryPolicy.Indicator.EXPIRING_SOON);
     }
 
+
+    @Test void crmR12ConcurrentSameVersionUpdatesOnlyOneCanCommit() throws Exception {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Concurrent customer",null);
+        var category=categoryService.create(actor,t.tenantId(),"CONCURRENT","Initial");
+        var today=java.time.LocalDate.of(2026,11,22);
+        var contract=contractService.create(actor,t.tenantId(),customer.id(),"CONCURRENT-01",
+                today,today.plusDays(90),today);
+        try (var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            var gate=new CountDownLatch(1);
+            List<Callable<Boolean>> writes=List.of(
+                    () -> { gate.await(); try { categoryService.rename(actor,t.tenantId(),
+                            category.id(),"Name A",category.rowVersion()); return true; }
+                            catch (org.springframework.orm.ObjectOptimisticLockingFailureException
+                                    | IllegalStateException ex) { return false; } },
+                    () -> { gate.await(); try { categoryService.rename(actor,t.tenantId(),
+                            category.id(),"Name B",category.rowVersion()); return true; }
+                            catch (org.springframework.orm.ObjectOptimisticLockingFailureException
+                                    | IllegalStateException ex) { return false; } });
+            var f1=executor.submit(writes.get(0));
+            var f2=executor.submit(writes.get(1));
+            gate.countDown();
+            int successes=(f1.get(30,TimeUnit.SECONDS) ? 1 : 0)
+                    +(f2.get(30,TimeUnit.SECONDS) ? 1 : 0);
+            assertThat(successes).isEqualTo(1);
+
+            var statusGate=new CountDownLatch(1);
+            var c1=executor.submit((Callable<Boolean>)() -> {
+                statusGate.await();
+                try { contractService.changeStatus(actor,t.tenantId(),contract.id(),
+                        CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today); return true; }
+                catch (org.springframework.orm.ObjectOptimisticLockingFailureException
+                        | IllegalStateException ex) { return false; }
+            });
+            var c2=executor.submit((Callable<Boolean>)() -> {
+                statusGate.await();
+                try { contractService.changeStatus(actor,t.tenantId(),contract.id(),
+                        CustomerContractEntity.Status.CANCELLED,contract.rowVersion(),today); return true; }
+                catch (org.springframework.orm.ObjectOptimisticLockingFailureException
+                        | IllegalStateException ex) { return false; }
+            });
+            statusGate.countDown();
+            assertThat((c1.get(30,TimeUnit.SECONDS) ? 1 : 0)
+                    +(c2.get(30,TimeUnit.SECONDS) ? 1 : 0)).isEqualTo(1);
+        }
+        assertThat(categoryService.get(actor,t.tenantId(),category.id()).rowVersion())
+                .isEqualTo(category.rowVersion()+1);
+        assertThat(contractService.get(actor,t.tenantId(),contract.id(),today,30).rowVersion())
+                .isEqualTo(contract.rowVersion()+1);
+    }
+
 }
