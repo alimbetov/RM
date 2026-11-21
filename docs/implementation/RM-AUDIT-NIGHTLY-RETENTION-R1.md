@@ -13,7 +13,9 @@
 
 ## 2. SQL / Liquibase
 
-**Новый changeset `rm:0020-audit-retention-governance`**:
+**Новые changesets:** `rm:0020-audit-retention-governance` — контрольные таблицы; `rm:0021-audit-retention-governance-lock` — PostgreSQL-trigger, синхронизирующий policy и legal hold DML с глобальной advisory-блокировкой ночной очистки.
+
+**Changeset `rm:0020-audit-retention-governance`**:
 - `crm.audit_retention_policy`: tenant UUID, срок 3–5 лет, `enabled`, `approved_at`, `updated_at`, `row_version`; CHECK не допускает enabled без approval.
 - `crm.audit_retention_hold`: `(tenant_id,event_id)`, `reason_code`, `created_at`, `released_at`. Не удалять запись при `released_at IS NULL`.
 - `crm.audit_retention_run`: id, начала/завершения, удалено, число батчей, исход RUNNING/DONE/FAILED/SKIPPED.
@@ -47,7 +49,7 @@ rm:
 
 - `RM_RETENTION_ENABLED` **false по умолчанию**, чтобы CI, локальный ноутбук и неподтверждённое production окружение ничего не удаляли.
 - Политики создаются/утверждаются привилегированным DB/service operator, не публичным контроллером. Изменения `enabled,years,approved_at` и `hold/released_at` должны аудироваться отдельным защищённым контуром. До него policy administration — ручная, с ограниченной ролью.
-- Конкурентная установка hold и delete требует строгой governance-процедуры: сначала остановка/фенсинг retention, затем изменение hold, затем возобновление. Без такого протокола **нет** гарантии сохранения записи при одновременной admin-вставке hold. Для production нужен совместный advisory lock в hold-admin сервисе.
+- PostgreSQL trigger `0021` получает ту же transaction advisory lock перед изменением retention policy и legal hold. Это сериализует **все обычные INSERT/UPDATE/DELETE** на двух контрольных таблицах с каждым batch удаления. Но административные действия с изменением DDL, отключением triggers или привилегированной ручной очисткой не защищены этим механизмом; DBA должен соблюдать процедуры допуска. Если hold был запрошен после того, как batch удаления уже начался, установка hold не может восстановить удалённую запись — для экстренных запретов требуется сначала остановить retention.
 - Нельзя выдавать общему приложению произвольный `DROP PARTITION`, `TRUNCATE` или DDL.
 - При будущем append-only/tamper-resistant audit требуются обособленные права: write-only ingest vs retention deleter; нельзя использовать обычную DB роль приложения с неограниченным `DELETE` как доказательство неизменяемости.
 - 2028+ новые annual partitions должны создаваться заранее отдельным migration/admin job, иначе записи попадут в DEFAULT. Не создавать секции из транзакции заказа/просмотра.
