@@ -135,3 +135,82 @@ ALTER TABLE security.kms_tenant_key
 --rollback ALTER TABLE security.kms_tenant_key DROP COLUMN job_fence_token;
 --rollback ALTER TABLE security.kms_tenant_key DROP COLUMN job_lease_until;
 --rollback ALTER TABLE security.kms_tenant_key DROP COLUMN job_lease_owner;
+
+
+--changeset rm:0008-iam-organization-foundation
+-- Identity is global; subscriptions belong to workspaces, never to security roles.
+CREATE TABLE iam_user_account (
+  id UUID NOT NULL PRIMARY KEY,
+  external_subject VARCHAR(255),
+  email_normalized VARCHAR(320),
+  phone_e164 VARCHAR(24),
+  display_name VARCHAR(200) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT uk_iam_user_external UNIQUE (external_subject),
+  CONSTRAINT uk_iam_user_email UNIQUE (email_normalized),
+  CONSTRAINT uk_iam_user_phone UNIQUE (phone_e164),
+  CONSTRAINT ck_iam_user_status CHECK (status IN ('PENDING','ACTIVE','SUSPENDED','DELETED'))
+);
+CREATE TABLE org_organization (
+  id UUID NOT NULL PRIMARY KEY,
+  legal_name VARCHAR(300) NOT NULL,
+  display_name VARCHAR(200) NOT NULL,
+  organization_type VARCHAR(30) NOT NULL,
+  country_code VARCHAR(2) NOT NULL,
+  registration_number VARCHAR(40),
+  status VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT ck_org_type CHECK (organization_type IN ('LEGAL_ENTITY','SOLE_PROPRIETOR','OTHER')),
+  CONSTRAINT ck_org_status CHECK (status IN ('DRAFT','ACTIVE','SUSPENDED','CLOSED'))
+);
+CREATE TABLE iam_workspace (
+  id UUID NOT NULL PRIMARY KEY,
+  kind VARCHAR(20) NOT NULL,
+  organization_id UUID UNIQUE,
+  owner_user_id UUID UNIQUE,
+  status VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_workspace_org FOREIGN KEY (organization_id) REFERENCES org_organization(id),
+  CONSTRAINT fk_workspace_person FOREIGN KEY (owner_user_id) REFERENCES iam_user_account(id),
+  CONSTRAINT ck_workspace_owner CHECK (
+    (kind='PERSONAL' AND owner_user_id IS NOT NULL AND organization_id IS NULL)
+    OR (kind='ORGANIZATION' AND organization_id IS NOT NULL AND owner_user_id IS NULL)),
+  CONSTRAINT ck_workspace_status CHECK (status IN ('PROVISIONING','ACTIVE','SUSPENDED','CLOSED'))
+);
+CREATE TABLE iam_org_membership (
+  id UUID NOT NULL PRIMARY KEY,
+  organization_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  role VARCHAR(20) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  joined_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT uk_iam_org_member UNIQUE (organization_id, user_id),
+  CONSTRAINT fk_membership_org FOREIGN KEY (organization_id) REFERENCES org_organization(id),
+  CONSTRAINT fk_membership_user FOREIGN KEY (user_id) REFERENCES iam_user_account(id),
+  CONSTRAINT ck_member_role CHECK (role IN ('OWNER','ADMIN','MANAGER','MEMBER','VIEWER')),
+  CONSTRAINT ck_member_status CHECK (status IN ('INVITED','ACTIVE','SUSPENDED','LEFT'))
+);
+CREATE TABLE iam_global_role_assignment (
+  id UUID NOT NULL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  role VARCHAR(30) NOT NULL,
+  granted_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  revoked_at TIMESTAMP WITH TIME ZONE,
+  CONSTRAINT uk_global_role UNIQUE (user_id, role),
+  CONSTRAINT fk_global_role_user FOREIGN KEY (user_id) REFERENCES iam_user_account(id),
+  CONSTRAINT ck_global_role CHECK (role IN ('PLATFORM_ADMIN','PLATFORM_AUDITOR'))
+);
+CREATE INDEX idx_org_membership_user ON iam_org_membership (user_id, status);
+CREATE INDEX idx_global_role_user ON iam_global_role_assignment (user_id, revoked_at);
+--rollback DROP TABLE iam_global_role_assignment;
+--rollback DROP TABLE iam_org_membership;
+--rollback DROP TABLE iam_workspace;
+--rollback DROP TABLE org_organization;
+--rollback DROP TABLE iam_user_account;
