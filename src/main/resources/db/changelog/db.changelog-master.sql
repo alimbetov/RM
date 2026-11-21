@@ -1545,3 +1545,46 @@ WHERE id=1 AND bootstrapped=FALSE
 -- Only emergency owner recovery requires a documented external incident/ticket.
 ALTER TABLE public.iam_tenant_rbac_event ADD COLUMN reason_code VARCHAR(80);
 --rollback ALTER TABLE public.iam_tenant_rbac_event DROP COLUMN reason_code;
+
+
+--changeset rm:0044-iam-registration-purpose-and-evidence
+-- Initial signup is never verified by default. Existing checkout challenges
+-- retain CHECKOUT purpose. No email state/identity remapping in R2.5A.
+ALTER TABLE public.iam_email_verification_challenge
+  ADD COLUMN purpose VARCHAR(24) NOT NULL DEFAULT 'CHECKOUT';
+ALTER TABLE public.iam_email_verification_challenge
+  ADD CONSTRAINT ck_iam_email_challenge_purpose
+  CHECK (purpose IN ('CHECKOUT','REGISTRATION'));
+CREATE TABLE public.iam_email_verification_event (
+  id UUID PRIMARY KEY,
+  challenge_id UUID NOT NULL UNIQUE,
+  email_identity_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  purpose VARCHAR(24) NOT NULL,
+  occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT fk_iam_verification_event_challenge FOREIGN KEY (challenge_id)
+    REFERENCES public.iam_email_verification_challenge(id),
+  CONSTRAINT fk_iam_verification_event_identity FOREIGN KEY (email_identity_id)
+    REFERENCES public.iam_email_identity(id),
+  CONSTRAINT fk_iam_verification_event_user FOREIGN KEY (user_id)
+    REFERENCES public.iam_user_account(id),
+  CONSTRAINT ck_iam_verification_event_purpose CHECK (purpose IN ('CHECKOUT','REGISTRATION'))
+);
+CREATE INDEX idx_iam_verification_event_identity
+  ON public.iam_email_verification_event(email_identity_id,occurred_at DESC);
+--rollback DROP TABLE public.iam_email_verification_event;
+--rollback ALTER TABLE public.iam_email_verification_challenge DROP CONSTRAINT ck_iam_email_challenge_purpose;
+--rollback ALTER TABLE public.iam_email_verification_challenge DROP COLUMN purpose;
+
+--changeset rm:0045-iam-verification-evidence-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION public.iam_reject_email_verification_event_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Email verification evidence is immutable';
+END;
+$$;
+CREATE TRIGGER trg_iam_email_verification_event_immutable
+ BEFORE UPDATE OR DELETE ON public.iam_email_verification_event
+ FOR EACH ROW EXECUTE FUNCTION public.iam_reject_email_verification_event_mutation();
+--rollback DROP TRIGGER trg_iam_email_verification_event_immutable ON public.iam_email_verification_event;
+--rollback DROP FUNCTION public.iam_reject_email_verification_event_mutation();
