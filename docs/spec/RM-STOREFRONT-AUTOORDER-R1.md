@@ -134,14 +134,14 @@ Store settings are one-per-seller-tenant, unpartitioned master data with unique 
 ## 10. Фактический статус первой реализации (2026-11-21)
 
 **Выполнено в ветке (code, не product-ready):**
-- Liquibase `rm:0014-autoorder-r1-foundation`: `iam_email_identity`, `iam_email_verification_challenge`, `crm.store_front`, `crm.store_offer` (временная серверная витринная цена до CATALOG), `crm.sales_order`, `crm.sales_order_line`, `crm.sales_checkout_receipt`, `crm.sales_order_status_event`.
+- Liquibase `rm:0014-autoorder-r1-foundation` + `rm:0015-iam-email-verification-durable-delivery`: `iam_email_identity`, `iam_email_verification_challenge`, `crm.store_front`, `crm.store_offer` (временная серверная витринная цена до CATALOG), `crm.sales_order`, `crm.sales_order_line`, `crm.sales_checkout_receipt`, `crm.sales_order_status_event`.
 - `EmailIdentityCrypto`: независимые global IAM AES-256-GCM / HMAC-SHA256 keys из secrets конфигурации, email-only normalization, PII не сохраняется plaintext в новых identity таблицах.
-- `AutoOrderService`: серверный расчёт по offer, email-only создание `PENDING` пользователя, одноразовый email challenge, order placement + idempotency receipt, verified buyer history. CRM карточка и контакты **не создаются** автоматически.
+- `AutoOrderService`: серверный расчёт по offer, email-only создание `PENDING` пользователя, одноразовый email challenge с зашифрованным токеном и durable delivery-outbox `iam_email_delivery_outbox`, order placement + idempotency receipt, verified buyer history. CRM карточка и контакты **не создаются** автоматически.
 - Existing IAM legacy `email_normalized` account lookup с повторным использованием стабильного `user_id`, но **без** доступа/авторизации до нового подтверждения email.
 - H2 и PostgreSQL qualification tests (включая existing account и повторный заказ) через CI; фактический результат последнего коммита проверять перед заявлением GREEN.
 
 **Не реализовано / blocked for public exposure:**
-1. SMTP/email provider и **durable transactional outbox**, генерация/доставка корректных ссылок подтверждения. Текущий внутренний `CheckoutResult` содержит secret verification payload **для доверенного уровня приложения**; категорически запрещено возвращать его через публичный HTTP API или логировать.
+1. SMTP/email provider, безопасный sender/worker с lease/fencing, генерация/доставка корректных ссылок подтверждения и обработка ошибок. **Durable DB outbox уже создан в 0015**, но worker ещё отсутствует. `CheckoutResult` содержит только `orderId` и статус; verification token зашифрован и остаётся в IAM-таблицах, не возвращается из checkout и не должен логироваться.
 2. Реальный OIDC/PKCE login/account claim для auto-provisioned пользователей и authenticated principal extraction. Подтверждение email само по себе ещё не заменяет полноценную аутентификацию.
 3. Anti-abuse rate-limit, account enumeration checks, CAPTCHA, per-email attempt limits; durable retry/outbox on mail-provider failures.
 4. Конкурентный multi-pod find-or-create/idempotency winner/loser/retry semantics и fencing; уникальные ключи предотвращают двойной commit при конфликте, но вызывающий слой обязан корректно обрабатывать гонки и повторять транзакцию.
