@@ -1,7 +1,5 @@
 package kz.rm.security.kms;
 
 public enum KeyStatus {
-    ACTIVE,
-    DECRYPT_ONLY,
-    REVOKED
+    EMPTY, ACTIVE, DECRYPT_ONLY, READY, REVOKED
 }

@@ -1,7 +1,7 @@
 # RM-R0 — Bootstrap
 
 ## Stack
-Java 21, Spring Boot 4.1.3, Maven, Spring MVC, JPA/Hibernate, Lombok, H2 (dev), PostgreSQL driver (future), Liquibase formatted SQL, JUnit.
+Java 21, Spring Boot 4.1.3, Maven, Spring MVC, JPA/Hibernate, Lombok, H2 (dev smoke), PostgreSQL (test development), Liquibase formatted SQL, JUnit.
 
 ## Run
 ```bash
@@ -12,19 +12,33 @@ curl http://localhost:8080/api/v1/health
 Expected: `{"status":"UP","application":"RM"}`.
 
 ## H2 (dev only)
-- JDBC URL: `jdbc:h2:mem:rm`
+- JDBC URL: `jdbc:h2:mem:rm;MODE=PostgreSQL;DB_CLOSE_DELAY=-1`
 - Username: `sa`, password blank
 - Console: `http://localhost:8080/h2-console`
 - In-memory data is lost on application shutdown. Liquibase executes the master SQL changelog when the app starts and records applied changes in DATABASECHANGELOG and DATABASECHANGELOGLOCK.
 
-## PostgreSQL later
+## Active profiles: dev and test
+
+- `dev` (default): H2 in-memory, suitable for local smoke tests.
+- `test`: PostgreSQL `rm_test`, used for ongoing development and integration verification.
+- Both use Liquibase SQL-only migrations and Hibernate `ddl-auto=validate`.
+- Never enable H2 console in PostgreSQL profile; never point test at production credentials.
+
+Run dev:
 ```bash
-export RM_DB_URL=jdbc:postgresql://localhost:5432/rm
-export RM_DB_USERNAME=rm
-export RM_DB_PASSWORD=... # supply via secret manager
-SPRING_PROFILES_ACTIVE=postgres mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+curl http://localhost:8080/api/v1/health
 ```
-The postgres profile is a **future placeholder**, not deployable until schema migrations are implemented. It sets `ddl-auto=validate` deliberately. Development H2 is not proof of PostgreSQL parity. Verify PostgreSQL integration with Testcontainers before production. Never enable H2 console outside development.
+
+Run PostgreSQL test profile after creating a disposable DB and least-privilege user:
+```bash
+export RM_TEST_DB_URL=jdbc:postgresql://localhost:5432/rm_test
+export RM_TEST_DB_USERNAME=rm
+export RM_TEST_DB_PASSWORD=... # secure environment
+SPRING_PROFILES_ACTIVE=test mvn spring-boot:run
+```
+
+`mvn test` without overriding profile remains H2-based. To test the PostgreSQL profile explicitly, set `SPRING_PROFILES_ACTIVE=test` and provide reachable PostgreSQL credentials. For CI add a distinct PostgreSQL Testcontainers suite; H2 passing does not qualify PostgreSQL-specific SQL, locking or partitioning.
 
 ## Architecture decisions
 - One Spring Boot application with modules under `kz.rm`.

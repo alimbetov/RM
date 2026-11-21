@@ -36,7 +36,7 @@ public class KeyWrappingService {
         }
     }
 
-    public byte[] wrap(UUID tenantId, int version, SecretKey dek) {
+    public byte[] wrap(UUID tenantId, long version, SecretKey dek) {
         try {
             byte[] nonce = new byte[NONCE_BYTES];
             random.nextBytes(nonce);
@@ -52,7 +52,7 @@ public class KeyWrappingService {
     }
 
     // Internal service API only; never expose key material in an HTTP response.
-    public SecretKey unwrap(UUID tenantId, int version, byte[] wrapped) {
+    public SecretKey unwrap(UUID tenantId, long version, byte[] wrapped) {
         if (wrapped == null || wrapped.length != NONCE_BYTES + 32 + 16) {
             throw new IllegalArgumentException("Invalid wrapped key payload");
         }
@@ -86,7 +86,7 @@ public class KeyWrappingService {
         return new SecretKeySpec(bytes, "AES");
     }
 
-    private byte[] aad(UUID tenantId, int version) {
+    private byte[] aad(UUID tenantId, long version) {
         return ("rm:kms:tenant-dek:v1:" + tenantId + ":" + version)
                 .getBytes(StandardCharsets.UTF_8);
     }
