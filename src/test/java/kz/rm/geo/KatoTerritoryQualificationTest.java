@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest
 class KatoTerritoryQualificationTest {
     @Autowired KatoTerritoryRepository kato;
+    @Autowired KatoTerritoryDirectory directory;
     @Autowired OrganizationLocationRepository locations;
     @Autowired OrganizationLocationService service;
     @Autowired OrganizationRepository orgs;
@@ -29,6 +30,17 @@ class KatoTerritoryQualificationTest {
                 "SELECT count(*) FROM ref_kato_territory WHERE parent_source_id IS NOT NULL " +
                 "AND parent_source_id NOT IN (SELECT source_id FROM ref_kato_territory)",Integer.class))
                 .isEqualTo(11);
+    }
+
+    @Test void romanizedNamesAreLoadedAndCodeIsOnlyTechnicalReference() {
+        var oblast = kato.findById("110000000").orElseThrow();
+        assertThat(oblast.getNameKk()).isEqualTo("АҚМОЛА ОБЛЫСЫ");
+        assertThat(oblast.getNameRu()).isEqualTo("АКМОЛИНСКАЯ ОБЛАСТЬ");
+        assertThat(oblast.getNameEng()).isEqualTo("AKMOLINSKAYA OBLAST");
+        assertThat(directory.eligibleForOrganizationLocation())
+                .allMatch(x -> x.level() <= 3 && !x.deleted()
+                        && !x.nameEng().isBlank() && !x.code().isBlank());
+        assertThat(directory.eligibleForOrganizationLocation()).hasSize(5);
     }
 
     @Test void branchesAndWarehousesBelongOnlyToOrganizationWorkspace() {
