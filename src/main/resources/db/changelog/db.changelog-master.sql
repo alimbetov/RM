@@ -214,3 +214,40 @@ CREATE INDEX idx_global_role_user ON iam_global_role_assignment (user_id, revoke
 --rollback DROP TABLE iam_workspace;
 --rollback DROP TABLE org_organization;
 --rollback DROP TABLE iam_user_account;
+
+
+--changeset rm:0009-kato-territories-and-org-locations
+-- Global KATO dictionary; organizational branches/warehouses/POS are separate tenant-owned rows.
+CREATE TABLE ref_kato_territory (
+  code VARCHAR(16) NOT NULL PRIMARY KEY,
+  source_id BIGINT NOT NULL UNIQUE,
+  parent_source_id BIGINT,
+  level_no INTEGER NOT NULL,
+  area_type INTEGER NOT NULL,
+  name_kk VARCHAR(300) NOT NULL,
+  name_ru VARCHAR(300) NOT NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  CONSTRAINT ck_kato_level CHECK (level_no > 0)
+);
+CREATE INDEX idx_kato_parent_source ON ref_kato_territory(parent_source_id);
+CREATE TABLE org_location (
+  id UUID NOT NULL PRIMARY KEY,
+  workspace_id UUID NOT NULL,
+  location_type VARCHAR(20) NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  kato_code VARCHAR(16) NOT NULL,
+  address_line VARCHAR(500),
+  status VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_org_location_workspace FOREIGN KEY (workspace_id) REFERENCES iam_workspace(id),
+  CONSTRAINT fk_org_location_kato FOREIGN KEY (kato_code) REFERENCES ref_kato_territory(code),
+  CONSTRAINT uq_org_location_workspace_id UNIQUE (workspace_id,id),
+  CONSTRAINT ck_org_location_type CHECK (location_type IN ('BRANCH','WAREHOUSE','POINT_OF_SALE')),
+  CONSTRAINT ck_org_location_status CHECK (status IN ('ACTIVE','INACTIVE','CLOSED'))
+);
+CREATE INDEX idx_org_location_scope ON org_location (workspace_id, location_type, status);
+CREATE INDEX idx_org_location_kato ON org_location (kato_code);
+--rollback DROP TABLE org_location;
+--rollback DROP TABLE ref_kato_territory;
