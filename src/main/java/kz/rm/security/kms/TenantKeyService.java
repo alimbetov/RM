@@ -2,6 +2,7 @@ package kz.rm.security.kms;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -14,11 +15,19 @@ public class TenantKeyService {
     private static final String ROOT_KEY_ID = "root-v1";
     private final TenantKeyRepository repository;
     private final KeyWrappingService wrapping;
+    private final JdbcTemplate jdbc;
 
     @Transactional
     public UUID provision(UUID tenantId) {
         if (tenantId == null) throw new IllegalArgumentException("tenantId required");
         if (repository.existsById(tenantId)) return tenantId;
+        // Do not silently generate an unrelated v1 when ciphertext uses the legacy key table.
+        Long legacy = jdbc.queryForObject(
+                "select count(*) from security.tenant_key where tenant_id = ?",
+                Long.class, tenantId);
+        if (legacy != null && legacy > 0) {
+            throw new IllegalStateException("Legacy tenant keys require an explicitly qualified migration");
+        }
         // PK also rejects concurrent duplicate provisioning; caller may retry in a new transaction.
         var dek = wrapping.generateTenantKey();
         var wrapped = wrapping.wrap(tenantId, 1L, dek);
