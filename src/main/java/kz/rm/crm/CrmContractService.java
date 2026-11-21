@@ -75,6 +75,7 @@ public class CrmContractService {
         if (contract.getStatus() == CustomerContractEntity.Status.CANCELLED
                 || contract.getStatus() == CustomerContractEntity.Status.CLOSED)
             throw new IllegalStateException("Terminal contract is immutable");
+        captureBaselineIfMissing(contract, actor.userId());
         contract.dates(starts, ends, Instant.now());
         var saved=contracts.saveAndFlush(contract);
         history.contract(tenant,id,actor.userId(),"DATES_CHANGED",saved.getRowVersion(),
@@ -94,6 +95,7 @@ public class CrmContractService {
                     || (current == CustomerContractEntity.Status.ACTIVE &&
                     (next == CustomerContractEntity.Status.CLOSED || next == CustomerContractEntity.Status.CANCELLED));
             if (!allowed) throw new IllegalStateException("Invalid contract state transition");
+            captureBaselineIfMissing(c, actor.userId());
             c.status(next, Instant.now());
             var saved=contracts.saveAndFlush(c);
             history.contract(tenant,id,actor.userId(),"STATUS_CHANGED",saved.getRowVersion(),
@@ -116,11 +118,24 @@ public class CrmContractService {
         if(c.getStatus()!=CustomerContractEntity.Status.ACTIVE || c.getEndsOn()==null
                 || !extendedEnd.isAfter(c.getEndsOn()))
             throw new IllegalStateException("Renewal requires active fixed-term contract and later end");
+        captureBaselineIfMissing(c,actor.userId());
         c.dates(c.getStartsOn(),extendedEnd,Instant.now());
         var saved=contracts.saveAndFlush(c);
         history.contract(tenant,id,actor.userId(),"RENEWED",saved.getRowVersion(),
                 saved.getStartsOn(),saved.getEndsOn(),saved.getStatus());
         return view(saved,asOf,30);
+    }
+
+
+    private void captureBaselineIfMissing(CustomerContractEntity c, UUID actorId) {
+        Integer existing = jdbc.queryForObject("""
+            SELECT count(*) FROM crm.contract_revision
+            WHERE tenant_id=? AND contract_id=?
+            """,Integer.class,c.getTenantId(),c.getId());
+        if(existing != null && existing == 0) {
+            history.contract(c.getTenantId(),c.getId(),actorId,"BASELINE_CAPTURED",
+                    c.getRowVersion(),c.getStartsOn(),c.getEndsOn(),c.getStatus());
+        }
     }
 
     private CustomerContractEntity contract(UUID tenant, UUID id, long expectedVersion) {
