@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.*;
 class IamUserOnboardingProcessQualificationTest {
     @Autowired PlatformTenantBootstrapService provisioning;
     @Autowired TenantMemberEnrollmentService enrollment;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roleCommands;
     @Autowired TenantAuthorization authorization;
     @Autowired GlobalAccountStatusService accounts;
     @Autowired TenantAccessStatusService access;
@@ -62,12 +62,12 @@ class IamUserOnboardingProcessQualificationTest {
                 .isInstanceOf(SecurityException.class);
         authorization.require(owner,tenant,DomainPermission.TENANT_RBAC_MANAGE);
 
-        var role=roles.createRole(owner,tenant,"SALES_OPERATOR","Sales employee");
-        roles.grant(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
+        var role=roleCommands.createRole(actor(owner),tenant,"SALES_OPERATOR","Sales employee");
+        roleCommands.grant(actor(owner),tenant,role.id(),DomainPermission.SALES_ORDER_READ);
         var invitation=enrollment.invite(actor(owner),tenant,staff);
         assertThat(invitation.status()).isEqualTo("INVITED");
         assertThat(enrollment.invite(actor(owner),tenant,staff).status()).isEqualTo("INVITED");
-        assertThatThrownBy(()->roles.assign(owner,tenant,staff,role.id()))
+        assertThatThrownBy(()->roleCommands.assign(actor(owner),tenant,staff,role.id()))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->authorization.require(staff,tenant,DomainPermission.SALES_ORDER_READ))
                 .isInstanceOf(SecurityException.class);
@@ -76,13 +76,13 @@ class IamUserOnboardingProcessQualificationTest {
         assertThat(enrollment.accept(actor(staff),tenant).status()).isEqualTo("ACTIVE");
         assertThatThrownBy(()->authorization.require(staff,tenant,DomainPermission.SALES_ORDER_READ))
                 .isInstanceOf(SecurityException.class);
-        roles.assign(owner,tenant,staff,role.id());
+        roleCommands.assign(actor(owner),tenant,staff,role.id());
         authorization.require(staff,tenant,DomainPermission.SALES_ORDER_READ);
         assertThatThrownBy(()->authorization.require(staff,tenant,DomainPermission.CRM_PII_READ))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->enrollment.invite(actor(staff),tenant,owner))
                 .isInstanceOf(SecurityException.class);
-        assertThatThrownBy(()->roles.grant(staff,tenant,role.id(),DomainPermission.CRM_PII_READ))
+        assertThatThrownBy(()->roleCommands.grant(actor(staff),tenant,role.id(),DomainPermission.CRM_PII_READ))
                 .isInstanceOf(SecurityException.class);
 
         assertThat(enrollment.list(actor(owner),tenant))
@@ -122,15 +122,15 @@ class IamUserOnboardingProcessQualificationTest {
         assertThatThrownBy(()->enrollment.list(actor(outsider),tenant))
                 .isInstanceOf(SecurityException.class);
 
-        var role=roles.createRole(owner,tenant,"WAREHOUSE_STAFF","Warehouse");
-        roles.grant(owner,tenant,role.id(),DomainPermission.INVENTORY_STOCK_READ);
+        var role=roleCommands.createRole(actor(owner),tenant,"WAREHOUSE_STAFF","Warehouse");
+        roleCommands.grant(actor(owner),tenant,role.id(),DomainPermission.INVENTORY_STOCK_READ);
         enrollment.invite(actor(owner),tenant,staff);
         enrollment.accept(actor(staff),tenant);
-        roles.assign(owner,tenant,staff,role.id());
+        roleCommands.assign(actor(owner),tenant,staff,role.id());
         authorization.require(staff,tenant,DomainPermission.INVENTORY_STOCK_READ);
         assertThatThrownBy(()->authorization.require(staff,otherTenant,
                 DomainPermission.INVENTORY_STOCK_READ)).isInstanceOf(SecurityException.class);
-        assertThatThrownBy(()->roles.grant(outsider,tenant,role.id(),
+        assertThatThrownBy(()->roleCommands.grant(actor(outsider),tenant,role.id(),
                 DomainPermission.INVENTORY_RECEIVE)).isInstanceOf(SecurityException.class);
     }
 
