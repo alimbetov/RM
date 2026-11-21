@@ -5,6 +5,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import java.util.UUID;
@@ -44,16 +46,25 @@ public class TenantAuthorization {
         private final UUID actorId,tenantId,organizationId;
         private final OrganizationMembershipEntity.Role role;
         private final DomainPermission permission;
+        private final TransactionSynchronization admissionMarker;
         private Decision(UUID actorId,UUID tenantId,UUID organizationId,
-                         OrganizationMembershipEntity.Role role,DomainPermission permission) {
+                         OrganizationMembershipEntity.Role role,DomainPermission permission,
+                         TransactionSynchronization admissionMarker) {
             this.actorId=actorId;this.tenantId=tenantId;this.organizationId=organizationId;
-            this.role=role;this.permission=permission;
+            this.role=role;this.permission=permission;this.admissionMarker=admissionMarker;
         }
         public UUID actorId(){return actorId;}
         public UUID tenantId(){return tenantId;}
         public UUID organizationId(){return organizationId;}
         public OrganizationMembershipEntity.Role role(){return role;}
         public DomainPermission permission(){return permission;}
+        /** A command permit cannot be replayed in another transaction. */
+        public boolean validForCurrentTransaction() {
+            return admissionMarker!=null
+                    && TransactionSynchronizationManager.isActualTransactionActive()
+                    && TransactionSynchronizationManager.isSynchronizationActive()
+                    && TransactionSynchronizationManager.getSynchronizations().contains(admissionMarker);
+        }
     }
 
     /**
@@ -69,7 +80,13 @@ public class TenantAuthorization {
         UUID locked=jdbc.queryForObject(commandTenantLockSql,UUID.class,tenantId);
         if(locked==null || !locked.equals(tenantId))
             throw new SecurityException("Tenant unavailable");
-        return require(actorId,tenantId,permission);
+        Decision checked=require(actorId,tenantId,permission);
+        if(!TransactionSynchronizationManager.isSynchronizationActive())
+            throw new IllegalStateException("Transactional synchronization required");
+        TransactionSynchronization marker=new TransactionSynchronization() {};
+        TransactionSynchronizationManager.registerSynchronization(marker);
+        return new Decision(checked.actorId(),checked.tenantId(),
+                checked.organizationId(),checked.role(),checked.permission(),marker);
     }
 
     public Decision require(UUID actorId, UUID tenantId, DomainPermission permission) {
@@ -114,7 +131,7 @@ public class TenantAuthorization {
                 throw new SecurityException("Domain permission denied");
             }
         }
-        return new Decision(actorId,tenantId,workspace.getOrganizationId(),membership.getRole(),permission);
+        return new Decision(actorId,tenantId,workspace.getOrganizationId(),membership.getRole(),permission,null);
     }
 
     private boolean permitted(DomainPermission permission, OrganizationMembershipEntity.Role role) {
