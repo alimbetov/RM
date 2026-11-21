@@ -24,7 +24,8 @@
 Поддержанные **конкретные** permissions (R1.0):
 | Permission | OWNER | ADMIN | MANAGER | MEMBER | VIEWER |
 |---|---:|---:|---:|---:|---:|
-| CRM_READ | Да | Да | Да | Да | Да |
+| CRM_READ (неперсональные данные) | Да | Да | Да | Да | Да |
+| CRM_PII_READ (расшифровка данных) | Да | Да | Да | Нет | Нет |
 | CRM_WRITE | Да | Да | Да | Нет | Нет |
 | ORGANIZATION_LOCATION_WRITE | Да | Да | Да | Нет | Нет |
 | INVENTORY_SETTINGS_MANAGE | Да | Да | Да | Нет | Нет |
@@ -68,7 +69,7 @@
 - `kz.rm.iam.DomainPermission` — отдельные разрешения реализованных operations; нет автоматического wildcard.
 - `TenantAuthorization.require` — центральная проверка user ACTIVE + workspace ORGANIZATION/ACTIVE + membership ACTIVE + operation/role, возвращает Decision.
 - `TenantAuthorization.requireOrganizationWriter` — обратная совместимость ORG; переводится на `ORGANIZATION_LOCATION_WRITE`.
-- `CrmCustomerService` — полностью заменяет собственную member/role проверку на `CRM_READ` / `CRM_WRITE` (закрывает audit P0-01).
+- `CrmCustomerService` — заменяет собственную member/role проверку на `CRM_READ` / `CRM_WRITE`, а чтение персональных карточек и контактов требует **отдельного `CRM_PII_READ`** (закрывает audit P0-01 и предотвращает неявную расшифровку PII для MEMBER/VIEWER).
 - `InventoryTenantSettingsService` — явное `INVENTORY_SETTINGS_MANAGE`.
 - `CrmR1aQualificationTest` — активные workspace в fixtures, негативные user SUSPENDED, workspace SUSPENDED, membership SUSPENDED, MEMBER/VIEWER write DENY, межтенантский READ DENY. H2/PostgreSQL CI gate.
 - **Новой Liquibase миграции нет по технической причине:** для R1.0 используются уже существующие IAM user/workspace/membership статусы и FK. Новая таблица permissions без сервиса и утверждённой матрицы дала бы ложный уровень защищённости. Версионированная ABAC/RBAC schema — отдельный SEC-R1.1 proposal.
@@ -78,7 +79,7 @@
 1. Попытка читать/менять данные неактивным, неизвестным или чужим user — DENY.
 2. Workspace неактивен/личный вместо организации — DENY.
 3. Membership отсутствует, приостановлено или удалено — DENY.
-4. MEMBER/VIEWER может просматривать разрешённые CRM объекты, но не изменять CRM, ORG или INVENTORY settings.
+4. MEMBER/VIEWER может просматривать только неперсональные CRM объекты; **не может расшифровывать карточки физлиц и контакты**, изменять CRM, ORG или INVENTORY settings.
 5. OWNER/ADMIN/MANAGER может выполнять только явно предусмотренные в R1.0 операции.
 6. Межтенантская подмена UUID не возвращает PII/результат и не меняет БД.
 7. Crypto/decrypted PII не появляется в исключениях/логах; доменные операции запрещаются **до** дешифрования и выдачи ключа.
@@ -93,3 +94,7 @@
 **SEC-R1.2:** revocation races, 2-pod/2-process qualification, PostgreSQL RLS/grants, step-up MFA for critical approvals, expiry/replay tests; enforce required CI checks on main. No production S2 until all gates pass.
 
 **Release judgement:** SEC-R1.0 hardens existing internal services but **does not grant production-readiness** to remaining domain skeletons.
+
+## 8. CI-R1.0 минимальный интеграционный gate
+
+В том же PR workflow `.github/workflows/kms-r1-qualification.yml` настроен запускать H2 и PostgreSQL тесты при push в `main` (ранее только в старую feature-ветку), а также при pull request. Это **базовый trigger**, не завершённая защита branch ruleset: required status checks, запрет bypass и независимые наполненные upgrade tests должны быть настроены в GitHub repository settings отдельно. После merge обязательно проверить CI именно merge SHA `main`.
