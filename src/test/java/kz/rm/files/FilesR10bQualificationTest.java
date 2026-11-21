@@ -1,6 +1,7 @@
 package kz.rm.files;
 
 import kz.rm.iam.*;
+import kz.rm.crm.AuthenticatedCrmCommands;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,6 +56,8 @@ class FilesR10bQualificationTest {
     @Autowired FileStoragePort storage;
     @Autowired SyntheticScanner scanner;
     @Autowired FileRecoveryService recovery;
+    @Autowired AuthenticatedCrmCommands crm;
+    @Autowired AuthenticatedFilesAttachments attachments;
     @Autowired FileMetadataService metadata;
     @Autowired JdbcTemplate jdbc;
     @Value("${rm.files.local-root:${java.io.tmpdir}/rm-files-synthetic}") String localRoot;
@@ -78,6 +81,11 @@ class FilesR10bQualificationTest {
                 "Uploader");
         roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_UPLOAD);
         roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_READ);
+        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_ATTACH);
+        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_DETACH);
+        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.CRM_READ);
+        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.CRM_WRITE);
+        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.CRM_PII_READ);
         roles.assign(owner.getId(),space.getId(),uploader.getId(),role.id());
         roles.enable(owner.getId(),space.getId());
         String sub=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",
@@ -429,6 +437,69 @@ class FilesR10bQualificationTest {
         assertThat(empty.examined()).isZero();
         assertThat(storage.exists(stagedFirst.key())).isFalse();
         assertThat(storage.exists(stagedSecond.key())).isFalse();
+    }
+
+
+    @Test void crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        var other=setup();
+        UUID customer=crm.createCompany(s.actor(),s.tenant(),"Files Synthetic Customer",null).id();
+        UUID otherCustomer=crm.createCompany(other.actor(),other.tenant(),
+                "Foreign Customer",null).id();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        assertThatThrownBy(()->attachments.attachCustomer(s.actor(),s.tenant(),
+                intent.fileId(),customer,"CONTRACT"))
+                .isInstanceOf(SecurityException.class);
+        completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes));
+        assertThatThrownBy(()->attachments.attachCustomer(s.actor(),s.tenant(),
+                intent.fileId(),otherCustomer,"CONTRACT"))
+                .isInstanceOf(SecurityException.class);
+        var id=attachments.attachCustomer(s.actor(),s.tenant(),
+                intent.fileId(),customer,"CONTRACT");
+        assertThat(attachments.attachCustomer(s.actor(),s.tenant(),
+                intent.fileId(),customer,"CONTRACT")).isEqualTo(id);
+        assertThat(attachments.listCustomer(s.actor(),s.tenant(),customer,10))
+                .extracting(FileAttachmentSummary::attachmentId).containsExactly(id);
+        assertThatThrownBy(()->attachments.listCustomer(other.actor(),other.tenant(),
+                customer,10)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->attachments.attachCustomer(null,s.tenant(),
+                intent.fileId(),customer,"CONTRACT")).isInstanceOf(SecurityException.class);
+        attachments.detachCustomer(s.actor(),s.tenant(),id);
+        attachments.detachCustomer(s.actor(),s.tenant(),id);
+        assertThat(attachments.listCustomer(s.actor(),s.tenant(),customer,10)).isEmpty();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.file_storage
+                 WHERE tenant_id=? AND file_id=? AND state='ACTIVE'
+                """,Integer.class,s.tenant(),intent.fileId())).isEqualTo(1);
+    }
+
+    @Test void crmDocumentAccessRequiresPiiAndFileReadNotOnlyTenantMembership() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        UUID customer=crm.createCompany(s.actor(),s.tenant(),"Private Documents",null).id();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes));
+        attachments.attachCustomer(s.actor(),s.tenant(),intent.fileId(),customer,"INTERNAL");
+        jdbc.update("""
+                DELETE FROM public.iam_tenant_role_permission
+                 WHERE tenant_id=? AND permission_code='CRM_PII_READ'
+                """,s.tenant());
+        assertThatThrownBy(()->attachments.listCustomer(s.actor(),s.tenant(),customer,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->attachments.attachCustomer(s.actor(),s.tenant(),
+                intent.fileId(),customer,"INTERNAL"))
+                .isInstanceOf(SecurityException.class);
+        jdbc.update("""
+                DELETE FROM public.iam_tenant_role_permission
+                 WHERE tenant_id=? AND permission_code='FILES_READ'
+                """,s.tenant());
+        assertThatThrownBy(()->attachments.listCustomer(s.actor(),s.tenant(),customer,10))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void unavailableDefaultScannerNeverClaimsClean() {
