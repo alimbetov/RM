@@ -23,8 +23,10 @@ public class OrganizationLocationService {
                 .orElseThrow(()->new IllegalArgumentException("Workspace not found"));
         if(workspace.getKind()!=WorkspaceEntity.Kind.ORGANIZATION)
             throw new IllegalArgumentException("Only organization workspaces own branches and warehouses");
-        if(kato.findByCodeAndDeletedFalse(katoCode).isEmpty())
-            throw new IllegalArgumentException("Unknown or deleted KATO code");
+        var territory=kato.findByCodeAndDeletedFalse(katoCode)
+            .orElseThrow(() -> new IllegalArgumentException("Unknown or deleted KATO code"));
+        if(territory.getLevel()>3)
+            throw new IllegalArgumentException("KATO selection limited to oblast/district level");
         return locations.saveAndFlush(new OrganizationLocationEntity(
                 UUID.randomUUID(),workspaceId,type,name,katoCode,addressLine));
     }
