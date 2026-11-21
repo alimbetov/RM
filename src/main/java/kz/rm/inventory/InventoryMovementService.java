@@ -29,14 +29,25 @@ public class InventoryMovementService {
     public record Movement(UUID id, UUID tenantId, UUID locationId, UUID itemId,
                            BigDecimal delta, BigDecimal before, BigDecimal after) {}
 
+    public enum Reason { MANUAL_ADJUSTMENT, CORRECTION, RECEIPT, WRITE_OFF }
+
     @Transactional
     public Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
                            String requestKey, BigDecimal delta) {
+        return adjust(tenantId,locationId,itemId,requestKey,delta,Reason.MANUAL_ADJUSTMENT);
+    }
+
+    @Transactional
+    public Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
+                           String requestKey, BigDecimal delta, Reason reason) {
         if (tenantId==null || locationId==null || itemId==null
                 || requestKey==null || !requestKey.matches("[A-Za-z0-9_-]{8,100}")
                 || delta==null || delta.signum()==0 || delta.scale()>4
-                || delta.precision()>19)
+                || delta.precision()>19 || reason==null)
             throw new IllegalArgumentException("Invalid stock movement");
+        if(reason==Reason.RECEIPT && delta.signum()<0 ||
+                reason==Reason.WRITE_OFF && delta.signum()>0)
+            throw new IllegalArgumentException("Movement direction conflicts with reason");
 
         // Lock tenant-wide request key FIRST: a retry targeting another stock row
         // must see the existing request and fail deterministically, not on UNIQUE.
@@ -58,16 +69,19 @@ public class InventoryMovementService {
 
         // Same request must return its original immutable ledger entry.
         var recorded=jdbc.query("""
-            SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after
+            SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after,reason_code
             FROM crm.inv_stock_movement WHERE tenant_id=? AND request_key=?
             """,(rs,n)->new Movement(rs.getObject(1,UUID.class),tenantId,
                 rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
                 rs.getBigDecimal(4),rs.getBigDecimal(5),rs.getBigDecimal(6)),
                 tenantId,requestKey);
         if(!recorded.isEmpty()) {
+            String savedReason=jdbc.queryForObject("""
+                SELECT reason_code FROM crm.inv_stock_movement WHERE tenant_id=? AND request_key=?
+                """,String.class,tenantId,requestKey);
             var old=recorded.getFirst();
             if(!old.locationId().equals(locationId) || !old.itemId().equals(itemId)
-                    || old.delta().compareTo(delta)!=0)
+                    || old.delta().compareTo(delta)!=0 || !savedReason.equals(reason.name()))
                 throw new IllegalArgumentException("Idempotency key reused with different movement");
             return old;
         }
@@ -87,9 +101,9 @@ public class InventoryMovementService {
         jdbc.update("""
             INSERT INTO crm.inv_stock_movement
             (tenant_id,id,location_id,item_id,request_key,delta_quantity,
-             balance_before,balance_after,occurred_at,recorded_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
-            """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now);
+             balance_before,balance_after,occurred_at,recorded_at,reason_code)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now,reason.name());
         return new Movement(id,tenantId,locationId,itemId,delta,before,after);
     }
 }
