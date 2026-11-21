@@ -47,7 +47,7 @@ public class TenantAuthorization {
     private boolean permitted(DomainPermission permission, OrganizationMembershipEntity.Role role) {
         if (role == null) return false;
         return switch (permission) {
-            case CRM_READ -> true;
+            case CRM_READ, ORGANIZATION_LOCATION_READ, INVENTORY_STOCK_READ, SALES_ORDER_READ -> true;
             case CRM_PII_READ -> role == OrganizationMembershipEntity.Role.OWNER
                 || role == OrganizationMembershipEntity.Role.ADMIN
                 || role == OrganizationMembershipEntity.Role.MANAGER;
