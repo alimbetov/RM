@@ -1301,3 +1301,92 @@ BEFORE UPDATE OR DELETE ON crm.inv_cost_policy_version
 FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_cost_policy_mutation();
 --rollback DROP TRIGGER trg_inv_cost_policy_immutable ON crm.inv_cost_policy_version;
 --rollback DROP FUNCTION crm.inv_reject_cost_policy_mutation();
+
+
+--changeset rm:0031-tenant-scoped-rbac
+-- R1.1: per-tenant functional roles, no hardcoded warehouse/accountant role types.
+-- RBAC is opt-in per existing tenant until its role grants and assignments are migrated.
+CREATE TABLE public.iam_tenant_rbac_config (
+ tenant_id UUID NOT NULL PRIMARY KEY,
+ enforced BOOLEAN NOT NULL DEFAULT FALSE,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT fk_rbac_config_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT ck_rbac_config_version CHECK(row_version>=0)
+);
+CREATE TABLE public.iam_tenant_role (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ role_code VARCHAR(64) NOT NULL,
+ display_name VARCHAR(120) NOT NULL,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_tenant_role PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_tenant_role_code UNIQUE(tenant_id,role_code),
+ CONSTRAINT fk_tenant_role_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT ck_tenant_role_code CHECK(length(role_code)>=3)
+);
+CREATE TABLE public.iam_tenant_role_permission (
+ tenant_id UUID NOT NULL,
+ role_id UUID NOT NULL,
+ permission_code VARCHAR(90) NOT NULL,
+ CONSTRAINT pk_tenant_role_permission PRIMARY KEY(tenant_id,role_id,permission_code),
+ CONSTRAINT fk_role_permission_role FOREIGN KEY(tenant_id,role_id)
+   REFERENCES public.iam_tenant_role(tenant_id,id)
+);
+CREATE TABLE public.iam_tenant_user_role (
+ tenant_id UUID NOT NULL,
+ user_id UUID NOT NULL,
+ role_id UUID NOT NULL,
+ assigned_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_tenant_user_role PRIMARY KEY(tenant_id,user_id,role_id),
+ CONSTRAINT fk_user_role_role FOREIGN KEY(tenant_id,role_id)
+   REFERENCES public.iam_tenant_role(tenant_id,id),
+ CONSTRAINT fk_user_role_account FOREIGN KEY(user_id) REFERENCES public.iam_user_account(id)
+);
+CREATE INDEX idx_tenant_user_role_actor ON public.iam_tenant_user_role(tenant_id,user_id);
+CREATE TABLE public.iam_tenant_rbac_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ actor_user_id UUID NOT NULL,
+ action_code VARCHAR(40) NOT NULL,
+ target_user_id UUID,
+ role_id UUID,
+ permission_code VARCHAR(90),
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_tenant_rbac_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_rbac_event_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_rbac_event_actor FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+   ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED','RBAC_ENABLED'))
+);
+CREATE INDEX idx_tenant_rbac_event_time ON public.iam_tenant_rbac_event(tenant_id,occurred_at DESC);
+--rollback DROP TABLE public.iam_tenant_rbac_event;
+--rollback DROP TABLE public.iam_tenant_user_role;
+--rollback DROP TABLE public.iam_tenant_role_permission;
+--rollback DROP TABLE public.iam_tenant_role;
+--rollback DROP TABLE public.iam_tenant_rbac_config;
+
+--changeset rm:0032-tenant-rbac-event-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION public.iam_reject_rbac_event_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Tenant RBAC history is immutable';
+END;
+$$;
+CREATE TRIGGER trg_iam_rbac_event_immutable
+BEFORE UPDATE OR DELETE ON public.iam_tenant_rbac_event
+FOR EACH ROW EXECUTE FUNCTION public.iam_reject_rbac_event_mutation();
+--rollback DROP TRIGGER trg_iam_rbac_event_immutable ON public.iam_tenant_rbac_event;
+--rollback DROP FUNCTION public.iam_reject_rbac_event_mutation();
+
+
+--changeset rm:0033-tenant-rbac-role-activation-evidence
+-- Functional role suspension/reactivation must be auditable; never rewrite 0031.
+ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+ ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+  'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED'));
+--rollback ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+--rollback ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+--rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED','RBAC_ENABLED'));

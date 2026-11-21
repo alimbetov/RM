@@ -26,6 +26,12 @@ public class OrganizationLocationEntity {
         this.status=Status.ACTIVE;this.createdAt=Instant.now();this.updatedAt=this.createdAt;
     }
     public UUID getId(){return id;}
+    public String getName(){return name;}
+    public String getAddressLine(){return addressLine;}
+    public Status getStatus(){return status;}
+    public Instant getCreatedAt(){return createdAt;}
+    public Instant getUpdatedAt(){return updatedAt;}
+    public long getRowVersion(){return rowVersion;}
     public UUID getWorkspaceId(){return workspaceId;}
     public String getKatoCode(){return katoCode;}
     public Type getType(){return type;}

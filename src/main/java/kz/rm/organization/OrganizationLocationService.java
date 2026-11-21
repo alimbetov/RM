@@ -23,7 +23,8 @@ public class OrganizationLocationService {
     public OrganizationLocationEntity create(UUID authenticatedActorId, UUID tenantId,
                                              OrganizationLocationEntity.Type type,
                                              String name, String katoCode, String addressLine) {
-        authorization.requireOrganizationWriter(authenticatedActorId, tenantId);
+        authorization.requireForCommand(authenticatedActorId, tenantId,
+                kz.rm.iam.DomainPermission.ORGANIZATION_LOCATION_WRITE);
         kato.requireOrganizationLocationEligible(katoCode);
         return locations.saveAndFlush(new OrganizationLocationEntity(
                 UUID.randomUUID(),tenantId,type,name,katoCode,addressLine));

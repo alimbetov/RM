@@ -32,7 +32,7 @@ public class InventoryMovementService {
     public enum Reason { MANUAL_ADJUSTMENT, CORRECTION, RECEIPT, WRITE_OFF }
 
     @Transactional
-    public Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
+    Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
                            String requestKey, BigDecimal delta) {
         return adjust(tenantId,locationId,itemId,requestKey,delta,Reason.MANUAL_ADJUSTMENT);
     }

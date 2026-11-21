@@ -1,9 +1,10 @@
-name: RM KMS R1.6 Qualification
+name: RM Domain Security and PostgreSQL Qualification
 
 on:
   push:
     branches:
-      - feat/rm-kms-r1-implementation
+      - main
+      - feat/sec-r1-unified-domain-authorization
   pull_request:
   workflow_dispatch:
 

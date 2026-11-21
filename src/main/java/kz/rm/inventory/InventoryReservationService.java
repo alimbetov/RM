@@ -5,11 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,7 +15,10 @@ import java.util.UUID;
  *
  * Order line -> exactly one reservation in R1.1; no cross-warehouse split.
  * Lock order for all mutations:
- * tenant/order-line request stripe -> seller order row -> stock balance -> reservation.
+ * seller order row -> stock balance -> reservation.
+ * Order row lock serializes retries on the same line; unique(tenant,order_line)
+ * remains the database idempotency barrier. Cross-order SKU locks are acquired
+ * in deterministic SKU order by the SALES orchestration service.
  *
  * No public endpoint: the caller must derive tenant and actor from verified IAM
  * membership and enforce SALES/INVENTORY rights before using this internal port.
@@ -36,11 +36,11 @@ public class InventoryReservationService {
     private record Stock(BigDecimal onHand, BigDecimal reserved) {}
 
     @Transactional
-    public Reservation reserve(UUID tenantId, UUID orderId, UUID orderLineId,
+    Reservation reserve(UUID tenantId, UUID orderId, UUID orderLineId,
                                UUID locationId, UUID itemId, BigDecimal quantity) {
         requireIds(tenantId,orderId,orderLineId,locationId,itemId);
         positiveQty(quantity);
-        lockRequest(tenantId,orderLineId);
+        // The seller order FOR UPDATE protects this line from concurrent retries.
         requireOrderStatus(tenantId,orderId,true);
         OrderLine line=jdbc.query("""
             SELECT l.quantity,s.catalog_item_id
@@ -84,20 +84,19 @@ public class InventoryReservationService {
     }
 
     @Transactional
-    public Reservation release(UUID tenantId, UUID reservationId) {
+    Reservation release(UUID tenantId, UUID reservationId) {
         return transition(tenantId,reservationId,State.RELEASED);
     }
 
     /** Fulfillment converts the reservation into a single immutable negative stock movement. */
     @Transactional
-    public Reservation fulfill(UUID tenantId, UUID reservationId) {
+    Reservation fulfill(UUID tenantId, UUID reservationId) {
         return transition(tenantId,reservationId,State.FULFILLED);
     }
 
     private Reservation transition(UUID tenantId,UUID reservationId,State target) {
         if(tenantId==null || reservationId==null) throw new IllegalArgumentException("Reservation required");
         Reservation peek=loadById(tenantId,reservationId,false);
-        lockRequest(tenantId,peek.lineId());
         String orderStatus=requireOrderStatus(tenantId,peek.orderId(),false);
         Stock stock=lockStock(tenantId,peek.locationId(),peek.itemId());
         Reservation current=loadById(tenantId,reservationId,true);
@@ -198,19 +197,6 @@ public class InventoryReservationService {
               (tenant_id,id,reservation_id,event_type,occurred_at)
             VALUES (?,?,?,?,?)
             """,tenant,UUID.randomUUID(),id,type,now);
-    }
-
-    private void lockRequest(UUID tenant,UUID line) {
-        int stripe;
-        try {
-            byte[] hash=MessageDigest.getInstance("SHA-256")
-                    .digest((tenant+":"+line).getBytes(StandardCharsets.UTF_8));
-            stripe=Math.floorMod(Arrays.hashCode(hash),64);
-        } catch(Exception e) {throw new IllegalStateException("Cannot hash reservation key",e);}
-        Integer value=jdbc.queryForObject("""
-            SELECT bucket FROM crm.inv_movement_request_lock WHERE bucket=? FOR UPDATE
-            """,Integer.class,stripe);
-        if(value==null || value!=stripe)throw new IllegalStateException("Inventory lock missing");
     }
 
     private static void positiveQty(BigDecimal value) {
