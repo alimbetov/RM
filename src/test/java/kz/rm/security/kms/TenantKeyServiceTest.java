@@ -4,52 +4,64 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
-
-import javax.crypto.SecretKey;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
 @TestPropertySource(properties = {
-        // Test fixture only. Never use this well-known KEK in a real deployment.
-        "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 })
 class TenantKeyServiceTest {
-
-    @Autowired TenantKeyService service;
+    @Autowired TenantKeyService keys;
     @Autowired TenantKeyRepository repository;
-    @Autowired KeyWrappingService wrapping;
+    @Autowired TenantCryptoService crypto;
 
     @Test
-    void provisionsAndRotatesSingleTable() {
+    void provisionsOneRowWithThreeSlots() {
         UUID tenant = UUID.randomUUID();
-        TenantKeyId v1 = service.provision(tenant);
-        assertThat(v1.getVersion()).isEqualTo(1);
-        assertThat(service.provision(tenant)).isEqualTo(v1);
-
-        TenantKeyEntity first = repository.findById(v1).orElseThrow();
-        assertThat(first.getStatus()).isEqualTo(KeyStatus.ACTIVE);
-        SecretKey original = wrapping.unwrap(tenant, 1, first.getWrappedKey());
-
-        TenantKeyId v2 = service.rotate(tenant);
-        assertThat(v2.getVersion()).isEqualTo(2);
-        assertThat(repository.findById(v1).orElseThrow().getStatus())
-                .isEqualTo(KeyStatus.DECRYPT_ONLY);
-        assertThat(repository.findById(v2).orElseThrow().getStatus())
-                .isEqualTo(KeyStatus.ACTIVE);
-        assertThat(repository.findById(v2).orElseThrow().getActiveSlot()).isEqualTo((short) 1);
-        assertThat(wrapping.unwrap(tenant, 1, first.getWrappedKey()).getEncoded())
-                .containsExactly(original.getEncoded());
+        assertThat(keys.provision(tenant)).isEqualTo(tenant);
+        assertThat(keys.provision(tenant)).isEqualTo(tenant);
+        var entity = repository.findById(tenant).orElseThrow();
+        assertThat(entity.getActiveSlot()).isEqualTo("A");
+        assertThat(entity.activeGeneration()).isEqualTo(1);
+        assertThat(entity.getNextGeneration()).isEqualTo(2);
+        assertThat(entity.forGeneration(1).status()).isEqualTo(KeyStatus.ACTIVE);
+        assertThatThrownBy(() -> entity.forGeneration(2)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> keys.rotate(tenant)).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
-    void wrongTenantCannotUnwrapKey() {
+    void encryptDecryptAndRejectWrongContext() {
         UUID tenant = UUID.randomUUID();
-        TenantKeyId id = service.provision(tenant);
-        byte[] wrapped = repository.findById(id).orElseThrow().getWrappedKey();
-        assertThatThrownBy(() -> wrapping.unwrap(UUID.randomUUID(), 1, wrapped))
-                .isInstanceOf(IllegalStateException.class);
+        keys.provision(tenant);
+        CryptoContext c = new CryptoContext(tenant, "crm_client", UUID.randomUUID(), "phone");
+        var a = crypto.encrypt(c, "Сәлем, Алматы! +7 777");
+        var b = crypto.encrypt(c, "Сәлем, Алматы! +7 777");
+        assertThat(a.nonce()).isNotEqualTo(b.nonce());
+        assertThat(crypto.decrypt(c, a)).isEqualTo("Сәлем, Алматы! +7 777");
+        assertThat(crypto.decrypt(c, b)).isEqualTo("Сәлем, Алматы! +7 777");
+        assertThatThrownBy(() -> crypto.decrypt(
+            new CryptoContext(tenant, "crm_client", UUID.randomUUID(), "phone"), a))
+            .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> crypto.decrypt(
+            new CryptoContext(tenant, "crm_client", c.entityId(), "email"), a))
+            .isInstanceOf(IllegalStateException.class);
+        byte[] tampered = a.ciphertextAndTag();
+        tampered[0] ^= 1;
+        var bad = new EncryptedValue(1, a.keyGeneration(), a.nonce(), tampered);
+        assertThatThrownBy(() -> crypto.decrypt(c, bad)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void wrongTenantFails() {
+        UUID tenant = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        keys.provision(tenant);
+        keys.provision(other);
+        var context = new CryptoContext(tenant, "crm_client", UUID.randomUUID(), "name");
+        var encrypted = crypto.encrypt(context, "A");
+        assertThatThrownBy(() -> crypto.decrypt(
+            new CryptoContext(other, "crm_client", context.entityId(), "name"), encrypted))
+            .isInstanceOf(IllegalStateException.class);
     }
 }
