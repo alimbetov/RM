@@ -2,7 +2,7 @@
 
 **Версия:** R2.2 (R2.0 + пользовательские сценарии + базовый DTO-контракт) · **Базовая версия R2.0:** PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae` · **Сценарии R2.1:** PR #5, merge `378dba6ccbd79687ea979dab2ad952ef2fbbbd51` · **DTO R2.2:** включён в `main` через PR #6 (`27373aca6bdb9a36396e7396ca411bf30b8af362`). Статус описания не означает реализацию API или production.
 **Источник фактической реализации:** код и точный SHA `main`, а не версия ТЗ. Базовый внедрённый R2-код: PR #2; IAM hardening из [PR #4](https://github.com/alimbetov/RM/pull/4) включён в `main` (`bb6baf3392943525c29cc49232509e47591a54dd`). Отдельное независимое security-одобрение и production admission — **HOLD**.
-**Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`. **Дополнение IAM-PII-R2.5 (§25) — DESIGN/ТЗ, не реализовано и не проходит текущий release gate.**
+**Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`. **IAM-PII-R2.5 (§25): R2.5A/B/C реализованы как внутренние сервисы в `base_dev`; R2.5D — синтетическая проверка переноса и контролируемый ручной cutover, без production-допуска.**
 
 ## 1. Назначение и продукт
 
@@ -26,7 +26,7 @@ RM — **CRM-first business platform**: единая рабочая среда �
 
 | Контекст | Владеет данными и поведением | R2-доставка |
 |---|---|---|
-| IAM | global identity, account status, membership, tenant roles, grants, защищённый профиль | IAM lifecycle в main; в base_dev IAM R2.3/R2.4 — PR #9. Шифрование global display name/phone и проверка смены email — **R2.5 TARGET**, не реализовано |
+| IAM | global identity, account status, membership, tenant roles, grants, защищённый профиль | IAM lifecycle в main; в `base_dev` IAM R2.3–R2.5D (PR #9), включая encrypted profile и изменение email; полный production cutover и внешняя авторизация **HOLD** |
 | ORG | организация, подразделения/локации | Базовые сервисы и чтение реализованы |
 | GEO | справочник КАТО/территорий | Справочные контракты, реальная полнота определяется тестами |
 | FILES | метаданные и доступ к файлам, хранение | Расширение по отдельной вертикали |
@@ -704,7 +704,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 3. **Email proof ≠ аутентификация.** Проверка почты не выдаёт `VerifiedActor`, OIDC session, membership, tenant role, `CRM_PII_READ`, OWNER или PLATFORM_ADMIN; не восстанавливает SUSPENDED/DELETED пользователя. Email-dependent recovery, activation of email invitations и buyer order claim требуют **текущего** подтверждённого email и своей предметной проверки.
 4. **Глобальный ключевой контур:** email, display name и phone принадлежат глобальному IAM. **Запрещено шифровать профиль tenant DEK**. Применять AES-256-GCM, независимый от него глобальный IAM encryption key и доменно-разделённый per-field AAD (userId, поле, версия); HMAC-SHA-256 blind index для equality email/phone. Секреты вне исходников/логов; неправильная generation/secret → fail closed.
 5. **Не ломать существующий checkout:** `crm.sales_order.pending_email_identity_id` связывает исторический заказ с конкретным email identity. Нельзя при email change просто переписать `email_envelope`/HMAC у старой identity — сохранять immutable old identity. Перед cutover `findOrProvision`, verify и buyer-order claim обязаны исключать переназначение старых заказов.
-6. **Текущая защищённость (проверено по коду `base_dev`):** `EmailIdentityCrypto`/ `EmailIdentityService` уже обеспечивают encrypted email, HMAC lookup, verification token и durable outbox (отправка провайдером пока HOLD). `iam_user_account.display_name`, `email_normalized`, `phone_e164` не зашифрованы на уровне приложения; email-change service отсутствует. **Не выдавать существующее CRM PII/KMS за защиту всех IAM-полей.**
+6. **Фактическая защищённость `base_dev`:** `EmailIdentityCrypto`/`EmailIdentityService` реализуют encrypted email, HMAC, challenge и CHANGE_EMAIL; `GlobalUserProfileCrypto/Service` сохраняют новые имена и телефоны зашифрованно. **Legacy-колонки `iam_user_account.display_name/email_normalized/phone_e164` физически присутствуют и могут содержать plaintext до офлайн-миграции и DB seal R2.5D.** Доставка провайдером и полный release admission HOLD. Не выдавать шифрование CRM/KMS за защиту всех IAM-полей.
 
 ### 25.2 Сервисный контракт, без нового framework
 
@@ -766,3 +766,15 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 - **Не закрыто:** автоматическая миграция в работающем сервисе, заполненная production-копия PostgreSQL с реальными коллизиями, завершение backup/restore, удаление legacy колонок/DB-пользовательских прав, доказательство отсутствия альтернативных SQL writers, управление жизненным циклом/ротацией глобальных IAM ключей. Сервисная миграция и зелёный synthetic CI не заменяют cutover-gate.
 
 **Условия допуска:** отдельное security-review PR #9, прогон migration и восстановления на обезличенной копии заполненной БД, проверка возможных конфликтов почты, обязательная сверка исторических заказов, внешний anti-abuse/SMTP/OIDC и DB least-privilege. Текущая стадия — разработка сервисов и квалификация; `main` не изменять до согласования.
+
+### 25.8 IAM-PII-R2.5D — квалификация переноса заполненной PostgreSQL и контроль остаточного plaintext
+
+**Статус:** внутренний preflight и изолированное тестирование **синтетических** заполненных данных, без доступа к производственной БД. Не утверждать реальный production migration/restore, пока он не проведён оператором и не подтверждён независимой проверкой. [Операционный регламент](../operations/RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION.md) · [ручной seal SQL](../operations/RM-IAM-PII-R2.5D-POSTGRES-SEAL.sql).
+
+- `LegacyIamPiiMigrationService` должен сохранять целостность: если encrypted profile уже создан, расшифровать и сравнить доступные legacy имя и телефон; при несоответствии **DENY и полный rollback** до очистки. Email-only пользователь без имени мигрирует адрес без выдуманного персонального имени. Существующие email, повреждённый ключ/AAD и чужой HMAC-claim должны блокировать стирание исходника.
+- `IamPiiMigrationQualificationService.inventory()` возвращает **только агрегаты**, без userId, адреса, ФИО, телефона или ключей. `assertBackfillAdmissible()` проверяет нормализованные глобальные email claim, расхождение legacy/encrypted, все encrypted profile/email envelopes и HMAC, наличие доступных IAM-ключей. `assertReadyForPlaintextSeal()` требует ровно **0** строк с ненулевыми legacy PII и целостный ciphertext.
+- Новая выделенная CI-задача `postgres-pii-populated` проверяет перенос **200 синтетических аккаунтов** в чистой PostgreSQL 17: 150 имя+телефон+email, 30 email-only, 20 имя-only; несколько транзакционных партий; negative tests коллизий, повреждённого ciphertext, недоступных ключей и запрета SQL plaintext.
+- Сценарий ручного **DB seal** выполняется оператором только после резервной копии, проверки восстановления, остановки **всех** legacy writers и успешного Java preflight на той же БД. В одном PG transaction берёт exclusive lock, подтверждает zero residual и валидирует `CHECK(display_name IS NULL AND phone_e164 IS NULL AND email_normalized IS NULL)`; это запрещает будущую запись открытых значений. Автоматически Liquibase этот seal **не применяет**.
+- Сами legacy-колонки физически сохраняются пустыми до отдельного доказуемого refactoring всех SQL legacy-queries и безопасного `DROP COLUMN`. Старые резервные копии/логи требуют собственной процедуры retention. Глобальный `external_subject` также остаётся сознательным нешифрованным lookup под отдельной политикой.
+
+**Релизные критерии:** для внутреннего candidate нужны exact-SHA GREEN трёх заданий (`h2-smoke`, `postgres-integration`, `postgres-pii-populated`). Для production обязательны миграция **реальной авторизованной копии** наполненной БД, evidence snapshot/restore и seal, DB least privilege, независимое security-review, управление глобальными ключами, SMTP и OIDC/BFF. Без этого **PRODUCTION HOLD**; `main` не менять до отдельного решения.
