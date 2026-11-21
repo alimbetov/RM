@@ -213,7 +213,7 @@ class IamAccessStatusQualificationTest {
             assertThat(restoration.get(20,TimeUnit.SECONDS)).isFalse();
         }
         assertThat(jdbc.queryForObject("""
-                SELECT status FROM public.iam_org_membership m
+                SELECT m.status FROM public.iam_org_membership m
                 JOIN public.iam_workspace w ON w.organization_id=m.organization_id
                 WHERE w.id=? AND m.user_id=?
                 """,String.class,f.tenant(),f.staff())).isEqualTo("SUSPENDED");
