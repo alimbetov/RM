@@ -63,6 +63,21 @@ class RustFsLiveInfrastructureE2ETest {
     @Autowired RustFsFileStorage rust;
     @Autowired JdbcTemplate jdbc;
 
+
+    @BeforeAll
+    static void ensureSyntheticBucketExists() {
+        try(var client=S3Client.builder()
+                .endpointOverride(URI.create(System.getenv("RM_RUSTFS_E2E_ENDPOINT")))
+                .region(Region.of("us-east-1")).forcePathStyle(true)
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(
+                    System.getenv("RM_RUSTFS_E2E_ACCESS"),
+                    System.getenv("RM_RUSTFS_E2E_SECRET")))).build()) {
+            var bucket=System.getenv("RM_RUSTFS_E2E_BUCKET");
+            try { client.createBucket(CreateBucketRequest.builder().bucket(bucket).build()); }
+            catch(software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException ignored) {}
+        }
+    }
+
     private record Tenant(UUID user,UUID tenant,VerifiedActor actor) {}
     private Tenant tenant() {
         var owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
