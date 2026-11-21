@@ -372,13 +372,13 @@ class TenantRbacRevocationQualificationTest {
             var command=pool.submit(()->{
                 try {
                     return tx.execute(status->{
-                var cached=memberships.findByOrganizationIdAndUserId(organizationId,f.staff())
-                        .orElseThrow();
-                assertThat(cached.getStatus()).isEqualTo(OrganizationMembershipEntity.Status.ACTIVE);
-                loaded.countDown();
-                await(proceed);
-                    authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
-                    return true;
+                        var cached=memberships.findByOrganizationIdAndUserId(organizationId,f.staff())
+                                .orElseThrow();
+                        assertThat(cached.getStatus()).isEqualTo(OrganizationMembershipEntity.Status.ACTIVE);
+                        loaded.countDown();
+                        await(proceed);
+                        authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                        return true;
                     });
                 } catch(SecurityException | UnexpectedRollbackException denied) {
                     return false; // rejected command transaction is rolled back
@@ -401,12 +401,12 @@ class TenantRbacRevocationQualificationTest {
             var command=pool.submit(()->{
                 try {
                     return tx.execute(status->{
-                var cached=workspaces.findById(f.tenant()).orElseThrow();
-                assertThat(cached.getStatus()).isEqualTo(WorkspaceEntity.Status.ACTIVE);
-                loaded.countDown();
-                await(proceed);
-                    authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
-                    return true;
+                        var cached=workspaces.findById(f.tenant()).orElseThrow();
+                        assertThat(cached.getStatus()).isEqualTo(WorkspaceEntity.Status.ACTIVE);
+                        loaded.countDown();
+                        await(proceed);
+                        authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.INVENTORY_RECEIVE);
+                        return true;
                     });
                 } catch(SecurityException | UnexpectedRollbackException denied) {
                     return false; // rejected command transaction is rolled back
