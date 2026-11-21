@@ -576,3 +576,42 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 
 
 **Git workflow (2026-11-21):** `main` — проверенная интеграционная ветка; `base_dev` — единственная постоянная ветка разработки. H2 и PostgreSQL запускаются на push в обе ветки и на PR. Допуск изменений в `main` — по PR с review и точным CI. Архивные ветки не считаются активной разработкой.
+
+---
+
+## 23. IAM — внутренний процесс входа и раздачи ролей (service-only R2.3)
+
+**Решение:** один процесс аутентификации для каждого человека (покупатель, сотрудник, владелец организации, администратор RM); полномочия определяются **после** проверки identity. Не делать разные логины или отдельные аккаунты по типам пользователя. Не создавать контроллеры до подтверждения доверенного HTTP/OIDC admission.
+
+**Целевой процесс и текущая реализация в `base_dev` (до merge — кандидат):**
+
+| Шаг | Кто действует | Внутренний сервис | Проверки и последствия |
+|---|---|---|---|
+| A. Identity | Любой человек | `OidcActorResolver` → `VerifiedActor` | Только подтверждённый subject, ACTIVE account и действующий токен; настоящий HTTP/BFF пока HOLD |
+| B. Назначить владельца новой компании | Глобальный `PLATFORM_ADMIN` | `PlatformTenantBootstrapService.provision` | ACTIVE admin, ACTIVE существующий user, создать organization/workspace/OWNER atomically; global admin **не получает** бизнес-прав |
+| C. Изолировать новую организацию | Система | шаг B | `iam_tenant_rbac_config.enforced=TRUE` немедленно; **default deny** любых бизнес-прав до конкретного назначения |
+| D. Пригласить сотрудника | Активный OWNER организации | `TenantMemberEnrollmentService.invite` | Только существующий ACTIVE global account; INVITED membership в одном tenant, без прав; один invite event |
+| E. Принять приглашение | Сам приглашённый сотрудник | `TenantMemberEnrollmentService.accept` | `VerifiedActor.userId` точно совпадает с адресатом; ACTIVE workspace, enforced RBAC; переход INVITED→ACTIVE, единичный audit |
+| F. Создать функциональную роль | OWNER | `VerifiedTenantRoleCommands.createRole/grant` | Tenant-owned роль, разрешения только из `DomainPermission`, `TENANT_RBAC_MANAGE` не делегировать |
+| G. Назначить роль сотруднику | OWNER | `VerifiedTenantRoleCommands.assign` | Сотрудник ACTIVE в том же tenant, роль ACTIVE; ни одного бизнес-permission до успешного назначения |
+| H. Работать в CRM/SALES/INVENTORY | Сотрудник | `TenantAuthorization.require/requireForCommand` | ACTIVE user+workspace+membership, актуальная роль и конкретное permission; дополнительно объектная политика домена |
+| I. Уволить, отозвать доступ | OWNER / PLATFORM_ADMIN по своей области | `TenantAccessStatusService`, `GlobalAccountStatusService` | Tenant suspension не равно global suspension; отзыв сериализован с командами, права не переходят в другой tenant |
+
+**Граница доверия:** платформа не принимает `actorId` из body/DTO. Global `PLATFORM_ADMIN` может создать организацию с первым OWNER; это **не универсальный администратор CRM**. OWNER создаёт произвольно названные функциональные роли и назначает их сотрудникам; не получает автоматически все права продаж, склада или PII.
+
+**Статусы и повтор:** повтор `provision` с тем же tenant UUID и тем же владельцем/реквизитами возвращает созданную пару; другой payload с тем же tenant UUID отклоняется. Повтор `invite` для INVITED и `accept` для ACTIVE — no-op без повторного audit. При потере ACTIVE account, блокировке workspace, неправильной роли, попытке самоприглашения или обращении к чужой организации — DENY. Новая организация по умолчанию **строже**, чем старый tenant в compatibility mode: `enforced=TRUE` с момента создания.
+
+**Что пока не поддерживается в новом process service:** создание глобального пользователя из произвольного email, реальная рассылка приглашений, внешний auth controller/Browser/BFF, подтверждение права на компанию (KYC/registry), перевод существующей компании с уже заполненной БД, transfer OWNER, глобальный admin-role grant/delegation, восстановление организации без OWNER, первичное доверенное назначение платформенного администратора. Эти функции отдельные service-only или интеграционные этапы. Администратор RM уже должен иметь легитимное `PLATFORM_ADMIN` назначение из доверенного bootstrap-контурa.
+
+### 23.1 Критерии процессной квалификации (без контроллеров)
+
+1. Platform admin → organization/tenant/OWNER; replay без второго tenant и audit; чужой пользователь не может provision.
+2. OWNER → role → grant → invite staff; до активации нельзя назначить роль; до назначения роль не даёт доступ.
+3. Сотрудник принимает приглашение **своим** verified principal; active membership сам по себе не обходит enforced RBAC.
+4. OWNER назначает рабочее permission; сотрудник получает только его и не может назначать себе/другим права.
+5. Platform admin не читает CRM другого tenant, даже если создал организацию. Сотрудник А не получает роль/данные организации B.
+6. Два параллельных принятия приглашения → одна активация, один MEMBER_JOINED event; повторная команда идемпотентна.
+7. Suspended/LEFT membership, suspended account и tenant запрещают операции; отзыв доступа не допускает race с новой изменяющей командой.
+8. Синтетический `VerifiedActor`/OIDC resolver и реальные PostgreSQL/H2 service tests достаточны **только для внутренней квалификации**. Реальные токены, пользовательский HTTP/BFF, SMTP/invite, security/least-privilege и production load — отдельные gates.
+
+**Ограничение архитектуры:** не строить универсальный workflow/ABAC, не создавать controller и формы входа пока этот service-only сценарий не пройдёт PostgreSQL и H2 на точном SHA. Новые таблицы допустимы только при реальной необходимости; текущий шаг использует существующую IAM-схему и добавляет только значения событий аудита Liquibase `0037`.
