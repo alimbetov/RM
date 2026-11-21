@@ -153,3 +153,24 @@ RM использует **один глобальный аккаунт** (`iam_u
 - `UserAccountEntity` исключает legacy поля `display_name`, `email_normalized`, `phone_e164` из JPA-мэппинга. Код checkout не пишет открытую строку имени. Миграции 0049–0051 создают `iam_pii.user_profile_secret`, аудит и допускают NULL для `display_name` до окончания cutover.
 - `LegacyIamPiiMigrationService` работает **только при явно активированном offline maintenance flag**, шифрует и очищает старые plaintext-поля транзакционно после проверки email collision; legacy email не становится verified по факту миграции. При ошибке полный rollback, старые данные сохраняются. Нельзя запускать одновременно с online checkout/legacy writers.
 - **Отложено до отдельной квалификации:** прогон в обезличенной копии наполненной PostgreSQL, выявление дублей и запрет альтернативных прямых SQL-writers, DB-level запрет plaintext/удаление старых колонок, восстановление из backup и ротация global IAM ключей. Пока это не завершено, R2.5C — internal implementation / technical tests, **не** production confidentiality admission.
+
+## 13. R2.5D — populated PostgreSQL migration & security qualification
+
+**Нормативный операционный контракт:** [RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION](../operations/RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION.md). [Ручной PostgreSQL seal](../operations/RM-IAM-PII-R2.5D-POSTGRES-SEAL.sql). Контроллеры не создаются. Нельзя автоматически мигрировать реальные пользовательские данные при старте Spring Boot.
+
+### 13.1 Минимальные сервисы квалификации
+
+- `IamPiiMigrationQualificationService.inventory()` — агрегатные количества global accounts, остаточных plaintext, encrypted profiles, active/pending/historical email identities. Возвращаемая структура **не содержит ФИО, телефон, email и userId**.
+- `assertBackfillAdmissible()` — read-only проверка пригодности заполненных данных: повторяемость нормализации email, конфликт владельцев email, различие старого имени/телефона и encrypted value, AEAD-integrity и HMAC, глобальные IAM секреты. При любой ошибке **fail closed** и запрет scrub.
+- `assertReadyForPlaintextSeal()` — криптографическая самопроверка ключей даже при пустой БД, полная верификация envelope/HMAC и ровно 0 ненулевых `display_name/phone_e164/email_normalized`. Успешный результат **только** допускает ручную, отдельно утверждаемую SQL seal-транзакцию, не запускает её.
+- `LegacyIamPiiMigrationService` обязан сверять уже сохранённый encrypted профиль с legacy перед очищением, а для email-only аккаунта без имени переносить почту без выдумывания ФИО. Попытка перенести другой legacy email поверх текущего или чужого active HMAC → DENY.
+
+### 13.2 Изолированное наполненное испытание
+
+Третий обязательный CI job `postgres-pii-populated` поднимает чистую PostgreSQL 17 и запускает класс `IamPiiPopulatedDatabaseQualificationTest` с 200 **синтетическими** аккаунтами (150 имя+телефон+email, 30 email-only, 20 имя-only). В нескольких транзакционных партиях выполняется backfill; после него crypto/HMAC scan и zero residual. Дополнительно проверяются case-insensitive email collision, расхождение encrypted/legacy, потеря ключа, ciphertext tampering, транзакционный DDL CHECK, который запрещает новые открытые значения.
+
+### 13.3 Ручное production-принятие: HOLD
+
+Для реальной заполненной БД обязательны независимое разрешение владельца данных, подтверждённая защита и восстановление backup, изоляция всех SQL-writers, preflight без раскрытия PII, полная миграция, zero residual, отдельная manual seal-транзакция и post-seal restore/test на совместимых IAM keys. `external_subject` остаётся осознанным нешифрованным lookup, а старые nullable legacy колонки **не удаляются физически** данным этапом; их нельзя удалить до refactoring всех SQL-путей. Исторические backups/логи не очищаются автоматически. Production admission без этих свидетельств — HOLD.
+
+**Не подменять реальный populated backup синтетическими данными GitHub Actions.** Независимый security-review, SMTP/provider abuse controls, реальный OIDC/BFF и DB least privilege также остаются обязательными.
