@@ -588,6 +588,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 | Шаг | Кто действует | Внутренний сервис | Проверки и последствия |
 |---|---|---|---|
 | A. Identity | Любой человек | `OidcActorResolver` → `VerifiedActor` | Только подтверждённый subject, ACTIVE account и действующий токен; настоящий HTTP/BFF пока HOLD |
+| A1. Свои контексты | Любой вошедший пользователь | `MyAccessService.myTenants/myGlobalRoles/myFunctionalRoles` | Список только ACTIVE организаций текущего пользователя; глобальные роли отдельно; функциональные роли только своего tenant |
 | B. Назначить владельца новой компании | Глобальный `PLATFORM_ADMIN` | `PlatformTenantBootstrapService.provision` | ACTIVE admin, ACTIVE существующий user, создать organization/workspace/OWNER atomically; global admin **не получает** бизнес-прав |
 | C. Изолировать новую организацию | Система | шаг B | `iam_tenant_rbac_config.enforced=TRUE` немедленно; **default deny** любых бизнес-прав до конкретного назначения |
 | D. Пригласить сотрудника | Активный OWNER организации | `TenantMemberEnrollmentService.invite` | Только существующий ACTIVE global account; INVITED membership в одном tenant, без прав; один invite event |
@@ -608,10 +609,11 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 1. Platform admin → organization/tenant/OWNER; replay без второго tenant и audit; чужой пользователь не может provision.
 2. OWNER → role → grant → invite staff; до активации нельзя назначить роль; до назначения роль не даёт доступ.
 3. Сотрудник принимает приглашение **своим** verified principal; active membership сам по себе не обходит enforced RBAC.
-4. OWNER назначает рабочее permission; сотрудник получает только его и не может назначать себе/другим права.
-5. Platform admin не читает CRM другого tenant, даже если создал организацию. Сотрудник А не получает роль/данные организации B.
-6. Два параллельных принятия приглашения → одна активация, один MEMBER_JOINED event; повторная команда идемпотентна.
-7. Suspended/LEFT membership, suspended account и tenant запрещают операции; отзыв доступа не допускает race с новой изменяющей командой.
-8. Синтетический `VerifiedActor`/OIDC resolver и реальные PostgreSQL/H2 service tests достаточны **только для внутренней квалификации**. Реальные токены, пользовательский HTTP/BFF, SMTP/invite, security/least-privilege и production load — отдельные gates.
+4. Один сотрудник в двух tenant видит обе свои организации, но роль SALES одного tenant не действует в другом; гость без membership не видит организации. Suspended account немедленно теряет доступ к чтению даже со старым VerifiedActor.
+5. OWNER назначает рабочее permission; сотрудник получает только его и не может назначать себе/другим права.
+6. Platform admin не читает CRM другого tenant, даже если создал организацию. Сотрудник А не получает роль/данные организации B.
+7. Два параллельных принятия приглашения → одна активация, один MEMBER_JOINED event; повторная команда идемпотентна.
+8. Suspended/LEFT membership, suspended account и tenant запрещают операции; отзыв доступа не допускает race с новой изменяющей командой.
+9. Синтетический `VerifiedActor`/OIDC resolver и реальные PostgreSQL/H2 service tests достаточны **только для внутренней квалификации**. Реальные токены, пользовательский HTTP/BFF, SMTP/invite, security/least-privilege и production load — отдельные gates.
 
 **Ограничение архитектуры:** не строить универсальный workflow/ABAC, не создавать controller и формы входа пока этот service-only сценарий не пройдёт PostgreSQL и H2 на точном SHA. Новые таблицы допустимы только при реальной необходимости; текущий шаг использует существующую IAM-схему и добавляет только значения событий аудита Liquibase `0037`.
