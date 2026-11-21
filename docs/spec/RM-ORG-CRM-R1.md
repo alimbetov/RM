@@ -152,3 +152,8 @@ Materialize/query per-workspace with scoped access and explicit reporting `asOf`
 - Partitioning: candidates are **large** CRM/PII/event tables, `PARTITION BY HASH(workspace_id)`, initial modulus based on benchmarking, physical partitions created by migrations. Partitioned PK/UNIQUE includes `workspace_id`. Small KATO table and user/organization tables do not require HASH partitions.
 - Sensitive customer names and free-text values must be classified; do not assume customer displayName is safe plaintext. Mask or encrypt when it refers to an identifiable natural person.
 - Development sequence remains CRM-R1A clients/consents → R1A.5 catalog → R1B/C orders/estimates → R1D invoices/payments → R1E-G campaigns/tasks/dashboard. Physical PII split is CRM-R1A design gate; massive hash partitioning is separately qualified after scale tests.
+
+
+## 10. File attachments as early foundation
+
+**FILES-R1.0 belongs before CRM-R1A attachments and CATALOG-R1A.5 images.** Use dedicated domain [RM-FILES-R1](RM-FILES-R1.md) and minimal tables `files.file_object`, `files.file_storage`, `files.file_attachment`. Binary content initially lives on a durable, private server filesystem; business entities reference stable `file_id` and `tenant_id`, never file system paths or future RustFS bucket keys. A `FileObjectStore` port allows later replacement with RustFS/S3 adapter, staged migration with checksum verification and no database relation changes. Sensitive files require at-rest encryption and tenant-scoped download authorization. Multiple application pods cannot safely rely on separate ephemeral pod disks.
