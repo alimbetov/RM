@@ -1,6 +1,6 @@
 # RM — CRM Modular Monolith
 
-Architecture baseline: **RM-R1 (proposal, not implementation)**. Java 21, Spring Boot, PostgreSQL, Flyway, Caffeine. One deployable application, no Redis/Vault/microservices in MVP.
+Architecture baseline: **RM-R1 (proposal, not implementation)**. Java 21, Spring Boot, H2 (development), PostgreSQL (later), Liquibase (SQL-only), Caffeine (planned). One deployable application, no Redis/Vault/microservices in MVP.
 
 ## MVP bounded modules
 - `identity`: company (tenant), users/membership, RBAC, registration
