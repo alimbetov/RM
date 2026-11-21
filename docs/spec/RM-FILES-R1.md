@@ -1,5 +1,7 @@
 # RM-FILES-R1.1 — единая файловая медиатека CRM, связи с сущностями и контроль доступа
 
+> **Обновление архитектурного решения, 2026-11-21:** для FILES выбрано хранение исходных бинарных данных **без прикладного шифрования**. Активные backend — LOCAL (по умолчанию) и RustFS/S3 (по флагу), без автоматической миграции. Любые требования ниже об обязательном binary AES-GCM считаются отменёнными этим решением; шифрование PII-полей CRM не меняется. **Production для конфиденциальных документов остаётся HOLD** до независимого privacy/security и эксплуатационного допуска. Описание актуального механизма: [RM-FILES-RUSTFS-FLAG-ROLLOUT-R1](../operations/RM-FILES-RUSTFS-FLAG-ROLLOUT-R1.md).
+
 **Статус:** REVIEWED DESIGN / ТЗ к реализации; код FILES не изменён.  
 **Дата:** 2026-11-21. **Рабочая ветка:** base_dev. **Production/public HTTP:** HOLD.  
 **Нормативный стандарт:** [RM-PLATFORM-STANDARD-R2](../architecture/RM-PLATFORM-STANDARD-R2.md); правила приватности [RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1](RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1.md).  
