@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.ByteArrayInputStream;
@@ -31,7 +32,12 @@ class FilesR10bQualificationTest {
     }
     static class SyntheticScanner implements FileScanPort {
         final AtomicReference<Verdict> next=new AtomicReference<>(Verdict.CLEAN);
-        @Override public Verdict scan(String privateStagingKey) {return next.get();}
+        final AtomicReference<Runnable> beforeVerdict=new AtomicReference<>();
+        @Override public Verdict scan(String privateStagingKey) {
+            Runnable hook=beforeVerdict.getAndSet(null);
+            if(hook!=null)hook.run();
+            return next.get();
+        }
     }
 
     @Autowired UserAccountRepository users;
@@ -44,6 +50,7 @@ class FilesR10bQualificationTest {
     @Autowired FileStoragePort storage;
     @Autowired SyntheticScanner scanner;
     @Autowired JdbcTemplate jdbc;
+    @Value("\${rm.files.local-root:\${java.io.tmpdir}/rm-files-synthetic}") String localRoot;
 
     private record Setup(UUID owner,UUID uploader,UUID tenant,VerifiedActor actor) {}
     private Setup setup() {
@@ -194,6 +201,38 @@ class FilesR10bQualificationTest {
         assertThatThrownBy(()->completion.acceptAndComplete(s.actor(),s.tenant(),
                 intent.fileId(),forbidden)).isInstanceOf(SecurityException.class);
         assertThat(storageCount(s,intent.fileId())).isZero();
+    }
+
+    @Test void restartCanReopenPersistedFinalBlobByServerKey() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes));
+        String persisted=jdbc.queryForObject("""
+                SELECT storage_key FROM crm.file_storage WHERE tenant_id=? AND file_id=?
+                """,String.class,s.tenant(),intent.fileId());
+        // Simulate a newly initialized adapter on the same persistent volume.
+        var reinitialized=new LocalFileStorage(localRoot);
+        assertThat(reinitialized.exists(persisted)).isTrue();
+    }
+
+    @Test void permissionRevokedAfterScanBeforeSqlCommitCannotPublish() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        byte[] bytes=pdf();
+        var intent=draft(s,bytes);
+        scanner.beforeVerdict.set(()->jdbc.update("""
+                UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?
+                """,s.uploader()));
+        assertThatThrownBy(()->completion.acceptAndComplete(s.actor(),s.tenant(),
+                intent.fileId(),new ByteArrayInputStream(bytes)))
+                .isInstanceOf(SecurityException.class);
+        assertThat(storageCount(s,intent.fileId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),intent.fileId())).isEqualTo("STAGED");
     }
 
     @Test void unavailableDefaultScannerNeverClaimsClean() {
