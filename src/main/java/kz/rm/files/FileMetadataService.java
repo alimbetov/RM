@@ -116,6 +116,18 @@ class FileMetadataService {
             """,staged.sha256(),Timestamp.from(Instant.now()),tenant,fileId);
         return new FileUploadIntent(fileId,"AVAILABLE","CLEAN",locked.mime(),locked.size());
     }
+    /** Positive malware verdict is terminal. Scanner errors are retryable STAGED. */
+    @Transactional
+    void rejectInfected(UUID actor,UUID tenant,UUID fileId) {
+        authorization.requireForCommand(actor,tenant,DomainPermission.FILES_UPLOAD);
+        int changed=jdbc.update("""
+                UPDATE crm.file_object
+                   SET state='REJECTED',scan_status='INFECTED',row_version=row_version+1
+                 WHERE tenant_id=? AND id=? AND uploaded_by=? AND state='STAGED'
+                """,tenant,fileId,actor);
+        if(changed!=1)throw new IllegalStateException("Cannot reject changed upload intent");
+    }
+
     private record Locked(String state,String mime,long size,UUID uploader) {}
 
     private record Existing(UUID id,String mime,long size,String state,
