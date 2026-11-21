@@ -96,3 +96,8 @@ The branch currently contains KMS, IAM/geo foundations and a first CRM-R1A imple
 
 
 **Сводное ТЗ перед реализацией:** [RM-IMPLEMENTATION-BASELINE-R1](RM-IMPLEMENTATION-BASELINE-R1.md).\n\n**Многоязычность:** четыре локали `kk`, `ru`, `en`, `zh-Hans`; модульные таблицы переводов, без языкового партиционирования. См. [RM-I18N-R1](RM-I18N-R1.md).
+
+
+## Публичная витрина, автозаказ и покупательский кабинет
+
+**Нормативное дополнительное ТЗ:** [RM-STOREFRONT-AUTOORDER-R1](RM-STOREFRONT-AUTOORDER-R1.md). Новый модуль STOREFRONT с префиксом `store_` и целевыми таблицами `crm.store_front`, `crm.store_setting`, `crm.store_front_i18n`. Автозаказ **всегда** требует email, при отсутствии аккаунта IAM автоматически создаёт `PENDING_VERIFICATION` пользователя. При существующем аккаунте нельзя делать login или связывать доступ к чужим заказам на основе одного введённого email: требуется подтверждение владения адресом и аутентификация. `tenant_id` всегда продавца, `buyer_user_id` — глобальная IAM identity; покупатель не получает `ORG_MEMBER` продавца. Заказы остаются в SALES, связь покупателя с seller CRM — `crm.crm_buyer_link`; новый код не создавался. Четыре языка, FILES, tenant security, consent и исторические статусы обязательны.
