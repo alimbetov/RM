@@ -68,12 +68,15 @@ class AuditRetentionQualificationTest {
 
     @Test void threeAndFiveYearPoliciesAndLegalHoldsAreEnforced() throws Exception {
         postgres();
-        UUID actor=actor(),three=tenant(),five=tenant(),notApproved=tenant();
+        UUID actor=actor(),three=tenant(),four=tenant(),five=tenant(),notApproved=tenant();
         policy(three,3);
+        policy(four,4);
         policy(five,5);
         UUID expiredThree=event(three,actor,"2022-06-01T00:00:00Z");
         UUID liveThree=event(three,actor,"2025-05-01T00:00:00Z");
         UUID heldThree=event(three,actor,"2019-02-01T00:00:00Z");
+        UUID expiredFour=event(four,actor,"2021-04-01T00:00:00Z");
+        UUID liveFour=event(four,actor,"2023-04-01T00:00:00Z");
         UUID expiredFive=event(five,actor,"2019-04-01T00:00:00Z");
         UUID liveFive=event(five,actor,"2023-04-01T00:00:00Z");
         UUID withoutPolicy=event(notApproved,actor,"2018-01-01T00:00:00Z");
@@ -82,9 +85,11 @@ class AuditRetentionQualificationTest {
             VALUES (?,?,'LEGAL_CASE',?)
             """,three,heldThree,Timestamp.from(Instant.now()));
         var result=retention.runBounded(1,10);
-        assertThat(result.deletedRows()).isEqualTo(2);
-        assertThat(result.batches()).isEqualTo(2);
+        assertThat(result.deletedRows()).isEqualTo(3);
+        assertThat(result.batches()).isEqualTo(3);
         assertThat(count(three,expiredThree)).isZero();
+        assertThat(count(four,expiredFour)).isZero();
+        assertThat(count(four,liveFour)).isOne();
         assertThat(count(five,expiredFive)).isZero();
         assertThat(count(three,liveThree)).isOne();
         assertThat(count(five,liveFive)).isOne();
