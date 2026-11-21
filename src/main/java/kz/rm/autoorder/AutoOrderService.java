@@ -1,6 +1,6 @@
 package kz.rm.autoorder;
 
-import kz.rm.iam.EmailIdentityCrypto;
+import kz.rm.iam.EmailIdentityService;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,10 +21,10 @@ import java.util.stream.Collectors;
 @Service
 public class AutoOrderService {
     private final JdbcTemplate jdbc;
-    private final EmailIdentityCrypto identityCrypto;
+    private final EmailIdentityService emailIdentities;
 
-    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityCrypto identityCrypto) {
-        this.jdbc=jdbc;this.identityCrypto=identityCrypto;
+    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities) {
+        this.jdbc=jdbc;this.emailIdentities=emailIdentities;
     }
 
     public record Line(UUID offerId,int quantity){}
@@ -35,7 +34,7 @@ public class AutoOrderService {
 
     @Transactional
     public CheckoutResult checkout(String slug, String email, String idempotencyKey, List<Line> lines) {
-        String normalized=identityCrypto.normalize(email);
+        String normalized=emailIdentities.normalize(email);
         if(slug==null||slug.isBlank()||idempotencyKey==null || !idempotencyKey.matches("[A-Za-z0-9_-]{8,100}")
                 ||lines==null||lines.isEmpty()||lines.size()>100)
             throw new IllegalArgumentException("Invalid checkout");
@@ -81,9 +80,8 @@ public class AutoOrderService {
             throw new IllegalArgumentException("Mixed currencies not supported");
         BigDecimal total=offers.stream().map(o->o.unitPrice().multiply(BigDecimal.valueOf(o.quantity())))
                 .reduce(BigDecimal.ZERO,BigDecimal::add);
-        // Cross-tenant checkouts with the same email must not provision two IAM users.
-        lockStripe("iam_email_identity_lock", normalized);
-        Identity identity=findOrCreate(normalized);
+        // IAM alone owns global email deduplication and pending account provisioning.
+        EmailIdentityService.Identity identity=emailIdentities.findOrProvision(normalized);
         UUID orderId=UUID.randomUUID();
         Timestamp now=Timestamp.from(Instant.now());
         jdbc.update("""
@@ -105,7 +103,7 @@ public class AutoOrderService {
             VALUES (?,?,?,?,?)
             """,tenant,idempotencyKey,requestHash,orderId,now);
         // Fresh proof is always required; token stays encrypted in an internal durable outbox.
-        createChallenge(identity.identityId());
+        emailIdentities.queueVerification(identity.identityId());
         return new CheckoutResult(new OrderReceipt(orderId,"PLACED"));
     }
 
@@ -115,30 +113,14 @@ public class AutoOrderService {
      */
     @Transactional
     public UUID verifyEmail(UUID challengeId,String presentedToken) {
-        if(challengeId==null || presentedToken==null || presentedToken.length()<32)
-            throw new SecurityException("Invalid challenge");
-        byte[] hash=identityCrypto.tokenHash(presentedToken);
-        var identityId=jdbc.query("""
-            SELECT email_identity_id,token_sha256,expires_at,consumed_at
-            FROM iam_email_verification_challenge WHERE id=? FOR UPDATE
-            """,rs->{
-                if(!rs.next() || rs.getTimestamp(4)!=null
-                        ||rs.getTimestamp(3).toInstant().isBefore(Instant.now())
-                        ||!MessageDigest.isEqual(hash,rs.getBytes(2)))
-                    throw new SecurityException("Invalid or expired challenge");
-                return rs.getObject(1,UUID.class);
-            },challengeId);
-        jdbc.update("UPDATE iam_email_verification_challenge SET consumed_at=? WHERE id=?",
-                Timestamp.from(Instant.now()),challengeId);
-        jdbc.update("UPDATE iam_email_identity SET verified_at=COALESCE(verified_at,?) WHERE id=?",
-                Timestamp.from(Instant.now()),identityId);
-        UUID userId=jdbc.queryForObject("SELECT user_id FROM iam_email_identity WHERE id=?",
-                UUID.class,identityId);
-        jdbc.update("UPDATE iam_user_account SET status='ACTIVE',updated_at=? WHERE id=? AND status='PENDING'",
-                Timestamp.from(Instant.now()),userId);
+        UUID userId=emailIdentities.verifyEmail(challengeId,presentedToken);
+        // SALES owns buyer order association; IAM verification grants no HTTP session.
         jdbc.update("""
-            UPDATE crm.sales_order SET buyer_user_id=? WHERE pending_email_identity_id=? AND buyer_user_id IS NULL
-            """,userId,identityId);
+            UPDATE crm.sales_order SET buyer_user_id=?
+            WHERE pending_email_identity_id IN
+              (SELECT id FROM iam_email_identity WHERE user_id=? AND verified_at IS NOT NULL)
+              AND buyer_user_id IS NULL
+            """,userId,userId);
         return userId;
     }
 
@@ -162,62 +144,13 @@ public class AutoOrderService {
     }
 
     private record Offer(UUID offerId,String title,BigDecimal unitPrice,String currency,int quantity){}
-    private record Identity(UUID identityId,UUID userId,boolean verified){}
-
-    private Identity findOrCreate(String normalized) {
-        byte[] lookup=identityCrypto.lookup(normalized);
-        List<Identity> found=jdbc.query("""
-            SELECT id,user_id,verified_at FROM iam_email_identity WHERE lookup_hmac=?
-            """,(rs,n)->new Identity(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
-                rs.getTimestamp(3)!=null),lookup);
-        if(!found.isEmpty())return found.getFirst();
-        // Backward-compatible association with existing IAM records.
-        // Never authenticate/link orders from this lookup: a fresh email proof is still required.
-        List<UUID> legacy=jdbc.query("""
-            SELECT id FROM iam_user_account WHERE email_normalized=? AND status <> 'DELETED'
-            """,(rs,n)->rs.getObject(1,UUID.class),normalized);
-        UUID userId=legacy.isEmpty()?UUID.randomUUID():legacy.getFirst();
-        UUID identityId=UUID.randomUUID();
-        if(legacy.isEmpty()) {
-            // Placeholder is technical only, not a person's name or mandatory checkout input.
-            jdbc.update("""
-                INSERT INTO iam_user_account(id,display_name,status,created_at,updated_at,row_version)
-                VALUES (?,'Покупатель','PENDING',?,?,0)
-                """,userId,Timestamp.from(Instant.now()),Timestamp.from(Instant.now()));
-        }
-        jdbc.update("""
-            INSERT INTO iam_email_identity(id,user_id,lookup_hmac,email_envelope,created_at)
-            VALUES (?,?,?,?,?)
-            """,identityId,userId,lookup,identityCrypto.encrypt(normalized),Timestamp.from(Instant.now()));
-        return new Identity(identityId,userId,false);
-    }
-
-    private void createChallenge(UUID identityId) {
-        String token=identityCrypto.token();
-        UUID id=UUID.randomUUID();
-        Instant now=Instant.now();
-        jdbc.update("""
-            INSERT INTO iam_email_verification_challenge
-              (id,email_identity_id,token_sha256,token_envelope,expires_at,created_at)
-            VALUES (?,?,?,?,?,?)
-            """,id,identityId,identityCrypto.tokenHash(token),identityCrypto.encrypt(token),
-                Timestamp.from(now.plus(15,ChronoUnit.MINUTES)),Timestamp.from(now));
-        jdbc.update("""
-            INSERT INTO iam_email_delivery_outbox
-            (id,challenge_id,email_identity_id,state,next_attempt_at,created_at)
-            VALUES (?,?,?,'PENDING',?,?)
-            """,UUID.randomUUID(),id,identityId,Timestamp.from(now),Timestamp.from(now));
-        // No plaintext email or token leaves this transactional application method.
-    }
-
     /**
      * Database row locks are transaction-scoped and shared by pods.
      * Table names are fixed, never built from request data.
      * 256 stripes are an R1 correctness choice; throughput qualification is separate.
      */
     private void lockStripe(String table, String value) {
-        if (!table.equals("crm.sales_checkout_lock") &&
-                !table.equals("iam_email_identity_lock"))
+        if (!table.equals("crm.sales_checkout_lock"))
             throw new IllegalArgumentException("Unknown lock");
         int bucket=Math.floorMod(Arrays.hashCode(digest(value)),256);
         Integer acquired=jdbc.queryForObject("SELECT bucket FROM "+table+" WHERE bucket=? FOR UPDATE",
