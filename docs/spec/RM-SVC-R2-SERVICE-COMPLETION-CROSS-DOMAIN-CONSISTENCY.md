@@ -52,6 +52,10 @@ RM сохраняет **модульный монолит**, существую�
 
 ### 3.3 Read/search и пагинация
 
+**Обязательная детализация:** [RM-SVC-R2A — Единый контракт фильтрации, сортировки и cursor/keyset pagination](RM-SVC-R2A-FILTERING-PAGINATION-CONTRACT.md). Этот документ является нормативным для новых списков и расширяет краткие требования ниже: bounded legacy OFFSET, per-domain typed filters, HMAC cursor, object-level visibility, лимиты и PostgreSQL EXPLAIN/конкурентную приёмку.
+
+
+
 - `getById(tenant,id)`, `search(tenant,filter,limit,cursor)` либо уже используемая page/size схема (size 1..100). Сортировка детерминированна (`created_at,id` или явно разрешённые поля).
 - Каждый список фильтруется tenant и объектными правами до возврата элементов. Удалённые/архивные записи не выдаются как активные; для исторического просмотра — отдельное разрешение.
 - Все подробные read и history возвращают domain DTO, а не JPA entities или `Map<String,Object>` со случайными полями.
