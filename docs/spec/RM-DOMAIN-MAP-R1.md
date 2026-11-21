@@ -83,3 +83,8 @@
 ## Compatibility and current development note
 
 The branch currently contains KMS, IAM/geo foundations and a first CRM-R1A implementation attempt. **The user shifted focus to DOMAIN DESIGN.** Do not assume all submitted CRM-R1A Java/SQL changes are qualified or approved for production. Keep CRUD REST and partition implementation out of this design decision. Resolve CI failures separately before a release candidate.
+
+
+## Масштабирование и максимальное партиционирование
+
+**Обязательная проектная матрица:** [RM-PARTITIONING-R1](RM-PARTITIONING-R1.md). Для каждого модуля до создания больших таблиц определить тип: `UNPARTITIONED`, `HASH(tenant_id)`, `RANGE(occurred_at)→HASH(tenant_id)` или регионально-ориентированную альтернативу `LIST(region_zone_id)`. Максимальная готовность к партиционированию **не означает** физическую разбивку всех таблиц: KATO, IAM, KMS, небольшие мастер-таблицы и чувствительные финансовые агрегаты по умолчанию сохраняют обычные PK/FK и индексы. Физический rollout допускается только после PostgreSQL `EXPLAIN ANALYZE`, тестов составной уникальности/внешних ключей, p95/p99 и восстановления. Java/H2 smoke не доказывает корректность нативных партиций PostgreSQL.
