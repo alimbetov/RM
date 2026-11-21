@@ -242,4 +242,54 @@ class IamPiiPopulatedDatabaseQualificationTest {
         }
         assertThat(qualifier.assertReadyForPlaintextSeal().plaintextAccounts()).isZero();
     }
+
+    @Test @Order(9) @Transactional
+    void pendingEmailChangeCannotBeConfusedWithVerifiedLegacyEmail() {
+        UUID owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "oidc-"+UUID.randomUUID(),"Owner")).getId();
+        VerifiedActor actor=new VerifiedActor(owner,Instant.now().plusSeconds(300));
+        String oldEmail="previous-"+UUID.randomUUID()+"@example.kz";
+        String proposed="replacement-"+UUID.randomUUID()+"@example.kz";
+        emailService.requestInitialVerification(actor,oldEmail);
+        var token=jdbc.query("""
+            SELECT c.id,c.token_envelope
+            FROM public.iam_email_verification_challenge c
+            JOIN public.iam_email_identity e ON e.id=c.email_identity_id
+            WHERE e.active_lookup_hmac=? AND c.purpose='REGISTRATION'
+            """,rs->{
+                if(!rs.next())throw new IllegalStateException("Missing registration proof");
+                return new Object[]{rs.getObject(1,UUID.class),
+                        emailCrypto.decrypt(rs.getBytes(2))};
+            },emailCrypto.lookup(oldEmail));
+        emailService.verifyRegistration((UUID)token[0],(String)token[1]);
+        emailService.requestEmailChange(actor,proposed);
+        jdbc.update("""
+            UPDATE public.iam_user_account SET email_normalized=? WHERE id=?
+            """,proposed,owner);
+        assertThatThrownBy(qualifier::assertBackfillAdmissible)
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->migration.migrateUser(owner))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT email_normalized FROM public.iam_user_account WHERE id=?
+            """,String.class,owner)).isEqualTo(proposed);
+        assertThat(emailService.myVerificationStatus(actor).emailVerified()).isTrue();
+    }
+
+    @Test @Order(10) @Transactional
+    void damagedGlobalEmailEnvelopeBlocksSealing() {
+        UUID emailIdentity=jdbc.queryForObject("""
+            SELECT id FROM public.iam_email_identity LIMIT 1
+            """,UUID.class);
+        byte[] ciphertext=jdbc.queryForObject("""
+            SELECT email_envelope FROM public.iam_email_identity WHERE id=?
+            """,byte[].class,emailIdentity);
+        ciphertext[ciphertext.length-1]^=1;
+        jdbc.update("""
+            UPDATE public.iam_email_identity SET email_envelope=? WHERE id=?
+            """,ciphertext,emailIdentity);
+        assertThatThrownBy(qualifier::assertReadyForPlaintextSeal)
+                .isInstanceOfAny(IllegalStateException.class,SecurityException.class);
+    }
+
 }
