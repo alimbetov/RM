@@ -3,6 +3,8 @@
 **Статус:** PROPOSED / техническое задание; сервисное исполнение ещё не произведено.  
 **Репозиторий:** `alimbetov/RM`, ветка `base_dev`. **База анализа:** `a2bf2e676c431e1897e6b8901e1ed537fec43f5f`, 21.11.2026.  
 **Зависимости:** `RM-SVC-R2` (service completion); сначала контракт и тесты, затем точечные миграции.  
+**Предреализационное уточнение CRM/CATALOG:** [RM-SVC-R2B — Domain Decisions](RM-SVC-R2B-PREIMPLEMENTATION-DOMAIN-DECISIONS.md). При разночтениях по категориям, договорам, effective expiry и modelCode использовать R2B как уточнение к R2/R2A; это предложения к утверждению, не реализованные методы.
+
 **Границы:** Java/Spring Boot + PostgreSQL; никаких новых микросервисов, HTTP controllers, универсального динамического SQL framework, Elasticsearch или Redis ради пагинации. Production и merge в main — HOLD.
 
 ## 1. Проблема подтверждённого кода
