@@ -475,3 +475,22 @@ Fast Path означает **нет SQL именно за DEK при cache HIT**
 **Gate:** G0 Crypto → G1 Schema → G2 Data integrity → G3 Restore → G4 Release. Перед включением nightly worker и auto rotation required negative/concurrency tests должны быть GREEN в PostgreSQL, а восстановление из независимого архива подтверждено. До этого `migration.enabled=false`, safe-reuse запрещён, productionAdmission=HOLD.
 
 **Необязательные для dev smoke, но обязательные до production:** измерения p95/p99 на PostgreSQL, восстановление при потере локальной БД, анализ race-condition и тесты сохранности historical KEK. Не заявлять GREEN только по наличию спецификации.
+
+
+## 22. Готовность RM-KMS к микросервисной архитектуре
+
+**Нормативный ADR:** [ADR-RM-KMS-004](../adr/ADR-RM-KMS-004-microservice-readiness.md).
+
+**Решение:** строить KMS как автономный bounded context с чистым прикладным портом `TenantCryptoPort`, но развёртывать пока внутри **одного** Spring Boot процесса, без HTTP API с plaintext/DEK, без изменения владельцев данных и без второй базы. Ключи, версии, archive и wrapping принадлежат KMS; CRM/ORD/FIN используют порт и сохраняют envelope в собственных бизнес-таблицах. Ключи через таблицы других модулей не запрашиваются.
+
+Кодовый контракт:
+- `TenantCryptoPort.encrypt(CryptoContext, String)`
+- `TenantCryptoPort.decrypt(CryptoContext, EncryptedValue)`
+- `TenantCryptoService implements TenantCryptoPort` — текущий внутренний адаптер; `CryptoContext` разрешается только после backend-авторизации.
+- `KmsDeploymentGuard`: `rm.kms.deployment.mode=single-jvm`; `rm.kms.rotation.enabled=false`; `rm.kms.migration.enabled=false`; любое несовместимое значение блокирует старт. Сам guard **не обнаруживает реальное количество реплик**: оно дополнительно обеспечивается deployment policy.
+
+**Дальнейшее выделение в микросервис НЕ автоматически одобрено.** До этого отдельно проектируются: workload identity/mTLS, tenant-scoped authorization, сериализация/версия API, отсутствие выдачи сырого DEK, изменение границы plaintext, устойчивость к сетевым отказам, retries/idempotency, outbox для tenant provisioning, распределённый generation admission и revocation barrier, кластера Caffeine, каталог зашифрованных полей во всех сервисах. Одновременно активировать несколько JVM запрещено до подтверждения всех инвариантов.
+
+**Новые acceptance tests:** MICRO-01 интерфейсный контракт внедряется без зависимости потребителя от JPA; MICRO-02 single-jvm допускается; MICRO-03 multi-jvm конфигурация fail closed; MICRO-04 rotation/migration flags fail closed; MICRO-05 незарегистрированный tenant и неверный CryptoContext не дают plaintext; MICRO-06 после будущего выделения версионированный encrypted envelope переносится побайтно и проходит decrypt в другой реализации порта; MICRO-07 конкурентные реплики + crash/partition после введения распределённого контракта не допускают устаревшей записи/отзыва. MICRO-06/07 — будущие gated тесты, не утверждать выполнение сейчас.
+
+**Приоритет работ:** сначала R1.6B persisted encrypt→reload→decrypt и legacy-key migration, затем transactional fencing/restore; только потом рассматривать физическое разделение и горизонтальное масштабирование.
