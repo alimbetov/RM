@@ -287,3 +287,34 @@ rm:
 Файлы: `application.yml` (общее), `application-dev.yml`, `application-test.yml`. Старый отдельный профиль `postgres` упразднён. Параметры подключения к test PostgreSQL — `RM_TEST_DB_URL`, `RM_TEST_DB_USERNAME`, `RM_TEST_DB_PASSWORD`; никогда не в Git. Значение по умолчанию остаётся `dev`. Все SQL changesets должны быть совместимы с обеими СУБД либо явно ограничены по `dbms`; **PostgreSQL-native SQL подтверждается на test, а не H2**. CI требуется явный запуск PostgreSQL интеграционного набора, иначе обычный `mvn test` с dev-профилем не доказывает квалификацию PostgreSQL.
 
 **Статус:** конфигурационные файлы профилей обновлены в этой ветке; реальный запуск H2/PostgreSQL и тестов не подтверждён. Это изменение профилей не означает выполнения миграции старой KMS-модели в трёхслотовую.
+
+
+## 19. Единая конвенция имён таблиц по модулям RM
+
+**Новое решение:** все прикладные таблицы получают обязательный префикс функционального модуля, независимо от физической PostgreSQL schema. Формат — `<module_prefix>_<business_entity>` в `lower_snake_case`; префиксы выбираются заранее и стабильны. Не включать в имя номер версии, tenant UUID или название окружения.
+
+Предлагаемый реестр имён (не означает, что таблицы уже созданы):
+
+| Модуль | Префикс | Примеры таблиц |
+|---|---|---|
+| Компании / tenant | `ten_` | `ten_company`, `ten_membership` |
+| Клиенты / CRM | `crm_` | `crm_client`, `crm_contact` |
+| Заказы | `ord_` | `ord_order`, `ord_order_line` |
+| Сметы | `est_` | `est_estimate`, `est_estimate_line` |
+| Управленческие финансы | `fin_` | `fin_transaction`, `fin_budget` |
+| Рассылки / коммуникации | `msg_` | `msg_campaign`, `msg_delivery` |
+| Задачи | `tsk_` | `tsk_task`, `tsk_task_comment` |
+| Аудит | `aud_` | `aud_event` |
+| KMS / криптография | `kms_` | `security.kms_tenant_key`, `security.kms_tenant_key_archive` |
+
+KMS remains isolated in `security` schema; `security` is a namespace, **not** a replacement for the `kms_` module prefix. One-row-per-company and archive constraints stay unchanged. The table names in sections 1/4/8/10/11/13 and all earlier design proposals are **legacy design aliases**; canonical implementation names are `security.kms_tenant_key` and `security.kms_tenant_key_archive`. No ambiguity should remain in Java Entity/Table annotations or new SQL changesets. The current deployed `security.tenant_key` is not to be renamed in-place without a controlled migration.
+
+Conventions:
+1. Table: `<prefix>_<singular_noun>`. All PK names `pk_<table>`, FK names `fk_<table>_<target>`, unique names `uk_<table>_<columns>`, index names `idx_<table>_<columns>`, CHECK names `ck_<table>_<rule>`. Respect PostgreSQL's 63-byte identifier limit; abbreviate consistently.
+2. Shared column names: `id`, `tenant_id`, `created_at`, `updated_at`, `row_version`; use composite PK when dictated by immutable key history or domain constraints. `tenant_id` is mandatory for tenant-owned tables, and tenant filtering/authorization must be enforced independently of naming.
+3. Join tables carry the owner module prefix, e.g. `crm_client_tag`; audit and outbox names belong to their owning module unless designed as a shared platform module.
+4. Java packages should follow the same module boundaries, e.g. `kz.rm.security.kms`, `kz.rm.crm`, `kz.rm.orders`; API endpoints remain resource-oriented without SQL prefixes.
+5. Liquibase SQL-only: new tables use canonical names. Existing applied `rm:0003-tenant-key` must remain intact. A follow-up, data-safe changeset migrates `security.tenant_key` (per-version rows) into `security.kms_tenant_key` (single-row three-slot) with version/account reconciliation, archive `security.kms_tenant_key_archive`, constraint revalidation and tested rollback plan. Never silently drop old wrapped keys or alter checksums.
+6. Prefix naming is an organizational convention and **not** a security boundary or performance optimization. Existing Liquibase metadata tables `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK` are infrastructure-owned and exempt.
+
+**Acceptance gate:** all new DDL, JPA `@Table`, SQL queries, tests and docs reference canonical prefixed tables; H2 `dev` smoke and PostgreSQL `test` integration pass. This section documents a design decision only; migration/code not yet implemented.
