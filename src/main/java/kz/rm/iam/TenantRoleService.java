@@ -192,7 +192,7 @@ public class TenantRoleService {
                  rs.getString(3),rs.getBoolean(4)),tenantId);
     }
 
-    private void lockAndAuthorize(UUID actorId,UUID tenantId) {
+    void lockAndAuthorize(UUID actorId,UUID tenantId) {
         if(actorId==null || tenantId==null)
             throw new SecurityException("Verified owner and tenant required");
         // Match the command admission order. The actor lock also fences global
