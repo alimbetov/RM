@@ -21,13 +21,15 @@ public class CrmContractService {
     private final CustomerContractRepository contracts;
     private final CrmCustomerRepository customers;
     private final TenantAuthorization authorization;
+    private final CrmHistoryService history;
 
     public record Contract(UUID tenantId, UUID id, UUID customerId, String contractCode,
             LocalDate startsOn, LocalDate endsOn, CustomerContractEntity.Status status,
             ContractExpiryPolicy.Indicator expiryIndicator, long rowVersion) {}
     public CrmContractService(CustomerContractRepository contracts, CrmCustomerRepository customers,
-                              TenantAuthorization authorization) {
+                              TenantAuthorization authorization, CrmHistoryService history) {
         this.contracts = contracts; this.customers = customers; this.authorization = authorization;
+        this.history = history;
     }
     private void authorize(VerifiedActor actor, UUID tenant, DomainPermission permission) {
         if (actor == null || tenant == null) throw new SecurityException("Verified actor and tenant required");
@@ -54,8 +56,11 @@ public class CrmContractService {
                 .orElseThrow(() -> new IllegalArgumentException("Customer not found in tenant"));
         if (client.getStatus() != CrmCustomerEntity.Status.ACTIVE)
             throw new IllegalStateException("Customer is archived");
-        return view(contracts.saveAndFlush(CustomerContractEntity.create(tenant, customer, code, starts, ends,
-                Instant.now())), asOf, 30);
+        var created=contracts.saveAndFlush(CustomerContractEntity.create(tenant, customer, code, starts, ends,
+                Instant.now()));
+        history.contract(tenant,created.getId(),actor.userId(),"CREATED",
+                created.getRowVersion(),created.getStartsOn(),created.getEndsOn(),created.getStatus());
+        return view(created,asOf,30);
     }
     @Transactional
     public Contract changeDates(VerifiedActor actor, UUID tenant, UUID id, LocalDate starts,
@@ -68,7 +73,10 @@ public class CrmContractService {
                 || contract.getStatus() == CustomerContractEntity.Status.CLOSED)
             throw new IllegalStateException("Terminal contract is immutable");
         contract.dates(starts, ends, Instant.now());
-        return view(contracts.saveAndFlush(contract), asOf, 30);
+        var saved=contracts.saveAndFlush(contract);
+        history.contract(tenant,id,actor.userId(),"DATES_CHANGED",saved.getRowVersion(),
+                saved.getStartsOn(),saved.getEndsOn(),saved.getStatus());
+        return view(saved, asOf, 30);
     }
     @Transactional
     public Contract changeStatus(VerifiedActor actor, UUID tenant, UUID id, CustomerContractEntity.Status next,
@@ -84,9 +92,34 @@ public class CrmContractService {
                     (next == CustomerContractEntity.Status.CLOSED || next == CustomerContractEntity.Status.CANCELLED));
             if (!allowed) throw new IllegalStateException("Invalid contract state transition");
             c.status(next, Instant.now());
+            var saved=contracts.saveAndFlush(c);
+            history.contract(tenant,id,actor.userId(),"STATUS_CHANGED",saved.getRowVersion(),
+                    saved.getStartsOn(),saved.getEndsOn(),saved.getStatus());
+            return view(saved, asOf, 30);
         }
-        return view(contracts.saveAndFlush(c), asOf, 30);
+        return view(c,asOf,30);
     }
+
+    /**
+     * Renewal changes the effective end date of an ACTIVE contract but preserves
+     * all preceding terms in the immutable revision table. Never resurrect a CLOSED contract.
+     */
+    @Transactional
+    public Contract renew(VerifiedActor actor, UUID tenant, UUID id, LocalDate extendedEnd,
+                          long expectedVersion, LocalDate asOf) {
+        authorize(actor,tenant,DomainPermission.CRM_WRITE);
+        if(extendedEnd==null || asOf==null) throw new IllegalArgumentException("Renewal end/asOf required");
+        var c=contract(tenant,id,expectedVersion);
+        if(c.getStatus()!=CustomerContractEntity.Status.ACTIVE || c.getEndsOn()==null
+                || !extendedEnd.isAfter(c.getEndsOn()))
+            throw new IllegalStateException("Renewal requires active fixed-term contract and later end");
+        c.dates(c.getStartsOn(),extendedEnd,Instant.now());
+        var saved=contracts.saveAndFlush(c);
+        history.contract(tenant,id,actor.userId(),"RENEWED",saved.getRowVersion(),
+                saved.getStartsOn(),saved.getEndsOn(),saved.getStatus());
+        return view(saved,asOf,30);
+    }
+
     private CustomerContractEntity contract(UUID tenant, UUID id, long expectedVersion) {
         var c = contracts.findByTenantIdAndId(tenant, id)
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found in tenant"));
