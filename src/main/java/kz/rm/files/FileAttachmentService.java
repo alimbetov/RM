@@ -146,9 +146,9 @@ class FileAttachmentService {
             throw new SecurityException("Owner type not permitted");
         owner.requireCustomerRead(actor,tenant,record.ownerId());
         if(!"AVAILABLE".equals(record.state()) || !"CLEAN".equals(record.scan())
-                || !"INTERNAL".equals(record.classification()) || record.cryptoVersion()!=1
+                || !"INTERNAL".equals(record.classification()) || record.cryptoVersion()!=0
                 || record.sha()==null)
-            throw new SecurityException("Unqualified, legacy or unavailable binary content");
+            throw new SecurityException("Unavailable or non-plaintext binary content");
         return new VerifiedRead(record.fileId(),record.key(),record.size(),record.sha());
     }
     private record ContentLink(String ownerType,UUID ownerId,UUID fileId,
