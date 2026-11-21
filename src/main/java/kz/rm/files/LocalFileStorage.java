@@ -103,4 +103,44 @@ class LocalFileStorage implements FileStoragePort {
     @Override public void delete(String key) throws IOException {
         Files.deleteIfExists(resolve(key));
     }
+    @Override public boolean matches(String key,long expectedSize,String expectedHash) throws IOException {
+        if(expectedSize<0 || expectedHash==null || !expectedHash.matches("[0-9a-f]{64}"))
+            return false;
+        Path path=resolve(key);
+        if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS)
+                || Files.size(path)!=expectedSize)return false;
+        MessageDigest digest;
+        try {digest=MessageDigest.getInstance("SHA-256");}
+        catch(Exception ex){throw new IOException("SHA-256 unavailable",ex);}
+        try(InputStream in=Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS)) {
+            byte[] buf=new byte[64*1024];
+            int n;
+            while((n=in.read(buf))!=-1) {
+                if(n>0)digest.update(buf,0,n);
+            }
+        }
+        return java.security.MessageDigest.isEqual(
+                java.util.HexFormat.of().formatHex(digest.digest()).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                expectedHash.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    }
+    @Override public java.util.List<String> listKeys(UUID tenant,UUID fileId) throws IOException {
+        if(tenant==null || fileId==null)throw new IOException("Invalid file namespace");
+        Path dir=root.resolve(tenant.toString()).resolve(fileId.toString()).normalize();
+        if(!dir.startsWith(root) || Files.isSymbolicLink(dir)
+                || Files.isSymbolicLink(dir.getParent()))
+            throw new IOException("Unsafe storage namespace");
+        if(!Files.exists(dir,LinkOption.NOFOLLOW_LINKS))return java.util.List.of();
+        java.util.List<String> keys=new java.util.ArrayList<>();
+        try(var stream=Files.newDirectoryStream(dir)) {
+            for(Path p:stream) {
+                if(keys.size()>=10000)throw new IOException("Recovery directory too large");
+                String filename=p.getFileName().toString();
+                if(Files.isRegularFile(p,LinkOption.NOFOLLOW_LINKS)
+                        && filename.matches("(stage|final)-[0-9a-f-]{36}"))
+                    keys.add(tenant+"/"+fileId+"/"+filename);
+            }
+        }
+        return keys;
+    }
+
 }
