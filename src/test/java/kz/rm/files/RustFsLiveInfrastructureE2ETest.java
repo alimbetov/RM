@@ -84,15 +84,15 @@ class RustFsLiveInfrastructureE2ETest {
                 "rustfs-e2e-owner-"+UUID.randomUUID(),"RustFS Owner"));
         var user=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
                 "rustfs-e2e-user-"+UUID.randomUUID(),"RustFS User"));
-        var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
+        var organization=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
                 "RustFS Synthetic E2E","RustFS E2E","KZ"));
         var space=workspaces.saveAndFlush(WorkspaceEntity.organization(
-                UUID.randomUUID(),org.getId()));
+                UUID.randomUUID(),organization.getId()));
         memberships.saveAndFlush(new OrganizationMembershipEntity(
-                UUID.randomUUID(),org.getId(),owner.getId(),
+                UUID.randomUUID(),organization.getId(),owner.getId(),
                 OrganizationMembershipEntity.Role.OWNER));
         memberships.saveAndFlush(new OrganizationMembershipEntity(
-                UUID.randomUUID(),org.getId(),user.getId(),
+                UUID.randomUUID(),organization.getId(),user.getId(),
                 OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",space.getId());
         var role=roles.createRole(owner.getId(),space.getId(),
