@@ -19,7 +19,7 @@ public interface OrganizationLocationRepository extends JpaRepository<Organizati
         WHERE l.workspaceId = :tenant
           AND (:type IS NULL OR l.type = :type)
           AND (:status IS NULL OR l.status = :status)
-          AND (:name IS NULL OR LOWER(l.name) LIKE LOWER(CONCAT('%', :name, '%')))
+          AND LOWER(l.name) LIKE LOWER(CONCAT('%', :name, '%'))
         """)
     Page<OrganizationLocationEntity> search(
             @Param("tenant") UUID tenant,
