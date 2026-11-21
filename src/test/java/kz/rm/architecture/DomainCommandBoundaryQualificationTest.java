@@ -1,6 +1,12 @@
 package kz.rm.architecture;
 
 import kz.rm.iam.TenantAuthorization;
+import kz.rm.crm.AuthenticatedCrmCommands;
+import kz.rm.crm.AuthenticatedCrmQueries;
+import kz.rm.crm.CrmCustomerService;
+import kz.rm.organization.AuthenticatedOrganizationLocations;
+import kz.rm.organization.OrganizationLocationEntity;
+import kz.rm.organization.dto.LocationSearch;
 import kz.rm.iam.VerifiedActor;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
 import kz.rm.inventory.AuthenticatedInventoryQueries;
@@ -78,6 +84,29 @@ class DomainCommandBoundaryQualificationTest {
                 .isFalse();
         assertThat(Modifier.isPublic(Class.forName("kz.rm.inventory.StockBalanceRepository").getModifiers()))
                 .isFalse();
+    }
+
+
+    @Test void crmAndOrganizationRawEntryPointsStayInternal() throws Exception {
+        assertThat(AuthenticatedCrmCommands.class.getDeclaredMethod("createCompany",
+                VerifiedActor.class,UUID.class,String.class,String.class)).isNotNull();
+        assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("getContact",
+                VerifiedActor.class,UUID.class,UUID.class)).isNotNull();
+        assertThat(AuthenticatedOrganizationLocations.class.getDeclaredMethod("create",
+                VerifiedActor.class,UUID.class,OrganizationLocationEntity.Type.class,
+                String.class,String.class,String.class)).isNotNull();
+        assertThat(AuthenticatedOrganizationLocations.class.getDeclaredMethod("search",
+                VerifiedActor.class,UUID.class,LocationSearch.class,int.class,int.class))
+                .isNotNull();
+        for(var method:CrmCustomerService.class.getDeclaredMethods())
+            if(java.util.Set.of("createPerson","createCompany","getCustomer","addContact",
+                    "getContact","recordEmailConsent","hasEmailConsent").contains(method.getName()))
+                assertThat(Modifier.isPublic(method.getModifiers()))
+                        .as("CRM raw actor boundary: "+method).isFalse();
+        assertThat(Modifier.isPublic(Class.forName(
+                "kz.rm.organization.OrganizationLocationService").getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(Class.forName(
+                "kz.rm.organization.OrganizationLocationQueryService").getModifiers())).isFalse();
     }
 
     @Test void exposedCommandPortsRequireVerifiedIdentity() throws Exception {
