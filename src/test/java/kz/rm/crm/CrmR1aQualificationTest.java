@@ -1010,4 +1010,30 @@ class CrmR1aQualificationTest {
           """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
     }
 
+
+    @Test void crmR13CapturesLegacyContractBaselineBeforeFirstRenewal() {
+        var t=newTenant();
+        var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Legacy contract customer",null);
+        var today=java.time.LocalDate.of(2026,11,22);
+        UUID oldId=UUID.randomUUID();
+        jdbc.update("""
+          INSERT INTO crm.customer_contract(tenant_id,id,customer_id,contract_code,
+            starts_on,ends_on,status,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,'ACTIVE',now(),now())
+          """,t.tenantId(),oldId,customer.id(),"LEGACY-R12",
+                today.minusDays(30),today.plusDays(15));
+        assertThat(crmHistory.contractHistory(actor,t.tenantId(),oldId,10)).isEmpty();
+        var renewed=contractService.renew(actor,t.tenantId(),oldId,
+                today.plusDays(60),0,today);
+        assertThat(renewed.rowVersion()).isEqualTo(1);
+        var revisions=crmHistory.contractHistory(actor,t.tenantId(),oldId,10);
+        assertThat(revisions).hasSize(2);
+        assertThat(revisions).extracting(CrmHistoryService.ContractRevision::action)
+                .containsExactly("RENEWED","BASELINE_CAPTURED");
+        assertThat(revisions.get(1).endsOn()).isEqualTo(today.plusDays(15));
+        assertThat(revisions.get(0).endsOn()).isEqualTo(today.plusDays(60));
+        assertThat(revisions.get(1).revisionNo()).isEqualTo(0);
+    }
+
 }
