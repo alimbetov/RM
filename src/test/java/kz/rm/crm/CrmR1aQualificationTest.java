@@ -139,6 +139,15 @@ class CrmR1aQualificationTest {
                 UUID.randomUUID(),organizationId,viewer.getId(),OrganizationMembershipEntity.Role.VIEWER));
         assertThat(crm.getCustomer(member.getId(),t.tenantId(),customer.id()).id()).isEqualTo(customer.id());
         assertThat(crm.getCustomer(viewer.getId(),t.tenantId(),customer.id()).id()).isEqualTo(customer.id());
+        var personal=crm.createPerson(t.actorId(),t.tenantId(),"Restricted Person",null);
+        var contact=crm.addContact(t.actorId(),t.tenantId(),customer.id(),
+                "Restricted Contact","private@example.kz",null);
+        assertThatThrownBy(()->crm.getCustomer(member.getId(),t.tenantId(),personal.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->crm.getContact(viewer.getId(),t.tenantId(),contact.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(crm.getCustomer(t.actorId(),t.tenantId(),personal.id()).name())
+                .isEqualTo("Restricted Person");
         assertThatThrownBy(()->crm.createCompany(member.getId(),t.tenantId(),"Forbidden",null))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->crm.createCompany(viewer.getId(),t.tenantId(),"Forbidden",null))
