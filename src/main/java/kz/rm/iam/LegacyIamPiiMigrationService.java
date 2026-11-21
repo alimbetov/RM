@@ -63,6 +63,33 @@ public class LegacyIamPiiMigrationService {
         return rows.size();
     }
 
+    /**
+     * One-account offline admission, useful for exact proof on a populated
+     * PostgreSQL copy before the bounded whole-table migration is approved.
+     */
+    @Transactional
+    public boolean migrateUser(UUID userId) {
+        if(!enabled)throw new SecurityException("Offline IAM PII migration disabled");
+        if(userId==null)throw new IllegalArgumentException("User ID required");
+        Legacy row=jdbc.query("""
+            SELECT id,display_name,phone_e164,email_normalized
+            FROM public.iam_user_account WHERE id=? FOR UPDATE
+            """,rs->rs.next()?new Legacy(rs.getObject(1,UUID.class),
+                    rs.getString(2),rs.getString(3),rs.getString(4)):null,userId);
+        if(row==null)throw new SecurityException("Account unavailable");
+        if(row.name()==null && row.phone()==null && row.email()==null)return false;
+        migrateProfile(row);
+        migrateLegacyEmail(row);
+        int scrubbed=jdbc.update("""
+            UPDATE public.iam_user_account
+            SET display_name=NULL,phone_e164=NULL,email_normalized=NULL,
+                row_version=row_version+1,updated_at=?
+            WHERE id=?
+            """,Timestamp.from(Instant.now()),row.id());
+        if(scrubbed!=1)throw new IllegalStateException("Legacy PII scrub conflict");
+        return true;
+    }
+
     private void migrateProfile(Legacy row) {
         Integer exists=jdbc.queryForObject("""
             SELECT count(*) FROM iam_pii.user_profile_secret WHERE user_id=?
