@@ -140,3 +140,15 @@ Materialize/query per-workspace with scoped access and explicit reporting `asOf`
 - Фактический файл содержит **лишь 100 записей**, в том числе 2 области и 3 записи третьего уровня. Для рабочего общереспубликанского выбора потребуется загрузка полного актуального КАТО с датой версии и проверкой целостности.
 
 **Acceptance:** филиал/склад/точка продаж принимает активный район или область; отклоняет `Level > 3`, удалённый и неизвестный код; сохраняет `address_line` независимо от кода.
+
+
+## 9. Two data contours, localized KATO and HASH partitioning
+
+**Accepted target architecture:** [ADR-RM-CRM-005](../adr/ADR-RM-CRM-005-public-pii-partitioning.md).
+
+- Shared KATO: technical `Code` hidden in UI, labels `NameKaz`, `NameRus`, `NameEng` (Latin **transliteration**, not an official English translation). Source provenance/version must remain recoverable. Levels 2–3 remain the only eligible ones for new organization locations.
+- **Never** replace KATO Code uniqueness with `hash(Code)` or derive encryption keys from geographic codes. `Workspace.id` is the tenant/KMS identifier. Stable KATO code remains PK in reference dictionary.
+- CRM split: schema `crm` holds workspace-scoped **non-PII** metadata, catalog, orders, estimates, invoices, tasks and references; schema `crm_pii` holds KMS-encrypted personal/contact data, sensitive addresses, notes and communication bodies. Separate DB roles and least-privilege services required before calling this security isolation.
+- Partitioning: candidates are **large** CRM/PII/event tables, `PARTITION BY HASH(workspace_id)`, initial modulus based on benchmarking, physical partitions created by migrations. Partitioned PK/UNIQUE includes `workspace_id`. Small KATO table and user/organization tables do not require HASH partitions.
+- Sensitive customer names and free-text values must be classified; do not assume customer displayName is safe plaintext. Mask or encrypt when it refers to an identifiable natural person.
+- Development sequence remains CRM-R1A clients/consents → R1A.5 catalog → R1B/C orders/estimates → R1D invoices/payments → R1E-G campaigns/tasks/dashboard. Physical PII split is CRM-R1A design gate; massive hash partitioning is separately qualified after scale tests.
