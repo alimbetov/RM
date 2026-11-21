@@ -73,6 +73,7 @@ public class TenantAuthorization {
         return switch (permission) {
             case CRM_READ, ORGANIZATION_LOCATION_READ, INVENTORY_STOCK_READ, SALES_ORDER_READ -> true;
             case TENANT_RBAC_MANAGE, SALES_ORDER_CONFIRM, SALES_ORDER_CANCEL,
+                 SALES_ORDER_FULFILL, INVENTORY_RELEASE,
                  INVENTORY_RECEIVE, INVENTORY_ADJUST, INVENTORY_RESERVE,
                  INVENTORY_FULFILL -> false;
             case CRM_PII_READ -> role == OrganizationMembershipEntity.Role.OWNER
