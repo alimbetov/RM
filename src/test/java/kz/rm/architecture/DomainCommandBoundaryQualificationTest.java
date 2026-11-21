@@ -3,6 +3,10 @@ package kz.rm.architecture;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
+import kz.rm.inventory.AuthenticatedInventoryQueries;
+import kz.rm.inventory.dto.StockSearch;
+import kz.rm.sales.AuthenticatedSalesQueries;
+import kz.rm.sales.dto.SalesOrderSearch;
 import kz.rm.inventory.InventoryAuthorizedCommandService;
 import kz.rm.inventory.InventoryMovementService;
 import kz.rm.inventory.InventoryReservationService;
@@ -57,6 +61,23 @@ class DomainCommandBoundaryQualificationTest {
         assertThat(Modifier.isPublic(InventoryAuthorizedCommandService.class
                 .getDeclaredMethod("receive",UUID.class,UUID.class,UUID.class,UUID.class,
                         String.class,BigDecimal.class).getModifiers())).isFalse();
+    }
+
+    @Test void publicReadBoundariesRequireVerifiedActorAndRawBeansAreNotPublic() throws Exception {
+        assertThat(AuthenticatedSalesQueries.class.getDeclaredMethod("search",
+                VerifiedActor.class,UUID.class,SalesOrderSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(AuthenticatedInventoryQueries.class.getDeclaredMethod("search",
+                VerifiedActor.class,UUID.class,StockSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.sales.SalesOrderQueryService").getModifiers()))
+                .isFalse();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.sales.SalesOrderRepository").getModifiers()))
+                .isFalse();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.inventory.StockBalanceQueryService").getModifiers()))
+                .isFalse();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.inventory.StockBalanceRepository").getModifiers()))
+                .isFalse();
     }
 
     @Test void exposedCommandPortsRequireVerifiedIdentity() throws Exception {
