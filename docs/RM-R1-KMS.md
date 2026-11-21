@@ -64,3 +64,21 @@ Concurrency: a write lock around row-level rotation and a protocol coordinating 
 **Migration note:** existing Liquibase SQL changeset `rm:0003-tenant-key` was already committed and must not be edited on deployed databases. Introduce a new formatted SQL changeset for old-to-new migration after verifying actual deployed environments and data. In dev-only disposable H2, recreation from a fresh changelog is possible, but don't silently mutate applied changesets.
 
 **Status:** design decision only. No JPA/SQL code transition or runtime verification has been performed for this model.
+
+
+## RM-KMS-R1.4 — per-slot usage statistics in the SAME tenant row (design)
+
+Keep **one `security.tenant_key` row per tenant**. Add per-slot statistics:
+- `remaining_a/b/c BIGINT NOT NULL DEFAULT 0`: last accounted number of live encrypted *field envelopes* referencing the exact generation in the slot (not number of customers or key cache hits).
+- `migrated_a/b/c BIGINT NOT NULL DEFAULT 0`: successful migration count for this generation; reset when slot receives a new generation.
+- `last_scan_a/b/c TIMESTAMP WITH TIME ZONE`: last authoritative reconciliation time.
+- Optional `stats_verified_a/b/c BOOLEAN NOT NULL DEFAULT FALSE`: certification flag; invalidated by any mutation that could reintroduce the generation; never interpreted as proof independent of data scan.
+- `row_version` protects against stale updates. Counts are nonnegative and relate to generation ID, not merely physical slot letter.
+
+Batch re-encryption: read a bounded batch of encrypted records for a specific old generation, decrypt+encrypt with new generation and store new envelopes with optimistic checks/CAS. Update per-slot counters *only after confirmed successful persisted transitions*, ideally in the same DB transaction; increments/decrements must be atomic, idempotent and based on actual changed rows. On rollback no stats change. Avoid duplicate double-count from retries. A single tenant-row update per batch, not per field, reduces lock contention.
+
+**Authoritative safety gate**: counters are progress telemetry, not proof of zero references. Before slot reuse, (1) fence new writers and background jobs using old generation, (2) await outstanding writes, (3) reconcile authoritative scans across ALL encrypted live tables and durable queues, (4) verify no references to old generation remain in the consistent fence, (5) account for old backups / external encrypted key archive, and (6) atomically change slot state and invalidate cache. If the live data or backups still depend on the old generation, defer reuse. Encrypted data may be moved by multiple modules and concurrent operations; a zero counter without this fence is unsafe.
+
+Counters are in the same row, but **do not lock/update that row for every normal data-field write**, which would turn key management into a bottleneck. Use batch delta persistence plus periodic reconciliation; clearly label snapshot counters as advisory between scans. Exact accounting under concurrency needs transactional write discipline or a durable outbox/reconciliation mechanism.
+
+No new SQL or Java is implemented by this section. Next implementation must migrate existing per-version JPA/SQL to three-slot model using a new Liquibase formatted-SQL changeset, without editing applied changesets. Test H2 and PostgreSQL before claiming this is production-ready.
