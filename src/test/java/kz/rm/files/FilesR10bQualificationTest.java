@@ -59,6 +59,7 @@ class FilesR10bQualificationTest {
     @Autowired AuthenticatedCrmCommands crm;
     @Autowired AuthenticatedFilesAttachments attachments;
     @Autowired FileMetadataService metadata;
+    @Autowired AuthenticatedFilesBinaryReads binaryReads;
     @Autowired JdbcTemplate jdbc;
     @Value("${rm.files.local-root:${java.io.tmpdir}/rm-files-synthetic}") String localRoot;
 
@@ -500,6 +501,37 @@ class FilesR10bQualificationTest {
                 """,s.tenant());
         assertThatThrownBy(()->attachments.listCustomer(s.actor(),s.tenant(),customer,10))
                 .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void authorizedPlaintextCustomerReadIsScopedAndImmediatelyRevoked() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var s=setup();
+        UUID customer=crm.createCompany(s.actor(),s.tenant(),"Synthetic Binary Reader",null).id();
+        byte[] payload=pdf();
+        var intent=draft(s,payload);
+        completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(payload));
+        UUID attachment=attachments.attachCustomer(s.actor(),s.tenant(),
+                intent.fileId(),customer,"INVOICE");
+        var download=new java.io.ByteArrayOutputStream();
+        assertThat(binaryReads.copyCustomerAttachment(s.actor(),s.tenant(),attachment,download))
+                .isEqualTo(payload.length);
+        assertThat(download.toByteArray()).isEqualTo(payload);
+        var foreign=setup();
+        var denied=new java.io.ByteArrayOutputStream();
+        assertThatThrownBy(()->binaryReads.copyCustomerAttachment(
+                foreign.actor(),foreign.tenant(),attachment,denied))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(denied.size()).isZero();
+        jdbc.update("""
+                DELETE FROM public.iam_tenant_role_permission
+                 WHERE tenant_id=? AND permission_code='FILES_READ'
+                """,s.tenant());
+        var revoked=new java.io.ByteArrayOutputStream();
+        assertThatThrownBy(()->binaryReads.copyCustomerAttachment(
+                s.actor(),s.tenant(),attachment,revoked))
+                .isInstanceOf(SecurityException.class);
+        assertThat(revoked.size()).isZero();
     }
 
     @Test void unavailableDefaultScannerNeverClaimsClean() {
