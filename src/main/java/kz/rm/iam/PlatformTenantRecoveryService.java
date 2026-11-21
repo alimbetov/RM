@@ -32,6 +32,8 @@ public class PlatformTenantRecoveryService {
         if(incidentCode==null || !incidentCode.matches("[A-Z0-9_-]{6,80}"))
             throw new IllegalArgumentException("Approved incident reference required");
         UUID adminId=admins.activeAdministrator(administrator);
+        if(adminId.equals(replacementUserId))
+            throw new SecurityException("Platform administrator cannot recover self as tenant owner");
         // Target account lock must precede workspace lock, consistent with commands.
         String replacementStatus=jdbc.query("""
                 SELECT status FROM public.iam_user_account
@@ -86,11 +88,19 @@ public class PlatformTenantRecoveryService {
                 WHERE organization_id=? AND user_id=? AND role<>'OWNER' AND status='ACTIVE'
                 """,organizationId,replacementUserId);
         if(changed!=1)throw new IllegalStateException("Recovery successor unavailable");
-        jdbc.update("""
-                UPDATE public.iam_owner_transfer_request
-                SET state='CANCELLED',decided_at=?,row_version=row_version+1
-                WHERE tenant_id=? AND state='PENDING'
-                """,Timestamp.from(Instant.now()),tenantId);
+        UUID pendingTarget=jdbc.query("""
+                SELECT to_user_id FROM public.iam_owner_transfer_request
+                WHERE tenant_id=? AND state='PENDING' FOR UPDATE
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenantId);
+        if(pendingTarget!=null) {
+            int cancelled=jdbc.update("""
+                    UPDATE public.iam_owner_transfer_request
+                    SET state='CANCELLED',decided_at=?,row_version=row_version+1
+                    WHERE tenant_id=? AND state='PENDING'
+                    """,Timestamp.from(Instant.now()),tenantId);
+            if(cancelled!=1)throw new IllegalStateException("Concurrent transfer cancellation");
+            audit(tenantId,adminId,pendingTarget,"OWNER_TRANSFER_CANCELLED",incidentCode);
+        }
         audit(tenantId,adminId,replacementUserId,"OWNER_RECOVERED",incidentCode);
     }
 
