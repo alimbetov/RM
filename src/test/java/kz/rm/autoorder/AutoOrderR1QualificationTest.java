@@ -46,14 +46,26 @@ class AutoOrderR1QualificationTest {
         return new Store(tenant.getId(),offerId,slug);
     }
 
+    private record Challenge(UUID id, String token) {}
+    private Challenge challenge(String email) {
+        return jdbc.query("""
+            SELECT c.id,c.token_envelope FROM iam_email_verification_challenge c
+            JOIN iam_email_identity e ON c.email_identity_id=e.id
+            WHERE e.lookup_hmac=? ORDER BY c.created_at DESC,c.id DESC
+            """,rs->{
+                if(!rs.next()) throw new IllegalStateException("No queued challenge");
+                return new Challenge(rs.getObject(1,UUID.class),crypto.decrypt(rs.getBytes(2)));
+            },crypto.lookup(crypto.normalize(email)));
+    }
     @Test void emailOnlyCheckoutCreatesPendingUserAndNoCrmProfile() {
         var store=store();
         var placed=orders.checkout(store.slug()," BUYER@Example.KZ ","key-new-001",
                 List.of(new AutoOrderService.Line(store.offerId(),2)));
         UUID orderId=placed.order().orderId();
         assertThat(placed.order().status()).isEqualTo("PLACED");
-        assertThat(placed.verification()).isNotNull();
-        assertThat(placed.verification().email()).isEqualTo("buyer@example.kz");
+        assertThat(challenge("buyer@example.kz")).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM iam_email_delivery_outbox WHERE state='PENDING'",
+                Integer.class)).isPositive();
         assertThat(jdbc.queryForObject("""
             SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
             """,BigDecimal.class,store.tenantId(),orderId)).isEqualByComparingTo("250.5000");
@@ -79,16 +91,18 @@ class AutoOrderR1QualificationTest {
 
     @Test void retryIsIdempotentAndChangesAreRejected() {
         var st=store();
-        var a=orders.checkout(st.slug(),"retry-"+UUID.randomUUID()+"@example.kz","key-retry-001",
+        String email="retry-"+UUID.randomUUID()+"@example.kz";
+        var a=orders.checkout(st.slug(),email,"key-retry-001",
                 List.of(new AutoOrderService.Line(st.offerId(),1)));
-        var b=orders.checkout(st.slug(),a.verification().email(),"key-retry-001",
+        var b=orders.checkout(st.slug(),email,"key-retry-001",
                 List.of(new AutoOrderService.Line(st.offerId(),1)));
         assertThat(b.order().orderId()).isEqualTo(a.order().orderId());
-        assertThat(b.verification()).isNull();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?",
+                Integer.class,st.tenantId())).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
             """,Integer.class,st.tenantId())).isEqualTo(1);
-        assertThatThrownBy(()->orders.checkout(st.slug(),a.verification().email(),"key-retry-001",
+        assertThatThrownBy(()->orders.checkout(st.slug(),email,"key-retry-001",
                 List.of(new AutoOrderService.Line(st.offerId(),2)))).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -97,18 +111,18 @@ class AutoOrderR1QualificationTest {
         String email="v-"+UUID.randomUUID()+"@example.kz";
         var a=orders.checkout(st.slug(),email,"key-verify-001",
                 List.of(new AutoOrderService.Line(st.offerId(),1)));
-        var account=orders.verifyEmail(a.verification().challengeId(),a.verification().token());
+        var account=orders.verifyEmail(challenge(email).id(),challenge(email).token());
         assertThat(orders.buyerOrders(account)).extracting(AutoOrderService.OrderReceipt::orderId)
                 .containsExactly(a.order().orderId());
-        assertThatThrownBy(()->orders.verifyEmail(a.verification().challengeId(),
-                a.verification().token())).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->orders.verifyEmail(challenge(email).id(),
+                challenge(email).token())).isInstanceOf(SecurityException.class);
         var b=orders.checkout(st.slug(),email,"key-verify-002",
                 List.of(new AutoOrderService.Line(st.offerId(),1)));
-        assertThat(b.verification()).isNotNull();
+        assertThat(challenge(email)).isNotNull();
         assertThat(jdbc.queryForObject("""
             SELECT buyer_user_id FROM crm.sales_order WHERE tenant_id=? AND id=?
             """,UUID.class,st.tenantId(),b.order().orderId())).isNull();
-        var again=orders.verifyEmail(b.verification().challengeId(),b.verification().token());
+        var again=orders.verifyEmail(challenge(email).id(),challenge(email).token());
         assertThat(again).isEqualTo(account);
         assertThat(orders.buyerOrders(account)).hasSize(2);
     }
@@ -131,8 +145,8 @@ class AutoOrderR1QualificationTest {
             SELECT buyer_user_id FROM crm.sales_order WHERE tenant_id=? AND id=?
             """,UUID.class,st.tenantId(),placed.order().orderId())).isNull();
         assertThatThrownBy(()->orders.buyerOrders(existingId)).isInstanceOf(SecurityException.class);
-        assertThat(orders.verifyEmail(placed.verification().challengeId(),
-                placed.verification().token())).isEqualTo(existingId);
+        assertThat(orders.verifyEmail(challenge(email).id(),
+                challenge(email).token())).isEqualTo(existingId);
         assertThat(orders.buyerOrders(existingId)).extracting(AutoOrderService.OrderReceipt::orderId)
                 .contains(placed.order().orderId());
     }
