@@ -23,8 +23,16 @@ public class AuthenticatedCrmCommands {
                                                 String name,String email,String phone) {
         return service.addContact(id(actor),tenant,customer,name,email,phone);
     }
-    public UUID recordEmailConsent(VerifiedActor actor,UUID tenant,UUID contact,boolean granted,
+    UUID recordEmailConsent(VerifiedActor actor,UUID tenant,UUID contact,boolean granted,
                                    String purpose,String version,String source) {
         return service.recordEmailConsent(id(actor),tenant,contact,granted,purpose,version,source);
     }
+    /** Public idempotent consent entrypoint for future authenticated adapters. */
+    public UUID recordEmailConsentOnce(VerifiedActor actor,UUID tenant,UUID contact,
+                                       boolean granted,String purpose,String version,
+                                       String source,String requestKey) {
+        return service.recordEmailConsentOnce(id(actor),tenant,contact,
+                granted,purpose,version,source,requestKey);
+    }
 }
+
