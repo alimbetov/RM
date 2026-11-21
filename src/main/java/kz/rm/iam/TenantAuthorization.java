@@ -27,6 +27,7 @@ public class TenantAuthorization {
     private final JdbcTemplate jdbc;
     private String commandTenantLockSql;
     private String commandActorLockSql;
+    private record FreshMember(UUID organizationId, OrganizationMembershipEntity.Role role) {}
 
     @PostConstruct
     void initializeCommandLock() {
@@ -91,7 +92,27 @@ public class TenantAuthorization {
                 rs.next()?rs.getObject(1,UUID.class):null,tenantId);
         if(locked==null || !locked.equals(tenantId))
             throw new SecurityException("Tenant unavailable");
+
+        // A JPA persistence context may already contain an ACTIVE membership or
+        // workspace loaded before another transaction suspended it. The tenant
+        // lock serializes trusted status writers; re-read current DB status
+        // after admission, and fail closed if JPA returns a stale role.
+        FreshMember fresh=jdbc.query("""
+                SELECT w.organization_id,m.role
+                FROM public.iam_workspace w
+                JOIN public.iam_org_membership m
+                  ON m.organization_id=w.organization_id AND m.user_id=?
+                WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
+                  AND m.status='ACTIVE'
+                """,rs->rs.next()
+                ?new FreshMember(rs.getObject(1,UUID.class),
+                    OrganizationMembershipEntity.Role.valueOf(rs.getString(2))):null,
+                actorId,tenantId);
+        if(fresh==null) throw new SecurityException("Active organization membership required");
         Decision checked=require(actorId,tenantId,permission);
+        if(!fresh.organizationId().equals(checked.organizationId()) ||
+                fresh.role()!=checked.role())
+            throw new SecurityException("Stale membership decision");
         if(!TransactionSynchronizationManager.isSynchronizationActive())
             throw new IllegalStateException("Transactional synchronization required");
         TransactionSynchronization marker=new TransactionSynchronization() {};
