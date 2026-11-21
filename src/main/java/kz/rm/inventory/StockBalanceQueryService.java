@@ -18,7 +18,7 @@ class StockBalanceQueryService {
     private final TenantAuthorization authorization;
     private final StockBalanceRepository repository;
 
-    @Transactional(readOnly = true)
+    @Transactional // shared IAM row locks require a writable PostgreSQL transaction
     public Page<StockBalanceDto> search(UUID authenticatedActorId, UUID tenantId,
                                         StockSearch search, int page, int size) {
         authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_STOCK_READ);
