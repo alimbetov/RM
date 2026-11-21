@@ -695,7 +695,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 
 ## 25. IAM-PII-R2.5 — глобальное шифрование профиля и подтверждение email
 
-**Статус:** DESIGN / ТЗ; на текущую дату **НЕ РЕАЛИЗОВАНО** и не утверждено production-ready. Нормативные требования этого раздела обязательны для проектирования следующей IAM-вертикали. Подробный процессный и миграционный контракт — [RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION](../spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md). **Никаких контроллеров до квалификации сервисов.**
+**Статус:** **R2.5A internal services — IMPLEMENTED/TESTED в `base_dev` (PR #9, до merge — кандидат)**; **R2.5B смена email и R2.5C шифрование остальных полей IAM — DESIGN / НЕ РЕАЛИЗОВАНЫ**; вся R2.5 **не** production-ready. Нормативные требования этого раздела обязательны для последующих IAM-вертикалей. Подробный процессный и миграционный контракт — [RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION](../spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md). **Никаких контроллеров до квалификации сервисов.**
 
 ### 25.1 Принятые продуктовые инварианты
 
@@ -730,3 +730,17 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 **Не считать R2.5 завершённой**, пока H2 + PostgreSQL не доказали: регистрация `emailVerified=false`, первый proof → true, смена A→B с неизменным CURRENT до proof, cross-purpose и replay DENY, два одновременных владельца одного email → единственный победитель, invalid/suspended account DENY, integrity/AAD failure для ciphertext, отсутствие утечек через DTO/logs, сохранение исторических заказов, заполненная PG миграция/восстановление и fail-closed при недоступном глобальном IAM ключе.
 
 **Граница:** всё выше — требования к следующей сервисной разработке в `base_dev`. Не писать контроллеры, SMTP-отправку, Redis, second identity service или universal privacy engine. Даже после сервисного GREEN остаются независимое security-review, реальный issuer/JWKS/OIDC/BFF, provider delivery, least-privilege, секреты/ротация, проверка backup/restore и production approval.
+
+### 25.5 Результат IAM-PII-R2.5A — только внутренние сервисы
+
+**Реализовано в `base_dev` (кандидат до merge):**
+- `EmailIdentityService.registerPendingEmail(rawEmail)`: внутренний signup с прежним глобальным email dedup; новая identity имеет `verified_at=NULL`, шифруется AES-GCM и ищется по HMAC. Не раскрывает существование чужого пользователя. Для ACTIVE-аккаунтов этот неаутентифицированный путь не создаёт новый proof.
+- `requestInitialVerification(VerifiedActor,email)`: первая почта активного OIDC-linked пользователя, проверка чужих и legacy адресов; не позволяет заменить уже привязанный email.
+- `myVerificationStatus(VerifiedActor)`: self-only `emailVerified` из `iam_email_identity.verified_at`; отдельного BOOLEAN нет.
+- `verifyRegistration(challengeId,token)`: одноразовое подтверждение только с purpose `REGISTRATION`; прежний checkout proof принимает только `CHECKOUT`. Email proof не выдаёт OIDC-session, tenant-роль или buyer-order claim.
+- Liquibase `0044–0045`: purpose с DEFAULT CHECKOUT для прежних записей; события успешного proof и PostgreSQL immutability trigger. Существующие email identity IDs и order FK остаются без изменения.
+- TTL challenge 15 минут, cooldown повторного registration challenge 60 секунд; это не заменяет HTTP anti-abuse и provider limits.
+
+**Тесты:** `IamInitialEmailRegistrationQualificationTest` проверяет false до proof, encrypted envelope, single-use, purpose isolation, неактивные аккаунты, OIDC self-access, запрет смены email через initial method, конкурентные signup и proof, immutable event в PostgreSQL. Закреплять точный commit/CI при gate.
+
+**Не реализовано:** R2.5B — PENDING/CURRENT/HISTORICAL и атомарная смена адреса с сохранением истории заказов; R2.5C — AES-GCM профиля `display_name`/`phone_e164` и populated-PG backfill. Real SMTP/email delivery, OIDC/BFF, key recovery и independent security review — HOLD.
