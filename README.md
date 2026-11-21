@@ -32,6 +32,7 @@
 - [FRZ-1 security review](docs/reviews/RM-FRZ1-SECURITY-REVIEW-2026-11-21.md)
 - [SEC-R1.1 tenant roles](docs/spec/RM-SEC-R1.1-TENANT-RBAC.md)
 - [RM-MAIL-OTP-R1.1 — email OTP, KumoMTA mail outbox and localized templates (spec only)](docs/spec/RM-MAIL-OTP-R1.md)
+- [RM-FILES-R1.1 — CRM media registry, entity attachments, access control and storage lifecycle (spec only)](docs/spec/RM-FILES-R1.md)
 
 **Document authority:** RM-PLATFORM-STANDARD-R2 defines approved rules; domain docs/ADRs provide detail; reviews document historical evidence; code and tests establish what is implemented. A standard approval is not production approval.
 
