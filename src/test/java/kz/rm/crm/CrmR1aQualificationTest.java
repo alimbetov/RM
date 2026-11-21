@@ -9,6 +9,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.UUID;
+import java.time.Instant;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
@@ -20,6 +23,9 @@ class CrmR1aQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired TenantKeyService keys;
     @Autowired CrmCustomerService crm;
+    @Autowired AuthenticatedCrmCommands secureCommands;
+    @Autowired AuthenticatedCrmQueries secureQueries;
+    @Autowired PlatformTransactionManager transactions;
     @Autowired JdbcTemplate jdbc;
 
     private record Tenant(UUID tenantId,UUID actorId){}
@@ -158,6 +164,93 @@ class CrmR1aQualificationTest {
             """,organizationId,member.getId());
         assertThatThrownBy(()->crm.getCustomer(member.getId(),t.tenantId(),customer.id()))
                 .isInstanceOf(SecurityException.class);
+    }
+
+
+    private VerifiedActor verified(UUID id) {
+        String subject=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,id);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder,users).resolve("synthetic-only");
+    }
+
+    @Test void secureCrmFacadeRejectsUnverifiedActorsAndForeignTenants() {
+        var a=newTenant();
+        var b=newTenant();
+        var trusted=verified(a.actorId());
+        var company=secureCommands.createCompany(trusted,a.tenantId(),"Verified Company",null);
+        assertThat(secureQueries.getCustomer(trusted,a.tenantId(),company.id()).id())
+                .isEqualTo(company.id());
+        var contact=secureCommands.addContact(trusted,a.tenantId(),company.id(),
+                "Contact","contact@example.kz",null);
+        assertThat(secureQueries.getContact(trusted,a.tenantId(),contact.id()).email())
+                .isEqualTo("contact@example.kz");
+        assertThatThrownBy(()->secureCommands.createCompany(null,a.tenantId(),"Blocked",null))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.getCustomer(null,a.tenantId(),company.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.getContact(trusted,b.tenantId(),contact.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.addContact(trusted,b.tenantId(),company.id(),
+                "Blocked",null,null)).isInstanceOf(SecurityException.class);
+    }
+
+    @Test void crmCreateAndConsentEvidenceRollbackAsOneTransaction() {
+        var t=newTenant();
+        var tx=new TransactionTemplate(transactions);
+        UUID customer=crm.createCompany(t.actorId(),t.tenantId(),"Existing",null).id();
+        UUID contact=crm.addContact(t.actorId(),t.tenantId(),customer,
+                "Consent Subject","consent@example.kz",null).id();
+        assertThatThrownBy(()->tx.execute(s->{
+            var created=secureCommands.createPerson(verified(t.actorId()),t.tenantId(),
+                    "Should Roll Back",null);
+            secureCommands.addContact(verified(t.actorId()),t.tenantId(),created.id(),
+                    "Nested Secret","never@example.kz",null);
+            secureCommands.recordEmailConsent(verified(t.actorId()),t.tenantId(),
+                    contact,true,"MARKETING","v1","TEST");
+            throw new IllegalStateException("synthetic failure before CRM commit");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer WHERE tenant_id=?
+                """,Integer.class,t.tenantId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.contact WHERE tenant_id=?
+                """,Integer.class,t.tenantId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event WHERE tenant_id=?
+                """,Integer.class,t.tenantId())).isZero();
+        assertThat(secureQueries.hasEmailConsent(verified(t.actorId()),
+                t.tenantId(),contact,"MARKETING")).isFalse();
+        var accepted=secureCommands.createPerson(verified(t.actorId()),t.tenantId(),
+                "Accepted",null);
+        assertThat(secureQueries.getCustomer(verified(t.actorId()),
+                t.tenantId(),accepted.id()).name()).isEqualTo("Accepted");
+    }
+
+    @Test void invalidCrmInputNeverLeaksContactOrPersonPlaintext() {
+        var t=newTenant();
+        var company=crm.createCompany(t.actorId(),t.tenantId(),"Company",null);
+        assertThatThrownBy(()->secureCommands.createPerson(
+                verified(t.actorId()),t.tenantId(),"  ",null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.addContact(
+                verified(t.actorId()),t.tenantId(),UUID.randomUUID(),
+                "Orphan","secret@example.kz",null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.recordEmailConsent(
+                verified(t.actorId()),t.tenantId(),UUID.randomUUID(),true,
+                "MARKETING","v1","FORM")).isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.contact WHERE tenant_id=?
+                """,Integer.class,t.tenantId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm_pii.contact_secret WHERE tenant_id=?
+                """,Integer.class,t.tenantId())).isZero();
+        assertThat(secureQueries.getCustomer(verified(t.actorId()),t.tenantId(),
+                company.id()).name()).isEqualTo("Company");
     }
 
     @Test void katoRejectsSubdistrictForCustomer() {
