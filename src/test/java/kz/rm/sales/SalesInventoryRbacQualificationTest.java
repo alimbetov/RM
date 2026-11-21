@@ -24,6 +24,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.ArrayList;
+import java.util.Collections;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Assumptions;
 
@@ -372,6 +376,113 @@ class SalesInventoryRbacQualificationTest {
         assertThatThrownBy(()->authenticatedCommands.confirm(
                 verified(c.staff()),c.tenant(),id,c.location()))
                 .isInstanceOf(SecurityException.class);
+    }
+
+
+    /**
+     * R1.2 synthetic contention qualification: actual PostgreSQL row locks,
+     * double-submit retries and mixed terminal states. Timings are diagnostic
+     * micro-sample metrics, not SLA or deployment-load evidence.
+     */
+    @Test void postgresMixedConcurrentOrderLifecyclePreservesLedgerAndIdempotency() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Context c=context(40);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        List<UUID> ids=new ArrayList<>();
+        for(int i=0;i<12;i++) ids.add(order(c,1));
+
+        List<Long> confirmMicros=Collections.synchronizedList(new ArrayList<>());
+        List<Callable<Integer>> confirmations=new ArrayList<>();
+        for(UUID id:ids) for(int retry=0;retry<2;retry++) {
+            confirmations.add(()->{
+                long start=System.nanoTime();
+                try {
+                    return commands.confirm(c.staff(),c.tenant(),id,c.location()).affectedLines();
+                } finally {
+                    confirmMicros.add(TimeUnit.NANOSECONDS.toMicros(System.nanoTime()-start));
+                }
+            });
+        }
+        int confirmed=executeConcurrent(confirmations,6);
+        assertThat(confirmed).isEqualTo(12);
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("40");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("12");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND state='ACTIVE'
+                """,Integer.class,c.tenant())).isEqualTo(12);
+
+        List<Long> terminalMicros=Collections.synchronizedList(new ArrayList<>());
+        List<Callable<Integer>> terminals=new ArrayList<>();
+        for(int i=0;i<ids.size();i++) {
+            UUID id=ids.get(i);
+            boolean cancellation=i<6;
+            for(int retry=0;retry<2;retry++) {
+                terminals.add(()->{
+                    long start=System.nanoTime();
+                    try {
+                        return cancellation
+                                ?commands.cancel(c.staff(),c.tenant(),id).affectedLines()
+                                :commands.fulfill(c.staff(),c.tenant(),id).affectedLines();
+                    } finally {
+                        terminalMicros.add(TimeUnit.NANOSECONDS.toMicros(System.nanoTime()-start));
+                    }
+                });
+            }
+        }
+        assertThat(executeConcurrent(terminals,6)).isEqualTo(12);
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("34");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND state='FULFILLED'
+                """,Integer.class,c.tenant())).isEqualTo(6);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND state='RELEASED'
+                """,Integer.class,c.tenant())).isEqualTo(6);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant())).isEqualTo(6);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=?
+                """,Integer.class,c.tenant())).isEqualTo(36);
+        for(int i=0;i<ids.size();i++)
+            assertThat(status(c,ids.get(i))).isEqualTo(i<6?"CANCELLED":"COMPLETED");
+
+        System.out.printf("R1.2 synthetic PG contention: confirm count=%d p95_us=%d p99_us=%d; "
+                        +"terminal count=%d p95_us=%d p99_us=%d%n",
+                confirmMicros.size(),percentile(confirmMicros,0.95),percentile(confirmMicros,0.99),
+                terminalMicros.size(),percentile(terminalMicros,0.95),percentile(terminalMicros,0.99));
+    }
+
+    private static int executeConcurrent(List<Callable<Integer>> tasks,int workers) throws Exception {
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(workers)) {
+            List<Future<Integer>> futures=new ArrayList<>();
+            for(Callable<Integer> task:tasks)
+                futures.add(pool.submit(()->{
+                    if(!start.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Contention start barrier timed out");
+                    return task.call();
+                }));
+            start.countDown();
+            int affected=0;
+            for(Future<Integer> future:futures) affected+=future.get(45,TimeUnit.SECONDS);
+            return affected;
+        }
+    }
+
+    private static long percentile(List<Long> samples,double quantile) {
+        List<Long> sorted=new ArrayList<>(samples);
+        Collections.sort(sorted);
+        return sorted.get(Math.max(0,(int)Math.ceil(quantile*sorted.size())-1));
     }
 
     @Test void finalSecGateRejectsMixedActorTenantAndMissingInventoryPermits() {
