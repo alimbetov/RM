@@ -37,7 +37,9 @@ public class TenantMemberEnrollmentService {
         roleService.lockAndAuthorize(ownerId,tenantId);
         assertEnforced(tenantId);
         String accountStatus = jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=?
+                SELECT status FROM public.iam_user_account
+                WHERE id=? AND external_subject IS NOT NULL
+                  AND length(trim(external_subject))>0
                 """,rs -> rs.next() ? rs.getString(1) : null, employeeUserId);
         if (!"ACTIVE".equals(accountStatus))
             throw new SecurityException("Employee account must be active");
