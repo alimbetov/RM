@@ -23,6 +23,9 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.Assumptions;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -45,6 +48,7 @@ class SalesInventoryRbacQualificationTest {
     @Autowired TenantAuthorization authorization;
     @Autowired OrderInventoryPort crossDomainPort;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired DataSource dataSource;
 
     private VerifiedActor verified(UUID userId) {
         String subject=jdbc.queryForObject(
@@ -315,6 +319,59 @@ class SalesInventoryRbacQualificationTest {
         assertThat(scalar(c,"on_hand")).isEqualByComparingTo("5");
         assertThatThrownBy(()->warehouse.receive(verified(c.owner()),c.tenant(),c.location(),c.item(),
             "receive-002",BigDecimal.ONE)).isInstanceOf(SecurityException.class);
+    }
+
+    @Test void postgresSalesConfirmationFencesConcurrentPermissionRevocation() throws Exception {
+        try (var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Context c=context(8);
+        UUID id=order(c,2);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        UUID role=jdbc.queryForObject("""
+                SELECT id FROM public.iam_tenant_role
+                WHERE tenant_id=? AND role_code LIKE 'OPS_%'
+                """,UUID.class,c.tenant());
+        var commandAdmitted=new CountDownLatch(1);
+        var commitCommand=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var confirm=pool.submit(()->tx.execute(status->{
+                authenticatedCommands.confirm(verified(c.staff()),c.tenant(),id,c.location());
+                commandAdmitted.countDown();
+                try {
+                    if(!commitCommand.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Confirmation latch timed out");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(commandAdmitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                roles.revoke(c.owner(),c.tenant(),role,DomainPermission.SALES_ORDER_CONFIRM);
+                return true;
+            });
+            try {
+                assertThatThrownBy(()->revoke.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                commitCommand.countDown();
+            }
+            assertThat(confirm.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(status(c,id)).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("2");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,c.tenant(),id)).isEqualTo(1);
+        assertThatThrownBy(()->authenticatedCommands.confirm(
+                verified(c.staff()),c.tenant(),id,c.location()))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void finalSecGateRejectsMixedActorTenantAndMissingInventoryPermits() {
