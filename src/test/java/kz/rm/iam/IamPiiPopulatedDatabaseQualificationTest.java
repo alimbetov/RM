@@ -206,6 +206,11 @@ class IamPiiPopulatedDatabaseQualificationTest {
 
     @Test @Order(8)
     void postgresTransactionalSealConstraintRejectsPlaintextReintroduction() throws Exception {
+        // Read account before the exclusive DDL lock to avoid using a second
+        // connection while holding that lock (which would block itself).
+        UUID account=jdbc.queryForObject("""
+            SELECT id FROM public.iam_user_account LIMIT 1
+            """,UUID.class);
         try(Connection c=source.getConnection()) {
             Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
                     .toLowerCase().contains("postgresql"));
@@ -222,9 +227,6 @@ class IamPiiPopulatedDatabaseQualificationTest {
                     VALIDATE CONSTRAINT ck_test_iam_pii_sealed
                     """);
                 Savepoint guarded=c.setSavepoint();
-                UUID account=jdbc.queryForObject("""
-                    SELECT id FROM public.iam_user_account LIMIT 1
-                    """,UUID.class);
                 try(PreparedStatement invalid=c.prepareStatement("""
                     UPDATE public.iam_user_account SET display_name=? WHERE id=?
                     """)) {
