@@ -1778,3 +1778,20 @@ CREATE INDEX idx_file_tenant_uploader_state
 --rollback ALTER TABLE crm.file_object DROP COLUMN scan_status;
 --rollback ALTER TABLE crm.file_object DROP COLUMN request_key;
 --rollback ALTER TABLE crm.file_object DROP COLUMN uploaded_by;
+
+--changeset rm:0055-files-r10c-fenced-upload-claim
+-- A single upload worker may hold the short-lived, token-fenced processing claim.
+-- No client identity or filename is used as a claim credential.
+ALTER TABLE crm.file_object ADD COLUMN processing_token UUID;
+ALTER TABLE crm.file_object ADD COLUMN processing_started_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE crm.file_object ADD CONSTRAINT ck_files_processing_claim CHECK (
+  (processing_token IS NULL AND processing_started_at IS NULL)
+  OR (processing_token IS NOT NULL AND processing_started_at IS NOT NULL
+      AND state='STAGED' AND scan_status='SCANNING')
+);
+CREATE INDEX idx_files_pending_processing ON crm.file_object
+  (state,scan_status,processing_started_at);
+--rollback DROP INDEX idx_files_pending_processing;
+--rollback ALTER TABLE crm.file_object DROP CONSTRAINT ck_files_processing_claim;
+--rollback ALTER TABLE crm.file_object DROP COLUMN processing_started_at;
+--rollback ALTER TABLE crm.file_object DROP COLUMN processing_token;
