@@ -107,6 +107,50 @@ class CrmR1aQualificationTest {
             """,Integer.class,workspace.getId())).isZero();
     }
 
+    @Test void suspendedActorAndWorkspaceCannotReadOrWriteCrm() {
+        var t=newTenant();
+        var customer=crm.createCompany(t.actorId(),t.tenantId(),"Before suspension",null);
+        jdbc.update("UPDATE iam_user_account SET status='SUSPENDED' WHERE id=?",t.actorId());
+        assertThatThrownBy(()->crm.getCustomer(t.actorId(),t.tenantId(),customer.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->crm.createCompany(t.actorId(),t.tenantId(),"Blocked",null))
+                .isInstanceOf(SecurityException.class);
+        jdbc.update("UPDATE iam_user_account SET status='ACTIVE' WHERE id=?",t.actorId());
+        jdbc.update("UPDATE iam_workspace SET status='SUSPENDED' WHERE id=?",t.tenantId());
+        assertThatThrownBy(()->crm.getCustomer(t.actorId(),t.tenantId(),customer.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->crm.createCompany(t.actorId(),t.tenantId(),"Blocked",null))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void memberAndViewerCannotWriteCrmButMayRead() {
+        var t=newTenant();
+        var customer=crm.createCompany(t.actorId(),t.tenantId(),"Permission check",null);
+        UUID organizationId=jdbc.queryForObject("""
+            SELECT organization_id FROM iam_workspace WHERE id=?
+            """,UUID.class,t.tenantId());
+        var member=users.saveAndFlush(new UserAccountEntity(
+                UUID.randomUUID(),"crm-member-"+UUID.randomUUID(),"Member"));
+        var viewer=users.saveAndFlush(new UserAccountEntity(
+                UUID.randomUUID(),"crm-viewer-"+UUID.randomUUID(),"Viewer"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),organizationId,member.getId(),OrganizationMembershipEntity.Role.MEMBER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),organizationId,viewer.getId(),OrganizationMembershipEntity.Role.VIEWER));
+        assertThat(crm.getCustomer(member.getId(),t.tenantId(),customer.id()).id()).isEqualTo(customer.id());
+        assertThat(crm.getCustomer(viewer.getId(),t.tenantId(),customer.id()).id()).isEqualTo(customer.id());
+        assertThatThrownBy(()->crm.createCompany(member.getId(),t.tenantId(),"Forbidden",null))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->crm.createCompany(viewer.getId(),t.tenantId(),"Forbidden",null))
+                .isInstanceOf(SecurityException.class);
+        jdbc.update("""
+            UPDATE iam_org_membership SET status='SUSPENDED'
+            WHERE organization_id=? AND user_id=?
+            """,organizationId,member.getId());
+        assertThatThrownBy(()->crm.getCustomer(member.getId(),t.tenantId(),customer.id()))
+                .isInstanceOf(SecurityException.class);
+    }
+
     @Test void katoRejectsSubdistrictForCustomer() {
         var t=newTenant();
         assertThatThrownBy(()->crm.createCompany(t.actorId(),t.tenantId(),"Client","433243300"))
