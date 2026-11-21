@@ -40,8 +40,8 @@ public class SalesInventoryCommandService {
 
     @Transactional
     public CommandResult confirm(UUID actorId,UUID tenantId,UUID orderId,UUID locationId) {
-        authorization.require(actorId,tenantId,DomainPermission.SALES_ORDER_CONFIRM);
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_RESERVE);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CONFIRM);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RESERVE);
         if(orderId==null || locationId==null)
             throw new IllegalArgumentException("Order and warehouse required");
         String status=lockOrder(tenantId,orderId);
@@ -76,8 +76,8 @@ public class SalesInventoryCommandService {
 
     @Transactional
     public CommandResult cancel(UUID actorId,UUID tenantId,UUID orderId) {
-        authorization.require(actorId,tenantId,DomainPermission.SALES_ORDER_CANCEL);
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CANCEL);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
         if("CANCELLED".equals(state)) {
@@ -109,8 +109,8 @@ public class SalesInventoryCommandService {
 
     @Transactional
     public CommandResult fulfill(UUID actorId,UUID tenantId,UUID orderId) {
-        authorization.require(actorId,tenantId,DomainPermission.SALES_ORDER_FULFILL);
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_FULFILL);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
         if("COMPLETED".equals(state)) {
