@@ -132,7 +132,7 @@ class SalesOrderQueryQualificationTest {
     @Test void orderListPaginatesFiltersAndNeverReturnsBuyerIdentity() {
         Shop first=shop(),second=shop();
         UUID one=order(first),two=order(first);
-        order(second);
+        UUID foreign=order(second);
         jdbc.update("UPDATE crm.sales_order SET status='CONFIRMED' WHERE tenant_id=? AND id=?",
                 first.tenant(),one);
         var page=service.search(first.actor(),first.tenant(),null,0,1);
@@ -140,6 +140,13 @@ class SalesOrderQueryQualificationTest {
         assertThat(page.getContent()).hasSize(1);
         var confirmed=service.search(first.actor(),first.tenant(),
                 new SalesOrderSearch("CONFIRMED",null,null),0,10);
+        assertThat(confirmed.getContent()).extracting(x->x.id()).doesNotContain(foreign);
+        assertThat(service.search(first.actor(),first.tenant(),null,0,10)
+                .getContent()).extracting(x->x.id()).contains(one,two)
+                .doesNotContain(foreign);
+        assertThat(service.search(second.actor(),second.tenant(),
+                new SalesOrderSearch("CONFIRMED",null,null),0,10)
+                .getContent()).isEmpty();
         assertThat(confirmed.getContent()).hasSize(1);
         assertThat(confirmed.getContent().getFirst().id()).isEqualTo(one);
         assertThat(service.search(first.actor(),first.tenant(),
