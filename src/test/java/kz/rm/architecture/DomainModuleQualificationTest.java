@@ -1,6 +1,11 @@
 package kz.rm.architecture;
 
 import kz.rm.audit.AuditAction;
+import kz.rm.iam.EmailIdentityCrypto;
+import kz.rm.iam.EmailIdentityService;
+import kz.rm.autoorder.AutoOrderService;
+import kz.rm.organization.OrganizationLocationService;
+import kz.rm.geo.KatoLocationPolicy;
 import kz.rm.catalog.CatalogItem;
 import kz.rm.files.FileObject;
 import kz.rm.finance.Money;
@@ -34,6 +39,15 @@ class DomainModuleQualificationTest {
         assertThat(DomainModule.STOREFRONT.table("front")).isEqualTo("store_front");
         assertThatThrownBy(()->DomainModule.CRM.table("WrongName"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void canonicalModuleOwnershipDoesNotDrift() {
+        assertThat(EmailIdentityCrypto.class.getPackageName()).isEqualTo(DomainModule.IAM.javaPackage());
+        assertThat(EmailIdentityService.class.getPackageName()).isEqualTo(DomainModule.IAM.javaPackage());
+        assertThat(OrganizationLocationService.class.getPackageName())
+                .isEqualTo(DomainModule.ORG.javaPackage());
+        assertThat(KatoLocationPolicy.class.getPackageName()).isEqualTo(DomainModule.GEO.javaPackage());
+        assertThat(AutoOrderService.class.getPackageName()).isEqualTo("kz.rm.autoorder");
     }
 
     @Test void financialAndInventoryInvariantsRemainInsideOwningDomain() {
