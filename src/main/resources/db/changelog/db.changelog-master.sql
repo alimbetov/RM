@@ -1020,3 +1020,44 @@ CREATE INDEX idx_fin_invoice_tenant_created ON crm.fin_invoice(tenant_id,created
 --rollback DROP INDEX idx_sales_status_tenant_order_time;
 --rollback DROP INDEX idx_sales_order_tenant_buyer_created;
 --rollback DROP INDEX idx_sales_order_tenant_created;
+
+
+--changeset rm:0020-audit-retention-governance
+-- Retention is opt-in per tenant after an approved policy. Absence of approval => NO PURGE.
+-- These tables are intentionally unpartitioned control-plane metadata.
+CREATE TABLE crm.audit_retention_policy (
+  tenant_id UUID NOT NULL PRIMARY KEY,
+  retention_years SMALLINT NOT NULL DEFAULT 5,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  approved_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_audit_retention_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT ck_audit_retention_years CHECK(retention_years BETWEEN 3 AND 5),
+  CONSTRAINT ck_audit_retention_approval CHECK(NOT enabled OR approved_at IS NOT NULL)
+);
+-- Legal holds are by stable tenant/event UUID; separate table avoids changing
+-- the PK/partition key of the existing audit journal.
+CREATE TABLE crm.audit_retention_hold (
+  tenant_id UUID NOT NULL,
+  event_id UUID NOT NULL,
+  reason_code VARCHAR(80) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  released_at TIMESTAMP WITH TIME ZONE,
+  CONSTRAINT pk_audit_retention_hold PRIMARY KEY(tenant_id,event_id),
+  CONSTRAINT fk_audit_hold_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+  CONSTRAINT ck_audit_hold_dates CHECK(released_at IS NULL OR released_at >= created_at)
+);
+CREATE TABLE crm.audit_retention_run (
+  id UUID NOT NULL PRIMARY KEY,
+  started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  finished_at TIMESTAMP WITH TIME ZONE,
+  deleted_rows BIGINT NOT NULL DEFAULT 0,
+  batch_count INTEGER NOT NULL DEFAULT 0,
+  outcome VARCHAR(20) NOT NULL,
+  CONSTRAINT ck_audit_run_rows CHECK(deleted_rows >= 0 AND batch_count >= 0),
+  CONSTRAINT ck_audit_run_outcome CHECK(outcome IN ('RUNNING','DONE','FAILED','SKIPPED'))
+);
+--rollback DROP TABLE crm.audit_retention_run;
+--rollback DROP TABLE crm.audit_retention_hold;
+--rollback DROP TABLE crm.audit_retention_policy;
