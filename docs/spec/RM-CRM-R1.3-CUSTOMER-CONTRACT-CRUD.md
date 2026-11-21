@@ -15,7 +15,7 @@
 ## Persistent evidence
 
 - `crm.customer_change_event`: `(tenant_id,id)` PK; tenant+customer FK; actor FK, action, previous/new row version, occurrence. New R1.3 events only; no invented backfill for legacy records.
-- `crm.contract_revision`: `(tenant_id,id)` PK, unique `(tenant_id,contract_id,revision_no)`; exact start/end/status per revision, actor, occurrence and action. The initial R1.2 contracts have no synthetic creation revision; first R1.3 modification starts from their current optimistic row version and must be interpreted accordingly.
+- `crm.contract_revision`: `(tenant_id,id)` PK, unique `(tenant_id,contract_id,revision_no)`; exact start/end/status per revision, actor, occurrence and action. Legacy R1.2 contracts have no creation revision; their first R1.3 material modification atomically captures the actual prior state as BASELINE_CAPTURED using the existing row version, followed by the new revision. This event is stamped at capture time, not backdated.
 - PostgreSQL append-only mutation triggers on both tables; no PII, contract document body, contact details or free-text snapshots.
 - All revisions are inserted within the same transaction as the mutation. Transaction rollback must roll back both.
 - `crm.customer.primary_category_id` retains one primary category only; no general many-to-many tags.
