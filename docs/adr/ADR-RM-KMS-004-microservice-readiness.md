@@ -1,7 +1,7 @@
 # ADR-RM-KMS-004 — Microservice-ready KMS without premature distribution
 
 **Date:** 2026-11-21  
-**Status:** ACCEPTED FOR DEVELOPMENT / DISTRIBUTED DEPLOYMENT HOLD  
+**Status:** ACCEPTED FOR MULTI-POD IMMUTABLE-KEY PHASE / ROTATION & DISTRIBUTED MUTATION HOLD  
 **Source:** RM-KMS-SPEC-R1 + audit R1.6; branch `feat/rm-kms-r1-implementation`.
 
 ## Decision
@@ -27,11 +27,23 @@ This Java interface is **not** an HTTP contract and is not exposed on the networ
 
 Before extracting KMS to a service decide whether (A) cryptographic operations stay next to business data under a secure local key provider, or (B) plaintext crosses the service boundary to a centralized cryptographic service. Neither can be adopted silently. A remote KMS holding wrapping keys **must not return plaintext DEKs to untrusted clients** merely to preserve the current cache architecture. Evaluate latency, PII movement, blast radius, horizontal scaling and operations.
 
-## Single-JVM guard
+## Multi-pod baseline: immutable keys, no automatic rotation
 
-`KmsDeploymentGuard` refuses application boot unless `rm.kms.deployment.mode=single-jvm`, `rm.kms.rotation.enabled=false`, and `rm.kms.migration.enabled=false`. Its purpose is to prevent someone from treating process-local Caffeine invalidation as a distributed revocation/fencing mechanism. This **does not detect two separately configured replicas**; deployment policy must set replicas=1 and reject scale-out until a cross-instance admission design is tested.
+Existing RM deployment is **multi-pod** and background tasks are scheduled. `KmsDeploymentGuard` now accepts `multi-pod` (default) and `single-jvm` for local development, provided `rm.kms.rotation.enabled=false` and `rm.kms.migration.enabled=false`. This guard does **not** prove distributed coordination; it merely rejects unsafe feature toggles.
 
-Do not use the JVM-local Caffeine cache to implement distributed key revocation. In a future multi-instance deployment implement persistent tenant key-state epoch, transactional DB fencing, cluster invalidation or bounded-lease guarantees, and tests for network partitions/stale caches/crash between commit and invalidation. Do not switch on extra replicas with the same settings.
+Ordinary AES-GCM encrypt/decrypt with **immutable ACTIVE generation**, tenant-keyed Caffeine cache and shared PostgreSQL can be exercised across multiple pods; encrypted fields must remain bound to tenant/entity/field AAD. Decrypting a mutable/REVOKED generation from a stale local cache is NOT safe; production revocation/promotion is still disabled. Concurrent first-time provisioning is not yet certified and requires a PostgreSQL atomic idempotency contract.
+
+Local Caffeine TTL/eviction is only a performance policy, never a revocation guarantee. Pod deployment counts, CI and rolling upgrades require their own test gates.
+
+### Scheduler coordination != transactional data fencing
+
+**Task acquisition:** any scheduled migration/rotation task must hold a **distributed, durable PostgreSQL-backed lease** (or an approved existing scheduler implementation with equivalent lease semantics) keyed by `(taskType, tenantId)`, with owner identity, expiry and **monotonically increasing fencing token**. Acquisition must be atomic. Each mutating transaction must verify its lease/fencing token before commit. Paused/expired workers, even if still alive, are not permitted to commit new writes after a successor acquires the lease. A scheduler-only single execution guarantee does not prevent concurrent CRM/API writers.
+
+**Data-writer barrier:** before changing ACTIVE or retiring generations, introduce per-tenant persistent `key_state_epoch` (new SQL changeset) and transactionally enforce generation/epoch checks in every encrypted-data write path. A promotion must block/abort old generation writers until their transactions have completed or been rejected. Confirm this with PostgreSQL concurrency tests using two JVMs/pods.
+
+**Failure semantics:** lease expiry, pod termination, network partition, database reconnect and concurrent scheduler executions must not permit duplicate migration effects or premature archival. Batch job remains idempotent and its progress derived from stored envelopes; counters are advisory, not proofs. Prefer the existing RM scheduler infrastructure if it already provides comparable distributed locks plus fencing, but verify in code and CI before relying on it.
+
+No claim is made that a qualified distributed scheduler/fencing implementation exists in this branch. Do **not** enable `rotation.enabled` or `migration.enabled` until the DB-backed protocol, worker fencing, full-generation scans and restore checks are implemented and tested.
 
 ## Data ownership and eventual consistency
 
@@ -45,10 +57,10 @@ Do not use the JVM-local Caffeine cache to implement distributed key revocation.
 
 | Phase | Deployment | Allowed |
 |---|---|---|
-| R1.6 | One JVM, H2 dev / PostgreSQL test | Provisioning, encryption/decryption in authorized test flows, Caffeine |
-| R1.7 | Same JVM | Persisted envelope round-trip, generation/KEK resolver, tests |
-| R1.8 | Same JVM | Transactional admission, safe migration/restore behind tests |
+| R1.6 | Multi-pod immutable-key mode, H2 dev / PostgreSQL test | Encrypt/decrypt under unchanged generation and tenant-keyed Caffeine; concurrency provisioning requires qualification |
+| R1.7 | Multi-pod, immutable keys | Persisted envelope round-trip and provisioning concurrency, tests |
+| R1.8 | Multi-pod | PostgreSQL scheduler lease/fencing and transactional admission; safe migration/restore behind gates |
 | MSA-R0 (future) | Boundary extraction proof of concept | Contract versioning, mTLS, authorization, failure injection |
-| MSA-R1 (future) | Multi-instance / distributed | ONLY with demonstrated cache invalidation, DB fencing, outbox, recovery, p95/p99, security review |
+| MSA-R1 (future) | Independent KMS microservice | ONLY with explicit network security, verified cache/DB fencing, outbox, recovery, p95/p99 and security review |
 
-**Release rule:** never represent an in-process port as a finished microservice; Kubernetes replicas >1 and remote KMS operations remain **HOLD**. Keep existing SQL migrations immutable.
+**Release rule:** multiple RM pods may execute immutable-key cryptographic operations in the current phase. **Distributed rotation, revocation, scheduled migration and extraction of a remote KMS remain HOLD.** Never represent an in-process port as a finished microservice. Keep existing SQL migrations immutable.
