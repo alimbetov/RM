@@ -36,7 +36,7 @@ public class InventoryReservationService {
     private record Stock(BigDecimal onHand, BigDecimal reserved) {}
 
     @Transactional
-    public Reservation reserve(UUID tenantId, UUID orderId, UUID orderLineId,
+    Reservation reserve(UUID tenantId, UUID orderId, UUID orderLineId,
                                UUID locationId, UUID itemId, BigDecimal quantity) {
         requireIds(tenantId,orderId,orderLineId,locationId,itemId);
         positiveQty(quantity);
@@ -84,13 +84,13 @@ public class InventoryReservationService {
     }
 
     @Transactional
-    public Reservation release(UUID tenantId, UUID reservationId) {
+    Reservation release(UUID tenantId, UUID reservationId) {
         return transition(tenantId,reservationId,State.RELEASED);
     }
 
     /** Fulfillment converts the reservation into a single immutable negative stock movement. */
     @Transactional
-    public Reservation fulfill(UUID tenantId, UUID reservationId) {
+    Reservation fulfill(UUID tenantId, UUID reservationId) {
         return transition(tenantId,reservationId,State.FULFILLED);
     }
 
