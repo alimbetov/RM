@@ -1,8 +1,5 @@
 package kz.rm.autoorder;
 
-import kz.rm.iam.UserAccountEntity;
-import kz.rm.iam.UserAccountRepository;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +21,9 @@ import java.util.stream.Collectors;
 public class AutoOrderService {
     private final JdbcTemplate jdbc;
     private final EmailIdentityCrypto identityCrypto;
-    private final UserAccountRepository users;
 
-    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityCrypto identityCrypto,
-                            UserAccountRepository users) {
-        this.jdbc=jdbc;this.identityCrypto=identityCrypto;this.users=users;
+    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityCrypto identityCrypto) {
+        this.jdbc=jdbc;this.identityCrypto=identityCrypto;
     }
 
     public record Line(UUID offerId,int quantity){}
@@ -87,8 +82,8 @@ public class AutoOrderService {
         Timestamp now=Timestamp.from(Instant.now());
         jdbc.update("""
             INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at)
-            VALUES (?,?,?,?,'PLACED',?,?,?)
-            """,tenant,orderId,identity.identityId(),identity.verified()?identity.userId():null,total,currency,now);
+            VALUES (?,?,?,NULL,'PLACED',?,?,?)
+            """,tenant,orderId,identity.identityId(),total,currency,now);
         for(Offer o:offers) {
             jdbc.update("""
                 INSERT INTO crm.sales_order_line(tenant_id,id,order_id,offer_id,title_snapshot,quantity,unit_price_snapshot,currency)
@@ -103,7 +98,8 @@ public class AutoOrderService {
             INSERT INTO crm.sales_checkout_receipt(tenant_id,idempotency_key,request_sha256,order_id,created_at)
             VALUES (?,?,?,?,?)
             """,tenant,idempotencyKey,requestHash,orderId,now);
-        VerificationDispatch dispatch=identity.verified()?null:createChallenge(identity.identityId(),normalized);
+        // Always require fresh proof for this checkout, including an existing verified account.
+        VerificationDispatch dispatch=createChallenge(identity.identityId(),normalized);
         // Trusted adapter must persist/send dispatch DURABLY before enabling public checkout.
         return new CheckoutResult(new OrderReceipt(orderId,"PLACED"),dispatch);
     }
