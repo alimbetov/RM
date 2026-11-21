@@ -1,6 +1,9 @@
 package kz.rm.geo;
 
 import kz.rm.iam.*;
+import kz.rm.organization.OrganizationLocationEntity;
+import kz.rm.organization.OrganizationLocationRepository;
+import kz.rm.organization.OrganizationLocationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
