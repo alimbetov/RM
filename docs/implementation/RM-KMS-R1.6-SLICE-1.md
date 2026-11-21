@@ -33,3 +33,27 @@ Immediate next acceptance:
 2. Correct dialect discrepancies (BYTEA, TIMESTAMPTZ, constraints) based on actual failures.
 3. PostgreSQL Testcontainers integration, concurrent tenant provision/idempotent retries and no legacy key loss.
 4. Add complete envelope storage codec / test vectors + transactional writer admission before any key rotation.
+
+
+## R1.6 Qualification update — 2026-11-21
+
+**Status: CI CONFIGURED; H2/POSTGRES EXECUTION NOT VERIFIED — HOLD.**
+
+Added `.github/workflows/kms-r1-qualification.yml` with two separate jobs:
+- `h2-smoke`: JDK 21, `SPRING_PROFILES_ACTIVE=dev mvn -B -ntp clean verify`;
+- `postgres-integration`: isolated PostgreSQL 17 GitHub Actions service database, `SPRING_PROFILES_ACTIVE=test mvn -B -ntp clean verify`.
+Surefire reports are uploaded on success/failure. No production database is used.
+
+Added `KmsCryptoQualificationTest` covering UTF-8 round-trip, empty/long values, nonce/tag changes, generation mismatch, defensive envelope arrays, and three-slot SQL constraints; `KeyWrappingQualificationTest` covering wrap/unwrap, root key failures and authentication. Fixed JPA archive composite `IdClass` to have public no-arg constructor and equality/hashCode.
+
+Environment inspected: Java 21 exists; Maven, PostgreSQL client/server, Docker unavailable; outbound GitHub cloning blocked by DNS. Therefore no local H2/PG runtime tests were executed. The GitHub connector's workflow lookup only exposes PR-triggered runs, and has not provided verification of these push-triggered jobs. **No claims of GREEN/PASS are authorized until CI reports are checked.**
+
+Additional risks known before R1.6 signoff:
+1. Real Liquibase H2 PostgreSQL mode type validation, especially `BYTEA`, and JPA schema must be observed in CI.
+2. Concurrent first-time provisioning currently fails closed on PK race; graceful idempotent retry requires a separate transaction and test.
+3. Live legacy key migration not implemented: legacy tenants are blocked and retained in `security.tenant_key`.
+4. Envelope persistence codec and CRM entity mapping not implemented.
+5. Rotation/revocation caching, transaction fencing, archival re-wrap and recovery, nightly worker remain unavailable and disabled.
+6. PostgreSQL HASH partitioning is not in this first slice; PostgreSQL job qualifies ordinary KMS table compatibility, not native partitioning.
+
+**Next required action:** observe GitHub Actions job conclusions/logs and fix any failures in this same branch, then record precise test count and environment details. Until then R1.6 remains **PARTIAL / HOLD**.
