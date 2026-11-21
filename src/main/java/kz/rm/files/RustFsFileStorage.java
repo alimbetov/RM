@@ -1,6 +1,7 @@
 package kz.rm.files;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.*;
@@ -26,6 +27,7 @@ class RustFsFileStorage implements FileStoragePort {
     private final S3Client s3;
     private final String bucket;
 
+    @Autowired
     RustFsFileStorage(@Value("${rm.files.rustfs.endpoint}") String endpoint,
                       @Value("${rm.files.rustfs.region:us-east-1}") String region,
                       @Value("${rm.files.rustfs.bucket:rm-files}") String bucket,
