@@ -57,6 +57,69 @@ class CrmR1aQualificationTest {
         return new Tenant(workspace.getId(),user.getId());
     }
 
+    @Test void tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped() {
+        var a=newTenant();
+        var b=newTenant();
+        var aActor=verified(a.actorId());
+        var bActor=verified(b.actorId());
+        var a1=secureCommands.createCompany(aActor,a.tenantId(),"Shared Logistics",null);
+        var a2=secureCommands.createCompany(aActor,a.tenantId(),"Shared Logistics",null);
+        var b1=secureCommands.createCompany(bActor,b.tenantId(),"Shared Logistics",null);
+        var b2=secureCommands.createPerson(bActor,b.tenantId(),"Private B",null);
+        var contactA1=secureCommands.addContact(aActor,a.tenantId(),a1.id(),
+                "Tenant A private","a-private@example.kz",null);
+        var contactA2=secureCommands.addContact(aActor,a.tenantId(),a2.id(),
+                "Tenant A second","a-second@example.kz",null);
+        var contactB=secureCommands.addContact(bActor,b.tenantId(),b1.id(),
+                "Tenant B private","b-private@example.kz",null);
+
+        // Shared timestamps and identical company labels exercise the stable ID tie-break.
+        var sharedTime=java.sql.Timestamp.from(Instant.parse("2026-01-02T03:04:05Z"));
+        jdbc.update("UPDATE crm.customer SET created_at=? WHERE tenant_id=? AND id IN (?,?)",
+                sharedTime,a.tenantId(),a1.id(),a2.id());
+        jdbc.update("UPDATE crm.customer SET created_at=? WHERE tenant_id=? AND id IN (?,?)",
+                sharedTime,b.tenantId(),b1.id(),b2.id());
+
+        var filter=new CustomerSearch("COMPANY","ACTIVE",null,"Shared");
+        var first=secureQueries.customers(aActor,a.tenantId(),filter,0,1);
+        var second=secureQueries.customers(aActor,a.tenantId(),filter,1,1);
+        var third=secureQueries.customers(aActor,a.tenantId(),filter,2,1);
+        assertThat(first.getTotalElements()).isEqualTo(2);
+        assertThat(second.getTotalElements()).isEqualTo(2);
+        assertThat(third.getContent()).isEmpty();
+        assertThat(java.util.List.of(first.getContent().getFirst().id(),
+                        second.getContent().getFirst().id()))
+                .containsExactlyInAnyOrder(a1.id(),a2.id()).doesNotContain(b1.id());
+        assertThat(secureQueries.customers(aActor,a.tenantId(),
+                new CustomerSearch("PERSON","ACTIVE",null,null),0,20)
+                .getTotalElements()).isZero();
+        assertThat(secureQueries.customers(bActor,b.tenantId(),filter,0,20)
+                .getContent()).extracting(CustomerSummary::id).containsExactly(b1.id());
+
+        assertThat(customerMetadata.findByTenantIdAndId(a.tenantId(),b1.id())).isEmpty();
+        assertThat(customerMetadata.findByTenantIdAndId(b.tenantId(),a1.id())).isEmpty();
+        assertThat(contactMetadata.findByTenantIdAndId(a.tenantId(),contactB.id())).isEmpty();
+        assertThat(contactMetadata.findByTenantIdAndCustomerId(a.tenantId(),b1.id())).isEmpty();
+        assertThat(contactMetadata.findByTenantIdAndCustomerId(a.tenantId(),a1.id()))
+                .extracting(CrmContactEntity::getId).containsExactly(contactA1.id());
+        assertThat(contactMetadata.findByTenantIdAndCustomerId(a.tenantId(),a2.id()))
+                .extracting(CrmContactEntity::getId).containsExactly(contactA2.id());
+        assertThat(secureQueries.contacts(aActor,a.tenantId(),
+                new ContactSearch(b1.id(),"ACTIVE",null),0,10).getTotalElements()).isZero();
+        assertThat(secureQueries.contacts(aActor,a.tenantId(),
+                new ContactSearch(null,"ACTIVE",false),0,1).getTotalElements()).isEqualTo(2);
+        assertThat(secureQueries.contacts(aActor,a.tenantId(),
+                new ContactSearch(null,"ACTIVE",true),0,10).getTotalElements()).isZero();
+        assertThat(secureQueries.contacts(aActor,a.tenantId(),
+                new ContactSearch(a1.id(),"ACTIVE",null),0,10).getContent())
+                .extracting(ContactSummary::id).containsExactly(contactA1.id());
+        assertThatThrownBy(()->secureQueries.customers(aActor,b.tenantId(),filter,0,1))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contacts(aActor,b.tenantId(),
+                new ContactSearch(null,null,null),0,1))
+                .isInstanceOf(SecurityException.class);
+    }
+
     @Test void contactJpaMetadataIsTenantBoundAndHasNoPlaintextPiiFields() {
         var tenantA = newTenant();
         var tenantB = newTenant();
