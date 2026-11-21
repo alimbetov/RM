@@ -132,13 +132,19 @@ class FilesR10bQualificationTest {
         assertThat(storageCount(s,intent.fileId())).isZero();
         assertThat(jdbc.queryForObject("""
                 SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
-                """,String.class,s.tenant(),intent.fileId())).isEqualTo("STAGED");
-        scanner.next.set(FileScanPort.Verdict.ERROR);
+                """,String.class,s.tenant(),intent.fileId())).isEqualTo("REJECTED");
         assertThatThrownBy(()->completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes))).isInstanceOf(IllegalStateException.class);
+        var retryable=draft(s,bytes);
+        scanner.next.set(FileScanPort.Verdict.ERROR);
+        assertThatThrownBy(()->completion.acceptAndComplete(s.actor(),s.tenant(),retryable.fileId(),
                 new ByteArrayInputStream(bytes))).isInstanceOf(IOException.class);
-        assertThat(storageCount(s,intent.fileId())).isZero();
+        assertThat(storageCount(s,retryable.fileId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),retryable.fileId())).isEqualTo("STAGED");
         scanner.next.set(FileScanPort.Verdict.CLEAN);
-        assertThat(completion.acceptAndComplete(s.actor(),s.tenant(),intent.fileId(),
+        assertThat(completion.acceptAndComplete(s.actor(),s.tenant(),retryable.fileId(),
                 new ByteArrayInputStream(bytes)).state()).isEqualTo("AVAILABLE");
     }
 
