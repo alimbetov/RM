@@ -133,7 +133,11 @@ class RustFsFileStorage implements FileStoragePort {
     }
     private InputStream get(String ref) throws IOException {
         try {return s3.getObject(GetObjectRequest.builder().bucket(bucket).key(key(ref)).build());}
-        catch(RuntimeException e){throw new IOException("RustFS read failed",e);}
+        catch(S3Exception e) {
+            if(e.statusCode()==404)throw new FileNotFoundException("RustFS object missing");
+            throw new IOException("RustFS read unavailable",e);
+        }
+        catch(RuntimeException e){throw new IOException("RustFS read unavailable",e);}
     }
     @Override public InputStream openStagedForScan(String ref) throws IOException {
         if(!isRustKey(ref)||!ref.contains("/stage-"))
@@ -160,7 +164,7 @@ class RustFsFileStorage implements FileStoragePort {
                     digest.update(buf,0,n);
                 }
             }
-        }catch(IOException e){return false;}
+        }catch(FileNotFoundException e){return false;}
         return count==length && MessageDigest.isEqual(digest.digest(),HexFormat.of().parseHex(sha256));
     }
     @Override public void streamVerified(UUID tenant,UUID file,String ref,OutputStream sink)
