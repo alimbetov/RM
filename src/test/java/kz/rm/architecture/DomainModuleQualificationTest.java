@@ -41,6 +41,28 @@ class DomainModuleQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test void everyDomainHasExplicitPrivacyRetentionAndPartitionPolicy() {
+        assertThat(DomainStandards.all()).hasSize(15);
+        for (DomainModule m:DomainModule.values()) {
+            var p=DomainStandards.of(m);
+            assertThat(p.module()).isEqualTo(m);
+            assertThat(p.scope()).isNotNull();
+            assertThat(p.retention()).isNotNull();
+            assertThat(p.privacy()).isNotNull();
+            assertThat(p.partitionPlan()).isNotNull();
+        }
+        assertThat(DomainStandards.of(DomainModule.GEO).scope())
+                .isEqualTo(DomainStandards.DataScope.GLOBAL);
+        assertThat(DomainStandards.of(DomainModule.AUDIT).retention())
+                .isEqualTo(DomainStandards.Retention.APPEND_ONLY);
+        assertThat(DomainStandards.of(DomainModule.KMS).privacy())
+                .isEqualTo(DomainStandards.Privacy.KEY_MATERIAL);
+        assertThat(SupportedLocale.values()).hasSize(4);
+        assertThat(SupportedLocale.fromCode("zh-Hans")).isEqualTo(SupportedLocale.ZH_HANS);
+        assertThatThrownBy(()->SupportedLocale.fromCode("zh-Hant"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void canonicalModuleOwnershipDoesNotDrift() {
         assertThat(EmailIdentityCrypto.class.getPackageName()).isEqualTo(DomainModule.IAM.javaPackage());
         assertThat(EmailIdentityService.class.getPackageName()).isEqualTo(DomainModule.IAM.javaPackage());
