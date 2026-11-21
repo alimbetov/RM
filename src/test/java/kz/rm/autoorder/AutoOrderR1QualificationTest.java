@@ -208,6 +208,28 @@ class AutoOrderR1QualificationTest {
                 Integer.class,secondStore.tenantId())).isEqualTo(1);
     }
 
+    @Test void suspendedAccountCannotVerifyEmailOrReceiveNewOrders() {
+        var st=store();
+        String email="suspend-"+UUID.randomUUID()+"@example.kz";
+        var placed=orders.checkout(st.slug(),email,"suspend-key-001",
+                List.of(new AutoOrderService.Line(st.offerId(),1)));
+        UUID userId=jdbc.queryForObject("""
+            SELECT user_id FROM iam_email_identity WHERE lookup_hmac=?
+            """,UUID.class,crypto.lookup(email));
+        jdbc.update("UPDATE iam_user_account SET status='SUSPENDED' WHERE id=?",userId);
+        var token=challenge(email);
+        assertThatThrownBy(()->orders.verifyEmail(token.id(),token.token()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT buyer_user_id FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,UUID.class,st.tenantId(),placed.order().orderId())).isNull();
+        assertThatThrownBy(()->orders.checkout(st.slug(),email,"suspend-key-002",
+                List.of(new AutoOrderService.Line(st.offerId(),1))))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,st.tenantId())).isEqualTo(1);
+    }
+
     @Test void badEmailAndForgedOfferCannotCreateOrder() {
         var st=store();
         assertThatThrownBy(()->orders.checkout(st.slug(),"no-email","key-invalid-001",
