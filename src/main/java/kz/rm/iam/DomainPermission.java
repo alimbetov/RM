@@ -23,7 +23,12 @@ public enum DomainPermission {
     CRM_PII_READ(DomainModule.CRM),
     CRM_WRITE(DomainModule.CRM),
     ORGANIZATION_LOCATION_WRITE(DomainModule.ORG),
-    INVENTORY_SETTINGS_MANAGE(DomainModule.INVENTORY);
+    INVENTORY_SETTINGS_MANAGE(DomainModule.INVENTORY),
+    FILES_UPLOAD(DomainModule.FILES),
+    FILES_READ(DomainModule.FILES),
+    FILES_ATTACH(DomainModule.FILES),
+    FILES_DETACH(DomainModule.FILES),
+    FILES_DELETE(DomainModule.FILES);
 
     private final DomainModule module;
     DomainPermission(DomainModule module) { this.module = module; }
