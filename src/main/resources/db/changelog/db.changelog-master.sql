@@ -1448,3 +1448,84 @@ ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHE
 --rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
 --rollback   'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
 --rollback   'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED'));
+
+
+--changeset rm:0038-platform-admin-guard-and-evidence
+-- Single row serializes global admin grants, revocations and one-time bootstrap.
+CREATE TABLE public.iam_global_admin_guard (
+ id SMALLINT PRIMARY KEY,
+ bootstrapped BOOLEAN NOT NULL DEFAULT FALSE,
+ bootstrapped_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT ck_global_admin_guard_single CHECK(id=1),
+ CONSTRAINT ck_global_admin_guard_state CHECK((bootstrapped=FALSE AND bootstrapped_at IS NULL)
+          OR (bootstrapped=TRUE AND bootstrapped_at IS NOT NULL))
+);
+INSERT INTO public.iam_global_admin_guard(id,bootstrapped) VALUES (1,FALSE);
+CREATE TABLE public.iam_global_role_event (
+ id UUID NOT NULL PRIMARY KEY,
+ actor_user_id UUID NOT NULL,
+ target_user_id UUID NOT NULL,
+ action_code VARCHAR(40) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_global_role_event_actor FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_global_role_event_target FOREIGN KEY(target_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_global_role_event_action CHECK(action_code IN ('ADMIN_BOOTSTRAPPED','ADMIN_GRANTED','ADMIN_REVOKED'))
+);
+CREATE INDEX idx_global_role_event_target ON public.iam_global_role_event(target_user_id,occurred_at DESC);
+--rollback DROP TABLE public.iam_global_role_event;
+--rollback DROP TABLE public.iam_global_admin_guard;
+
+--changeset rm:0039-global-role-evidence-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION public.iam_reject_global_role_event_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Global role evidence is immutable';
+END;
+$$;
+CREATE TRIGGER trg_iam_global_role_event_immutable
+BEFORE UPDATE OR DELETE ON public.iam_global_role_event
+FOR EACH ROW EXECUTE FUNCTION public.iam_reject_global_role_event_mutation();
+--rollback DROP TRIGGER trg_iam_global_role_event_immutable ON public.iam_global_role_event;
+--rollback DROP FUNCTION public.iam_reject_global_role_event_mutation();
+
+--changeset rm:0040-owner-transfer-request
+-- One active or terminal transfer record per tenant; accepted/cancelled transitions
+-- are evidenced by tenant RBAC events before a subsequent request can replace it.
+CREATE TABLE public.iam_owner_transfer_request (
+ tenant_id UUID NOT NULL PRIMARY KEY,
+ request_id UUID NOT NULL,
+ from_user_id UUID NOT NULL,
+ to_user_id UUID NOT NULL,
+ state VARCHAR(20) NOT NULL,
+ requested_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ decided_at TIMESTAMP WITH TIME ZONE,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT fk_owner_transfer_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_owner_transfer_from FOREIGN KEY(from_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_owner_transfer_to FOREIGN KEY(to_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_owner_transfer_people CHECK(from_user_id<>to_user_id),
+ CONSTRAINT ck_owner_transfer_state CHECK(state IN ('PENDING','ACCEPTED','CANCELLED')),
+ CONSTRAINT ck_owner_transfer_expiry CHECK(expires_at>requested_at),
+ CONSTRAINT ck_owner_transfer_decided CHECK(
+    (state='PENDING' AND decided_at IS NULL) OR
+    (state<>'PENDING' AND decided_at IS NOT NULL))
+);
+--rollback DROP TABLE public.iam_owner_transfer_request;
+
+--changeset rm:0041-owner-lifecycle-evidence
+-- Amend the event constraint by adding actions; preserve historical migrations.
+ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+ ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+  'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
+  'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED',
+  'TENANT_PROVISIONED','MEMBER_INVITED','MEMBER_JOINED',
+  'OWNER_TRANSFER_REQUESTED','OWNER_TRANSFER_ACCEPTED','OWNER_TRANSFER_CANCELLED',
+  'OWNER_RECOVERED','OWNER_DEMOTED_BY_RECOVERY'));
+--rollback ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+--rollback ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+--rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+--rollback   'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED',
+--rollback   'MEMBER_SUSPENDED','MEMBER_RESTORED','TENANT_SUSPENDED','TENANT_RESTORED',
+--rollback   'TENANT_PROVISIONED','MEMBER_INVITED','MEMBER_JOINED'));
