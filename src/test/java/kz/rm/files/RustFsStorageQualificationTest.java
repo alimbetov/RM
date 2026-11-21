@@ -42,7 +42,7 @@ class RustFsStorageQualificationTest {
         var complete=backend.promote(tenant,file,staged);
         assertThat(complete).startsWith("rustfs/"+tenant+"/"+file+"/final-");
         verify(s3).copyObject(any(CopyObjectRequest.class));
-        verify(s3).deleteObject(argThat(x->x.key().contains("/stage-")));
+        verify(s3).deleteObject(org.mockito.ArgumentMatchers.<DeleteObjectRequest>argThat(x->x.key().contains("/stage-")));
         var keys=ListObjectsV2Response.builder().contents(
                 S3Object.builder().key(staged.key().substring(7)).build(),
                 S3Object.builder().key(complete.substring(7)).build()).isTruncated(false).build();
