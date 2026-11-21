@@ -19,6 +19,7 @@ class IamUserOnboardingProcessQualificationTest {
     @Autowired PlatformTenantBootstrapService provisioning;
     @Autowired TenantMemberEnrollmentService enrollment;
     @Autowired VerifiedTenantRoleCommands roleCommands;
+    @Autowired MyAccessService myAccess;
     @Autowired TenantAuthorization authorization;
     @Autowired GlobalAccountStatusService accounts;
     @Autowired TenantAccessStatusService access;
@@ -215,6 +216,50 @@ class IamUserOnboardingProcessQualificationTest {
                 JOIN public.iam_workspace w ON w.organization_id=m.organization_id
                 WHERE w.id=? AND m.user_id=?
                 """,Integer.class,tenant,emailOnly)).isZero();
+    }
+
+
+    @Test void oneLoginListsOnlyOwnTenantsAndDifferentFunctionalRoles() {
+        UUID admin=admin(),ownerA=user("Owner A"),ownerB=user("Owner B"),employee=user("Employee");
+        UUID tenantA=UUID.randomUUID(),tenantB=UUID.randomUUID();
+        provisioning.provision(actor(admin),tenantA,ownerA,"Org A LLP","Org A","KZ");
+        provisioning.provision(actor(admin),tenantB,ownerB,"Org B LLP","Org B","KZ");
+        assertThat(myAccess.myGlobalRoles(actor(admin))).containsExactly("PLATFORM_ADMIN");
+        assertThat(myAccess.myTenants(actor(admin))).isEmpty();
+        assertThat(myAccess.myGlobalRoles(actor(ownerA))).isEmpty();
+        assertThat(myAccess.myTenants(actor(ownerA)))
+                .extracting(MyAccessService.Tenant::tenantId).containsExactly(tenantA);
+
+        enrollment.invite(actor(ownerA),tenantA,employee);
+        enrollment.invite(actor(ownerB),tenantB,employee);
+        assertThat(myAccess.myTenants(actor(employee))).isEmpty();
+        assertThatThrownBy(()->myAccess.myFunctionalRoles(actor(employee),tenantA))
+                .isInstanceOf(SecurityException.class);
+        enrollment.accept(actor(employee),tenantA);
+        enrollment.accept(actor(employee),tenantB);
+        assertThat(myAccess.myTenants(actor(employee)))
+                .extracting(MyAccessService.Tenant::tenantId)
+                .containsExactlyInAnyOrder(tenantA,tenantB);
+        assertThat(myAccess.myFunctionalRoles(actor(employee),tenantA)).isEmpty();
+        assertThat(myAccess.myFunctionalRoles(actor(employee),tenantB)).isEmpty();
+
+        var salesRole=roleCommands.createRole(actor(ownerA),tenantA,
+                "SALES_READER","Sales reading");
+        roleCommands.grant(actor(ownerA),tenantA,salesRole.id(),DomainPermission.SALES_ORDER_READ);
+        roleCommands.assign(actor(ownerA),tenantA,employee,salesRole.id());
+        assertThat(myAccess.myFunctionalRoles(actor(employee),tenantA))
+                .containsExactly("SALES_READER");
+        assertThat(myAccess.myFunctionalRoles(actor(employee),tenantB)).isEmpty();
+        authorization.require(employee,tenantA,DomainPermission.SALES_ORDER_READ);
+        assertThatThrownBy(()->authorization.require(employee,tenantB,
+                DomainPermission.SALES_ORDER_READ)).isInstanceOf(SecurityException.class);
+
+        VerifiedActor previousSession=actor(employee);
+        accounts.suspendAccount(actor(admin),employee);
+        assertThatThrownBy(()->myAccess.myTenants(previousSession))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->myAccess.myGlobalRoles(previousSession))
+                .isInstanceOf(SecurityException.class);
     }
 
 }
