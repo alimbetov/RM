@@ -1,0 +1,91 @@
+name: CRM R1.2 Populated PostgreSQL Upgrade Qualification
+
+on:
+  push:
+    branches: [base_dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crm-populated-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+    steps:
+      - name: Checkout pre-R1.2 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ddd1b7c0ad1b5e6e24ceeeed2917b329f157ce5f
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Seed real CRM customer/contact rows on prior schema
+        run: mvn -B -ntp -Dtest=CrmR1aQualificationTest test
+      - name: Snapshot original composite IDs
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At \
+            -c "SELECT tenant_id::text || '/' || id::text FROM crm.customer ORDER BY 1" > /tmp/r12-customers-before.txt
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At \
+            -c "SELECT tenant_id::text || '/' || id::text FROM crm.contact ORDER BY 1" > /tmp/r12-contacts-before.txt
+          test -s /tmp/r12-customers-before.txt
+          test -s /tmp/r12-contacts-before.txt
+      - name: Checkout current implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Apply Liquibase R1.2 to populated CRM and run qualification
+        run: mvn -B -ntp -Dtest=CrmR1aQualificationTest test
+      - name: Assert no pre-existing customer or contact disappeared
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At \
+            -c "SELECT tenant_id::text || '/' || id::text FROM crm.customer ORDER BY 1" > /tmp/r12-customers-after.txt
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At \
+            -c "SELECT tenant_id::text || '/' || id::text FROM crm.contact ORDER BY 1" > /tmp/r12-contacts-after.txt
+          if comm -23 /tmp/r12-customers-before.txt /tmp/r12-customers-after.txt | grep -q .; then
+            echo "CRM customer rows lost during migration"; exit 1
+          fi
+          if comm -23 /tmp/r12-contacts-before.txt /tmp/r12-contacts-after.txt | grep -q .; then
+            echo "CRM contact rows lost during migration"; exit 1
+          fi
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
+            DO \$\$ BEGIN
+              IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema='crm' AND table_name='customer_contract')
+                 OR NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema='crm' AND table_name='customer_category')
+              THEN RAISE EXCEPTION 'R1.2 tables missing'; END IF;
+            END \$\$;"
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-r12-populated-upgrade-surefire
+          path: target/surefire-reports/
+          if-no-files-found: warn
