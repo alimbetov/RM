@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -22,14 +23,15 @@ public class CrmContractService {
     private final CrmCustomerRepository customers;
     private final TenantAuthorization authorization;
     private final CrmHistoryService history;
+    private final JdbcTemplate jdbc;
 
     public record Contract(UUID tenantId, UUID id, UUID customerId, String contractCode,
             LocalDate startsOn, LocalDate endsOn, CustomerContractEntity.Status status,
             ContractExpiryPolicy.Indicator expiryIndicator, long rowVersion) {}
     public CrmContractService(CustomerContractRepository contracts, CrmCustomerRepository customers,
-                              TenantAuthorization authorization, CrmHistoryService history) {
+                              TenantAuthorization authorization, CrmHistoryService history, JdbcTemplate jdbc) {
         this.contracts = contracts; this.customers = customers; this.authorization = authorization;
-        this.history = history;
+        this.history = history; this.jdbc = jdbc;
     }
     private void authorize(VerifiedActor actor, UUID tenant, DomainPermission permission) {
         if (actor == null || tenant == null) throw new SecurityException("Verified actor and tenant required");
@@ -52,6 +54,7 @@ public class CrmContractService {
         dates(starts, ends);
         if (asOf == null || code == null || !CODE.matcher(code).matches())
             throw new IllegalArgumentException("Invalid contract code or reference date");
+        jdbc.queryForObject("SELECT id FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE", UUID.class, tenant, customer);
         var client = customers.findByTenantIdAndId(tenant, customer)
                 .orElseThrow(() -> new IllegalArgumentException("Customer not found in tenant"));
         if (client.getStatus() != CrmCustomerEntity.Status.ACTIVE)
