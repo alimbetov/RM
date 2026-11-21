@@ -104,27 +104,29 @@ public class TenantRoleService {
     @Transactional
     public void enable(UUID actorId,UUID tenantId) {
         lockAndAuthorize(actorId,tenantId);
-        // Enabling without a second active OWNER holding a functional role
-        // would strand a sole-OWNER tenant because self-assignment is forbidden.
-        Integer otherOwner=jdbc.queryForObject("""
-            SELECT count(*) FROM public.iam_tenant_user_role a
-            JOIN public.iam_tenant_role r ON r.tenant_id=a.tenant_id AND r.id=a.role_id
-            JOIN public.iam_workspace w ON w.id=a.tenant_id
-            JOIN public.iam_org_membership m
-              ON m.organization_id=w.organization_id AND m.user_id=a.user_id
-            JOIN public.iam_user_account u ON u.id=a.user_id
-            WHERE a.tenant_id=? AND a.user_id<>?
-              AND m.role='OWNER' AND m.status='ACTIVE' AND u.status='ACTIVE'
-              AND r.active=TRUE
-              AND EXISTS(SELECT 1 FROM public.iam_tenant_role_permission p
-                WHERE p.tenant_id=r.tenant_id AND p.role_id=r.id)
-            """,Integer.class,tenantId,actorId);
-        if(otherOwner==null || otherOwner==0)
-            throw new IllegalStateException("Another active owner must have a functional role before RBAC enforcement");
         Boolean already=jdbc.query("""
             SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
             """,rs->rs.next()&&rs.getBoolean(1),tenantId);
         if(Boolean.TRUE.equals(already))return;
+        // A sole-owner tenant is valid. Its OWNER always retains the
+        // non-delegable RBAC management right, even without a functional role.
+        // Prevent enabling a company with no usable operational permissions.
+        Integer ready=jdbc.queryForObject("""
+            SELECT count(*) FROM public.iam_tenant_user_role a
+            JOIN public.iam_tenant_role r
+              ON r.tenant_id=a.tenant_id AND r.id=a.role_id
+            JOIN public.iam_tenant_role_permission p
+              ON p.tenant_id=r.tenant_id AND p.role_id=r.id
+            JOIN public.iam_workspace w ON w.id=a.tenant_id
+            JOIN public.iam_org_membership m
+              ON m.organization_id=w.organization_id AND m.user_id=a.user_id
+            JOIN public.iam_user_account u ON u.id=a.user_id
+            WHERE a.tenant_id=? AND r.active=TRUE
+              AND m.status='ACTIVE' AND u.status='ACTIVE'
+              AND p.permission_code<>'TENANT_RBAC_MANAGE'
+            """,Integer.class,tenantId);
+        if(ready==null || ready==0)
+            throw new IllegalStateException("Assign an active member a functional permission before enabling RBAC");
         Integer exists=jdbc.queryForObject(
                 "SELECT count(*) FROM public.iam_tenant_rbac_config WHERE tenant_id=?",
                 Integer.class,tenantId);
@@ -139,6 +141,45 @@ public class TenantRoleService {
             WHERE tenant_id=? AND enforced=FALSE
             """,now,tenantId);
         evidence(tenantId,actorId,"RBAC_ENABLED",null,null,null);
+    }
+
+    @Transactional
+    public void setRoleActive(UUID actorId,UUID tenantId,UUID roleId,boolean active) {
+        lockAndAuthorize(actorId,tenantId);
+        requireRole(tenantId,roleId);
+        int updated=jdbc.update("""
+            UPDATE public.iam_tenant_role SET active=?
+            WHERE tenant_id=? AND id=? AND active<>?
+            """,active,tenantId,roleId,active);
+        if(updated!=0)
+            evidence(tenantId,actorId,active?"ROLE_ACTIVATED":"ROLE_DEACTIVATED",
+                    null,roleId,null);
+    }
+
+    @Transactional(readOnly=true)
+    public List<DomainPermission> listGrants(UUID actorId,UUID tenantId,UUID roleId) {
+        authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
+        requireRole(tenantId,roleId);
+        return jdbc.query("""
+            SELECT permission_code FROM public.iam_tenant_role_permission
+            WHERE tenant_id=? AND role_id=? ORDER BY permission_code
+            """,(rs,n)->DomainPermission.valueOf(rs.getString(1)),tenantId,roleId);
+    }
+
+    public record RoleAssignment(UUID userId,UUID roleId,String roleCode) {}
+
+    @Transactional(readOnly=true)
+    public List<RoleAssignment> listAssignments(UUID actorId,UUID tenantId) {
+        authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
+        return jdbc.query("""
+            SELECT a.user_id,a.role_id,r.role_code
+            FROM public.iam_tenant_user_role a
+            JOIN public.iam_tenant_role r
+              ON r.tenant_id=a.tenant_id AND r.id=a.role_id
+            WHERE a.tenant_id=?
+            ORDER BY r.role_code,a.user_id
+            """,(rs,n)->new RoleAssignment(rs.getObject(1,UUID.class),
+                    rs.getObject(2,UUID.class),rs.getString(3)),tenantId);
     }
 
     @Transactional(readOnly=true)
@@ -159,6 +200,16 @@ public class TenantRoleService {
         if(locked==null)throw new SecurityException("Tenant not found");
         // Re-evaluate after acquiring serialization lock.
         authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
+    }
+
+    private void requireRole(UUID tenantId,UUID roleId) {
+        if(roleId==null)throw new IllegalArgumentException("Role ID required");
+        Integer count=jdbc.queryForObject("""
+            SELECT count(*) FROM public.iam_tenant_role
+            WHERE tenant_id=? AND id=?
+            """,Integer.class,tenantId,roleId);
+        if(count==null || count!=1)
+            throw new SecurityException("Tenant role not found");
     }
 
     private void requireActiveRole(UUID tenantId,UUID roleId) {
