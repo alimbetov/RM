@@ -118,7 +118,9 @@ public class AutoOrderService {
         jdbc.update("""
             UPDATE crm.sales_order SET buyer_user_id=?
             WHERE pending_email_identity_id IN
-              (SELECT id FROM iam_email_identity WHERE user_id=? AND verified_at IS NOT NULL)
+              (SELECT id FROM iam_email_identity
+                 WHERE user_id=? AND lifecycle_state='CURRENT'
+                   AND verified_at IS NOT NULL)
               AND buyer_user_id IS NULL
             """,userId,userId);
         return userId;
@@ -133,7 +135,8 @@ public class AutoOrderService {
         if(authenticatedUserId==null)throw new SecurityException("Authentication required");
         Integer verified=jdbc.queryForObject("""
             SELECT count(*) FROM iam_email_identity e JOIN iam_user_account u ON u.id=e.user_id
-            WHERE e.user_id=? AND e.verified_at IS NOT NULL AND u.status='ACTIVE'
+            WHERE e.user_id=? AND e.lifecycle_state='CURRENT'
+              AND e.verified_at IS NOT NULL AND u.status='ACTIVE'
             """,Integer.class,authenticatedUserId);
         if(verified==null||verified==0)throw new SecurityException("Verified email required");
         return jdbc.query("""
