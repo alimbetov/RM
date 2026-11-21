@@ -1795,3 +1795,32 @@ CREATE INDEX idx_files_pending_processing ON crm.file_object
 --rollback ALTER TABLE crm.file_object DROP CONSTRAINT ck_files_processing_claim;
 --rollback ALTER TABLE crm.file_object DROP COLUMN processing_started_at;
 --rollback ALTER TABLE crm.file_object DROP COLUMN processing_token;
+
+--changeset rm:0056-files-r11-crm-attachment-links
+-- Additive: existing attachment IDs preserved; legacy links keep detached_at=NULL.
+ALTER TABLE crm.file_attachment ADD COLUMN created_by UUID;
+ALTER TABLE crm.file_attachment ADD COLUMN detached_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE crm.file_attachment ADD COLUMN detached_by UUID;
+ALTER TABLE crm.file_attachment ADD CONSTRAINT fk_file_attachment_created_by
+  FOREIGN KEY(created_by) REFERENCES public.iam_user_account(id);
+ALTER TABLE crm.file_attachment ADD CONSTRAINT fk_file_attachment_detached_by
+  FOREIGN KEY(detached_by) REFERENCES public.iam_user_account(id);
+ALTER TABLE crm.file_attachment ADD CONSTRAINT ck_file_attachment_detachment
+  CHECK ((detached_at IS NULL AND detached_by IS NULL)
+         OR (detached_at IS NOT NULL AND detached_by IS NOT NULL));
+CREATE INDEX idx_file_attachment_active_owner
+  ON crm.file_attachment(tenant_id,owner_type,owner_id,detached_at,created_at,id);
+--rollback DROP INDEX idx_file_attachment_active_owner;
+--rollback ALTER TABLE crm.file_attachment DROP CONSTRAINT ck_file_attachment_detachment;
+--rollback ALTER TABLE crm.file_attachment DROP CONSTRAINT fk_file_attachment_detached_by;
+--rollback ALTER TABLE crm.file_attachment DROP CONSTRAINT fk_file_attachment_created_by;
+--rollback ALTER TABLE crm.file_attachment DROP COLUMN detached_by;
+--rollback ALTER TABLE crm.file_attachment DROP COLUMN detached_at;
+--rollback ALTER TABLE crm.file_attachment DROP COLUMN created_by;
+
+--changeset rm:0057-files-r11-unique-active-attachments dbms:postgresql
+-- A detached link cannot become active again; retries return its existing active ID.
+CREATE UNIQUE INDEX uk_file_active_owner_purpose
+ ON crm.file_attachment(tenant_id,file_id,owner_type,owner_id,purpose)
+ WHERE detached_at IS NULL;
+--rollback DROP INDEX uk_file_active_owner_purpose;
