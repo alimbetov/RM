@@ -1539,3 +1539,9 @@ SET bootstrapped=TRUE,bootstrapped_at=CURRENT_TIMESTAMP
 WHERE id=1 AND bootstrapped=FALSE
   AND EXISTS (SELECT 1 FROM public.iam_global_role_assignment WHERE role='PLATFORM_ADMIN');
 --rollback SELECT 1;
+
+
+--changeset rm:0043-owner-recovery-reason
+-- Only emergency owner recovery requires a documented external incident/ticket.
+ALTER TABLE public.iam_tenant_rbac_event ADD COLUMN reason_code VARCHAR(80);
+--rollback ALTER TABLE public.iam_tenant_rbac_event DROP COLUMN reason_code;
