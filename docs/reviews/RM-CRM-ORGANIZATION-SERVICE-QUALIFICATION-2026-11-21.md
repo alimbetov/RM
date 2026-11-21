@@ -26,3 +26,16 @@
 **Acceptance:** all three CI jobs GREEN on the precise final HEAD, tests not skipped in PostgreSQL, independent review before `main` merge. Any partial rollback, unauthorized PII, unauthorized tenant write, stale permit, or competing revoke ordering must block integration.
 
 **Known deliberate limit:** this qualifies Spring service transactions, not process crashes, cloud identity integration, PostgreSQL RLS, production KMS, audit of historical raw backups, or SMTP/email delivery. Proceed to Catalog/Marketing/File only after this gate is exact-head GREEN.
+
+## CRM Search + Consent Idempotency follow-up (R1.1)
+
+**Implemented in `base_dev`, acceptance pending exact-head CI.**
+
+- `AuthenticatedCrmQueries.customers(VerifiedActor,tenant,CustomerSearch,page,size)`: only `CRM_READ`, tenant-only metadata, no decrypted PERSON name, searchable COMPANY label; allowlisted type/status/region filters, bounded 1..100 page size, stable createdAt/id order.
+- `AuthenticatedCrmQueries.contacts(VerifiedActor,tenant,ContactSearch,page,size)`: mandatory `CRM_PII_READ`, encrypted contact fields decrypted after read admission; tenant/customer/status/primary filters, no dynamic SQL identifiers or cross-tenant lookup; no contact PII in customer list.
+- `AuthenticatedCrmCommands.recordEmailConsentOnce(VerifiedActor,tenant,contact,granted,purpose,version,source,requestKey)`: request key syntax `[A-Za-z0-9_-]{8,100}`, global within tenant; identical replay yields immutable original event ID; conflicting payload rejected; authorization checked before replay; database UNIQUE `(tenant_id,request_key)` and 64 persistent PostgreSQL/H2 transaction lock buckets protect concurrent writers.
+- Legacy `recordEmailConsent` without a request key remains internal package-only for migration/test compatibility; new trusted external-facing service contract requires key. Old unkeyed evidence is not retroactively deduplicated.
+- Liquibase changeset `0052-crm-consent-idempotency` is additive. Existing records keep nullable request_key; do not rewrite past audit evidence.
+- Functional tests: `customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized`, `consentRequestKeyIsIdempotentAndRejectsConflictingPayload`, `postgresConcurrentConsentSubmissionCreatesExactlyOneEvent`, plus architecture boundary checks.
+
+**Safety and limitations:** key protects atomic event creation and consistent replay, not proof of genuine end-user consent. Real marketing dispatch still requires fresh eligibility/revocation checks and outbox. Offset pagination can move while rows are inserted; a stable client cursor contract is a separate future enhancement. Synthetic PostgreSQL concurrency tests cannot substitute production throughput or privacy/security approval.
