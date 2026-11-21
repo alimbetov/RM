@@ -13,6 +13,7 @@ public class KatoTerritoryEntity {
     @Column(name="area_type",nullable=false) private Integer areaType;
     @Column(name="name_kk",nullable=false,length=300) private String nameKk;
     @Column(name="name_ru",nullable=false,length=300) private String nameRu;
+    @Column(name="name_en",nullable=false,length=400) private String nameEng;
     @Column(name="is_deleted",nullable=false) private Boolean deleted;
     protected KatoTerritoryEntity() {}
     public String getCode(){return code;}
@@ -22,5 +23,6 @@ public class KatoTerritoryEntity {
     public Integer getAreaType(){return areaType;}
     public String getNameKk(){return nameKk;}
     public String getNameRu(){return nameRu;}
+    public String getNameEng(){return nameEng;}
     public boolean isDeleted(){return Boolean.TRUE.equals(deleted);}
 }
