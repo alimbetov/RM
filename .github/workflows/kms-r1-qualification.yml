@@ -72,3 +72,48 @@ jobs:
           name: kms-postgres-surefire
           path: target/surefire-reports/
           if-no-files-found: warn
+
+
+  postgres-pii-populated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Separate, clean PostgreSQL database: no dependencies on test ordering or
+    # previously generated fixtures from the general IAM qualification.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Populate 200 synthetic IAM accounts, migrate in bounded batches, verify security
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+          RM_TEST_DB_USERNAME: rm
+          RM_TEST_DB_PASSWORD: rm_ci_only
+        run: >-
+          mvn -B -ntp clean verify
+          -Dtest=IamPiiPopulatedDatabaseQualificationTest
+          -Drm.pii.populated=true
+      - name: Upload populated PostgreSQL test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam-pii-populated-pg-surefire
+          path: target/surefire-reports/
+          if-no-files-found: warn
