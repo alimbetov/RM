@@ -27,11 +27,12 @@ public class CrmCustomerService {
     private final TenantAuthorization authorization;
     private final TenantCryptoPort crypto;
     private final TenantKeyService keys;
+    private final CrmHistoryService history;
 
     public CrmCustomerService(JdbcTemplate jdbc, TenantAuthorization authorization,
-                              TenantCryptoPort crypto, TenantKeyService keys) {
+                              TenantCryptoPort crypto, TenantKeyService keys, CrmHistoryService history) {
         this.jdbc=jdbc; this.authorization=authorization;
-        this.crypto=crypto; this.keys=keys;
+        this.crypto=crypto; this.keys=keys; this.history=history;
     }
 
     public record Customer(UUID tenantId, UUID id, String type, String name, String regionZoneId) {}
@@ -229,6 +230,70 @@ public class CrmCustomerService {
              WHERE tenant_id=? AND contact_id=? AND purpose=?
              ORDER BY occurred_at DESC,id DESC
             """,rs->rs.next() && rs.getBoolean(1),tenantId,contactId,purpose));
+    }
+
+
+    /** Versioned company metadata change; validates the KATO dictionary and never edits PERSON secrets. */
+    @Transactional
+    Customer updateCompany(UUID actorId, UUID tenantId, UUID customerId, String newName,
+                           String katoCode, long expectedVersion) {
+        requireOrganizationMember(actorId,tenantId,true);
+        if(newName==null || newName.isBlank() || newName.length()>200)
+            throw new IllegalArgumentException("Invalid organization name");
+        String zone=zone(katoCode);
+        int n=jdbc.update("""
+          UPDATE crm.customer SET organization_label=?, kato_code=?,region_zone_id=?,
+              row_version=row_version+1
+          WHERE tenant_id=? AND id=? AND customer_type='COMPANY' AND status='ACTIVE'
+             AND row_version=?
+          """,newName.strip(),katoCode,zone,tenantId,customerId,expectedVersion);
+        if(n!=1) throw new IllegalStateException("Customer not found, archived or stale");
+        history.customer(tenantId,customerId,actorId,"METADATA_UPDATED",expectedVersion,expectedVersion+1);
+        return new Customer(tenantId,customerId,"COMPANY",newName.strip(),zone);
+    }
+
+    /** Re-encrypt same stable AAD identity and change metadata atomically. No plaintext audit payloads. */
+    @Transactional
+    Customer updatePerson(UUID actorId, UUID tenantId, UUID customerId, String fullName,
+                          String katoCode, long expectedVersion) {
+        requireOrganizationMember(actorId,tenantId,true);
+        if(fullName==null || fullName.isBlank() || fullName.length()>200)
+            throw new IllegalArgumentException("Invalid person name");
+        String zone=zone(katoCode);
+        keys.active(tenantId);
+        byte[] envelope=EncryptedValueCodec.encode(crypto.encrypt(
+            new CryptoContext(tenantId,"crm_customer",customerId,"name"),fullName.strip()));
+        int n=jdbc.update("""
+          UPDATE crm.customer SET kato_code=?,region_zone_id=?,row_version=row_version+1
+          WHERE tenant_id=? AND id=? AND customer_type='PERSON' AND status='ACTIVE'
+            AND row_version=?
+          """,katoCode,zone,tenantId,customerId,expectedVersion);
+        if(n!=1) throw new IllegalStateException("Customer not found, archived or stale");
+        int changed=jdbc.update("""
+          UPDATE crm_pii.customer_secret SET name_envelope=?,row_version=row_version+1
+          WHERE tenant_id=? AND customer_id=?
+          """,envelope,tenantId,customerId);
+        if(changed!=1) throw new IllegalStateException("Customer secret missing");
+        history.customer(tenantId,customerId,actorId,"NAME_UPDATED",expectedVersion,expectedVersion+1);
+        return new Customer(tenantId,customerId,"PERSON",fullName.strip(),zone);
+    }
+
+    /** Soft archive retains contacts, consent, contracts and historic evidence. */
+    @Transactional
+    void archiveCustomer(UUID actorId, UUID tenantId, UUID customerId, long expectedVersion) {
+        requireOrganizationMember(actorId,tenantId,true);
+        Integer activeContracts=jdbc.queryForObject("""
+          SELECT count(*) FROM crm.customer_contract
+          WHERE tenant_id=? AND customer_id=? AND status='ACTIVE'
+          """,Integer.class,tenantId,customerId);
+        if(activeContracts!=null && activeContracts>0)
+            throw new IllegalStateException("Customer has active contracts");
+        int n=jdbc.update("""
+          UPDATE crm.customer SET status='ARCHIVED',row_version=row_version+1
+          WHERE tenant_id=? AND id=? AND status='ACTIVE' AND row_version=?
+          """,tenantId,customerId,expectedVersion);
+        if(n!=1) throw new IllegalStateException("Customer not found, archived or stale");
+        history.customer(tenantId,customerId,actorId,"ARCHIVED",expectedVersion,expectedVersion+1);
     }
 
     private String zone(String katoCode) {
