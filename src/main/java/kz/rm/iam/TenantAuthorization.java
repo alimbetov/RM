@@ -26,6 +26,7 @@ public class TenantAuthorization {
     private final UserAccountRepository users;
     private final JdbcTemplate jdbc;
     private String commandTenantLockSql;
+    private String commandActorLockSql;
 
     @PostConstruct
     void initializeCommandLock() {
@@ -33,9 +34,10 @@ public class TenantAuthorization {
                 connection.getMetaData().getDatabaseProductName());
         // PostgreSQL shared row locks let different employee commands run in parallel;
         // H2 uses its supported exclusive row lock for the test-only compatibility path.
-        commandTenantLockSql="SELECT id FROM public.iam_workspace WHERE id=? " +
-                (database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
-                        ? "FOR SHARE" : "FOR UPDATE");
+        String lockMode=database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
+                ? "FOR SHARE" : "FOR UPDATE";
+        commandActorLockSql="SELECT status FROM public.iam_user_account WHERE id=? " + lockMode;
+        commandTenantLockSql="SELECT id FROM public.iam_workspace WHERE id=? " + lockMode;
     }
 
     /**
@@ -77,6 +79,14 @@ public class TenantAuthorization {
     public Decision requireForCommand(UUID actorId,UUID tenantId,DomainPermission permission) {
         if(actorId==null || tenantId==null || permission==null)
             throw new SecurityException("Authenticated actor, tenant and permission required");
+        // A global account status UPDATE conflicts with this row lock, so an
+        // account suspension cannot commit across an admitted business command.
+        // Lock actor first, tenant second; future status writers must obey the
+        // same lock order and tenant membership writers must fence on workspace.
+        String actorStatus=jdbc.query(commandActorLockSql,rs->
+                rs.next()?rs.getString(1):null,actorId);
+        if(!"ACTIVE".equals(actorStatus))
+            throw new SecurityException("Actor inactive or unknown");
         UUID locked=jdbc.query(commandTenantLockSql,rs->
                 rs.next()?rs.getObject(1,UUID.class):null,tenantId);
         if(locked==null || !locked.equals(tenantId))
