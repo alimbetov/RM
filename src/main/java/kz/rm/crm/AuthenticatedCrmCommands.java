@@ -34,5 +34,17 @@ public class AuthenticatedCrmCommands {
         return service.recordEmailConsentOnce(id(actor),tenant,contact,
                 granted,purpose,version,source,requestKey);
     }
-}
 
+    public CrmCustomerService.Customer updateCompany(VerifiedActor actor, UUID tenant, UUID customer,
+                                                      String name, String kato, long expectedVersion) {
+        return service.updateCompany(id(actor),tenant,customer,name,kato,expectedVersion);
+    }
+    public CrmCustomerService.Customer updatePerson(VerifiedActor actor, UUID tenant, UUID customer,
+                                                     String name, String kato, long expectedVersion) {
+        return service.updatePerson(id(actor),tenant,customer,name,kato,expectedVersion);
+    }
+    public void archiveCustomer(VerifiedActor actor, UUID tenant, UUID customer, long expectedVersion) {
+        service.archiveCustomer(id(actor),tenant,customer,expectedVersion);
+    }
+
+}
