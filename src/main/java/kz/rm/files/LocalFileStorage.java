@@ -85,7 +85,7 @@ class LocalFileStorage implements FileStoragePort {
         } finally {
             if(!success)Files.deleteIfExists(path);
         }
-        return new Staged(key,bytes,HexFormat.of().formatHex(sha.digest()),mime);
+        return new Staged(key,bytes,HexFormat.of().formatHex(sha.digest()),mime,0);
     }
     @Override public InputStream openStagedForScan(String stagingKey) throws IOException {
         if(stagingKey==null || !stagingKey.matches(
@@ -131,6 +131,11 @@ class LocalFileStorage implements FileStoragePort {
         return java.security.MessageDigest.isEqual(
                 java.util.HexFormat.of().formatHex(digest.digest()).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
                 expectedHash.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    }
+    /** Legacy LOCAL bytes are intentionally denied by the secure binary-read contract. */
+    @Override public void streamVerified(UUID tenant,UUID fileId,String key,OutputStream sink)
+            throws IOException {
+        throw new SecurityException("Encrypted binary storage qualification required");
     }
     @Override public java.util.List<String> listKeys(UUID tenant,UUID fileId) throws IOException {
         if(tenant==null || fileId==null)throw new IOException("Invalid file namespace");
