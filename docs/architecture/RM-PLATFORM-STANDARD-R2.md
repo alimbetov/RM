@@ -695,7 +695,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 
 ## 25. IAM-PII-R2.5 — глобальное шифрование профиля и подтверждение email
 
-**Статус:** **R2.5A internal services — IMPLEMENTED/TESTED в `base_dev` (PR #9, до merge — кандидат)**; **R2.5B смена email и R2.5C шифрование остальных полей IAM — DESIGN / НЕ РЕАЛИЗОВАНЫ**; вся R2.5 **не** production-ready. Нормативные требования этого раздела обязательны для последующих IAM-вертикалей. Подробный процессный и миграционный контракт — [RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION](../spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md). **Никаких контроллеров до квалификации сервисов.**
+**Статус:** R2.5A и R2.5B — внутренние сервисы + H2/PostgreSQL испытания в `base_dev` (до merge кандидаты); R2.5C — encrypted profile service + opt-in offline migration, с отдельным обязательным populated-PostgreSQL cutover gate. **Полная R2.5 НЕ production-ready.** Нормативные требования этого раздела обязательны для последующих IAM-вертикалей. Подробный процессный и миграционный контракт — [RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION](../spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md). **Никаких контроллеров до квалификации сервисов.**
 
 ### 25.1 Принятые продуктовые инварианты
 
@@ -743,4 +743,26 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 
 **Тесты:** `IamInitialEmailRegistrationQualificationTest` проверяет false до proof, encrypted envelope, single-use, purpose isolation, неактивные аккаунты, OIDC self-access, запрет смены email через initial method, конкурентные signup и proof, immutable event в PostgreSQL. Закреплять точный commit/CI при gate.
 
-**Не реализовано:** R2.5B — PENDING/CURRENT/HISTORICAL и атомарная смена адреса с сохранением истории заказов; R2.5C — AES-GCM профиля `display_name`/`phone_e164` и populated-PG backfill. Real SMTP/email delivery, OIDC/BFF, key recovery и independent security review — HOLD.
+**Последующие этапы:** R2.5B реализован внутренними сервисами, квалификация и схема приведены в §25.6. R2.5C реализует encrypted CRUD и сервис отключённой по умолчанию миграции, но полный populated-PG production cutover ещё HOLD (§25.7). Real SMTP/email delivery, OIDC/BFF, key recovery и independent security review — HOLD.
+
+### 25.6 Реализация R2.5B — смена почты с новой проверкой и сохранением заказов
+
+**Изменения в `base_dev`, без HTTP:**
+- `EmailIdentityService.requestEmailChange(VerifiedActor,newEmail)` создаёт отдельный CHANGE_EMAIL PENDING; старый verified CURRENT остаётся действующим. Повтор идентичного email — no-op; смена на чужой адрес или занятую активную identity — DENY.
+- `confirmEmailChange(VerifiedActor,challengeId,token)` проверяет адресата, challenge purpose, expiry, hash и статус аккаунта. В **одной транзакции** прежний CURRENT становится HISTORICAL, новый PENDING становится CURRENT с `verified_at`; токен consumed и append-only audit. Отмена/повтор/неверный токен не меняет CURRENT.
+- `cancelEmailChange(VerifiedActor)` отменяет только текущий CHANGE_EMAIL PENDING, не снимая подтверждения со старого адреса. Старые токены не могут активировать HISTORICAL identity.
+- Новые Liquibase `0046–0048`: `lifecycle_state` (`PENDING`/`CURRENT`/`HISTORICAL`), `pending_reason`, отдельный `active_lookup_hmac`; уникальные nullable `current_owner_id`/`pending_owner_id` и active lookup. Исторические `lookup_hmac` и `email_envelope` сохраняются неизменными. **Существующие `crm.sales_order.pending_email_identity_id` не перезаписываются.**
+- `AutoOrderService.verifyEmail/buyerOrders` учитывает только CURRENT verified email при подтверждении buyer claim. `findOrProvision` использует active lookup и не присваивает старый аккаунт владельцу заново зарегистрированного адреса.
+- Внутренние тесты: нормальная смена, отмена, replay/cross-purpose, cross-account, повторное использование исторического адреса, параллельные подтверждения и реальный SALES order linkage. Реальный почтовый провайдер, BFF и rate limits на внешней границе пока HOLD.
+
+### 25.7 Реализация R2.5C — AES-GCM профиля и staged plaintext removal
+
+**Изменения в `base_dev`:**
+- `GlobalUserProfileCrypto` использует собственные **глобальные IAM** ключи `RM_IAM_PROFILE_ENCRYPTION_KEY_BASE64` и `RM_IAM_PHONE_LOOKUP_KEY_BASE64`, не tenant DEK и не email lookup key. Для каждого поля AEAD AAD включает `userId` и имя поля; неправильная подпись, ключ и контекст отвергаются без plaintext fallback.
+- `GlobalUserProfileService.myProfile/saveOwnProfile` возвращает/меняет только собственные имя и телефон по `VerifiedActor`, сверяя ACTIVE account, ограничение E.164 и `rowVersion`; возвращение plaintext разрешено только self. Сохраняет ciphertext/phone HMAC в `iam_pii.user_profile_secret` и audit без PII.
+- `UserAccountEntity` больше не отображает legacy `display_name`, `phone_e164`, `email_normalized` для JPA-чтения/записи. Новый checkout не создаёт plaintext placeholder имени. Шифрование телефонов и имён нельзя обходить прямой записью JPA.
+- Liquibase `0049–0051` добавляет отдельную IAM PII-таблицу и append-only audit; legacy `display_name` становится nullable. Старые колонки **пока физически существуют** ради безопасной offline migration.
+- `LegacyIamPiiMigrationService.migrateUser/migrateBatch`: явный opt-in (`RM_IAM_PII_MIGRATION_ENABLED`, по умолчанию `false`), предназначен только для остановленного legacy контура. В транзакции зашифровывает имя/телефон, нормализует/шифрует legacy email при отсутствии identity, **не считает его подтверждённым**, проверяет конфликты и лишь затем очищает три plaintext-поля. При конфликте либо потере ключа — полный rollback.
+- **Не закрыто:** автоматическая миграция в работающем сервисе, заполненная production-копия PostgreSQL с реальными коллизиями, завершение backup/restore, удаление legacy колонок/DB-пользовательских прав, доказательство отсутствия альтернативных SQL writers, управление жизненным циклом/ротацией глобальных IAM ключей. Сервисная миграция и зелёный synthetic CI не заменяют cutover-gate.
+
+**Условия допуска:** отдельное security-review PR #9, прогон migration и восстановления на обезличенной копии заполненной БД, проверка возможных конфликтов почты, обязательная сверка исторических заказов, внешний anti-abuse/SMTP/OIDC и DB least-privilege. Текущая стадия — разработка сервисов и квалификация; `main` не изменять до согласования.
