@@ -52,6 +52,7 @@ public class OrderInventoryPort {
                                DomainPermission expectedSales,
                                DomainPermission expectedInventory) {
         if(sales==null || inventory==null ||
+                !sales.validForCurrentTransaction() || !inventory.validForCurrentTransaction() ||
                 sales.permission()!=expectedSales || inventory.permission()!=expectedInventory ||
                 !sales.tenantId().equals(inventory.tenantId()) ||
                 !sales.actorId().equals(inventory.actorId()))
