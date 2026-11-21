@@ -153,3 +153,8 @@ Migrate per-object with checksum verification at destination, atomic storage poi
 ## Публичная витрина, автозаказ и покупательский кабинет
 
 **Нормативное дополнительное ТЗ:** [RM-STOREFRONT-AUTOORDER-R1](RM-STOREFRONT-AUTOORDER-R1.md). Новый модуль STOREFRONT с префиксом `store_` и целевыми таблицами `crm.store_front`, `crm.store_setting`, `crm.store_front_i18n`. Автозаказ **всегда** требует email, при отсутствии аккаунта IAM автоматически создаёт `PENDING_VERIFICATION` пользователя. При существующем аккаунте нельзя делать login или связывать доступ к чужим заказам на основе одного введённого email: требуется подтверждение владения адресом и аутентификация. `tenant_id` всегда продавца, `buyer_user_id` — глобальная IAM identity; покупатель не получает `ORG_MEMBER` продавца. Заказы остаются в SALES, связь покупателя с seller CRM — `crm.crm_buyer_link`; новый код не создавался. Четыре языка, FILES, tenant security, consent и исторические статусы обязательны.
+
+
+## Domain foundation coverage (2026-11-21)
+
+All 15 named contexts now have a canonical module registry, Java source package and initial typed contract or pre-existing implementation. **This is not a claim that all tables/controllers/business operations are implemented.** Current coverage, prefix mappings and follow-on vertical-slice gates are maintained in [RM-DOMAIN-IMPLEMENTATION-PLAN-R1](RM-DOMAIN-IMPLEMENTATION-PLAN-R1.md). The `kz.rm.architecture.DomainModule` registry validates prefixes and package uniqueness. Existing IAM, KMS, GEO, CRM and preliminary AUTOORDER persistence are preserved; missing domain persistence is introduced in independent Liquibase changesets with PostgreSQL integration tests.
