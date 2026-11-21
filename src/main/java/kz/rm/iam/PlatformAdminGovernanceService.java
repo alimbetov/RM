@@ -53,7 +53,7 @@ public class PlatformAdminGovernanceService {
         if(used)throw new SecurityException("Initial administrator already bootstrapped");
         Integer existing=jdbc.queryForObject("""
                 SELECT count(*) FROM public.iam_global_role_assignment
-                WHERE role='PLATFORM_ADMIN' AND revoked_at IS NULL
+                WHERE role='PLATFORM_ADMIN'
                 """,Integer.class);
         if(existing==null || existing!=0)
             throw new SecurityException("Initial administrator already exists");
