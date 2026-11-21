@@ -1133,3 +1133,66 @@ BEFORE UPDATE OR DELETE ON crm.inv_stock_movement
 FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_movement_mutation();
 --rollback DROP TRIGGER trg_inv_movement_immutable ON crm.inv_stock_movement;
 --rollback DROP FUNCTION crm.inv_reject_movement_mutation();
+
+
+--changeset rm:0025-inventory-reservation-contract
+-- Mutable reservations are intentionally NOT partitioned: unique per sales line.
+-- A reservation belongs to one seller tenant, one order line, and one stock location/SKU.
+ALTER TABLE crm.sales_order_line
+ ADD CONSTRAINT uk_sales_order_line_tenant_order_id UNIQUE(tenant_id,order_id,id);
+CREATE TABLE crm.inv_stock_reservation (
+  tenant_id UUID NOT NULL,
+  id UUID NOT NULL,
+  order_id UUID NOT NULL,
+  order_line_id UUID NOT NULL,
+  location_id UUID NOT NULL,
+  item_id UUID NOT NULL,
+  quantity NUMERIC(19,4) NOT NULL,
+  state VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  row_version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_inv_stock_reservation PRIMARY KEY(tenant_id,id),
+  CONSTRAINT uk_inv_reservation_order_line UNIQUE(tenant_id,order_line_id),
+  CONSTRAINT fk_inv_reservation_order_line FOREIGN KEY(tenant_id,order_id,order_line_id)
+    REFERENCES crm.sales_order_line(tenant_id,order_id,id),
+  CONSTRAINT fk_inv_reservation_balance FOREIGN KEY(tenant_id,location_id,item_id)
+    REFERENCES crm.inv_stock_balance(tenant_id,location_id,item_id),
+  CONSTRAINT ck_inv_reservation_quantity CHECK(quantity > 0),
+  CONSTRAINT ck_inv_reservation_state CHECK(state IN ('ACTIVE','RELEASED','FULFILLED'))
+);
+CREATE INDEX idx_inv_reservation_tenant_state
+ ON crm.inv_stock_reservation(tenant_id,state,created_at);
+CREATE INDEX idx_inv_reservation_tenant_order
+ ON crm.inv_stock_reservation(tenant_id,order_id);
+-- Enrich the existing append-only movement ledger; no changes to old changesets.
+ALTER TABLE crm.inv_stock_movement
+ ADD COLUMN movement_kind VARCHAR(24) NOT NULL DEFAULT 'ADJUSTMENT';
+ALTER TABLE crm.inv_stock_movement
+ ADD COLUMN reason_code VARCHAR(64) NOT NULL DEFAULT 'MANUAL_ADJUSTMENT';
+ALTER TABLE crm.inv_stock_movement
+ ADD COLUMN reservation_id UUID;
+ALTER TABLE crm.inv_stock_movement
+ ADD CONSTRAINT ck_inv_movement_kind CHECK(movement_kind IN ('ADJUSTMENT','FULFILLMENT'));
+ALTER TABLE crm.inv_stock_movement
+ ADD CONSTRAINT ck_inv_movement_reason CHECK(length(trim(reason_code)) >= 3);
+ALTER TABLE crm.inv_stock_movement
+ ADD CONSTRAINT ck_inv_movement_fulfillment_ref CHECK(
+   (movement_kind='FULFILLMENT' AND reservation_id IS NOT NULL AND delta_quantity < 0)
+   OR (movement_kind='ADJUSTMENT' AND reservation_id IS NULL)
+ );
+ALTER TABLE crm.inv_stock_movement
+ ADD CONSTRAINT fk_inv_movement_reservation FOREIGN KEY(tenant_id,reservation_id)
+ REFERENCES crm.inv_stock_reservation(tenant_id,id);
+CREATE UNIQUE INDEX uk_inv_movement_fulfilled_reservation
+ ON crm.inv_stock_movement(tenant_id,reservation_id);
+--rollback DROP INDEX uk_inv_movement_fulfilled_reservation;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT fk_inv_movement_reservation;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_fulfillment_ref;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_reason;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_kind;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN reservation_id;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN reason_code;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN movement_kind;
+--rollback DROP TABLE crm.inv_stock_reservation;
+--rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT uk_sales_order_line_tenant_order_id;
