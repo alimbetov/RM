@@ -93,14 +93,14 @@ public class CrmContractService {
         if (c.getRowVersion() != expectedVersion) throw new IllegalStateException("Stale contract revision");
         return c;
     }
-    @Transactional(readOnly = true)
+    @Transactional
     public Contract get(VerifiedActor actor, UUID tenant, UUID id, LocalDate asOf, int warningDays) {
         authorize(actor, tenant, DomainPermission.CRM_READ);
         if (asOf == null) throw new IllegalArgumentException("asOf required");
         return view(contracts.findByTenantIdAndId(tenant, id)
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found in tenant")), asOf, warningDays);
     }
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<Contract> list(VerifiedActor actor, UUID tenant, UUID customerId,
                                LocalDate asOf, int warningDays, int page, int size) {
         authorize(actor, tenant, DomainPermission.CRM_READ);
