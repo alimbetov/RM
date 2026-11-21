@@ -85,13 +85,13 @@ public class CrmCategoryService {
         customer.setPrimaryCategoryId(categoryId);
         customers.saveAndFlush(customer);
     }
-    @Transactional(readOnly = true)
+    @Transactional
     public Category get(VerifiedActor actor, UUID tenant, UUID id) {
         authorize(actor, tenant, DomainPermission.CRM_READ);
         return view(categories.findByTenantIdAndId(tenant, id)
                 .orElseThrow(() -> new IllegalArgumentException("Category not found in tenant")));
     }
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<Category> list(VerifiedActor actor, UUID tenant, boolean activeOnly, int page, int size) {
         authorize(actor, tenant, DomainPermission.CRM_READ);
         if (page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("Invalid pagination");
