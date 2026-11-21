@@ -1,5 +1,7 @@
 # RM — технический аудит доменного слоя после merge в main
 
+**Историческое ревью, а не текущий release status.** Выводы относятся только к указанному SHA; часть обнаруженных P0 закрыта последующими изменениями. Действующие требования RM: [RM-PLATFORM-STANDARD-R2](../architecture/RM-PLATFORM-STANDARD-R2.md). Не использовать этот аудит для утверждения текущей готовности без проверки кода и CI.
+
 **Дата:** 2026-11-21. **Аудируемый commit:** `f2e32bc053c6c0f3e9c5d1eb14af97978ab1eca8`.
 **Область:** 15 bounded contexts, Java 21/Spring, JDBC/JPA, PostgreSQL/Liquibase, IAM/tenant, KMS, integration CI. **Метод:** source/static review + инспекция CI runs; новых E2E/нагрузочных запусков в ходе самого аудита не выполнялось.
 **Вердикт:** архитектурный foundation usable for continued development; **production admission HOLD**. GREEN старого feature-commit не эквивалентен full domain E2E.
