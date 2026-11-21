@@ -115,7 +115,7 @@ class IamGlobalUserProfileQualificationTest {
         String oldEmail=email(),phone="+7701"+String.format("%07d",
                 Math.floorMod(UUID.randomUUID().hashCode(),10_000_000));
         UUID id=legacyUser("Legacy User",phone,oldEmail);
-        assertThat(migration.migrateBatch(500)).isPositive();
+        assertThat(migration.migrateUser(id)).isTrue();
         assertThat(jdbc.queryForObject("""
             SELECT display_name FROM public.iam_user_account WHERE id=?
             """,String.class,id)).isNull();
@@ -139,7 +139,7 @@ class IamGlobalUserProfileQualificationTest {
             SELECT count(*) FROM iam_pii.user_profile_event
             WHERE user_id=? AND action_code='PROFILE_MIGRATED'
             """,Integer.class,id)).isEqualTo(1);
-        assertThat(migration.migrateBatch(500)).isZero();
+        assertThat(migration.migrateUser(id)).isFalse();
     }
 
     @Test void offlineBackfillCannotRunWhenDisabledAndMissingKeysFailClosed() {
@@ -153,9 +153,10 @@ class IamGlobalUserProfileQualificationTest {
 
     @Test void offlineMigrationRejectsExistingEmailClaimWithoutScrubbingLegacyPII() {
         String shared=email();
-        UUID first=oidcUser(),second=legacyUser("Second",null,shared);
+        UUID first=oidcUser();
         emails.requestInitialVerification(actor(first),shared);
-        assertThatThrownBy(()->migration.migrateBatch(500))
+        UUID second=legacyUser("Second",null,shared);
+        assertThatThrownBy(()->migration.migrateUser(second))
             .isInstanceOf(Exception.class);
         assertThat(jdbc.queryForObject("""
             SELECT display_name FROM public.iam_user_account WHERE id=?
