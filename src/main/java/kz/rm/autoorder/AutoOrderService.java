@@ -49,6 +49,9 @@ public class AutoOrderService {
                 return rs.getObject(1,UUID.class);},slug);
         byte[] requestHash=digest(normalized+"|"+basket.entrySet().stream()
                 .map(e->e.getKey()+":"+e.getValue()).collect(Collectors.joining(",")));
+        // All competing transactions for a seller/idempotency key serialize here.
+        // Always acquire checkout stripe BEFORE the global email stripe.
+        lockStripe("crm.sales_checkout_lock", tenant + ":" + idempotencyKey);
         List<OrderReceipt> existing=jdbc.query("""
             SELECT r.order_id,r.request_sha256,o.status FROM crm.sales_checkout_receipt r
             JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
@@ -76,6 +79,8 @@ public class AutoOrderService {
             throw new IllegalArgumentException("Mixed currencies not supported");
         BigDecimal total=offers.stream().map(o->o.unitPrice().multiply(BigDecimal.valueOf(o.quantity())))
                 .reduce(BigDecimal.ZERO,BigDecimal::add);
+        // Cross-tenant checkouts with the same email must not provision two IAM users.
+        lockStripe("iam_email_identity_lock", normalized);
         Identity identity=findOrCreate(normalized);
         UUID orderId=UUID.randomUUID();
         Timestamp now=Timestamp.from(Instant.now());
@@ -201,6 +206,22 @@ public class AutoOrderService {
             VALUES (?,?,?,'PENDING',?,?)
             """,UUID.randomUUID(),id,identityId,Timestamp.from(now),Timestamp.from(now));
         // No plaintext email or token leaves this transactional application method.
+    }
+
+    /**
+     * Database row locks are transaction-scoped and shared by pods.
+     * Table names are fixed, never built from request data.
+     * 256 stripes are an R1 correctness choice; throughput qualification is separate.
+     */
+    private void lockStripe(String table, String value) {
+        if (!table.equals("crm.sales_checkout_lock") &&
+                !table.equals("iam_email_identity_lock"))
+            throw new IllegalArgumentException("Unknown lock");
+        int bucket=Math.floorMod(Arrays.hashCode(digest(value)),256);
+        Integer acquired=jdbc.queryForObject("SELECT bucket FROM "+table+" WHERE bucket=? FOR UPDATE",
+                Integer.class,bucket);
+        if(acquired==null || acquired!=bucket)
+            throw new IllegalStateException("Lock stripe missing");
     }
 
     private static byte[] digest(String text){
