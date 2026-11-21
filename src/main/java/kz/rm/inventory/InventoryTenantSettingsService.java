@@ -37,7 +37,7 @@ public class InventoryTenantSettingsService {
 
     @Transactional
     public Settings initialize(UUID authenticatedActorId, UUID tenantId) {
-        authorize(authenticatedActorId,tenantId);
+        authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         // Lock the tenant row to serialize simultaneous initialization across pods.
         jdbc.queryForObject("SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE",
                 UUID.class,tenantId);
@@ -57,14 +57,14 @@ public class InventoryTenantSettingsService {
 
     @Transactional(readOnly=true)
     public Settings get(UUID authenticatedActorId, UUID tenantId) {
-        authorize(authenticatedActorId,tenantId);
+        authorization.require(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         return load(tenantId,false);
     }
 
     @Transactional
     public Settings updatePicking(UUID authenticatedActorId,UUID tenantId,
                                   PickingStrategy strategy,boolean autoReserve,long expectedVersion) {
-        authorize(authenticatedActorId,tenantId);
+        authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         if(strategy==null || expectedVersion<0)
             throw new IllegalArgumentException("Picking strategy and version required");
         Settings old=load(tenantId,true);
@@ -82,7 +82,7 @@ public class InventoryTenantSettingsService {
     @Transactional
     public Settings approveCostPolicy(UUID authenticatedActorId,UUID tenantId,
                                       ValuationMethod method,String currency,long expectedVersion) {
-        authorize(authenticatedActorId,tenantId);
+        authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         if(method==null || currency==null || expectedVersion<0)
             throw new IllegalArgumentException("Method, currency and revision required");
         String iso=Currency.getInstance(currency).getCurrencyCode();
@@ -123,10 +123,6 @@ public class InventoryTenantSettingsService {
             """,policy,now,tenantId,expectedVersion);
         if(changed!=1)throw new IllegalStateException("Concurrent settings update");
         return load(tenantId,false);
-    }
-
-    private void authorize(UUID actor,UUID tenant) {
-        authorization.require(actor,tenant,DomainPermission.INVENTORY_SETTINGS_MANAGE);
     }
 
     private Settings load(UUID tenant,boolean lock) {
