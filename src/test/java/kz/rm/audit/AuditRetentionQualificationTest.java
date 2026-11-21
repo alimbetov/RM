@@ -100,6 +100,18 @@ class AuditRetentionQualificationTest {
             """,String.class,result.runId())).isEqualTo("DONE");
     }
 
+    @Test void governanceLockTriggersProtectHoldAndPolicyWrites() throws Exception {
+        postgres();
+        for (String trigger : new String[]{
+                "trg_audit_retention_policy_lock", "trg_audit_retention_hold_lock"}) {
+            Integer count=jdbc.queryForObject("""
+                SELECT count(*) FROM pg_trigger
+                WHERE tgname=? AND NOT tgisinternal
+                """,Integer.class,trigger);
+            assertThat(count).as(trigger).isEqualTo(1);
+        }
+    }
+
     @Test void unapprovedPolicyAndBatchLimitsFailClosed() throws Exception {
         postgres();
         UUID tenant=tenant(),actor=actor();
