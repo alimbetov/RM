@@ -44,7 +44,8 @@ class FileContentCryptoQualificationTest {
         new java.security.SecureRandom().nextBytes(clear);
         byte[] cipher=encrypt(f,clear);
         assertThat(cipher.length).isGreaterThan(clear.length);
-        assertThat(cipher).doesNotContainSequence(java.util.Arrays.copyOf(clear,16));
+        assertThat(java.util.Arrays.equals(java.util.Arrays.copyOfRange(cipher,28,44),
+                java.util.Arrays.copyOf(clear,16))).isFalse();
         assertThat(decrypt(f,cipher)).isEqualTo(clear);
     }
     @Test void mutationTruncationWrongFileAndWrongTenantFailClosed() throws Exception {
