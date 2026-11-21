@@ -39,7 +39,7 @@ public class SalesInventoryCommandService {
     private record Line(UUID id,UUID itemId,BigDecimal quantity) {}
 
     @Transactional
-    public CommandResult confirm(UUID actorId,UUID tenantId,UUID orderId,UUID locationId) {
+    CommandResult confirm(UUID actorId,UUID tenantId,UUID orderId,UUID locationId) {
         var salesPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CONFIRM);
         var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RESERVE);
         if(orderId==null || locationId==null)
@@ -75,7 +75,7 @@ public class SalesInventoryCommandService {
     }
 
     @Transactional
-    public CommandResult cancel(UUID actorId,UUID tenantId,UUID orderId) {
+    CommandResult cancel(UUID actorId,UUID tenantId,UUID orderId) {
         var salesPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_CANCEL);
         var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
         if(orderId==null)throw new IllegalArgumentException("Order required");
@@ -108,7 +108,7 @@ public class SalesInventoryCommandService {
     }
 
     @Transactional
-    public CommandResult fulfill(UUID actorId,UUID tenantId,UUID orderId) {
+    CommandResult fulfill(UUID actorId,UUID tenantId,UUID orderId) {
         var salesPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.SALES_ORDER_FULFILL);
         var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
         if(orderId==null)throw new IllegalArgumentException("Order required");
