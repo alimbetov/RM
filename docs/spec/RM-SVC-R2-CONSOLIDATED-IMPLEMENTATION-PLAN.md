@@ -52,6 +52,23 @@ No second customer copy, catalog copy, file metadata registry, or globally share
 5. Existing CRM query JDBC and create/read behavior unchanged, no controllers.
 6. Applicable CI H2/PostgreSQL/populated PII/RustFS E2E green **on same HEAD**; no claiming GREEN for unrun HEAD.
 
+## PERSIST-R1.1 — Implementation and qualification addendum (2026-11-22)
+
+**Implemented, pending exact-head CI qualification:** `CrmContactKey` (`tenantId,id`), `CrmContactEntity` (`@IdClass`, `@Version`) and package-private `CrmContactRepository` with `findByTenantIdAndId` and `findByTenantIdAndCustomerId`. Entity deliberately maps only `crm.contact` metadata. `crm_pii.contact_secret` is neither mapped nor read through JPA.
+
+**No operational rewrite:** `CrmCustomerService.addContact/getContact`, `CrmSearchService.contacts`, `AuthenticatedCrmQueries`, encryption and JDBC SQL remain unchanged. This is a persistence foundation; it does not create contact Update/Archive/Primary operations.
+
+**Mandatory tenant-isolation gate for the new JPA path:**
+1. Seed two distinct organization workspace tenants, each with a customer and an encrypted contact.
+2. Read own contact and customer association with `(tenantId, contactId)` and `(tenantId, customerId)`; assert the other tenant's known contact/customer IDs produce empty results even when UUIDs are known.
+3. Assert `findById(CrmContactKey(otherTenant, knownId))` is empty. Composite-key access **must not** bypass selected tenant.
+4. Assert metadata `CrmContactEntity` has no name/email/phone fields or encrypted envelope mappings; original PII must remain encrypted at rest and accessible only through authorized CRM query services.
+5. Execute PostgreSQL + H2 + populated PII regression; independent real RustFS/ClamAV E2E confirms no unrelated breakage. Gate success **only for verified exact SHA**, not inherited from prior commits.
+
+**Security caveat:** Spring Data `JpaRepository` exposes inherited `findAll`/`findById` and is **not** by itself an authorization boundary. Keep repository package-private/internal; never inject it into transport or other domains. Future tenant-scoped domain facades must authorize `VerifiedActor` and tenant before repository access. When hardening the repository API, prefer narrow read interfaces without inherited unscoped methods, subject to Spring Data compatibility tests.
+
+**Next after PERSIST-R1.1 GREEN:** `TENANT-ISO-R1` expands mandatory tests to *both JPA repositories*, joins, filter/count/cursor and revocation. Only then implement CRM category and customer contract migrations.
+
 ## Sequence guardrails
 
 No new microservice, controller, branch, unreviewed merge, persistent read-model copy, generic CRUD framework, global SQL fragment filter builder, arbitrary user sort expression, unsafe PII indexing, production admission or app-level file byte encryption.
