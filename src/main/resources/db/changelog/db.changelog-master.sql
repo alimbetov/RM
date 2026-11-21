@@ -1379,3 +1379,14 @@ BEFORE UPDATE OR DELETE ON public.iam_tenant_rbac_event
 FOR EACH ROW EXECUTE FUNCTION public.iam_reject_rbac_event_mutation();
 --rollback DROP TRIGGER trg_iam_rbac_event_immutable ON public.iam_tenant_rbac_event;
 --rollback DROP FUNCTION public.iam_reject_rbac_event_mutation();
+
+
+--changeset rm:0033-tenant-rbac-role-activation-evidence
+-- Functional role suspension/reactivation must be auditable; never rewrite 0031.
+ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+ ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED',
+  'RBAC_ENABLED','ROLE_DEACTIVATED','ROLE_ACTIVATED'));
+--rollback ALTER TABLE public.iam_tenant_rbac_event DROP CONSTRAINT ck_rbac_event_action;
+--rollback ALTER TABLE public.iam_tenant_rbac_event ADD CONSTRAINT ck_rbac_event_action CHECK(action_code IN
+--rollback  ('ROLE_CREATED','GRANT_ADDED','GRANT_REVOKED','ROLE_ASSIGNED','ROLE_UNASSIGNED','RBAC_ENABLED'));
