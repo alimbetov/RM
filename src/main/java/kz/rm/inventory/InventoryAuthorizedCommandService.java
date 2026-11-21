@@ -17,14 +17,11 @@ import java.util.UUID;
 public class InventoryAuthorizedCommandService {
     private final TenantAuthorization authorization;
     private final InventoryMovementService movements;
-    private final InventoryReservationService reservations;
 
     public InventoryAuthorizedCommandService(TenantAuthorization authorization,
-                                             InventoryMovementService movements,
-                                             InventoryReservationService reservations) {
+                                             InventoryMovementService movements) {
         this.authorization=authorization;
         this.movements=movements;
-        this.reservations=reservations;
     }
 
     @Transactional
@@ -48,24 +45,7 @@ public class InventoryAuthorizedCommandService {
                 InventoryMovementService.Reason.CORRECTION);
     }
 
-    @Transactional
-    public InventoryReservationService.Reservation reserve(UUID actorId,UUID tenantId,
-            UUID orderId,UUID orderLineId,UUID locationId,UUID itemId,BigDecimal quantity) {
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_RESERVE);
-        return reservations.reserve(tenantId,orderId,orderLineId,locationId,itemId,quantity);
-    }
-
-    @Transactional
-    public InventoryReservationService.Reservation release(UUID actorId,UUID tenantId,
-                                                              UUID reservationId) {
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_RELEASE);
-        return reservations.release(tenantId,reservationId);
-    }
-
-    @Transactional
-    public InventoryReservationService.Reservation fulfill(UUID actorId,UUID tenantId,
-                                                              UUID reservationId) {
-        authorization.require(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
-        return reservations.fulfill(tenantId,reservationId);
-    }
+    // Order-linked reservation/release/fulfillment are intentionally NOT exposed here.
+    // They must be invoked atomically through SalesInventoryCommandService,
+    // which checks both SALES and INVENTORY permissions and updates order state.
 }
