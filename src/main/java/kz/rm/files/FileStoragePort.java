@@ -9,6 +9,8 @@ interface FileStoragePort {
     record Staged(String key,long sizeBytes,String sha256,String detectedMime) {}
     Staged stage(UUID tenant,UUID fileId,InputStream bytes,long declaredSize,String mime) throws IOException;
     String promote(UUID tenant,UUID fileId,Staged staged) throws IOException;
+    /** Scanner-only private staging stream; not a user download interface. */
+    InputStream openStagedForScan(String stagingKey) throws IOException;
     boolean exists(String key) throws IOException;
     /** Verify checksum and length on persisted bytes, not merely path existence. */
     boolean matches(String key,long expectedSize,String sha256) throws IOException;
