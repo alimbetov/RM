@@ -1118,3 +1118,18 @@ CREATE TABLE crm.inv_movement_request_lock (
 );
 INSERT INTO crm.inv_movement_request_lock(bucket) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20),(21),(22),(23),(24),(25),(26),(27),(28),(29),(30),(31),(32),(33),(34),(35),(36),(37),(38),(39),(40),(41),(42),(43),(44),(45),(46),(47),(48),(49),(50),(51),(52),(53),(54),(55),(56),(57),(58),(59),(60),(61),(62),(63);
 --rollback DROP TABLE crm.inv_movement_request_lock;
+
+
+--changeset rm:0024-inventory-ledger-immutability dbms:postgresql splitStatements:false
+-- Once recorded, inventory movements are append-only. Corrections are new movements.
+CREATE FUNCTION crm.inv_reject_movement_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'Inventory movements are immutable; post a corrective movement';
+END;
+$$;
+CREATE TRIGGER trg_inv_movement_immutable
+BEFORE UPDATE OR DELETE ON crm.inv_stock_movement
+FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_movement_mutation();
+--rollback DROP TRIGGER trg_inv_movement_immutable ON crm.inv_stock_movement;
+--rollback DROP FUNCTION crm.inv_reject_movement_mutation();
