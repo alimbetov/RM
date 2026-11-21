@@ -126,3 +126,17 @@ Materialize/query per-workspace with scoped access and explicit reporting `asOf`
 **Product scope update:** organization-specific product and service catalogs are mandatory in the business model and precede order/estimate implementation. IAM-R1 does not create catalog tables yet.
 
 **Production gate:** 7 user modes approved, but authorization middleware and feature entitlements are still separate implementation phases. The IAM-R1 changeset does not yet provide HTTP endpoints, billing, onboarding workflow or CRM tables.
+
+
+## 8. Территориальная привязка КАТО до районного уровня
+
+**Утверждённое ограничение CRM:** в форме организации, филиала, склада или торговой точки выбирать территорию **до района / городской администрации включительно**, без населённых пунктов и сельских округов. Для текущей структуры `kato-data.json` это активные записи с `Level <= 3`: `2` — область; `3` — район или городская администрация. `AreaType` сохраняется как дополнительная классификация, но не подменяет `Level`.
+
+- Уровни 4–6 сохраняются в глобальном справочнике на случай истории и будущего расширения, но не допускаются для создания новых `org_location`.
+- `kato_code` указывает на выбранную территорию; `address_line` содержит улицу, дом и прочие детали. Не считать выбор района доказательством точного расположения.
+- Иерархия `Parent` разрешается по `source_id`, не вычисляется по цифрам кода `Code`.
+- Удалённые записи (`IsMarkedToDelete`) недоступны для новой привязки, но остаются для исторических ссылок.
+- Фильтры каталога, запасов, заказов и дашборда смогут использовать `workspace_id + kato_code` выбранной локации; динамические фильтры по иерархии требуют полноценного источника КАТО.
+- Фактический файл содержит **лишь 100 записей**, в том числе 2 области и 3 записи третьего уровня. Для рабочего общереспубликанского выбора потребуется загрузка полного актуального КАТО с датой версии и проверкой целостности.
+
+**Acceptance:** филиал/склад/точка продаж принимает активный район или область; отклоняет `Level > 3`, удалённый и неизвестный код; сохраняет `address_line` независимо от кода.
