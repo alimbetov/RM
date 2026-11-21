@@ -7,7 +7,8 @@ import java.util.stream.Collectors;
 /**
  * Canonical RM bounded-context registry.
  *
- * DOMAIN REGISTERED != persistence implemented or production-qualified.\n * Implementation progress is tracked in docs/spec/RM-DOMAIN-IMPLEMENTATION-PLAN-R1.md,\n * NOT by a static boolean attached to the enum.
+ * DOMAIN REGISTERED != persistence implemented or production-qualified.\n * Implementation progress is tracked in docs/spec/RM-DOMAIN-IMPLEMENTATION-PLAN-R1.md,
+ * NOT by a static boolean attached to the enum.
  * New tables must start with module prefix regardless of PostgreSQL schema.
  */
 public enum DomainModule {
