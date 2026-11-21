@@ -27,6 +27,9 @@ rm:
 # First global administrator: off by default, operator-only. Keep the 256-bit
 # setup secret out of files/logs; only SHA-256 hex is exposed as configuration.
   iam:
+    pii:
+      migration:
+        enabled: ${RM_IAM_PII_MIGRATION_ENABLED:false}
     bootstrap:
       enabled: ${RM_IAM_BOOTSTRAP_ENABLED:false}
       token-sha256: "${RM_IAM_BOOTSTRAP_TOKEN_SHA256:}"
