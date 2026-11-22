@@ -20,10 +20,11 @@ import java.util.UUID;
  */
 @Service
 public class CrmBuyerLinkService {
-    public enum State { PENDING, CONFIRMED }
+    public enum State { PENDING, CONFIRMED, DISPUTED, REVOKED }
     public record Link(UUID tenantId, UUID id, UUID customerId, UUID buyerUserId,
                        State state, long rowVersion) {}
     public record BuyerOrder(UUID orderId, String status, Instant createdAt) {}
+    public record LinkEvent(UUID id, String action, UUID actorUserId, Instant occurredAt) {}
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
@@ -67,7 +68,8 @@ public class CrmBuyerLinkService {
         }
         Integer existing=jdbc.queryForObject("""
                 SELECT count(*) FROM crm.customer_buyer_link
-                WHERE tenant_id=? AND (customer_id=? OR buyer_user_id=?)
+                WHERE tenant_id=? AND status IN ('PENDING','CONFIRMED','DISPUTED')
+                  AND (customer_id=? OR buyer_user_id=?)
                 """,Integer.class,tenant,customer,buyer);
         if(existing!=null && existing>0)
             throw new IllegalStateException("Customer or buyer already linked in tenant");
@@ -108,6 +110,8 @@ public class CrmBuyerLinkService {
         if(current.rowVersion()!=expectedVersion)
             throw new IllegalStateException("Stale buyer link revision");
         if(current.state()==State.CONFIRMED) return current;
+        if(current.state()!=State.PENDING)
+            throw new IllegalStateException("Link is no longer awaiting confirmation");
         Integer orderCount=jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_order
                 WHERE tenant_id=? AND buyer_user_id=?
@@ -154,8 +158,114 @@ public class CrmBuyerLinkService {
         if(customer==null) throw new IllegalArgumentException("Customer required");
         return jdbc.query("""
                 SELECT id,customer_id,buyer_user_id,status,row_version
-                FROM crm.customer_buyer_link WHERE tenant_id=? AND customer_id=?
+                FROM crm.customer_buyer_link
+                WHERE tenant_id=? AND customer_id=?
+                  AND status IN ('PENDING','CONFIRMED','DISPUTED')
                 """,rs->rs.next()?link(tenant,rs):null,tenant,customer);
+    }
+
+
+    /**
+     * Buyer withdraws consent. Release of the active uniqueness slot is
+     * atomic with the event. A revoked link cannot be reconfirmed.
+     */
+    @Transactional
+    public Link revokeByBuyer(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion) {
+        if(buyer==null || tenant==null || linkId==null) throw new SecurityException("Buyer required");
+        UUID buyerId=buyer.userId();
+        Link current=lockLink(tenant,linkId);
+        if(current==null || !buyerId.equals(current.buyerUserId()))
+            throw new SecurityException("Only the linked buyer can revoke");
+        return transition(current,expectedVersion,buyerId,
+                new State[]{State.PENDING,State.CONFIRMED,State.DISPUTED},
+                State.REVOKED,"REVOKED");
+    }
+
+    /** Seller can close their own CRM mapping, but cannot transfer buyer consent. */
+    @Transactional
+    public Link releaseBySeller(VerifiedActor seller, UUID tenant, UUID linkId, long expectedVersion) {
+        UUID sellerId=requireSeller(seller,tenant,DomainPermission.CRM_WRITE);
+        Link current=lockLink(tenant,linkId);
+        if(current==null) throw new IllegalArgumentException("No tenant link");
+        return transition(current,expectedVersion,sellerId,
+                new State[]{State.PENDING,State.CONFIRMED},
+                State.REVOKED,"REVOKED");
+    }
+
+    /** Only the linked buyer may dispute an already confirmed identity match. */
+    @Transactional
+    public Link disputeByBuyer(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion) {
+        if(buyer==null || tenant==null || linkId==null) throw new SecurityException("Buyer required");
+        UUID buyerId=buyer.userId();
+        Link current=lockLink(tenant,linkId);
+        if(current==null || !buyerId.equals(current.buyerUserId()))
+            throw new SecurityException("Only linked buyer can dispute");
+        return transition(current,expectedVersion,buyerId,
+                new State[]{State.CONFIRMED},State.DISPUTED,"DISPUTED");
+    }
+
+    /**
+     * Dispute resolution is fail-closed: seller closes DISPUTED to REVOKED,
+     * never silently restores CONFIRMED. New consent requires a new proposal.
+     */
+    @Transactional
+    public Link closeDispute(VerifiedActor seller, UUID tenant, UUID linkId, long expectedVersion) {
+        UUID sellerId=requireSeller(seller,tenant,DomainPermission.CRM_WRITE);
+        Link current=lockLink(tenant,linkId);
+        if(current==null) throw new IllegalArgumentException("No tenant link");
+        return transition(current,expectedVersion,sellerId,
+                new State[]{State.DISPUTED},State.REVOKED,"DISPUTE_CLOSED");
+    }
+
+    /** Historical events are append-only, including for revoked link generations. */
+    @Transactional
+    public List<LinkEvent> linkHistory(VerifiedActor seller, UUID tenant, UUID customer) {
+        requireSeller(seller,tenant,DomainPermission.CRM_READ);
+        if(customer==null) throw new IllegalArgumentException("Customer required");
+        return jdbc.query("""
+                SELECT e.id,e.action_code,e.actor_user_id,e.occurred_at
+                FROM crm.customer_buyer_link_event e
+                JOIN crm.customer_buyer_link l
+                  ON l.tenant_id=e.tenant_id AND l.id=e.link_id
+                WHERE l.tenant_id=? AND l.customer_id=?
+                ORDER BY e.occurred_at,e.id
+                """,(rs,n)->new LinkEvent(rs.getObject(1,UUID.class),
+                rs.getString(2),rs.getObject(3,UUID.class),
+                rs.getTimestamp(4).toInstant()),tenant,customer);
+    }
+
+    private UUID requireSeller(VerifiedActor actor,UUID tenant,DomainPermission permission) {
+        if(actor==null || tenant==null) throw new SecurityException("Seller and tenant required");
+        UUID id=actor.userId();
+        authorization.requireForCommand(id,tenant,permission);
+        return id;
+    }
+
+    private Link lockLink(UUID tenant,UUID linkId) {
+        return jdbc.query("""
+                SELECT id,customer_id,buyer_user_id,status,row_version
+                FROM crm.customer_buyer_link WHERE tenant_id=? AND id=? FOR UPDATE
+                """,rs->rs.next()?link(tenant,rs):null,tenant,linkId);
+    }
+
+    private Link transition(Link current,long expectedVersion,UUID actor,
+                            State[] allowed,State next,String action) {
+        if(expectedVersion<0) throw new IllegalArgumentException("Invalid revision");
+        if(current.rowVersion()!=expectedVersion)
+            throw new IllegalStateException("Stale buyer link revision");
+        boolean permitted=false;
+        for(State state:allowed) if(current.state()==state) permitted=true;
+        if(!permitted) throw new IllegalStateException("Invalid buyer link transition");
+        int updated=jdbc.update("""
+                UPDATE crm.customer_buyer_link
+                SET status=?,row_version=row_version+1
+                WHERE tenant_id=? AND id=? AND row_version=? AND status=?
+                """,next.name(),current.tenantId(),current.id(),
+                expectedVersion,current.state().name());
+        if(updated!=1) throw new IllegalStateException("Concurrent buyer link transition");
+        event(current.tenantId(),current.id(),actor,action);
+        return new Link(current.tenantId(),current.id(),current.customerId(),
+                current.buyerUserId(),next,expectedVersion+1);
     }
 
     private Link link(UUID tenant, java.sql.ResultSet rs) throws java.sql.SQLException {
