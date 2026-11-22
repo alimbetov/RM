@@ -2,6 +2,9 @@ package kz.rm.inventory;
 
 import kz.rm.iam.VerifiedActor;
 import kz.rm.inventory.dto.StockBalanceDto;
+import kz.rm.inventory.dto.InventoryMovementSearch;
+import kz.rm.inventory.dto.InventoryMovementDto;
+import kz.rm.inventory.dto.InventoryReservationEventDto;
 import kz.rm.inventory.dto.StockSearch;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -31,14 +34,14 @@ public class AuthenticatedInventoryQueries {
         return history.getPosition(actor.userId(),tenant,location,item);
     }
 
-    public Page<InventoryHistoryQueryService.MovementRow> searchMovements(
-            VerifiedActor actor,UUID tenant,InventoryHistoryQueryService.MovementSearch filter,
+    public Page<InventoryMovementDto> searchMovements(
+            VerifiedActor actor,UUID tenant,InventoryMovementSearch filter,
             int page,int size) {
         if(actor==null)throw new SecurityException("Verified actor required");
         return history.searchMovements(actor.userId(),tenant,filter,page,size);
     }
 
-    public Page<InventoryHistoryQueryService.ReservationEvent> reservationHistory(
+    public Page<InventoryReservationEventDto> reservationHistory(
             VerifiedActor actor,UUID tenant,UUID reservationId,int page,int size) {
         if(actor==null)throw new SecurityException("Verified actor required");
         return history.reservationHistory(actor.userId(),tenant,reservationId,page,size);
