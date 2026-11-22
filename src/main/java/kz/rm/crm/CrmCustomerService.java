@@ -128,7 +128,8 @@ public class CrmCustomerService {
             SELECT c.customer_id,s.name_envelope,s.email_envelope,s.phone_envelope
               FROM crm.contact c JOIN crm_pii.contact_secret s
                 ON c.tenant_id=s.tenant_id AND c.id=s.contact_id
-             WHERE c.tenant_id=? AND c.id=? AND c.status='ACTIVE'
+                JOIN crm.customer u ON u.tenant_id=c.tenant_id AND u.id=c.customer_id
+             WHERE c.tenant_id=? AND c.id=? AND c.status='ACTIVE' AND u.status='ACTIVE'
             """,rs->{
                 if(!rs.next()) throw new IllegalArgumentException("Contact not found in tenant");
                 UUID customerId=rs.getObject(1,UUID.class);
@@ -366,6 +367,30 @@ public class CrmCustomerService {
             """,target,tenant,id,expected,version);
         if(changed!=1) throw new IllegalStateException("Stale contact revision");
         history.contact(tenant,id,rows.getFirst(),actor,action,version,version+1);
+    }
+
+
+    /** Restore customer metadata without resurrecting contacts, consents or contracts. */
+    @Transactional
+    void restoreCustomer(UUID actor, UUID tenant, UUID customer, long expectedVersion) {
+        requireOrganizationMember(actor,tenant,true);
+        int changed=jdbc.update("""
+            UPDATE crm.customer SET status='ACTIVE', row_version=row_version+1
+            WHERE tenant_id=? AND id=? AND status='ARCHIVED' AND row_version=?
+            """,tenant,customer,expectedVersion);
+        if(changed!=1) throw new IllegalStateException("Customer not found, active or stale");
+        history.customer(tenant,customer,actor,"RESTORED",expectedVersion,expectedVersion+1);
+    }
+
+    /** Status-aware metadata only; no decryption or plaintext PERSON names. */
+    @Transactional
+    CrmCustomerEntity.Status customerStatus(UUID actor, UUID tenant, UUID customer) {
+        requireOrganizationMember(actor,tenant,false);
+        var matches=jdbc.query("""
+            SELECT status FROM crm.customer WHERE tenant_id=? AND id=?
+            """,(rs,n)->CrmCustomerEntity.Status.valueOf(rs.getString(1)),tenant,customer);
+        if(matches.isEmpty()) throw new IllegalArgumentException("Customer not found in tenant");
+        return matches.getFirst();
     }
 
     private String zone(String katoCode) {
