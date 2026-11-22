@@ -33,15 +33,17 @@ jobs:
             if (branchData.commit.sha !== sha)
               return core.setFailed('Stale qualification SHA: ' + sha);
             const required = [
-              'RM Domain Security and PostgreSQL Qualification',
-              'CRM R1.2 Populated PostgreSQL Upgrade Qualification',
-              'INVENTORY 0081 Populated PostgreSQL Upgrade Qualification',
-              'SALES 08.4 Populated PostgreSQL Upgrade Qualification',
-              'RustFS Real Infrastructure E2E'
+              {name:'RM Domain Security and PostgreSQL Qualification'},
+              {name:'CRM R1.2 Populated PostgreSQL Upgrade Qualification',artifact:'crm-r12-populated-upgrade-surefire'},
+              {name:'INVENTORY 0081 Populated PostgreSQL Upgrade Qualification',artifact:'inventory-0081-populated-postgresql'},
+              {name:'SALES 08.4 Populated PostgreSQL Upgrade Qualification',artifact:'sales-084-populated-postgresql'},
+              {name:'RustFS Real Infrastructure E2E',artifact:'rustfs-real-infra-e2e-surefire'}
             ];
             const manifest = {
-              schema:'RM-QA-01B/v1',repository:owner+'/'+repo,branch,sha,
-              observed_at:new Date().toISOString(),required:[]
+              schema:'RM-QA-01B/v2',repository:owner+'/'+repo,branch,sha,
+              observed_at:new Date().toISOString(),required:[],
+              // No invented test counts: detailed Surefire XML validation is a separate gate.
+              testCounts:'NOT_YET_AGGREGATED',migrationFingerprint:'NOT_YET_VERIFIED'
             };
             let allGreen=false;
             // Workflows run concurrently. Wait for all exact-SHA evidence rather
@@ -57,15 +59,42 @@ jobs:
                 {owner,repo,head_sha:sha,branch,per_page:100}
               );
               manifest.required=[];
-              for(const name of required) {
-                const matches=results.filter(r=>r.name===name &&
+              for(const gate of required) {
+                const matches=results.filter(r=>r.name===gate.name &&
                   r.head_sha===sha && r.event==='push').sort((a,b)=>b.id-a.id);
                 const run=matches[0];
-                manifest.required.push(run ? {
-                  name,id:run.id,sha:run.head_sha,status:run.status,
+                if (!run) {
+                  manifest.required.push({name:gate.name,status:'MISSING',conclusion:null});
+                  continue;
+                }
+                const evidence={
+                  name:gate.name,id:run.id,sha:run.head_sha,status:run.status,
                   conclusion:run.conclusion,url:run.html_url,
-                  run_attempt:run.run_attempt
-                } : {name,status:'MISSING',conclusion:null});
+                  run_attempt:run.run_attempt,jobs:[],artifact:null
+                };
+                if (run.status==='completed' && run.conclusion==='success') {
+                  const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRun,{
+                    owner,repo,run_id:run.id,per_page:100
+                  });
+                  evidence.jobs=jobs.map(j=>({
+                    name:j.name,status:j.status,conclusion:j.conclusion,
+                    skippedSteps:(j.steps||[]).filter(st=>st.conclusion==='skipped' &&
+                      !['Post','Complete job'].some(prefix=>st.name.startsWith(prefix))).map(st=>st.name)
+                  }));
+                  if (!jobs.length || jobs.some(j=>j.status!=='completed' ||
+                      j.conclusion!=='success')) evidence.conclusion='incomplete-jobs';
+                  if (gate.artifact) {
+                    const artifacts=await github.paginate(
+                      github.rest.actions.listWorkflowRunArtifacts,
+                      {owner,repo,run_id:run.id,per_page:100}
+                    );
+                    const a=artifacts.find(a=>a.name===gate.artifact && !a.expired &&
+                      a.size_in_bytes>0);
+                    evidence.artifact=a ? {name:a.name,id:a.id,bytes:a.size_in_bytes} : null;
+                    if (!a) evidence.conclusion='missing-test-artifact';
+                  }
+                }
+                manifest.required.push(evidence);
               }
               allGreen=manifest.required.every(r=>
                 r.status==='completed' && r.conclusion==='success' && r.sha===sha);
@@ -75,12 +104,16 @@ jobs:
                   r.conclusion!=='success' && r.conclusion!==null)) break;
               if(attempt<39) await new Promise(resolve=>setTimeout(resolve,30000));
             }
-            manifest.admission = allGreen?'QUALIFIED':'HOLD';
+            // Workflow execution proof is not a full release qualification.
+            manifest.workflowGate = allGreen?'PASS':'FAIL';
+            manifest.admission = 'HOLD';
             fs.writeFileSync('rm-exact-sha-manifest.json',
               JSON.stringify(manifest,null,2)+'\n');
             core.info(JSON.stringify(manifest,null,2));
             if(!allGreen)
-              core.setFailed('RM-QA-01B HOLD: incomplete or failed mandatory exact-SHA evidence');
+              core.setFailed('RM-QA-01B: missing/failed required jobs or artifacts at exact SHA');
+            else
+              core.info('Exact-SHA workflow gate PASS; full qualification remains HOLD pending Surefire counts and migration fingerprints');
       - name: Publish immutable manifest evidence
         if: always()
         uses: actions/upload-artifact@v4
