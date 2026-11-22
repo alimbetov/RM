@@ -34,6 +34,20 @@ SUITES = {
         ("CrmR1aQualificationTest",),
 }
 
+# These PostgreSQL interleavings must execute, not merely appear as skipped classes.
+REQUIRED_CASES = {
+    "kms-postgres-surefire": {
+        ("CommercialCoreE2EQualificationTest",
+         "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects"),
+        ("CommercialCoreE2EQualificationTest",
+         "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot"),
+        ("InventoryTransferStocktakeQualificationTest",
+         "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings"),
+        ("InventoryTransferStocktakeQualificationTest",
+         "postgresInv16DurableAdvanceAndConcurrentReceivingHaveNoFalseDrift"),
+    },
+}
+
 def api(url, token):
     req = urllib.request.Request(
         url, headers={"Authorization": "Bearer " + token,
@@ -97,6 +111,7 @@ def verify():
                     raise ValueError("No Surefire TEST-*.xml files")
                 counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
                 skipped_cases = []
+                executed_cases = set()
                 for member in xmls:
                     suite_root = ET.fromstring(archive.read(member))
                     if suite_root.tag != "testsuite":
@@ -112,6 +127,8 @@ def verify():
                         values[key] = value
                         counts[key] += value
                     for case in suite_root.findall("testcase"):
+                        if case.find("skipped") is None:
+                            executed_cases.add((suite, case.get("name")))
                         skip = case.find("skipped")
                         if skip is not None:
                             skipped_cases.append({
@@ -121,6 +138,9 @@ def verify():
                     group = discovered_suites.setdefault(suite, {"tests": 0, "skipped": 0})
                     group["tests"] += values["tests"]
                     group["skipped"] += values["skipped"]
+                missing_cases = REQUIRED_CASES.get(artifact_name, set()) - executed_cases
+                if missing_cases:
+                    problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
                 if counts["tests"] <= 0 or counts["failures"] or counts["errors"]:
                     problems.append(f"{name}: {artifact_name} empty/failing tests")
                 if counts["skipped"] > counts["tests"]:
