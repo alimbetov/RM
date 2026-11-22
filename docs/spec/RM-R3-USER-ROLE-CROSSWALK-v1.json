@@ -1,0 +1,2439 @@
+{
+  "schema": "RM-QUAL-USER-R3-CROSSWALK/v1",
+  "strategySchema": "RM-R3-FUNCTIONAL-COVERAGE/v1",
+  "scope": "All first-wave R3 requirements; mappings are provisional and do not assert executable JUnit role proofs",
+  "qualificationMode": "JAVA_SERVICE_JUNIT_ONLY",
+  "sourcePath": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+  "policy": "Exact-SHA QA gate plus separately executed role cases are required; declared canonical proof != qualified user-role case",
+  "actorProfileIds": [
+    "U0",
+    "U1",
+    "U2",
+    "U3",
+    "U4",
+    "U5",
+    "U6",
+    "U7",
+    "U8",
+    "U9",
+    "U10",
+    "U11",
+    "U12"
+  ],
+  "storyIds": [
+    "BS-01",
+    "BS-02",
+    "BS-03",
+    "BS-04",
+    "BS-05",
+    "BS-06",
+    "BS-07",
+    "BS-08",
+    "BS-09",
+    "BS-10",
+    "BS-11",
+    "BS-12",
+    "BS-13",
+    "BS-14",
+    "BS-15"
+  ],
+  "requirements": [
+    {
+      "requirementId": "IAM-01",
+      "domainId": "IAM_RBAC",
+      "title": "Tenant roles and explicit permissions",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java",
+      "operationId": "OP:IAM.ROLE_ADMIN",
+      "storyIds": [
+        "BS-02"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U7",
+        "U8",
+        "U9",
+        "U11"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "TENANT_RBAC_MANAGE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "TenantRbacQualificationTest",
+        "test": "functionalRoleIsIsolatedAndActivatedOnlyAfterApproval"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "IAM-02",
+      "domainId": "IAM_RBAC",
+      "title": "Immediate permission revocation with command fencing",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/iam/TenantAuthorization.java",
+      "operationId": "OP:IAM.REVOKE_FENCE",
+      "storyIds": [
+        "BS-02",
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U4",
+        "U11"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "TENANT_RBAC_MANAGE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "TenantRbacRevocationQualificationTest",
+        "test": "commandCannotProceedUntilEarlierRevocationCommits"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "IAM-03",
+      "domainId": "IAM_RBAC",
+      "title": "Email registration and single-use proof",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/iam/EmailIdentityService.java",
+      "operationId": "OP:IAM.EMAIL_REGISTER",
+      "storyIds": [
+        "BS-01"
+      ],
+      "actorProfiles": [
+        "U1"
+      ],
+      "permissionPolicy": "IDENTITY_LIFECYCLE",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "IamInitialEmailRegistrationQualificationTest",
+        "test": "firstRegistrationCreatesUnverifiedEncryptedEmailAndQueuesOneChallenge"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "IAM-04",
+      "domainId": "IAM_RBAC",
+      "title": "Safe change of email after independent verification",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/iam/EmailIdentityService.java",
+      "operationId": "OP:IAM.EMAIL_CHANGE",
+      "storyIds": [
+        "BS-01",
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U1"
+      ],
+      "permissionPolicy": "IDENTITY_LIFECYCLE",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "IamEmailChangeQualificationTest",
+        "test": "oldEmailRemainsCurrentUntilFreshNewProofAndOriginalIdentityIsImmutable"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "IAM-05",
+      "domainId": "IAM_RBAC",
+      "title": "Synthetic populated PII migration and seal checks",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/iam/IamPiiMigrationQualificationService.java",
+      "operationId": "OP:IAM.PII_MIGRATE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "SYSTEM_MIGRATION",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "iam-pii-populated-pg-surefire",
+        "suite": "IamPiiPopulatedDatabaseQualificationTest",
+        "test": "twoHundredPopulatedAccountsMigrateInCommittedBatchesWithoutPlaintext"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "IAM-06",
+      "domainId": "IAM_RBAC",
+      "title": "Real issuer/JWKS session onboarding and external email delivery",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:IAM.FUTURE",
+      "storyIds": [
+        "BS-01"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "CRM-01",
+      "domainId": "CRM_CORE",
+      "title": "Tenant-safe customer and contact access",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/AuthenticatedCrmQueries.java",
+      "operationId": "OP:CRM.CUSTOMER_READ",
+      "storyIds": [
+        "BS-08"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U6",
+        "U8",
+        "U9"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CRM-02",
+      "domainId": "CRM_CORE",
+      "title": "Encrypted customer/person PII",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/CrmCustomerService.java",
+      "operationId": "OP:CRM.PII_READ",
+      "storyIds": [
+        "BS-08"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_READ",
+        "CRM_PII_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "personAndContactSecretsStayEncryptedAndReloadAcrossInstance"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CRM-03",
+      "domainId": "CRM_CORE",
+      "title": "Consent opt-in and revocation",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/CrmCustomerService.java",
+      "operationId": "OP:CRM.CONSENT",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U6"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_WRITE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "consentIsOptInAndRevocationWins"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CRM-04",
+      "domainId": "CRM_CORE",
+      "title": "Contract revision and customer archive guards",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/CrmContractService.java",
+      "operationId": "OP:CRM.CONTRACT_REVISE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_WRITE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CRM-05",
+      "domainId": "CRM_CORE",
+      "title": "Bounded customer search and privacy",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/CrmSearchService.java",
+      "operationId": "OP:CRM.SEARCH",
+      "storyIds": [
+        "BS-08"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CRM-06",
+      "domainId": "CRM_CORE",
+      "title": "Qualified staff-facing complete CRM funnel",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:CRM.FUTURE",
+      "storyIds": [
+        "BS-08"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "INT-01",
+      "domainId": "CRM_INTERACTION",
+      "title": "Interaction lifecycle, assignee and next action",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+      "operationId": "OP:CRM.INTERACTION_COMMAND",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_WRITE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmInteractionQualificationTest",
+        "test": "interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INT-02",
+      "domainId": "CRM_INTERACTION",
+      "title": "Immutable interaction events with tenant-qualified ownership",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+      "operationId": "OP:CRM.INTERACTION_EVIDENCE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CRM_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmInteractionQualificationTest",
+        "test": "postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INT-03",
+      "domainId": "CRM_INTERACTION",
+      "title": "Purpose-scoped encrypted NOTE body and communication outcome",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:CRM.INTERACTION_FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "INT-04",
+      "domainId": "CRM_INTERACTION",
+      "title": "Task creation and completion through TASKS ownership",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:CRM.INTERACTION_FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "CAT-01",
+      "domainId": "CATALOG",
+      "title": "Tenant SKU, product draft and publication",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+      "operationId": "OP:CATALOG.CREATE_PUBLISH",
+      "storyIds": [
+        "BS-03"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CATALOG_WRITE",
+        "CATALOG_PUBLISH"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CatalogQualificationTest",
+        "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CAT-02",
+      "domainId": "CATALOG",
+      "title": "Price revision immutable audit",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+      "operationId": "OP:CATALOG.PRICE_REVISION",
+      "storyIds": [
+        "BS-03",
+        "BS-06"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CATALOG_PRICE_MANAGE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CatalogQualificationTest",
+        "test": "postgresCatalogPriceAndAuditAreAppendOnly"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CAT-03",
+      "domainId": "CATALOG",
+      "title": "Archive guards against stock/offer commitments",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+      "operationId": "OP:CATALOG.ARCHIVE_GUARD",
+      "storyIds": [
+        "BS-03",
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "CATALOG_WRITE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CommercialCoreE2EQualificationTest",
+        "test": "publishedOfferAndOpenStocktakePreventUnsafeArchive"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "CAT-04",
+      "domainId": "CATALOG",
+      "title": "Bulk catalog migration with reconciliation report",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:CATALOG.FUTURE",
+      "storyIds": [
+        "BS-03"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "STO-01",
+      "domainId": "STOREFRONT",
+      "title": "Tenant storefront draft/publication/pause CAS",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+      "operationId": "OP:STOREFRONT.STATE_CAS",
+      "storyIds": [
+        "BS-04",
+        "BS-05"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "STOREFRONT_OFFER_PUBLISH"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "StorefrontManagementQualificationTest",
+        "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "STO-02",
+      "domainId": "STOREFRONT",
+      "title": "Published SKU offer price and state lifecycle",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+      "operationId": "OP:STOREFRONT.OFFER_LIFECYCLE",
+      "storyIds": [
+        "BS-04",
+        "BS-05"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "STOREFRONT_OFFER_MANAGE",
+        "STOREFRONT_OFFER_PUBLISH"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "sales-084-populated-postgresql",
+        "suite": "SellerOfferQualificationTest",
+        "test": "draftPublicationPauseResumeAndCas"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "STO-03",
+      "domainId": "STOREFRONT",
+      "title": "Canonical price audit and no-op CAS",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/storefront/SellerOfferService.java",
+      "operationId": "OP:STOREFRONT.PRICE_CAS_HISTORY",
+      "storyIds": [
+        "BS-06"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "STOREFRONT_OFFER_MANAGE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SellerOfferQualificationTest",
+        "test": "r10PriceHistoryIsImmutableAndNoOpOrStaleCasCannotAppend"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "STO-04",
+      "domainId": "STOREFRONT",
+      "title": "Cross-service permission and suspension fences",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+      "operationId": "OP:STOREFRONT.PERMISSION_SUSPEND_FENCE",
+      "storyIds": [
+        "BS-05",
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U8",
+        "U10",
+        "U11"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "STOREFRONT_OFFER_MANAGE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SellerOfferQualificationTest",
+        "test": "postgresW1SuspensionAndCheckoutSerialize"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "STO-05",
+      "domainId": "STOREFRONT",
+      "title": "Ready-to-use seller storefront management UI",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:STOREFRONT.FUTURE",
+      "storyIds": [
+        "BS-04"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-01",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Idempotent checkout and proof boundaries",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "operationId": "OP:SALES.CHECKOUT_IDEMPOTENT",
+      "storyIds": [
+        "BS-07",
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U0",
+        "U1",
+        "U8"
+      ],
+      "permissionPolicy": "PUBLIC_CHECKOUT_POLICY",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "retryIsIdempotentAndChangesAreRejected"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-02",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Immutable accepted SKU and price snapshot",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "operationId": "OP:SALES.ACCEPTED_ORDER_SNAPSHOT",
+      "storyIds": [
+        "BS-07",
+        "BS-06"
+      ],
+      "actorProfiles": [
+        "U1",
+        "U2"
+      ],
+      "permissionPolicy": "PUBLIC_CHECKOUT_POLICY",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-03",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Order confirm / inventory reserve / fulfillment",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+      "operationId": "OP:SALES.CONFIRM_FULFILL",
+      "storyIds": [
+        "BS-09",
+        "BS-10"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "SALES_ORDER_CONFIRM",
+        "INVENTORY_RESERVE",
+        "SALES_ORDER_FULFILL",
+        "INVENTORY_FULFILL"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CommercialCoreE2EQualificationTest",
+        "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-04",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Tenant-scoped seller detail and order history",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/sales/SalesOrderQueryService.java",
+      "operationId": "OP:SALES.SELLER_DETAIL",
+      "storyIds": [
+        "BS-08"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U6",
+        "U8",
+        "U9"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "SALES_ORDER_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SalesOrderQueryQualificationTest",
+        "test": "r10SellerDetailAndStatusHistoryAreTenantBoundAndLimited"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-05",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Buyer identity safe order reads",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/autoorder/AuthenticatedBuyerOrders.java",
+      "operationId": "OP:SALES.BUYER_HISTORY",
+      "storyIds": [
+        "BS-11"
+      ],
+      "actorProfiles": [
+        "U1",
+        "U7",
+        "U10"
+      ],
+      "permissionPolicy": "BUYER_IDENTITY_OWNERSHIP",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "tcrud04BuyerOrdersCannotBeReadBySupplyingAnotherUsersUuid"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-06",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Full real OIDC buyer/seller browser E2E",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:SALES.FUTURE",
+      "storyIds": [
+        "BS-07"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "SAL-07",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Invoice/payment/settlement order integration",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:SALES.FUTURE",
+      "storyIds": [
+        "BS-07"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-01",
+      "domainId": "INVENTORY",
+      "title": "Idempotent receiving and movement ledger",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+      "operationId": "OP:INVENTORY.RECEIVE",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "INVENTORY_RECEIVE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryMovementQualificationTest",
+        "test": "adjustmentIsAtomicAndIdempotent"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-02",
+      "domainId": "INVENTORY",
+      "title": "Stock reservations and release invariants",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+      "operationId": "OP:INVENTORY.RESERVE_RELEASE",
+      "storyIds": [
+        "BS-09",
+        "BS-10",
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "INVENTORY_RESERVE",
+        "INVENTORY_RELEASE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": null,
+      "proofStatus": "MISSING_PROOF",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-03",
+      "domainId": "INVENTORY",
+      "title": "Conserving transfers with safe replay",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+      "operationId": "OP:INVENTORY.TRANSFER",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "INVENTORY_ADJUST"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryTransferStocktakeQualificationTest",
+        "test": "transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-04",
+      "domainId": "INVENTORY",
+      "title": "Stocktake with guard against reserved overdraw",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+      "operationId": "OP:INVENTORY.STOCKTAKE",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "INVENTORY_ADJUST"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryTransferStocktakeQualificationTest",
+        "test": "stocktakePostsOnlyMeasuredDeltaAndRejectsStaleOrBelowReserved"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-05",
+      "domainId": "INVENTORY",
+      "title": "Durable reconciliation concurrent advance fencing",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliationRuns.java",
+      "operationId": "OP:INVENTORY.RECONCILE_ADVANCE",
+      "storyIds": [
+        "BS-13",
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "INVENTORY_STOCK_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryTransferStocktakeQualificationTest",
+        "test": "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-06",
+      "domainId": "INVENTORY",
+      "title": "Posting sequence ordered under position lock",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/inventory/InventoryPostingVersion.java",
+      "operationId": "OP:INVENTORY.POSTING_ORDER",
+      "storyIds": [
+        "BS-12",
+        "BS-13"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "INVENTORY_RECEIVE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryMovementQualificationTest",
+        "test": "postgresConcurrentDifferentKeysHaveStrictlyIncreasingPostingVersions"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "INV-07",
+      "domainId": "INVENTORY",
+      "title": "Certified tenant-wide as-of reconciliation across pages",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:INVENTORY.FUTURE",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIL-01",
+      "domainId": "FILES",
+      "title": "Idempotent tenant-file metadata staging",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/files/FileMetadataService.java",
+      "operationId": "OP:FILES.STAGE_UPLOAD",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "FILES_UPLOAD"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10aQualificationTest",
+        "test": "verifiedMetadataBeginIsIdempotentAndTenantScoped"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIL-02",
+      "domainId": "FILES",
+      "title": "Malware and invalid stream fail-closed policy",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/files/FileUploadCompletionService.java",
+      "operationId": "OP:FILES.MALWARE_GUARD",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "FILES_UPLOAD"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10bQualificationTest",
+        "test": "scannerInfectedAndTimeoutFailClosedWithoutStoragePromotion"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIL-03",
+      "domainId": "FILES",
+      "title": "CRM owner and PII binary read boundary",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/files/AuthenticatedFilesBinaryReads.java",
+      "operationId": "OP:FILES.CRM_BINARY_READ",
+      "storyIds": [
+        "BS-08"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U6",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "FILES_READ",
+        "CRM_PII_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10bQualificationTest",
+        "test": "crmDocumentAccessRequiresPiiAndFileReadNotOnlyTenantMembership"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIL-04",
+      "domainId": "FILES",
+      "title": "Recovery of interrupted storage promotion",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/files/FileRecoveryService.java",
+      "operationId": "OP:FILES.PROMOTION_RECOVERY",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "FILES_UPLOAD"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10bQualificationTest",
+        "test": "crashAfterPromoteBeforeSqlCommitIsReconciledAndRetrySucceeds"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIL-05",
+      "domainId": "FILES",
+      "title": "Real RustFS and scanner infrastructure validation",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/files/RustFsFileStorage.java",
+      "operationId": "OP:FILES.REAL_INFRA",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5"
+      ],
+      "permissionPolicy": "INFRA_DEPENDENCY",
+      "requiredPermissionsAllOf": [
+        "FILES_UPLOAD"
+      ],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": null,
+      "proofStatus": "MISSING_PROOF",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIL-06",
+      "domainId": "FILES",
+      "title": "Typed attachment owner ACL for catalog and sales",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:FILES.FUTURE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "ORG-01",
+      "domainId": "ORGANIZATION",
+      "title": "Location CRUD, version and auditable changes",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+      "operationId": "OP:ORGANIZATION.LOCATION_WRITE",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "ORGANIZATION_LOCATION_WRITE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "OrganizationLocationLifecycleQualificationTest",
+        "test": "typedCreateUpdateNoOpStaleAndUnicodeAreAuditedAtomically"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "ORG-02",
+      "domainId": "ORGANIZATION",
+      "title": "Protect reserved stock from warehouse close",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+      "operationId": "OP:ORGANIZATION.WAREHOUSE_CLOSE",
+      "storyIds": [
+        "BS-12",
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "ORGANIZATION_LOCATION_WRITE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "OrganizationLocationLifecycleQualificationTest",
+        "test": "reservationsAndOpenStocktakeBlockDeactivation"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "ORG-03",
+      "domainId": "ORGANIZATION",
+      "title": "Concurrency between warehouse status and receiving",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+      "operationId": "OP:ORGANIZATION.LOCATION_RECEIVE_RACE",
+      "storyIds": [
+        "BS-12",
+        "BS-14"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U5",
+        "U8"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "ORGANIZATION_LOCATION_WRITE",
+        "INVENTORY_RECEIVE"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+        "test": "postgresDeactivationWinsThenReceiptCannotInitializeOrPost"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "ORG-04",
+      "domainId": "ORGANIZATION",
+      "title": "Tenant-scoped location search and read",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/organization/OrganizationLocationQueryService.java",
+      "operationId": "OP:ORGANIZATION.LOCATION_READ",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U6",
+        "U8",
+        "U9"
+      ],
+      "permissionPolicy": "TENANT_RBAC",
+      "requiredPermissionsAllOf": [
+        "ORGANIZATION_LOCATION_READ"
+      ],
+      "permissionMappingStatus": "REVIEW_REQUIRED",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": null,
+      "proofStatus": "MISSING_PROOF",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "ORG-05",
+      "domainId": "ORGANIZATION",
+      "title": "Complete first-tenant self-service onboarding",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:ORGANIZATION.FUTURE",
+      "storyIds": [
+        "BS-12"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "GEO-01",
+      "domainId": "GEO",
+      "title": "Reference KATO snapshots and deleted rows",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/geo/KatoTerritoryDirectory.java",
+      "operationId": "OP:GEO.REFERENCE_SNAPSHOT",
+      "storyIds": [
+        "BS-03"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "REFERENCE_DATA",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KatoTerritoryQualificationTest",
+        "test": "sourceSnapshotPreservesActiveAndDeletedRows"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "GEO-02",
+      "domainId": "GEO",
+      "title": "Reject invalid geographic territory references",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/geo/KatoLocationPolicy.java",
+      "operationId": "OP:GEO.REFERENCE_GUARD",
+      "storyIds": [
+        "BS-03"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "DB_CONSTRAINT",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KatoTerritoryQualificationTest",
+        "test": "databaseRejectsUnknownTerritoryCode"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "GEO-03",
+      "domainId": "GEO",
+      "title": "Verified full Kazakhstan directory update lifecycle",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:GEO.FUTURE",
+      "storyIds": [
+        "BS-03"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "KMS-01",
+      "domainId": "KMS",
+      "title": "Tenant envelope encryption and wrapping",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/security/kms/KeyWrappingService.java",
+      "operationId": "OP:KMS.ENVELOPE_CRYPTO",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "INTERNAL_SYSTEM_CRYPTO",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": null,
+      "proofStatus": "MISSING_PROOF",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "KMS-02",
+      "domainId": "KMS",
+      "title": "Fenced key processing lease",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/security/kms/KmsFencedJobService.java",
+      "operationId": "OP:KMS.LEASE_FENCE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "INTERNAL_WORKER",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KmsFencedJobQualificationTest",
+        "test": "expiredOldWorkerCannotCommitAfterSuccessorAcquiresLease"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "KMS-03",
+      "domainId": "KMS",
+      "title": "Encryption configuration deployment fail closed",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/security/kms/KmsDeploymentGuard.java",
+      "operationId": "OP:KMS.CONFIG_GUARD",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "STARTUP_CONFIG",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": null,
+      "proofStatus": "MISSING_PROOF",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "KMS-04",
+      "domainId": "KMS",
+      "title": "Operational tenant-key rotation and recovery",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:KMS.FUTURE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "AUD-01",
+      "domainId": "AUDIT",
+      "title": "Retention policy and legal hold enforcement",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/audit/AuditRetentionService.java",
+      "operationId": "OP:AUDIT.RETENTION",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "SYSTEM_RETENTION",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AuditRetentionQualificationTest",
+        "test": "threeAndFiveYearPoliciesAndLegalHoldsAreEnforced"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "AUD-02",
+      "domainId": "AUDIT",
+      "title": "Protected modification of retention governance",
+      "delivery": "IMPLEMENTED",
+      "implementationSource": "src/main/java/kz/rm/audit/AuditRetentionService.java",
+      "operationId": "OP:AUDIT.GOVERNANCE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "SYSTEM_RETENTION",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
+      "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AuditRetentionQualificationTest",
+        "test": "governanceLockTriggersProtectHoldAndPolicyWrites"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_RUN",
+      "negativeDimensions": [
+        "INACTIVE_ACTOR",
+        "CROSS_TENANT",
+        "MISSING_PERMISSION_OR_POLICY",
+        "NO_FORBIDDEN_SIDE_EFFECT"
+      ],
+      "executionTier": "JAVA_SERVICE_JUNIT_H2_AND_PG",
+      "qualified": false
+    },
+    {
+      "requirementId": "AUD-03",
+      "domainId": "AUDIT",
+      "title": "Tenant-safe cross-domain sanitized audit query",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:AUDIT.FUTURE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "AUD-04",
+      "domainId": "AUDIT",
+      "title": "Auditor UI and bounded compliant export",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:AUDIT.FUTURE",
+      "storyIds": [
+        "BS-15"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "TSK-01",
+      "domainId": "TASKS",
+      "title": "Tenant-owned task commands and transitions",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:TASKS.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "TSK-02",
+      "domainId": "TASKS",
+      "title": "CRM interaction-to-task typed link",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:TASKS.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "TSK-03",
+      "domainId": "TASKS",
+      "title": "Assigned task lists, reminders and deadlines",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:TASKS.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "TSK-04",
+      "domainId": "TASKS",
+      "title": "Tasks browser acceptance and permission gates",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:TASKS.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIN-01",
+      "domainId": "FINANCE",
+      "title": "Tenant-owned invoice issue and lifecycle",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:FINANCE.FUTURE",
+      "storyIds": [
+        "BS-07"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIN-02",
+      "domainId": "FINANCE",
+      "title": "Payments and allocations with idempotency",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:FINANCE.FUTURE",
+      "storyIds": [
+        "BS-07"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIN-03",
+      "domainId": "FINANCE",
+      "title": "Reconciliation and immutable financial events",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:FINANCE.FUTURE",
+      "storyIds": [
+        "BS-07"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "FIN-04",
+      "domainId": "FINANCE",
+      "title": "Order-linked finance view and audit",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:FINANCE.FUTURE",
+      "storyIds": [
+        "BS-07"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "MKT-01",
+      "domainId": "MARKETING",
+      "title": "Purpose-bound customer consent targeting",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:MARKETING.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "MKT-02",
+      "domainId": "MARKETING",
+      "title": "Campaign lifecycle and consent-gated dispatch",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:MARKETING.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "MKT-03",
+      "domainId": "MARKETING",
+      "title": "Campaign delivery status and suppression proof",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:MARKETING.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "SUB-01",
+      "domainId": "SUBSCRIPTION",
+      "title": "Tenant plan entitlement evaluation",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:SUBSCRIPTION.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "SUB-02",
+      "domainId": "SUBSCRIPTION",
+      "title": "Usage metering and quota enforcement",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:SUBSCRIPTION.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    },
+    {
+      "requirementId": "SUB-03",
+      "domainId": "SUBSCRIPTION",
+      "title": "Subscription billing lifecycle and renewal proof",
+      "delivery": "PLANNED",
+      "implementationSource": null,
+      "operationId": "OP:SUBSCRIPTION.FUTURE",
+      "storyIds": [
+        "BS-14"
+      ],
+      "actorProfiles": [],
+      "permissionPolicy": "NOT_DEFINED",
+      "requiredPermissionsAllOf": [],
+      "permissionMappingStatus": "NOT_APPLICABLE_PLANNED",
+      "serviceContractStatus": "NOT_IMPLEMENTED",
+      "canonicalProof": null,
+      "proofStatus": "NOT_APPLICABLE_PLANNED",
+      "userRoleCaseIds": [],
+      "userRoleCaseStatus": "NOT_IMPLEMENTED",
+      "negativeDimensions": [],
+      "executionTier": "NOT_IMPLEMENTED",
+      "qualified": false
+    }
+  ]
+}
