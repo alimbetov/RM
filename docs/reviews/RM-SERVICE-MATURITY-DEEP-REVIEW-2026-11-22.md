@@ -1,7 +1,7 @@
 # RM — повторная инвентаризация, матрица зрелости и cross-domain consistency (R3)
 
 **Дата:** 2026-11-22. **Ветка:** `base_dev`. **Тип:** source-and-schema review + квалификационный реестр, **НЕ** новый полный прогон тестов.
-**Текущий кодовый кандидат STOREFRONT:** commit `4edb0d9ce5c11e1cec8347cfd662ed2cc8f96cc4` (последний кодовый коммит перед этим обзором); перед release повторно получить actual branch HEAD и точный CI head_sha.
+**Текущий кодовый кандидат STOREFRONT:** commit `fba500ddfbc94c380587732907d30beb233a3b29` (последний source/test-коммит перед обновлением обзора); перед release повторно получить actual branch HEAD и точный CI head_sha.
 **Нормативный источник:** [RM-PLATFORM-STANDARD-R2](../architecture/RM-PLATFORM-STANDARD-R2.md). Исполняемый backlog: [RM-SVC-MATURITY-COMPLETION-R2](../spec/RM-SVC-MATURITY-COMPLETION-R2.md).
 **Важное ограничение:** отдельные source review и исторический exact-SHA CI не являются доказательством качества нового HEAD. HTTP/OIDC / production — HOLD.
 
@@ -51,14 +51,14 @@
 
 - `StorefrontManagementService`: `createDraft`, `publish`, `pause`, `get` с `VerifiedActor`, `STOREFRONT_OFFER_MANAGE/PUBLISH`, `TenantAuthorization.requireForCommand`, row-lock, monotonic CAS, action audit; PUBLISHED→PAUSED→PUBLISHED.
 - `StorefrontOfferService`: `createDraft`, `updatePrice`, `publish`, `pause`, `hide`, `get`. Цена принадлежит seller offer, а не автоматической `cat_price` projection; запрещён SERVICE, FOREIGN и ARCHIVED SKU, PUBLISHED offer требует PUBLISHED PRODUCT; catalog binding не меняется; price update and transitions advance `row_version`; accepted order snapshot не обновляется.
-- `StorefrontManagementQualificationTest`: positive lifecycle, A/B tenant denial, missing publish grant, stale/ABA, immutable line price/SKU after live price update, SERVICE and foreign offer negatives, concurrent price×checkout (two workers; order snapshot only old or new coherent offer price/title).
+- `StorefrontManagementQualificationTest`: positive lifecycle, A/B tenant denial, missing publish grant, stale/ABA, immutable line price/SKU after live price update, SERVICE and foreign offer negatives, concurrent price×checkout (two workers; order snapshot only old or new coherent offer price/title); deterministic PostgreSQL two-transaction admitted-pause×role-revoke and pause×checkout tests with barriers; synthetic keys for checkout CI.
 - Миграций, второй витрины, второго CATALOG, контроллеров и новых permissions **не добавлено**.
 
 ### 3.3 Статусы тестов и ограничения доказательности
 
-**CI:** для test commit `e4e2f78...` обнаружен GitHub Actions run [44991446904](https://github.com/alimbetov/RM/actions/runs/44991446904) с jobs `h2-smoke`, `postgres-integration`, `postgres-pii-populated` в статусе `queued` при проверке; source commit `36480d5f...` имеет [run 44991544050](https://github.com/alimbetov/RM/actions/runs/44991544050) также `queued`. Это **НЕ GREEN** и не тесты latest `4edb0d9c...`; exact latest-SHA qualification остаётся OPEN.
+**CI:** для test commit `e4e2f78...` обнаружен GitHub Actions run [44991446904](https://github.com/alimbetov/RM/actions/runs/44991446904) с jobs `h2-smoke`, `postgres-integration`, `postgres-pii-populated` в статусе `queued` при проверке; source commit `36480d5f...` имеет [run 44991544050](https://github.com/alimbetov/RM/actions/runs/44991544050), `c82b94ec...` имеет [run 44991727545](https://github.com/alimbetov/RM/actions/runs/44991727545), также `queued` при проверке. Это **НЕ GREEN** и не тесты latest `fba500dd...`; exact latest-SHA qualification остаётся OPEN.
 
-**P0 gaps:** full two-transaction `revoke×seller command` both interleavings, `pause storefront×checkout` with deterministic PG barriers, duplicate slug race, rollback/failure injection, `offer publish×CATALOG archive` and stock admission, full populated 0078–0080 migration, seller offer search/history, PII/permission read. `StorefrontOfferService` хранит action audit, но не отдельный неизменяемый price-delta journal; историю конкретной цены оффера пока нельзя считать полномасштабной.
+**P0 gaps:** дописанные два PG-race теста **ещё не выполнены**; нужны вторые winning orders `revoke-first×seller command` и `checkout-first×pause`, duplicate slug race, rollback/failure injection, `offer publish×CATALOG archive` and stock admission, full populated 0078–0080 migration, seller offer search/history, PII/permission read. `StorefrontOfferService` хранит action audit, но не отдельный неизменяемый price-delta journal; историю конкретной цены оффера пока нельзя считать полномасштабной.
 
 **Security note:** `STOREFRONT_OFFER_*` permissions в текущем `DomainPermission` отнесены к `DomainModule.SALES` несмотря на отдельный `DomainModule.STOREFRONT`. Existing role grants use explicit codes and work across packages, но ownership map нужно согласовать без ломки historical grants; это P1 design debt, не подтверждённая уязвимость.
 
