@@ -156,6 +156,25 @@ public class AuthenticatedInventoryReconciliationRuns {
         return load(tenant,runId,false);
     }
 
+    /** Bounded tenant-authorized access to saved diagnostic findings. */
+    @Transactional
+    public List<Finding> findings(VerifiedActor actor,UUID tenant,UUID runId,int page,int size) {
+        admit(actor,tenant);
+        if(runId==null||page<0||size<1||size>100)
+            throw new IllegalArgumentException("Invalid finding page");
+        load(tenant,runId,false);
+        return jdbc.query("""
+                SELECT location_id,item_id,finding_code,on_hand,reserved,
+                       active_reservations,ledger_balance,inspected_movements
+                FROM crm.inv_reconciliation_finding
+                WHERE tenant_id=? AND run_id=?
+                ORDER BY location_id,item_id LIMIT ? OFFSET ?
+                """,(rs,n)->new Finding(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+                        Code.valueOf(rs.getString(3)),rs.getBigDecimal(4),rs.getBigDecimal(5),
+                        rs.getBigDecimal(6),rs.getBigDecimal(7),rs.getLong(8)),
+                tenant,runId,size,(long)page*size);
+    }
+
     private Run load(UUID tenant,UUID id,boolean lock) {
         return jdbc.query("""
                 SELECT id,status,inspected_positions,finding_count,
