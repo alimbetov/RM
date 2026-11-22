@@ -43,7 +43,7 @@ public class StorefrontOfferService {
         UUID user = admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
         lockStorefront(tenant);
         validatePrice(title, amount, currency);
-        validatePublishedProduct(tenant, catalogItemId);
+        validateCatalogProduct(tenant, catalogItemId, false);
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,
@@ -125,7 +125,7 @@ public class StorefrontOfferService {
                     """, rs -> rs.next() ? rs.getString(1) : null, tenant);
             if (!"PUBLISHED".equals(storeState))
                 throw new IllegalStateException("STOREFRONT_UNAVAILABLE");
-            validatePublishedProduct(tenant, current.catalogItemId());
+            validateCatalogProduct(tenant, current.catalogItemId(), true);
         }
         int changed = jdbc.update("""
                 UPDATE crm.store_offer SET state=?,row_version=row_version+1
@@ -174,15 +174,20 @@ public class StorefrontOfferService {
         if (id == null) throw new IllegalStateException("Tenant storefront required");
     }
 
-    private void validatePublishedProduct(UUID tenant, UUID catalogItemId) {
+    private void validateCatalogProduct(UUID tenant, UUID catalogItemId,
+                                        boolean requirePublished) {
         if (catalogItemId == null)
             throw new IllegalArgumentException("Catalog PRODUCT required");
-        String state = jdbc.query("""
-                SELECT kind || ':' || state FROM crm.cat_item
+        record Product(String kind, String state) {}
+        Product product = jdbc.query("""
+                SELECT kind,state FROM crm.cat_item
                 WHERE tenant_id=? AND id=? FOR UPDATE
-                """, rs -> rs.next() ? rs.getString(1) : null, tenant, catalogItemId);
-        if (!"PRODUCT:PUBLISHED".equals(state))
-            throw new IllegalStateException("Offer requires PUBLISHED catalog PRODUCT");
+                """, rs -> rs.next() ? new Product(rs.getString(1), rs.getString(2)) : null,
+                tenant, catalogItemId);
+        if (product == null || !"PRODUCT".equals(product.kind())
+                || "ARCHIVED".equals(product.state())
+                || (requirePublished && !"PUBLISHED".equals(product.state())))
+            throw new IllegalStateException("Offer requires eligible catalog PRODUCT");
     }
 
     private static void validatePrice(String title, BigDecimal amount, String currency) {
