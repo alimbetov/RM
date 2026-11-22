@@ -151,3 +151,15 @@
 - **Приёмка:** SALE-Q01..Q16 в ТЗ, slices SALE-R1.A–E после согласования D-01..D-08 и повторного code-to-test trace. **Maturity остаётся 2/5**, текущий gate — source review, не реализация и не PostgreSQL qualification новых функций.
 
 **Следующее действие внутри этого же сервиса:** проход **02/12 — полный method → SQL/JDBC → permission → state → consumer → test trace**, затем 03/12 по aggregate/schema и populated migration. К другому домену не переходить по факту написания ТЗ.
+
+
+### ORGANIZATION — проход 02/12: фактические бизнес-пути склада/филиала/POS
+
+- **Детальное ревью:** [RM-ORG-FUNC-R1-P02](RM-ORG-FUNCTIONAL-DEPTH-PASS02-2026-11-22.md); **главное ТЗ обновлено:** [RM-ORG-FUNC-R1](../spec/RM-ORG-FUNCTIONAL-DEPTH-R1-12-PASSES.md). **Снимок source:** `2b4afbbabc6be0193def86a933d7947163f964ae`; runtime классы не изменены относительно первого аудита.
+- **BJ-01 WAREHOUSE:** `create/get/search` работают, но новая SKU-позиция отсутствует в прикладном API. `InventoryMovementService.adjust` требует ранее созданный `inv_stock_balance`; существующие тесты делают SQL INSERT в arrange. Новый **ORG-11 / P0** — INVENTORY `initializePosition` и сервисный E2E «создать склад → инициализировать SKU → приёмка», без stock INSERT из ORG.
+- **BJ-02 BRANCH:** полнота R1 определяется редактированием адреса/названия/КАТО и переходами ACTIVE/INACTIVE/CLOSED; не требуется новая IAM роль филиала или необоснованная иерархия.
+- **BJ-03 POINT_OF_SALE:** `org_location.POINT_OF_SALE` не является действующим POS checkout: `crm.store_front` и `crm.store_offer` не имеют location_id. **ORG-12 / P2** — отдельно зафиксировать будущую связку, не реализовывать в ORG-R1.
+- **IAM предусловие ORG-13 / P0:** `PlatformTenantBootstrapService.provision` создаёт новый tenant с enforced RBAC и без default operational grants; `TenantRoleService` запрещает self-assignment. Для реального сценария первый сотрудник должен законно получить ORG_READ/WRITE через IAM до создания склада.
+- **ORG-14 / P1:** минимальный scoped usage-blocker по stock/reservations на границе INVENTORY; запрещать закрытие склада с положительным остатком/резервом, но не раскрывать SKU/количество без INVENTORY_STOCK_READ.
+- **Уточнение lifecycle:** новый reserve/receipt/confirm — только ACTIVE WAREHOUSE; исторический idempotent replay без новых mutations и release/cancel cleanup не должны беспричинно блокироваться после смены статуса. При реализации учесть request-key stripe и order/stock locks, проверить deadlock на PG.
+- **Приёмка:** сценарии ORG-BJ01..ORG-BJ12 — **NOT RUN**; старые тесты подтверждают только отдельные методы и scripted SQL setup. Этап **02/12 SPECIFIED**, не GREEN; ORG всё ещё **1/5**. Следующий этап 03/12 — lifecycle-инварианты и доказанные блокировки.
