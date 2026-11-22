@@ -472,6 +472,129 @@ class InventoryTransferStocktakeQualificationTest {
         assertThat(applied.run().findingCount()).isEqualTo(1);
     }
 
+    @Test void postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings()
+            throws Exception {
+        try (var con = source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f = fixture();
+        receive(f, f.source(), "r16-concurrent-source-" + UUID.randomUUID(), 5);
+        receive(f, f.destination(), "r16-concurrent-dest-" + UUID.randomUUID(), 7);
+        // One diagnostic condition; it must not be inserted twice by two workers.
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET reserved=1,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """, f.tenant(), f.source(), f.item());
+        var who = actor(f.actor());
+        var run = reconciliationRuns.start(who, f.tenant());
+        var firstHeld = new CountDownLatch(1);
+        var secondAttempt = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> tx.execute(status -> {
+                var step = reconciliationRuns.advance(who, f.tenant(), run.id(), 1);
+                firstHeld.countDown();
+                try {
+                    if (!release.await(15, TimeUnit.SECONDS))
+                        throw new IllegalStateException("Reconciliation barrier timeout");
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+                return step;
+            }));
+            var second = pool.submit(() -> {
+                if (!firstHeld.await(10, TimeUnit.SECONDS))
+                    throw new IllegalStateException("First advance did not lock run");
+                secondAttempt.countDown();
+                return reconciliationRuns.advance(who, f.tenant(), run.id(), 1);
+            });
+            try {
+                assertThat(secondAttempt.await(10, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                release.countDown();
+            }
+            assertThat(first.get(20, TimeUnit.SECONDS).run().inspectedPositions())
+                    .isEqualTo(1);
+            try {
+                second.get(20, TimeUnit.SECONDS);
+            } catch (java.util.concurrent.ExecutionException ex) {
+                // PostgreSQL can reject a stale REPEATABLE READ lock acquisition
+                // with SQLSTATE 40001. The entire independent step must retry.
+                Throwable cause = ex.getCause();
+                boolean retryable = false;
+                for (Throwable at = cause; at != null; at = at.getCause()) {
+                    if (at instanceof java.sql.SQLException sql &&
+                            "40001".equals(sql.getSQLState())) retryable = true;
+                }
+                if (!retryable) throw ex;
+            }
+        } finally {
+            release.countDown();
+        }
+        var completed = reconciliationRuns.advance(who, f.tenant(), run.id(), 1);
+        assertThat(completed.run().status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(completed.run().inspectedPositions()).isEqualTo(2);
+        assertThat(completed.run().findingCount()).isEqualTo(1);
+        assertThat(reconciliationRuns.findings(who, f.tenant(), run.id(), 0, 10))
+                .hasSize(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_reconciliation_finding
+                WHERE tenant_id=? AND run_id=?
+                """, Integer.class, f.tenant(), run.id())).isEqualTo(1);
+    }
+
+    @Test void postgresInv16DurableAdvanceAndConcurrentReceivingHaveNoFalseDrift()
+            throws Exception {
+        try (var con = source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f = fixture();
+        receive(f, f.source(), "r16-race-seed-" + UUID.randomUUID(), 30);
+        receive(f, f.destination(), "r16-race-dest-" + UUID.randomUUID(), 30);
+        var who = actor(f.actor());
+        var run = reconciliationRuns.start(who, f.tenant());
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var writer = pool.submit(() -> {
+                start.await(10, TimeUnit.SECONDS);
+                for (int i = 0; i < 12; i++)
+                    commands.receive(who, f.tenant(), f.source(), f.item(),
+                            "r16-race-receipt-" + i + "-" + run.id(), BigDecimal.ONE);
+                return true;
+            });
+            var reader = pool.submit(() -> {
+                start.await(10, TimeUnit.SECONDS);
+                for (int attempt = 0; attempt < 12; attempt++) {
+                    try {
+                        var page = reconciliationRuns.advance(who, f.tenant(), run.id(), 1);
+                        if (!page.newFindings().isEmpty())
+                            throw new AssertionError("False inventory corruption under legal write");
+                        if (page.run().status() == AuthenticatedInventoryReconciliationRuns.Status.COMPLETED)
+                            return true;
+                    } catch (org.springframework.dao.CannotSerializeTransactionException retry) {
+                        // A full step retry is legal. Cursor/findings rolled back together.
+                    }
+                }
+                throw new AssertionError("Reconciliation failed to finish bounded scan");
+            });
+            start.countDown();
+            assertThat(writer.get(60, TimeUnit.SECONDS)).isTrue();
+            assertThat(reader.get(60, TimeUnit.SECONDS)).isTrue();
+        }
+        var result = reconciliationRuns.get(who, f.tenant(), run.id());
+        assertThat(result.status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(result.inspectedPositions()).isEqualTo(2);
+        assertThat(result.findingCount()).isZero();
+        assertThat(stock(f, f.source())).isEqualByComparingTo("42");
+    }
+
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
         var f=fixture();receive(f,f.source(),"stockQ7A0001",10);
         receive(f,f.destination(),"stockQ7B0001",10);
