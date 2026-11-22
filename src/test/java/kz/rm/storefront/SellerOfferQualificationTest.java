@@ -82,6 +82,22 @@ class SellerOfferQualificationTest {
         roles.enable(verified(c.owner()),c.tenant());
     }
 
+    @Test void tenantAuthorizedStorefrontDraftCreationAndStateCas() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        // Existing tenant storefront cannot be silently replaced.
+        assertThatThrownBy(()->offers.createStorefrontDraft(verified(c.seller()),
+            c.tenant(),"different-store")).isInstanceOf(IllegalStateException.class);
+        var actor=verified(c.seller());
+        assertThat(offers.changeStorefrontState(actor,c.tenant(),0,"PAUSED").state())
+            .isEqualTo("PAUSED");
+        assertThatThrownBy(()->offers.changeStorefrontState(actor,c.tenant(),0,"PUBLISHED"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("OFFER_VERSION_CONFLICT");
+        assertThat(offers.changeStorefrontState(actor,c.tenant(),1,"PUBLISHED").state())
+            .isEqualTo("PUBLISHED");
+    }
+
     @Test void draftPublicationPauseResumeAndCas() {
         Context c=context();
         grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
