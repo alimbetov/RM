@@ -59,16 +59,20 @@ class SalesOrderQueryQualificationTest {
         memberships.saveAndFlush(new OrganizationMembershipEntity(
                 UUID.randomUUID(),org.getId(),user.getId(),OrganizationMembershipEntity.Role.OWNER));
         jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
-        UUID offer=UUID.randomUUID();
+        UUID offer=UUID.randomUUID(),item=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,workspace.getId(),item,"sales-read-"+UUID.randomUUID());
         String slug="read-"+UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at)
             VALUES (?,?,?,'PUBLISHED',CURRENT_TIMESTAMP)
             """,workspace.getId(),UUID.randomUUID(),slug);
         jdbc.update("""
-            INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state)
-            VALUES (?,?,?,?,'KZT','PUBLISHED')
-            """,workspace.getId(),offer,"Read Offer",new BigDecimal("100"));
+            INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+            VALUES (?,?,?,?,'KZT','PUBLISHED',?)
+            """,workspace.getId(),offer,"Read Offer",new BigDecimal("100"),item);
         return new Shop(user.getId(),workspace.getId(),slug,offer);
     }
     private UUID order(Shop s) {
