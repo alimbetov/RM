@@ -1193,7 +1193,8 @@ class QrWarehouseHandoverQualificationTest {
             var c=context();var o=ready(c,true);
             var issued=pickup.issue(c.buyer(),o.publicRef(),key());
             long initialVersion=version(c,o);
-            var readyToStart=new CountDownLatch(clients),go=new CountDownLatch(1);
+            var readyToStart=new CountDownLatch(clients);
+            var go=new CountDownLatch(1);
             var measurements=new java.util.ArrayList<Long>();
             int completed=0,denied=0;
             try(var pool=Executors.newFixedThreadPool(clients)) {
@@ -1244,7 +1245,8 @@ class QrWarehouseHandoverQualificationTest {
         var issued=pickup.issue(c.buyer(),o.publicRef(),key());
         long initialVersion=version(c,o);
         int clients=20;
-        var readyToStart=new CountDownLatch(clients+1),go=new CountDownLatch(1);
+        var readyToStart=new CountDownLatch(clients+1);
+        var go=new CountDownLatch(1);
         var latencies=new java.util.ArrayList<Long>();
         int completed=0,denied=0;
         try(var pool=Executors.newFixedThreadPool(clients+1)) {
