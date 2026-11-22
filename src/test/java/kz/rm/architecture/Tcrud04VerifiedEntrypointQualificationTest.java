@@ -57,9 +57,10 @@ class Tcrud04VerifiedEntrypointQualificationTest {
         }
     }
 
-    @Test void inventorySettingsUuidBackendMustStayInternal() {
-        assertThat(Modifier.isPublic(InventoryTenantSettingsService.class.getModifiers())).isFalse();
-        var raw=java.util.Arrays.stream(InventoryTenantSettingsService.class.getDeclaredMethods())
+    @Test void inventorySettingsUuidBackendMustStayInternal() throws Exception {
+        var internal=Class.forName("kz.rm.inventory.InventoryTenantSettingsService");
+        assertThat(Modifier.isPublic(internal.getModifiers())).isFalse();
+        var raw=java.util.Arrays.stream(internal.getDeclaredMethods())
                 .filter(m->!m.isSynthetic() && !Modifier.isStatic(m.getModifiers()))
                 .filter(m->m.getParameterCount()>0 && m.getParameterTypes()[0]==UUID.class).toList();
         assertThat(raw).allSatisfy(m->assertThat(Modifier.isPublic(m.getModifiers()))
