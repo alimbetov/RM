@@ -1589,7 +1589,11 @@ class QrWarehouseHandoverQualificationTest {
         var observations=new ArrayList<B32Operation>();
         long totalMeasuredNanos=0;
         for(int wave=0;wave<2;wave++) {
-            var batch=all.subList(wave*24,(wave+1)*24);
+            // Alternate tenant A/B in EACH measured wave, rather than placing
+            // the two tenant cohorts in sequential separate waves.
+            var batch=new ArrayList<java.util.Map.Entry<Context,B31Target>>();
+            for(int i=0;i<24;i++)
+                batch.add(all.get((i%2)*24+wave*12+i/2));
             var readyGate=new CountDownLatch(batch.size());
             var release=new CountDownLatch(1);
             long began;
@@ -1740,6 +1744,89 @@ class QrWarehouseHandoverQualificationTest {
                     """,BigDecimal.class,c.tenant(),c.otherWarehouse(),c.itemTwo()))
                     .isEqualByComparingTo("1");
         }
+    }
+
+
+    /** B3.2 time-paced soak: 20 seconds, four independently fulfillable orders
+     * offered per second, split evenly across two tenants.
+     * This is a correctness/latency baseline at offered 4 orders/s,
+     * deliberately NOT a maximum-capacity measurement. */
+    @Test void qr06bPgB32TwentySecondTwoTenantPacedSoak() throws Exception {
+        requirePostgres();
+        Context a=context(),b=context();
+        var contexts=List.of(a,b);
+        for(Context c:contexts) {
+            roles.grant(c.owner(),c.tenant(),assignedRole(c),
+                    DomainPermission.INVENTORY_RECEIVE);
+            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                    c.itemOne(),key(),new BigDecimal("300"));
+            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                    c.itemTwo(),key(),new BigDecimal("300"));
+        }
+        var targets=new ArrayList<java.util.Map.Entry<Context,B31Target>>();
+        // 2 orders per tenant x 20 one-second windows.
+        for(int second=0;second<20;second++) {
+            for(Context c:contexts) for(int k=0;k<2;k++) {
+                var o=ready(c,true);
+                targets.add(java.util.Map.entry(c,new B31Target(o,
+                        pickup.issue(c.buyer(),o.publicRef(),key()),version(c,o))));
+            }
+        }
+        var readyGate=new CountDownLatch(targets.size());
+        var release=new CountDownLatch(1);
+        var latencies=new ArrayList<Long>();
+        long start;
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures=new ArrayList<java.util.concurrent.Future<B32Operation>>();
+            for(int i=0;i<targets.size();i++) {
+                var entry=targets.get(i);
+                int window=i/4;
+                futures.add(pool.submit(()->{
+                    readyGate.countDown();
+                    if(!release.await(35,TimeUnit.SECONDS))
+                        throw new IllegalStateException("B32_SOAK_RELEASE_TIMEOUT");
+                    long due=System.nanoTime()+TimeUnit.SECONDS.toNanos(window);
+                    while(System.nanoTime()<due)
+                        java.util.concurrent.locks.LockSupport.parkNanos(
+                                Math.min(TimeUnit.MILLISECONDS.toNanos(5),
+                                        Math.max(1,due-System.nanoTime())));
+                    long begin=System.nanoTime();
+                    var c=entry.getKey();var target=entry.getValue();
+                    var done=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                            target.proof().rawProof(),true,target.version(),key());
+                    if(!"COMPLETED".equals(done.status()))
+                        throw new IllegalStateException("B32_SOAK_WRONG_STATE");
+                    return new B32Operation("COMPLETED",true,System.nanoTime()-begin);
+                }));
+            }
+            assertThat(readyGate.await(35,TimeUnit.SECONDS)).isTrue();
+            start=System.nanoTime();
+            release.countDown();
+            for(var f:futures)latencies.add(f.get(90,TimeUnit.SECONDS).nanos());
+        } finally {
+            release.countDown();
+        }
+        long wall=System.nanoTime()-start;
+        assertThat(latencies).hasSize(80);
+        assertThat(wall).isGreaterThanOrEqualTo(TimeUnit.SECONDS.toNanos(19));
+        for(var e:targets) assertExactlyOneHandover(e.getKey(),e.getValue().order(),2);
+        for(Context c:contexts) {
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("120");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("200");
+            assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.sales_pickup_handover
+                    WHERE tenant_id=?
+                    """,Integer.class,c.tenant())).isEqualTo(40);
+        }
+        System.out.printf(java.util.Locale.ROOT,
+                "QR06B_B32_SOAK tenant_count=2 windows=20 offered_orders_per_sec=4 "+
+                "completed=80 failures=0 wall_ms=%d completed_per_sec=%.3f "+
+                "p50_success_ms=%d p95_success_ms=%d p99_success_ms=%d%n",
+                TimeUnit.NANOSECONDS.toMillis(wall),80.0/(wall/1e9),
+                b3Percentile(latencies,50),b3Percentile(latencies,95),
+                b3Percentile(latencies,99));
     }
 
 }
