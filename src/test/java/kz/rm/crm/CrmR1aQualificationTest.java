@@ -1125,6 +1125,9 @@ class CrmR1aQualificationTest {
         var customer=secureCommands.createCompany(actor,t.tenantId(),"Archived parent",null);
         var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),"Secret",null,null);
         secureCommands.archiveCustomer(actor,t.tenantId(),customer.id(),0);
+        assertThatThrownBy(()->secureCommands.recordEmailConsentOnce(actor,t.tenantId(),
+                contact.id(),true,"marketing","v1","R14","archivedcontact-r14"))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(()->secureQueries.getContact(actor,t.tenantId(),contact.id()))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(()->secureCommands.updateContact(actor,t.tenantId(),contact.id(),
