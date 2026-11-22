@@ -54,6 +54,6 @@ public class CatalogInventoryUsagePort {
     }
 
     private boolean exists(String sql, UUID tenant, UUID item) {
-        return Boolean.TRUE.equals(jdbc.query(sql, rs -> rs.next(), tenant, item));
+        return Boolean.TRUE.equals(jdbc.query(sql, (org.springframework.jdbc.core.ResultSetExtractor<Boolean>) rs -> rs.next(), tenant, item));
     }
 }
