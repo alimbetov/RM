@@ -51,3 +51,21 @@ No approval is implied by code commits or simulated adapter success.
 Technical policy and operator conditions: `docs/architecture/IAM-CRM-R22F-OIDC-REVOCATION-OUTBOX.md`.
 
 **Decision:** worker design implementation and 47-test PostgreSQL qualification GREEN at the explicitly stated SHA. Additional unscoped test remains separately gated until its own exact-SHA evidence. **Production HOLD.**
+
+
+## Final extended scheduler admission — exact SHA
+
+- **Qualified source SHA:** `793ed38fb65653f4b3a208c653f96efddc83428b`
+- **GitHub Actions:** https://github.com/alimbetov/RM/actions/runs/45054043409 — **SUCCESS**.
+- **Job:** `137305226222`.
+- **Artifact:** `iam-r22f-oidc-revocation-45054043409`, ID `14766876706`.
+- **Surefire:** **48 executed, 0 failures, 0 errors, 0 skipped**.
+  - 25 CRM Buyer / IAM deletion
+  - 6 OIDC revocation worker including unscoped scheduled claim
+  - 2 initial email registration
+  - 6 email change
+  - 9 email change / order-history scenarios
+- The final test additionally exercised the no-event-ID `processOne(workerId)` scheduler query, proving the nullable PostgreSQL UUID admission path.
+- The earlier 47-test GREEN is retained as historical evidence, not the current qualification SHA.
+
+**Scoped technical gate: GREEN for this exact SHA only.** Real Keycloak provider E2E, provider secret lifecycle, operator monitoring and signed Security/Legal retention approval remain **HOLD**.
