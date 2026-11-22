@@ -25,7 +25,7 @@
 | CRM Interaction | **2** | Record, assign, next-action date, complete/cancel, search, idempotent event | Kind NOTE без текста, содержательные результаты коммуникаций, Tasks linkage |
 | CATALOG | **2** | Draft SKU/i18n/modelCode, price revisions, publish/archive, tenant queries/history | Публикация **не передаёт** оффер в storefront/checkout, отсутствуют коммерческие price list/offer flows |
 | SALES / AutoOrder | **2** | Public-engine checkout + email proof, status events, seller confirm/cancel/fulfill and stock reserve | Staff draft/detail/line editing/history; CRM Customer mapping; actual storefront governance; delivery vs payment |
-| INVENTORY | **2** | Quantity receive/correct, reservations/release/fulfill, balances, stock ledger, settings persistence | Transfer, stocktake, valuation execution; настройки Picking/autoReserve не управляют подтверждением заказа |
+| INVENTORY | **3** | Q1–Q9: first receipt, staff ledger provenance/history/write-off, atomic transfer, stocktake, SALES reserve/fulfill, working mandatory-reservation policy — PostgreSQL-qualified | Financial valuation/FEFO/lot/serial, transport, real-load qualification and full tenant-wide TCRUD remain HOLD |
 | FILES | **3** | Staged upload, Local/RustFS, ClamAV adapter, immutable metadata, attachment, guarded binary read, recovery | Typed owners beyond CRM COMPANY, media search, actual AV infrastructure required at runtime |
 | ORGANIZATION | **1** | Create/get/search location, KATO validation | Update/deactivate/reactivate, archive constraints with active stock/orders |
 | GEO | **2** | KATO directory, region eligibility for org location | Полнота/актуальность nationwide production reference и обновление источника не квалифицированы этим обзором |
@@ -116,6 +116,9 @@
 - Transfer и stocktake нужно добавлять на существующем balance/immutable ledger с минимальным transfer receipt и stocktake snapshot, а не создавать параллельный stock engine.
 
 **Переоценка:** INVENTORY остаётся **2/5** до закрытия INV-Q0–Q9. Документ расширяет диагностику и ТЗ, Java не меняет; текущий статус **REVIEWED / SPEC PROPOSED**, не IMPLEMENTED. Указанные бизнес-решения требуют согласования до реализации. Новый CI документации не является предметной приёмкой.
+
+**Дополнение от 2026-11-22, имеет приоритет над указанной выше исторической оценкой:** Q1–Q9 реализованы и PostgreSQL-квалифицированы на source SHA `534aa18008bc54f77a4b1f0277d0f041bfa12bae`; завершено 12/12 предметных проходов **только количественного inventory-R1**. Текущая оценка **3/5**, а не 2/5. Верификация: [INV-Q7/Q9 PG & performance closure](RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md); реализационный [INVENTORY functional completion spec](../spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md); все четыре CI workflow на точном SHA SUCCESS: 44987925832, 44987931306, 44987925857, 44987925840. Тесты INVENTORY 9/9+7/7 и SALES RBAC 16/16; исторические записи сохранены. Production, valuation, FEFO, transport и масштабная нагрузка по-прежнему HOLD. Следующий домен SALES/AutoOrder, используя существующий 12-проходный ТЗ; первоначальные GAP-01/07/08 по INVENTORY в этой общей таблице закрыты соответствующим Q1–Q9 code scope, а не переписаны задним числом.
+
 
 
 ---
