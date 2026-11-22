@@ -140,10 +140,11 @@ public class InventoryMovementService {
             INSERT INTO crm.inv_stock_movement
             (tenant_id,id,location_id,item_id,request_key,delta_quantity,
              balance_before,balance_after,occurred_at,recorded_at,reason_code,
-             actor_user_id,source_type,source_id,business_reason_code)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             actor_user_id,source_type,source_id,business_reason_code,posting_version)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now,reason.name(),
-                actorId,actorId==null?null:"STAFF",null,cause==null?null:cause.name());
+                actorId,actorId==null?null:"STAFF",null,cause==null?null:cause.name(),
+                InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,locationId,itemId));
         return new Movement(id,tenantId,locationId,itemId,delta,before,after);
     }
 }
