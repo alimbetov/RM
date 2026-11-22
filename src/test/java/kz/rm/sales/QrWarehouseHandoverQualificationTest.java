@@ -1484,4 +1484,61 @@ class QrWarehouseHandoverQualificationTest {
                 b3Percentile(latencies,95),b3Percentile(latencies,99));
     }
 
+
+    /** B3.1: 100 and 250 callers split across two real JVMs. The worker
+     * results and database ledger, not process-local success counters alone,
+     * are the admission proof. */
+    @Test void qr06bPgB31DistributedTwoJvm100And250() throws Exception {
+        requirePostgres();
+        for(int total:new int[]{100,250}) {
+            Context c=context();
+            Order o=ready(c,true);
+            var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+            long initialVersion=version(c,o);
+            var dir=java.nio.file.Files.createTempDirectory("qr06b-b31-jvm-");
+            Process a=null,b=null;
+            try {
+                var secret=writeQr06bSecret(dir,issued.rawProof());
+                var gate=dir.resolve("gate");
+                var readyA=dir.resolve("ready-a");
+                var readyB=dir.resolve("ready-b");
+                a=startQr06bWorker("LOAD_"+(total/2),c,secret.toString(),
+                        initialVersion,key(),readyA,gate,dir.resolve("a.log"));
+                b=startQr06bWorker("LOAD_"+(total/2),c,secret.toString(),
+                        initialVersion,key(),readyB,gate,dir.resolve("b.log"));
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
+                while(!java.nio.file.Files.exists(readyA)||!java.nio.file.Files.exists(readyB)) {
+                    if(!a.isAlive()||!b.isAlive())
+                        throw new AssertionError("Distributed JVM bootstrap failed. A="+
+                                qr06bDiagnostics(dir.resolve("a.log"),issued.rawProof())+
+                                " B="+qr06bDiagnostics(dir.resolve("b.log"),issued.rawProof()));
+                    if(System.nanoTime()>deadline)
+                        throw new AssertionError("Distributed JVM startup timeout");
+                    Thread.sleep(30);
+                }
+                long begin=System.nanoTime();
+                java.nio.file.Files.writeString(gate,"GO");
+                int resultA=waitQr06bProcess(a,dir.resolve("a.log"));
+                int resultB=waitQr06bProcess(b,dir.resolve("b.log"));
+                assertThat(resultA).withFailMessage(()->
+                        qr06bDiagnostics(dir.resolve("a.log"),issued.rawProof())).isZero();
+                assertThat(resultB).withFailMessage(()->
+                        qr06bDiagnostics(dir.resolve("b.log"),issued.rawProof())).isZero();
+                assertExactlyOneHandover(c,o,2);
+                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+                System.out.printf(java.util.Locale.ROOT,
+                        "QR06B_B31_DISTRIBUTED clients=%d jvms=2 completed=1 "+
+                        "rejected=%d elapsed_ms=%d%n",
+                        total,total-1,TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-begin));
+            } finally {
+                if(a!=null&&a.isAlive())a.destroyForcibly();
+                if(b!=null&&b.isAlive())b.destroyForcibly();
+                for(String file:List.of("credential","gate","ready-a","ready-b","a.log","b.log"))
+                    java.nio.file.Files.deleteIfExists(dir.resolve(file));
+                java.nio.file.Files.deleteIfExists(dir);
+            }
+        }
+    }
+
 }
