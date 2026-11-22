@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
+import urllib.parse
 import zipfile
 from io import BytesIO
 import xml.etree.ElementTree as ET
@@ -48,12 +49,22 @@ REQUIRED_CASES = {
     },
 }
 
+class SafeArtifactRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not forward the GitHub token to an artifact storage redirect host."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and (
+                urllib.parse.urlsplit(req.full_url).netloc
+                != urllib.parse.urlsplit(newurl).netloc):
+            redirected.remove_header("Authorization")
+        return redirected
+
 def api(url, token):
     req = urllib.request.Request(
         url, headers={"Authorization": "Bearer " + token,
                       "Accept": "application/vnd.github+json",
                       "X-GitHub-Api-Version": "2022-11-28"})
-    with urllib.request.urlopen(req, timeout=60) as response:
+    with urllib.request.build_opener(SafeArtifactRedirect()).open(req, timeout=60) as response:
         return response.read()
 
 def verify():
