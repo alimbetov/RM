@@ -1,6 +1,6 @@
 # RM QR-07/R2.5 — Physical Return Hardening
 
-**Date:** 2026-11-22. **Branch:** `base_dev`. **Latest code candidate:** `77baf4c24d16cd98273a98874aca43074cba11ef`. **Admission:** HOLD pending exact-SHA PostgreSQL and full regression. Production HOLD.
+**Date:** 2026-11-22. **Branch:** `base_dev`. **Latest code candidate:** `8a171f31ff6e4d2ebb7c8eeab7658298a40b6e2d`. **Admission:** HOLD pending exact-SHA PostgreSQL and full regression. Production HOLD.
 
 ## Added physical return controls
 
@@ -11,7 +11,7 @@
 
 ## Qualification plans
 
-**Current exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45048617338; two jobs, `qr07-r0-postgresql` and `qr07-full-postgresql-regression`. Both required for full R2.5 technical closure.
+**Current exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45048873534; two jobs, `qr07-r0-postgresql` and `qr07-full-postgresql-regression`. Both required for full R2.5 technical closure.
 
 Tests: immutable RESTOCK and WRITE_OFF baseline, QUARANTINE exact quantity and zero sellable-stock delta, multiple returns aggregated by SKU, foreign staff/scope, revoke `SALES_RETURN_POST` and `INVENTORY_RECEIVE`, invalid/rotated/replayed physical proof, 2 JVM race, hard process crash before/after COMMIT.
 
@@ -42,3 +42,9 @@ Quarantine *intake*, segregated balances, and **append-only release/disposal exi
 - **Latest source SHA above requires a fresh complete CI result.** The full-project PostgreSQL job can be slow; its status is independent of focused return tests.
 
 **QR-08** remains specification-only until QR-07/R2.5 full correctness qualification. See `docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md`.
+
+## Whole-project PostgreSQL evidence from earlier exact SHA
+
+The first full `mvn test` PostgreSQL 17 workflow ran **522 tests, 0 failed assertions, 1 test error, 18 skips** at an earlier candidate SHA. The one error was the test-only `Set.of(item,itemTwo)` fixture, which could contain duplicate randomly generated SKU; fixed by deduplicating with a mutable set. This historical result is a **FAIL**, not a current production gate. Follow-on candidates showed a failed negative IAM case caused by passing a malformed legacy `SCAN_004` string after the service started enforcing 43-character Base64URL. That fixture has been changed to pass a correctly shaped invalid proof so the intended IAM gate is actually reached.
+
+The current code SHA above adds independent quarantine restock/dispose exit and is the only source revision eligible for R2.5 admission. Its dedicated and full PostgreSQL jobs must both finish GREEN. Earlier failures and runs still underway never count toward that admission.
