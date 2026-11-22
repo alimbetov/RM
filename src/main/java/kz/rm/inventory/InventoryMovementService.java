@@ -97,6 +97,15 @@ public class InventoryMovementService {
             return old;
         }
 
+        // Transfer and single-leg movement request keys share the tenant-wide
+        // idempotency namespace. The request stripe above serializes both writers.
+        Integer transferKeyCount=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_transfer
+            WHERE tenant_id=? AND request_key=?
+            """,Integer.class,tenantId,requestKey);
+        if(transferKeyCount!=null && transferKeyCount>0)
+            throw new IllegalArgumentException("Movement key belongs to an existing transfer");
+
         // First check under tenant request-key fence; idempotent retries above
         // are replayable even after closing a warehouse or archiving the SKU.
         // Lock owner reference rows before stock for race-safe ACTIVE PRODUCT check.
