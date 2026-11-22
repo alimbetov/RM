@@ -18,7 +18,7 @@ class FilesR10aQualificationTest {
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
     @Autowired OrganizationMembershipRepository memberships;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
     @Autowired AuthenticatedFilesCommands files;
     @Autowired AuthenticatedFilesQueries queries;
     @Autowired JdbcTemplate jdbc;
@@ -50,13 +50,13 @@ class FilesR10aQualificationTest {
         return new OidcActorResolver(decoder,users).resolve("synthetic-files-token");
     }
     private void enable(Setup s) {
-        var role=roles.createRole(s.owner(),s.tenant(),
+        var role=roles.createRole(verified(s.owner()),s.tenant(),
                 "FILE_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "Synthetic file operator");
-        roles.grant(s.owner(),s.tenant(),role.id(),DomainPermission.FILES_UPLOAD);
-        roles.grant(s.owner(),s.tenant(),role.id(),DomainPermission.FILES_READ);
-        roles.assign(s.owner(),s.tenant(),s.employee(),role.id());
-        roles.enable(s.owner(),s.tenant());
+        roles.grant(verified(s.owner()),s.tenant(),role.id(),DomainPermission.FILES_UPLOAD);
+        roles.grant(verified(s.owner()),s.tenant(),role.id(),DomainPermission.FILES_READ);
+        roles.assign(verified(s.owner()),s.tenant(),s.employee(),role.id());
+        roles.enable(verified(s.owner()),s.tenant());
     }
 
     @Test void legacyModeDeniesFilesIncludingOrganizationOwner() {
