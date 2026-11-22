@@ -269,6 +269,98 @@ class CrmInteractionQualificationTest {
                 """,Integer.class,t.tenantId(),entry.id())).isEqualTo(events);
     }
 
+    /**
+     * CRM-U03: an employee must not infer consent from contact existence;
+     * purpose-scoped grant/revoke events stay immutable and are idempotent.
+     * This is NOT marketing dispatch qualification.
+     */
+    @Test void crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents() {
+        var a=tenant();
+        var b=tenant();
+        var actor=verified(a.actorId());
+        var foreign=verified(b.actorId());
+        var customer=customers.createCompany(actor,a.tenantId(),"Consent Journey",null);
+        var contact=customers.addContact(actor,a.tenantId(),customer.id(),
+                "Private contact","journey-"+UUID.randomUUID()+"@example.kz",null);
+        assertThat(queries.hasEmailConsent(actor,a.tenantId(),contact.id(),"updates")).isFalse();
+        String grantKey="crm-grant-"+UUID.randomUUID();
+        UUID grant=customers.recordEmailConsentOnce(actor,a.tenantId(),contact.id(),true,
+                "updates","v1","EMPLOYEE",grantKey);
+        assertThat(customers.recordEmailConsentOnce(actor,a.tenantId(),contact.id(),true,
+                "updates","v1","EMPLOYEE",grantKey)).isEqualTo(grant);
+        assertThat(queries.hasEmailConsent(actor,a.tenantId(),contact.id(),"updates")).isTrue();
+        assertThat(queries.hasEmailConsent(actor,a.tenantId(),contact.id(),"marketing")).isFalse();
+        assertThatThrownBy(()->customers.recordEmailConsentOnce(actor,a.tenantId(),contact.id(),
+                false,"updates","v1","EMPLOYEE",grantKey))
+                .isInstanceOf(IllegalArgumentException.class);
+        UUID revoked=customers.recordEmailConsentOnce(actor,a.tenantId(),contact.id(),false,
+                "updates","v1","EMPLOYEE","crm-revoke-"+UUID.randomUUID());
+        assertThat(revoked).isNotEqualTo(grant);
+        assertThat(queries.hasEmailConsent(actor,a.tenantId(),contact.id(),"updates")).isFalse();
+        assertThatThrownBy(()->queries.hasEmailConsent(foreign,a.tenantId(),
+                contact.id(),"updates")).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event
+                WHERE tenant_id=? AND contact_id=? AND purpose='updates'
+                """,Integer.class,a.tenantId(),contact.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event
+                WHERE tenant_id=? AND contact_id=? AND purpose='updates'
+                """,Integer.class,b.tenantId(),contact.id())).isZero();
+    }
+
+    /**
+     * CRM-U11: active contracts fence archive; rejected archive has zero
+     * customer-history delta. Restoring a legitimately archived client
+     * preserves its contacts and interaction timeline.
+     */
+    @Test void crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline() {
+        var a=tenant();
+        var actor=verified(a.actorId());
+        var customer=customers.createCompany(actor,a.tenantId(),"Lifecycle Journey",null);
+        var contact=customers.addContact(actor,a.tenantId(),customer.id(),
+                "Lifecycle Contact",null,null);
+        var interaction=interactions.record(actor,a.tenantId(),customer.id(),contact.id(),
+                CrmInteractionService.Kind.CALL,a.actorId(),
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "lifecycle-"+UUID.randomUUID());
+        LocalDate today=LocalDate.of(2026,11,22);
+        var contract=contracts.create(actor,a.tenantId(),customer.id(),
+                "LC-"+UUID.randomUUID(),today,today.plusDays(45),today);
+        contracts.changeStatus(actor,a.tenantId(),contract.id(),
+                CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today);
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_change_event
+                WHERE tenant_id=? AND customer_id=?
+                """,Integer.class,a.tenantId(),customer.id());
+        assertThatThrownBy(()->customers.archiveCustomer(actor,a.tenantId(),
+                customer.id(),0)).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_change_event
+                WHERE tenant_id=? AND customer_id=?
+                """,Integer.class,a.tenantId(),customer.id())).isEqualTo(before);
+        assertThat(queries.customerStatus(actor,a.tenantId(),customer.id()))
+                .isEqualTo(CrmCustomerEntity.Status.ACTIVE);
+
+        var withoutContract=customers.createCompany(actor,a.tenantId(),
+                "Archive Allowed",null);
+        var retainedContact=customers.addContact(actor,a.tenantId(),withoutContract.id(),
+                "Retained PII",null,null);
+        customers.archiveCustomer(actor,a.tenantId(),withoutContract.id(),0);
+        assertThat(queries.customerStatus(actor,a.tenantId(),withoutContract.id()))
+                .isEqualTo(CrmCustomerEntity.Status.ARCHIVED);
+        assertThatThrownBy(()->queries.getContact(actor,a.tenantId(),retainedContact.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        customers.restoreCustomer(actor,a.tenantId(),withoutContract.id(),1);
+        assertThat(queries.getContact(actor,a.tenantId(),retainedContact.id()).name())
+                .isEqualTo("Retained PII");
+        assertThat(history.customerHistory(actor,a.tenantId(),withoutContract.id(),10))
+                .extracting(CrmHistoryService.CustomerChange::action)
+                .containsExactly("RESTORED","ARCHIVED");
+        assertThat(interactions.get(actor,a.tenantId(),interaction.id()).customerId())
+                .isEqualTo(customer.id());
+    }
+
     @Test void postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified()
             throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
