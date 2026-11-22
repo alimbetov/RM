@@ -298,4 +298,83 @@ class AutoOrderR1QualificationTest {
                 .isInstanceOf(SecurityException.class);
     }
 
+
+    @Test void sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice() {
+        Store store=store();
+        String email="snapshot-"+UUID.randomUUID()+"@example.kz";
+        var created=orders.checkout(store.slug(),email,"sale08-capture-001",
+                List.of(new AutoOrderService.Line(store.offerId(),2)));
+        UUID orderId=created.order().orderId();
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,store.tenantId(),orderId)).isEqualTo(store.itemId());
+        jdbc.update("""
+                UPDATE crm.store_offer
+                SET title='New title',unit_price=999
+                WHERE tenant_id=? AND id=?
+                """,store.tenantId(),store.offerId());
+        var accepted=jdbc.queryForMap("""
+                SELECT title_snapshot,unit_price_snapshot,quantity,currency
+                FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+                """,store.tenantId(),orderId);
+        assertThat(accepted.get("title_snapshot")).isEqualTo("Notebook");
+        assertThat((BigDecimal)accepted.get("unit_price_snapshot"))
+                .isEqualByComparingTo("125.2500");
+        assertThat(accepted.get("currency")).isEqualTo("KZT");
+        assertThat(orders.checkout(store.slug(),email,"sale08-capture-001",
+                List.of(new AutoOrderService.Line(store.offerId(),2)))
+                .order().orderId()).isEqualTo(orderId);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,store.tenantId(),orderId)).isEqualTo(1);
+    }
+
+    @Test void sale08RejectsUnmappedAndArchivedOffersBeforeEmailOrOrderSideEffects() {
+        Store store=store();
+        String email="unmapped-"+UUID.randomUUID()+"@example.kz";
+        jdbc.update("""
+                UPDATE crm.store_offer SET catalog_item_id=NULL WHERE tenant_id=? AND id=?
+                """,store.tenantId(),store.offerId());
+        assertThatThrownBy(()->orders.checkout(store.slug(),email,"sale08-unmapped-001",
+                List.of(new AutoOrderService.Line(store.offerId(),1))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Offer unavailable");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
+                """,Integer.class,store.tenantId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_identity WHERE lookup_hmac=?
+                """,Integer.class,crypto.lookup(email))).isZero();
+
+        jdbc.update("""
+                UPDATE crm.store_offer SET catalog_item_id=? WHERE tenant_id=? AND id=?
+                """,store.itemId(),store.tenantId(),store.offerId());
+        jdbc.update("""
+                UPDATE crm.cat_item SET state='ARCHIVED'
+                WHERE tenant_id=? AND id=?
+                """,store.tenantId(),store.itemId());
+        assertThatThrownBy(()->orders.checkout(store.slug(),email,"sale08-archived-001",
+                List.of(new AutoOrderService.Line(store.offerId(),1))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
+                """,Integer.class,store.tenantId())).isZero();
+    }
+
+    @Test void sale08ServiceSkuCannotEnterPhysicalStockCheckout() {
+        Store store=store();
+        jdbc.update("""
+                UPDATE crm.cat_item SET kind='SERVICE' WHERE tenant_id=? AND id=?
+                """,store.tenantId(),store.itemId());
+        assertThatThrownBy(()->orders.checkout(store.slug(),
+                "service-"+UUID.randomUUID()+"@example.kz","sale08-service-001",
+                List.of(new AutoOrderService.Line(store.offerId(),1))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("published PRODUCT");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
+                """,Integer.class,store.tenantId())).isZero();
+    }
 }
