@@ -4,7 +4,7 @@
 **Branch:** `base_dev`; no controller changes or modifications to `main`.
 **Exact tested SHA:** `4e87392619f98f7adcc27eea17253b457fb165be`
 **GitHub Actions run:** https://github.com/alimbetov/RM/actions/runs/45035614955
-**Evidence job:** `qr06b-b31-mixed-load` — SUCCESS.
+**Evidence jobs:** `qr06b-b31-mixed-load` — SUCCESS; `qr06b-postgresql` — SUCCESS.
 **Source:** `QrWarehouseHandoverQualificationTest` / `QrHandoverProcessWorker`, test-only.
 **Release decision:** B3.1 defined scenario set PASS; whole QR-06B and production admission **HOLD**.
 
@@ -57,3 +57,13 @@ Two independent JVMs with their own Spring contexts, JDBC pools and 50/125 concu
 **B3.2 — Capacity & mixed operations:** use many independently fulfillable orders, sustained load (duration-controlled, per-outcome latency), hot and cold warehouse SKUs, receive/correct/writeoff/transfer against reserve/fulfill, long movement chains, separate tenant cohorts, 2+ application instances. Document transaction deadlocks, retries, DB locks, connection pool saturation and p95/p99 by outcome.
 
 **B4 — External integration and release admission:** proxy-injected broken response both before and after COMMIT; true OIDC revocation, HTTPS canonical domain and actual scanners; user-approved policy and meaningful SLO thresholds against fixed hardware. Remain HOLD until proven.
+
+## Regression gate on the same exact SHA
+
+The companion job `qr06b-postgresql` completed **SUCCESS** at the same source SHA and produced Maven evidence: `QrWarehouseHandoverQualificationTest` 27 tests, `TenantRbacRevocationQualificationTest` 11 tests; total **38 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**. This includes previously admitted B1, B2 and B3 entry profiles plus the three B3.1 methods.
+
+## SLO decision record
+
+**Provisional UAT performance envelope (not an approved SLO):** the slowest of six observed multi-order 100/250 runs has p99 = 633 ms for all attempts, including business conflicts. A prospective repeatable CI alert level of p99 1000 ms for this *specific synthetic load shape* is proposed for engineering review, with explicit outcome labeling; it is **not** yet enforced as a hard CI gate and not an external customer commitment.
+
+Production SLO must be based on many independent successful orders per second, fixed hardware/connection pools, sustained warm measurements and p95/p99 by success/denial/technical error before it is approved. Do not use the measured attempts/sec as completed-order throughput. Zero duplicate/partial/unauthorized completion remains a mandatory correctness gate, not an SLO percentile.
