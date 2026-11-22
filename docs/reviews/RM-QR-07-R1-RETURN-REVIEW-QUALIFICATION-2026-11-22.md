@@ -2,9 +2,10 @@
 
 **Date:** 2026-11-22
 **Branch:** `base_dev`; no new controllers, no `main` merge.
-**Qualified exact source SHA:** `ebdd8971195c2ba1bc3205f8ffff83cb6f8e44eb`.
-**Dedicated exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45042596024
-**Admission:** QR-07/R0+R1 dedicated PostgreSQL gate **PASS**; separate full-project same-SHA regression unverified, QR-07/R2 and production remain HOLD.
+**Qualified exact source SHA (H2 plus QR07 PostgreSQL):** `56d0bc07c850b20889de1a8b0f5d9fb6f7c04db1`.
+**Dedicated exact-SHA PostgreSQL CI:** https://github.com/alimbetov/RM/actions/runs/45042824037
+**Same-SHA H2 module CI:** https://github.com/alimbetov/RM/actions/runs/45042823930
+**Admission:** QR-07/R0+R1 PostgreSQL **PASS** and module H2 **PASS**. Full-project PostgreSQL suite not established (module PG job skipped). QR-07/R2 and production HOLD.
 
 ## Implemented R1 contract
 
@@ -50,3 +51,16 @@ The corrected code SHA `ebdd8971195c2ba1bc3205f8ffff83cb6f8e44eb` is qualified b
 - immutable decision event and live tenant RBAC negative checks exercised.
 
 **Scope caveat:** Ten test methods establish only tested service behaviors; this is not the complete 20+ case business qualification or the independent full regression. R2 stock movements, external OIDC and production release still HOLD. R1 30-day eligibility and `UAT_1` methodology are provisional, not commercial policy.
+
+## H2 migration portability defect and qualified resolution
+
+A prior exact-SHA PostgreSQL R0/R1 test job at `ebdd8971195c2ba1bc3205f8ffff83cb6f8e44eb` achieved **10/10 PASS**, but the parallel H2 module runner failed while applying changeset `0097`. H2 2.4 rejected PostgreSQL's multi-column `ALTER TABLE ... ADD COLUMN a, ADD COLUMN b` syntax. In turn, 96 tests encountered an ApplicationContext initialization failure, not a return-service failure. The migration was refactored into single-column `ALTER TABLE` commands and single-constraint commands, preserving PostgreSQL semantics.
+
+**Final qualified source SHA:** `56d0bc07c850b20889de1a8b0f5d9fb6f7c04db1`.
+
+- Dedicated PostgreSQL 17 QR-07 R0/R1 job: https://github.com/alimbetov/RM/actions/runs/45042824037; **10 tests; 0 failures/errors/skips; BUILD SUCCESS**.
+- H2 module job: https://github.com/alimbetov/RM/actions/runs/45042823930; **96 tests; 0 failures; 0 errors; 12 skipped; BUILD SUCCESS**. The skips are declared test-specific skips; they are **not** PostgreSQL evidence.
+- The same module workflow's broader `module-postgresql` job was **SKIPPED**, so the full RM PostgreSQL integration test matrix is **not qualified** by this H2 result. The dedicated 10-case QR07 PG job is the precise PG scope.
+- No new controller or change to `main`, no stock return/restock posting, no refund, no QR08 implementation.
+
+**Current technical decision: R0/R1 service-level PASS, full project production admission HOLD.** Policy `UAT_1`, 30-day eligibility and the return reason allowlist remain product-policy items requiring independent approval before commercial admission.
