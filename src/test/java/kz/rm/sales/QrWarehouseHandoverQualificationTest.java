@@ -44,6 +44,7 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired SalesReturnReviewService returnReview;
     @Autowired SalesReturnPhysicalService returnPhysical;
     @Autowired SalesReturnReceptionProofService returnProof;
+    @Autowired SalesReturnQuarantineResolutionService quarantineResolution;
     @Autowired SalesInventoryCommandService sales;
     @Autowired SalesOrderQrReferenceService orderRefs;
     @Autowired WarehouseStaffScopeService scopes;
@@ -3062,6 +3063,93 @@ class QrWarehouseHandoverQualificationTest {
         assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),
                 c.warehouse(),claim.requestId(),5,key()))
                 .isInstanceOf(SecurityException.class);
+    }
+
+
+    private SalesReturnRequestService.Created qr07R25Quarantined(Context c,Order o){
+        var claim=qr07R2Approved(c,o,2);
+        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,qr07PhysicalProof(c,claim.requestId()),key());
+        returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),4,SalesReturnPhysicalService.Disposition.QUARANTINE,
+                "INSPECT_Q_EXIT",key());
+        assertThat(returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),5,key()).state()).isEqualTo("QUARANTINED");
+        return claim;
+    }
+
+    @Test void qr07R25QuarantineReleaseRestocksExactlyOnceAndLeavesOriginalReceipt()
+            throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R25Quarantined(c,o);
+        UUID item=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal sellable=stock(c,item,"on_hand");
+        String requestKey=key();
+        var out=quarantineResolution.resolve(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.RESTOCK,
+                "QA_RELEASE_PASS",requestKey);
+        assertThat(out.state()).isEqualTo("RESTOCKED");
+        assertThat(out.stockMovementId()).isNotNull();
+        assertThat(quarantineResolution.resolve(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.RESTOCK,
+                "QA_RELEASE_PASS",requestKey).resolutionId())
+                .isEqualTo(out.resolutionId());
+        assertThat(stock(c,item,"on_hand"))
+                .isEqualByComparingTo(sellable.add(BigDecimal.valueOf(2)));
+        assertThat(jdbc.queryForObject("""
+                SELECT quantity FROM crm.inv_return_quarantine_balance
+                WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),item))
+                .isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_quarantine_resolution
+                WHERE tenant_id=? AND return_id=? AND stock_movement_id IS NOT NULL
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+        assertExactlyOneHandover(c,o,1);
+    }
+
+    @Test void qr07R25QuarantineDisposalCannotLeakIntoSellableStock() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R25Quarantined(c,o);
+        UUID item=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal initial=stock(c,item,"on_hand");
+        assertThatThrownBy(()->quarantineResolution.resolve(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.DISPOSE,
+                "QA_DESTROYED",key())).isInstanceOf(SecurityException.class);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.INVENTORY_ADJUST);
+        String req=key();
+        var resolution=quarantineResolution.resolve(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.DISPOSE,
+                "QA_DESTROYED",req);
+        assertThat(resolution.state()).isEqualTo("DISPOSED");
+        assertThat(resolution.stockMovementId()).isNull();
+        assertThat(stock(c,item,"on_hand")).isEqualByComparingTo(initial);
+        assertThat(jdbc.queryForObject("""
+                SELECT quantity FROM crm.inv_return_quarantine_balance
+                WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),item))
+                .isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_quarantine_resolution
+                WHERE tenant_id=? AND return_id=? AND action_code='DISPOSE'
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+        assertThatThrownBy(()->quarantineResolution.resolve(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.RESTOCK,
+                "QA_DESTROYED",req))
+                .hasMessageContaining("QUARANTINE_REPLAY_CONFLICT");
     }
 
 }
