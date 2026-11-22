@@ -57,3 +57,54 @@ Baseline `81c6a4abb7e46f717d9b73e3f13a41a225f09c7c`, branch `base_dev`. The inve
 | `sales/AuthenticatedSalesQueries.search` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
 
 Source files: 12; indexed public methods: 51. `PRESENT` means only found in source. Never infer TESTED or QUALIFIED without exact SHA evidence.
+
+## Part B — INVENTORY / IAM / AutoOrder
+
+These methods may deliberately have other trust boundaries than `VerifiedActor`; manually trace authentication and object ownership before declaring bypass.
+
+| Public method | Trusted actor arg | Explicit tenant arg | Permission/SQL/JOIN evidence | Status |
+|---|---|---|---|---|
+| `inventory/AuthenticatedInventoryCommands.receive` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `inventory/AuthenticatedInventoryCommands.correct` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `inventory/AuthenticatedInventoryQueries.search` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.TenantRole` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.createRole` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.grant` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.revoke` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.assign` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.unassign` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.enable` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.setRoleActive` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.listGrants` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.RoleAssignment` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.listAssignments` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantRoleService.listRoles` | review | explicit | TRACE REQUIRED | PRESENT |
+| `iam/PlatformTenantBootstrapService.OrganizationAccess` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/PlatformTenantBootstrapService.provision` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantMemberEnrollmentService.Member` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantMemberEnrollmentService.invite` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantMemberEnrollmentService.accept` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantMemberEnrollmentService.list` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantOwnershipTransferService.Transfer` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantOwnershipTransferService.requestTransfer` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantOwnershipTransferService.acceptTransfer` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/TenantOwnershipTransferService.cancelTransfer` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/MyAccessService.Tenant` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/MyAccessService.myTenants` | VerifiedActor | review | TRACE REQUIRED | PRESENT |
+| `iam/MyAccessService.myGlobalRoles` | VerifiedActor | review | TRACE REQUIRED | PRESENT |
+| `iam/MyAccessService.myFunctionalRoles` | VerifiedActor | explicit | TRACE REQUIRED | PRESENT |
+| `iam/GlobalUserProfileService.Profile` | VerifiedActor | review | TRACE REQUIRED | PRESENT |
+| `iam/GlobalUserProfileService.myProfile` | VerifiedActor | review | TRACE REQUIRED | PRESENT |
+| `iam/GlobalUserProfileService.saveOwnProfile` | VerifiedActor | review | TRACE REQUIRED | PRESENT |
+| `autoorder/AutoOrderService.Line` | review | review | TRACE REQUIRED | PRESENT |
+| `autoorder/AutoOrderService.OrderReceipt` | review | review | TRACE REQUIRED | PRESENT |
+| `autoorder/AutoOrderService.CheckoutResult` | review | review | TRACE REQUIRED | PRESENT |
+| `autoorder/AutoOrderService.checkout` | review | review | TRACE REQUIRED | PRESENT |
+| `autoorder/AutoOrderService.verifyEmail` | review | review | TRACE REQUIRED | PRESENT |
+| `autoorder/AutoOrderService.buyerOrders` | review | review | TRACE REQUIRED | PRESENT |
+
+Part B: 9 additional Java files, 38 signatures. Total indexed: 89. For exact permission and test mapping this remains an open investigative task; no QUALIFIED assertion is made.
+
+## Confirmed TCRUD-02 gap / proposed minimum fix
+
+`AuthenticatedCrmCommands.createPerson/updatePerson/addContact/updateContact` currently expose `CrmCustomerService.Customer.name` or `Contact.name/email/phone` from `CRM_WRITE` command paths without an independent `CRM_PII_READ` check. Fix the **authenticated facade boundary** so mutation results contain IDs and safe metadata only. Do not change internal write logic, ciphertext, SQL, audit or transaction structure. Test write-only tenant roles and read-side PII denial in PostgreSQL and H2.
