@@ -1,6 +1,8 @@
 package kz.rm.storefront;
 
 import kz.rm.iam.VerifiedActor;
+import kz.rm.iam.TenantAuthorization;
+import kz.rm.iam.DomainPermission;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +24,15 @@ public class SellerOfferService {
     public record Storefront(UUID tenantId, UUID id, String slug, String state, long rowVersion) {}
 
     private final JdbcTemplate jdbc;
+    private final TenantAuthorization authorization;
     private final StorefrontOfferService offers;
     private final StorefrontManagementService storefronts;
 
     public SellerOfferService(JdbcTemplate jdbc, StorefrontOfferService offers,
-                              StorefrontManagementService storefronts) {
+                              StorefrontManagementService storefronts,
+                              TenantAuthorization authorization) {
         this.jdbc=jdbc;
+        this.authorization=authorization;
         this.offers=offers;
         this.storefronts=storefronts;
     }
@@ -64,7 +69,8 @@ public class SellerOfferService {
 
     @Transactional
     public Storefront createStorefrontDraft(VerifiedActor actor,UUID tenant,String slug) {
-        if(actor==null)throw new SecurityException("Verified actor required");
+        if(actor==null || tenant==null)throw new SecurityException("Verified actor and tenant required");
+        authorization.requireForCommand(actor.userId(),tenant,DomainPermission.STOREFRONT_OFFER_MANAGE);
         if(jdbc.queryForObject("SELECT count(*) FROM crm.store_front WHERE tenant_id=?",
                 Integer.class,tenant)>0)
             throw new IllegalStateException("Tenant storefront already exists");
@@ -116,6 +122,7 @@ public class SellerOfferService {
         StorefrontOfferService.Offer before=offers.get(actor,tenant,offerId);
         if(before.rowVersion()!=expectedVersion)
             throw new IllegalStateException("OFFER_VERSION_CONFLICT");
+        if(amount==null)throw new IllegalArgumentException("OFFER_INVALID_PRICE");
         if(before.unitPrice().compareTo(amount)==0 && before.currency().equals(isoCurrency))
             throw new IllegalArgumentException("Offer price unchanged");
         try {
@@ -129,7 +136,10 @@ public class SellerOfferService {
     @Transactional
     public Storefront changeStorefrontState(VerifiedActor actor,UUID tenant,
                                             long expectedVersion,String target) {
-        if(actor==null)throw new SecurityException("Verified actor required");
+        if(actor==null || tenant==null)throw new SecurityException("Verified actor and tenant required");
+        authorization.requireForCommand(actor.userId(),tenant,
+                "PUBLISHED".equals(target) ? DomainPermission.STOREFRONT_OFFER_PUBLISH
+                    : DomainPermission.STOREFRONT_OFFER_MANAGE);
         UUID id=storefrontId(tenant);
         try {
             return asStorefront(switch(target==null?"":target) {
