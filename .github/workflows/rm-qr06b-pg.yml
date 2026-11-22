@@ -13,6 +13,12 @@ on:
       - 'src/main/resources/db/changelog/**'
       - '.github/workflows/rm-qr06b-pg.yml'
   workflow_dispatch:
+    inputs:
+      extended_b35:
+        description: "Run additional 4 x 120-second B3.5 JIT workload stages"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -281,7 +287,7 @@ jobs:
 
   qr06b-b35-rate-steps:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:17
@@ -320,6 +326,20 @@ jobs:
           mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr06b-classpath.txt
           export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr06b-classpath.txt)"
           mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB35*' test 2>&1 | tee target/qr06b-b35-evidence/console.log
+      - name: Optional 4 x 120-second sustained JIT QR rate stages
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_b35 }}
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+          RM_TEST_DB_USERNAME: rm
+          RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+        run: |
+          set -o pipefail
+          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr06b-classpath.txt)"
+          mvn -B -ntp -Drm.qr06b.b35.levelSeconds=120 '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB35*' test 2>&1 | tee -a target/qr06b-b35-evidence/console.log
           grep '^QR06B_B35_' target/qr06b-b35-evidence/console.log > target/qr06b-b35-evidence/metrics.txt
           printf '%s\n' "${GITHUB_SHA}" > target/qr06b-b35-evidence/exact-sha.txt
       - name: Upload exact-SHA B3.5 evidence
