@@ -1074,8 +1074,8 @@ class CrmR1aQualificationTest {
                 "Old B","b@example.kz","+77002002020");
         var updated=secureCommands.updateContact(actorA,a.tenantId(),ca.id(),
                 "New A","new@example.kz",null,0);
-        assertThat(updated.name()).isEqualTo("New A");
-        assertThat(updated.email()).isEqualTo("new@example.kz");
+        assertThat(updated.name()).isNull();
+        assertThat(updated.email()).isNull();
         assertThat(secureQueries.getContact(actorA,a.tenantId(),ca.id()).name()).isEqualTo("New A");
         var envelope=jdbc.queryForObject("""
             SELECT name_envelope FROM crm_pii.contact_secret WHERE tenant_id=? AND contact_id=?
