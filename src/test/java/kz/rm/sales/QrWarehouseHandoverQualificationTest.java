@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.*;
 class QrWarehouseHandoverQualificationTest {
     @Autowired SalesOrderPreparationService prep;
     @Autowired SalesPickupHandoverService pickup;
+    @Autowired SalesReturnRequestService returns;
     @Autowired SalesInventoryCommandService sales;
     @Autowired SalesOrderQrReferenceService orderRefs;
     @Autowired WarehouseStaffScopeService scopes;
@@ -2275,6 +2276,102 @@ class QrWarehouseHandoverQualificationTest {
                 java.nio.file.Files.deleteIfExists(folder.resolve(name));
             java.nio.file.Files.deleteIfExists(folder);
         }
+    }
+
+
+    /** QR-07/R0 PostgreSQL: original fulfillment is immutable, a partial
+     * return is only a CLAIM and must not increase inventory. */
+    @Test void qr07R0ReturnPartialReplayAndOverReturnProtectsReceipt() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),
+                true,version(c,o),key());
+        UUID source=o.lines().getFirst();
+        String requestKey=key();
+        var first=returns.request(c.buyer(),o.publicRef(),source,2,
+                "DAMAGED","UAT_1",requestKey);
+        assertThat(first.state()).isEqualTo("REQUESTED");
+        assertThat(returns.request(c.buyer(),o.publicRef(),source,2,
+                "DAMAGED","UAT_1",requestKey).requestId())
+                .isEqualTo(first.requestId());
+        assertThatThrownBy(()->returns.request(c.buyer(),o.publicRef(),source,3,
+                "DAMAGED","UAT_1",requestKey))
+                .hasMessageContaining("RETURN_IDEMPOTENCY_CONFLICT");
+        returns.request(c.buyer(),o.publicRef(),source,3,
+                "DAMAGED","UAT_1",key());
+        assertThatThrownBy(()->returns.request(c.buyer(),o.publicRef(),source,1,
+                "DAMAGED","UAT_1",key()))
+                .hasMessageContaining("RETURN_QUANTITY_EXCEEDS_FULFILLED");
+        assertExactlyOneHandover(c,o,2);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_request
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND event_type='REQUESTED'
+                """,Integer.class,c.tenant())).isEqualTo(2);
+    }
+
+    @Test void qr07R0RejectsUncompletedOrForeignBuyerBeforeAnyReturnWrite() throws Exception {
+        requirePostgres();
+        var c=context();var other=context();var o=ready(c,true);
+        assertThatThrownBy(()->returns.request(c.buyer(),o.publicRef(),
+                o.lines().getFirst(),1,"DAMAGED","UAT_1",key()))
+                .hasMessageContaining("RETURN_SOURCE_NOT_COMPLETED");
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),
+                true,version(c,o),key());
+        assertThatThrownBy(()->returns.request(other.buyer(),o.publicRef(),
+                o.lines().getFirst(),1,"DAMAGED","UAT_1",key()))
+                .isInstanceOfAny(SecurityException.class,IllegalStateException.class);
+        assertThatThrownBy(()->returns.request(c.buyer(),o.publicRef(),
+                UUID.randomUUID(),1,"DAMAGED","UAT_1",key()))
+                .hasMessageContaining("RETURN_LINE_NOT_FULFILLED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_request WHERE tenant_id=?
+                """,Integer.class,c.tenant())).isZero();
+    }
+
+    @Test void qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),
+                true,version(c,o),key());
+        var barrier=new CountDownLatch(2);
+        var go=new CountDownLatch(1);
+        int accepted=0,rejected=0;
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var futures=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(int i=0;i<2;i++)futures.add(pool.submit(()->{
+                barrier.countDown();
+                if(!go.await(15,TimeUnit.SECONDS))throw new IllegalStateException("BARRIER");
+                try {
+                    returns.request(c.buyer(),o.publicRef(),o.lines().getFirst(),
+                            4,"DAMAGED","UAT_1",key());
+                    return true;
+                }catch(IllegalStateException expected){
+                    if(!expected.getMessage().contains("RETURN_QUANTITY_EXCEEDS_FULFILLED"))
+                        throw expected;
+                    return false;
+                }
+            }));
+            assertThat(barrier.await(15,TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            for(var future:futures)if(future.get(60,TimeUnit.SECONDS))accepted++;else rejected++;
+        }finally{go.countDown();}
+        assertThat(accepted).isEqualTo(1);
+        assertThat(rejected).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT COALESCE(SUM(rl.quantity),0)
+                FROM crm.sales_return_line rl
+                WHERE tenant_id=? AND order_id=? AND order_line_id=?
+                """,Integer.class,c.tenant(),o.id(),o.lines().getFirst())).isEqualTo(4);
+        assertExactlyOneHandover(c,o,1);
     }
 
 }
