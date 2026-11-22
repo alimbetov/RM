@@ -2,8 +2,8 @@
 
 **Тип:** комплексное техническое задание / dependency-aware execution plan / service-only qualification contract.  
 **Дата:** 2026-11-23. **Репозиторий:** `alimbetov/RM`. **Ветка:** `base_dev`.  
-**Source baseline на момент подготовки:** `9feeb812e2b56d877e223c42bde0d55c09d4057b`.  
-**Статус:** **R1.1 REVIEWED / ALIGNED WITH CURRENT RM / IMPLEMENTATION VIA SEPARATE APPROVED TASKS**. Создание этого документа не доказывает выполнение кодовых задач или прохождение CI.  
+**Source baseline R1.0/R1.1:** `9feeb812e2b56d877e223c42bde0d55c09d4057b`. **R1.2 audit source baseline:** `3485e36f9c3f3ad279b16dfd1337aa9b7d28828e` (documentation-only source changes since preceding baseline).  
+**Статус:** **R1.2 DEEP SOURCE-REVIEWED / CONTRACT-ALIGNED / IMPLEMENTATION VIA SEPARATE APPROVED TASKS**. Создание этого документа не доказывает выполнение кодовых задач или прохождение CI.  
 **Delivery boundary:** Java/Spring application/domain services + JDBC/JPA + PostgreSQL/Liquibase + H2 smoke + JUnit/Testcontainers; новые REST controllers/BFF/UI — **STOP**, public HTTP/OIDC admission — **HOLD**, production — **HOLD**, merge to `main` — **HOLD**.
 
 ## 0. Продуктовое решение и исключения
@@ -90,13 +90,13 @@ FC-10/20/30 source analysis may run in parallel after FC-00 diagnosis; mutations
 
 ### FC-40 — P0: SALES / INVENTORY / authoritative order lifecycle
 
-**Business stories:** buyer submits order; authorized seller sees detail/history and confirms order for a specific eligible warehouse; full atomic reservation; seller prepares/marks ready; verified handover posts exactly once; cancel releases reservation when permitted; movements/stocktake/transfer and adjustments remain independently auditable.
+**Business stories:** buyer submits order; authorized seller sees detail/history and confirms order for a specific eligible warehouse; full atomic reservation; seller prepares/marks ready; verified handover posts exactly once; cancellation is safe even around pick-confirmation and reservation; movements/stocktake/transfer and adjustments remain independently auditable. **Blocking decision:** the existing generic `AuthenticatedSalesCommands.fulfill` and secure `SalesPickupHandoverService.complete` must not both complete a pickup-proof-required order without one approved fulfillment-channel policy. See R1.2 A-03/A-04.
 
 **Method audit:** `AutoOrderService`, `AuthenticatedSalesCommands/Queries`, `SalesInventoryCommandService`, `SalesOrderPreparationService`, `OrderInventoryPort`, `InventoryReservationService`, `InventoryMovementService`, `InventoryTransferService`, `InventoryStocktakeService`, reconciliation services.
 
-**Required rules:** one order→one seller, tenant+warehouse scope, permitted state transitions, immutable accepted line snapshots, reserve only after authorized CONFIRMED, no stock debit in PREPARING/READY, exactly-once fulfillment, no negative sellable balance, no stray ledger on denied or rolled-back operation; stockowner INVENTORY only. Do not equate COMPLETED with PAID or DELIVERED.
+**Required rules:** one order→one seller, tenant+warehouse scope with explicit operation-specific warehouse assignment policy, permitted state transitions, immutable accepted line snapshots, reserve only after authorized CONFIRMED, no stock debit in PREPARING/READY, exactly-once fulfillment, no negative sellable balance, no stray ledger on denied or rolled-back operation; stockowner INVENTORY only. **Proof-required PICKUP orders cannot use an unqualified direct fulfillment route.** `cancel(PREPARING)` after immutable PICK requires explicit physical reversal policy. Do not equate COMPLETED with PAID or DELIVERED.
 
-**DoD:** transition table positive/negative, warehouse mismatch, partial availability failure with rollback, cancel×confirm, fulfill×revoke, duplicate confirm/fulfill, warehouse stocktake×movement, transfer/reconciliation concurrency, reboot/retry, durable receipts/history and populated PG test. Independent source/result oracle checks onHand/reserved/movements/order state.
+**DoD:** transition table positive/negative, warehouse mismatch and warehouse-scoped permissions, insufficient availability rollback, `cancel×confirm`, `cancel×pick`, generic `fulfill×pickup`, `fulfill×revoke`, duplicate confirm/fulfill, warehouse stocktake×movement, transfer/reconciliation concurrency, restart/retry, durable receipts/history and populated PG test. Independent SQL oracles verify onHand/reserved/movements/order state and required handover proof. FC-40 cannot PASS before R1.2 fulfillment/cancel policy decisions are qualified.
 
 ### FC-50 — P0: QR Commerce / negotiation / pickup / returns
 
@@ -274,3 +274,206 @@ Failure policy: a required CI failure, absent artifact, unexpected skip, unappro
 - Не создавать новые branches, не менять `main`, не добавлять controllers/REST/BFF/UI, не запускать KF-01..05 и TASKS.
 - Для миграций не править применённые changesets; новые forward-only изменения + clean/populated DB доказательства, особенно PostgreSQL partial indices и тестовая H2 совместимость.
 - Повторная квалификация не должна переписывать исторические `DONE-QUALIFIED@OLD-SHA`: они сохраняются как historical evidence до fresh release SHA.
+
+## 11. R1.2 — Deep Technical Contract Alignment / Implementation Blueprint (2026-11-23)
+
+**Аудит-источник:** [RM-DEEP-TECH-AUDIT-R1](../reviews/RM-DEEP-TECH-AUDIT-R1-2026-11-23.md). **Точное source state:** `3485e36f9c3f3ad279b16dfd1337aa9b7d28828e`. Заключение получено из Java source, SQL миграций, названий/содержимого квалификационных тестов и GitHub CI; **новые Java-тесты в рамках ревью не запускались**. Поэтому `R1.2 ALIGNED` означает согласованный и проверяемый контракт, но не `CODE/CI PASS`.
+
+### 11.1 Архитектурный decision register перед новой реализацией
+
+| ID | Статус | Вопрос | Допустимое временное правило | Независимый критерий принятия |
+|---|---|---|---|---|
+| `DEC-CORE-01` | APPROVED PRODUCT SCOPE | RM Business + QR, RM Network закрыт | Сохранить multi-location и tenant RBAC как инфраструктуру SMB | Strategy R2 и R1.2 scope не конфликтуют |
+| `DEC-CORE-02` | APPROVED SEQUENCING | TASKS после P0/P1 | Existing CRM Interaction responsible/nextAction, без TaskService | TASKS отсутствует среди CORE-P0 |
+| `DEC-FUL-01` | **BLOCKER** | Можно ли прямым generic `fulfill` закрыть заказ, для которого нужна QR-выдача? | **Нельзя подтверждать QR functional PASS без доказанного proof boundary**. Не менять generic nonpickup behavior вслепую | Однозначный owner-owned fulfillment policy, оба entrypoint-теста, migration review при новом поле |
+| `DEC-SAL-02` | **BLOCKER** | Что делать при CANCEL после фактической PICK в PREPARING? | Не разрешать непроверенную потерю учёта физически отобранных единиц | Policy reject after first PICK **или** auditable UNPICK; PG `cancel×pick` |
+| `DEC-LOC-03` | REQUIRED | Warehouse staff scope: что применимо к confirm/fulfill versus prepare/handover? | Сохранить существующие границы до отдельного решения; никакого неявного grant | Таблица actor×tenant×warehouse×operation, оба revoke orders |
+| `DEC-CRM-04` | P1 PRODUCT | Нужны ли содержательные NOTE/result без TASKS в первом бизнес-цикле? | Не обещать текст заметки: текущий `Kind.NOTE` не хранит body | Accepted P0/P1 policy; при P0 — encrypted note tests |
+| `DEC-Q08-05` | APPROVED GATE SPLIT | QR-08 упаковка — обязательная часть core? | Нет, отдельный R0. Существующие tests не пропускать в общей регрессии | QR Core PASS отдельно от QR08 PASS |
+| `DEC-PRICE-06` | ALIGNED | Источник цены checkout | `store_offer` current price; `cat_price` catalogue history; negotiated quote immutable override | 2 price-drift E2E, no silent repricing |
+| `DEC-RET-07` | ALIGNED | Когда возвращённый товар продаваем? | Только после authorized reception/inspection + authoritative inventory post | No premature on_hand credit |
+| `DEC-CI-08` | BLOCKER | H2 partial unique index и PG connection exhaustion | SQL/CI fix without skipping mandatory tests or changing applied PG invariants | G0 full exact-SHA GREEN |
+| `DEC-QR-09` | P1 PRODUCT | no-show, expirations, partial fulfillment/return, refund | QR token expiry **не отменяет** заказ/резерв; refunds/delivery/payments out of core | Explicit negative/no-implicit-side-effect tests |
+
+**Stop condition:** `DEC-FUL-01` и `DEC-SAL-02` являются блокерами **функционального QR/SALES service admission**, а не разрешением начинать произвольную переработку БД. Сначала решение на реальном call graph, затем минимальная реализация/тест. `DEC-CI-08` блокирует все общие exact-SHA verdicts.
+
+### 11.2 Source-level traceability — не реализовывать повторно
+
+| Work package | Existing source and concrete methods | Existing verification anchors | Неполный контракт |
+|---|---|---|---|
+| FC-10 | `SelfServiceTenantOnboardingService.createFirstTenant/selectTenant`; `TenantMemberEnrollmentService.invite/accept`; `WarehouseStaffScopeService.assign/revoke/requireAssigned`; `AuthenticatedOrganizationLocations.*` | `R4FirstTenantOnboardingQualificationTest`, `OrganizationLocationLifecycleQualificationTest`, `OrganizationLocationR11ConcurrencyQualificationTest` | member→grant→warehouse route + exact SHA + open object-scope decision |
+| FC-20 | `AuthenticatedCrmCommands/Queries`; `CrmBuyerLinkService.propose/confirm/orderHistory/revokeByBuyer/adjudicateDispute`; `CrmInteractionService.record/setNextAction/complete/history` | `CrmR1aQualificationTest`, `CrmBuyerLinkQualificationTest`, `CrmInteractionQualificationTest` | real cross-domain CRM proof with one order, PII/archival and optional NOTE |
+| FC-30 | `CatalogItemService.createDraft/addPriceRevision/publish/archive`; `StorefrontManagementService`, `StorefrontOfferService.createDraft/updatePrice/publish/pause/hide/priceHistory` | `CatalogQualificationTest`, `StorefrontManagementQualificationTest`, `CommercialCoreE2EQualificationTest` | full price/version/tenant/active SKU vs order and archive races |
+| FC-40 | `AuthenticatedSalesCommands.confirm/cancel/fulfill`, `SalesInventoryCommandService`, `SalesOrderPreparationService.startPreparing/confirmPicked/markReadyForPickup`, `OrderInventoryPort` | `SalesInventoryRbacQualificationTest`, `CommercialCoreE2EQualificationTest` | **generic-fulfill vs proof-required pickup**, PREPARING cancel/picked reversal, operation warehouse scope |
+| FC-50 | `PublishedOfferQrService`, `PublishedOfferCardQuery`, `PublishedQrCheckoutService`, `SalesPriceProposalService`, `AutoOrderService.checkoutAcceptedQuote`, `SalesPickupHandoverService`, `SalesReturnPhysicalService`, `SalesReturnQuarantineResolutionService` | `PublishedQrCheckoutQualificationTest`, `QrNegotiatedCheckoutQualificationTest`, `QrWarehouseHandoverQualificationTest` | joined buyer/CRM service journey, no direct bypass, full RMA posting and residual package sub-gate |
+| FC-60 | `CommercialCoreE2EQualificationTest`, public QR and CRM suite combinations | existing >70 test-source files, various historical exact SHA jobs | semantic equivalence mapping + final exact-SHA executed test evidence |
+
+**CRITICAL evidence correction:** A test named `skuToSellerOfferToCheckoutToFulfillmentToReconciliation` **already exists**, however it uses synthetic identity and `sales.fulfill` from CONFIRMED; **it does not prove QR secure pickup and its immutable receipt**. FC-60 must extend the existing test coverage, not rename a partial journey “full CRM+QR production E2E”.
+
+### 11.3 Required state-machine and authorized transition contracts
+
+**SALES order — one seller, one accepted order snapshot:**
+
+| From | Command/actor | To | Transaction and domain effect | Forbidden shortcut |
+|---|---|---|---|---|
+| ABSENT | list-price/quote checkout / buyer proof policy | PLACED | one order/lines/status/receipt; **stock unchanged** | no reservation on PLACED |
+| PLACED | confirm / paired seller + inventory | CONFIRMED | all full-line reservations at approved warehouse or total rollback | no partial reserves, no mixed warehouse |
+| CONFIRMED | startPreparing / assigned warehouse staff | PREPARING | preparation event, stock unchanged | no debit |
+| PREPARING | confirmPicked per line / warehouse staff | PREPARING | immutable actual quantity/item/warehouse pick proof | no assumed complete pick |
+| PREPARING | markReady / warehouse staff | READY_FOR_PICKUP | every line picked and reserved, stock unchanged | no ready on incomplete lines |
+| READY_FOR_PICKUP | explicit pickup credential + physical confirmation / authorized staff | COMPLETED | credential CONSUMED; one handover, one set movements; atomic | **no generic fulfill for proof-required order** |
+| PLACED/CONFIRMED/PREPARING | cancel / seller | CANCELLED where policy allows | release active reservations, preserve events/picks, no debit | no silent cancellation of picked goods |
+| CONFIRMED/PREPARING | generic staff fulfill / seller | COMPLETED **only for explicitly admitted non-pickup policy** | one ledger and status; what proof substitutes pickup must be decided | never bypass QR pickup |
+| COMPLETED | return request (new RMA aggregate) | original stays COMPLETED | separate RMA, no reversal of historical sale | no payment/refund implication |
+
+Do not change the existing enum merely to make tests pass. If an explicit fulfillment mode is selected, a forward-only migration plus historical/order migration policy and object-level gate must be approved; the inspected `crm.sales_order` does **not** currently have a `fulfillment_mode` discriminator.
+
+**Quote/QR state contracts:** `PRODUCT_OFFER` stable public alias refers to current seller offer, not a naked SKU; PUBLISHED→PAUSED stops new checkout but never edits prior order; REVOKED alias is not a new-order credential. Negotiated quote `AVAILABLE→CONSUMED` once, requiring same buyer, latest accepted revision, currency/quantity, verified current email identity; QR buyer cannot use seller-only grants. List-price checkout uses acknowledgement `offerRowVersion + acceptedUnitPrice + currency + publicRef`; a price change causes `PRICE_RECONFIRM_REQUIRED`, no hidden buyer provision/outbox.
+
+**RMA state contracts:** REQUESTED→seller review→APPROVED→physical RECEIVED→INSPECTED→RESTOCKED/QUARANTINED/DISPOSED; independently eligible QUARANTINED→RESTOCKED/DISPOSED with proofs. Reject/deny states preserve history; original completed order remains unchanged. `RETURN_REFERENCE` alone is not reception credential. Quarantined or written-off quantity is never automatically sellable.
+
+**QR-08:** Packaging R0 accepted service line snapshots remain immutable and post **zero** inventory/finance; R1 packaging materials requires separate explicit ticket after R0 full exact-SHA QA. QR-08 not a prerequisite for base product journey.
+
+### 11.4 Transaction / Lock DAG worksheet — mandatory before changes
+
+Do not impose an invented universal sequence. For each affected service, document its real SQL order, then test pairwise cycles against others.
+
+| Route | Existing known order / requirement | Interfering operation | Required proof |
+|---|---|---|---|
+| Buyer list checkout | seller checkout stripe → IAM workspace → published storefront → offer + catalog → email identity/SALES writes | seller suspend, pause, price update, QR revoke | old-or-new coherent price, deny-before-commit with zero orphan rows |
+| Buyer accepted quote | checkout stripe → buyer account → workspace → storefront → offer → cat → accepted quote → order | buyer delete/suspend, proposal accept, price edit, quote consumption | exactly one order; no deadlock; quote/receipt match |
+| Seller confirm | current IAM actor/workspace admission → order FOR UPDATE → inventory reserve (stock locks) | warehouse close, IAM revoke, cancel, stock adjustment | all full-line reservations or rollback |
+| Warehouse prep | actor/workspace admission → order lock → warehouse assignment check → pick/receipt | warehouse-scope revoke, order cancel | one winner, immutable physical trace |
+| Secure pickup | actor/workspace admission → credential lookup → order lock → warehouse assignment → credential/stock → handover | generic fulfill, credential rotation, revoke, second scan | exactly one movement and required receipt |
+| Return/inspection/post | actor/workspace/warehouse → RMA row lock → proof/reception/inspection → Inventory return port → terminal receipt | duplicate return, suspension, quarantine resolve, rollback | at most one posting, correct sellable/quarantine balance |
+| Catalog archive | SKU exclusive lock → non-locking inventory/offer usage check | receiving, offer publish, stocktake | archive never races a fresh valid stock/offer commitment |
+
+Real PostgreSQL test barriers must force both commit orders and capture SQLSTATE (`40P01` deadlock, uniqueness violation, lock timeout) without declaring “success” when mandatory work was merely skipped. `@Transactional`/reentrant Spring semantics and `Propagation.MANDATORY` for owner ports must be inspected. Lock-order assertions are needed for **cross-domain** paths, not only within one aggregate.
+
+### 11.5 Exact SQL business-oracle templates
+
+For each successful order `(tenant T, order O)`:
+
+- **Order:** one `crm.sales_order`, one status sequence without illegal transitions, one seller workspace, immutable `sales_order_line` SKU/title/price/currency/quantity snapshot, total = sum of quantities × accepted unit prices in one currency (no mixed currency).
+- **Checkout receipt:** one `crm.sales_checkout_receipt` per `(tenant,idempotency_key)`; same key+same fingerprint returns original order, same key+different payload DENY with no new order/outbox. All checkout modes share receipt namespace.
+- **Reservations:** `SELECT sum(quantity) ... FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? AND state='ACTIVE'` equals exact full ordered quantities at CONFIRMED/READY, zero at PLACED; each line's SKU, warehouse and count agrees with immutable order snapshot.
+- **Stock conservation:** for each SKU and location, `0 <= reserved <= on_hand`; `on_hand` changes only on authoritative movements, not public card/negotiation/pick/READY/proof preview. At normal pickup `onHand_after = onHand_before - fulfilled_qty`, `reserved_after=reserved_before-fulfilled_qty`.
+- **Pickup:** if fulfillment policy requires proof and order COMPLETED, exactly one `crm.sales_pickup_handover`, exactly one immutable line per fulfilled reservation and corresponding `crm.inv_stock_movement`, credential `CONSUMED`. Generic direct fulfill must not create a completed proof-required order with zero receipt.
+- **Return:** `SUM(return_accepted_qty per source handover line) <= fulfilled_qty`; approved inspection must precede sellable RESTOCK; exactly one `crm.sales_return_posting` per return; quarantine balance + sellable movement reconcile; original order and handover are immutable.
+- **Denied/rolled-back operation:** no new business order, reservation, movement, pick, receipt, terminal event, public secret or notification; no leaked PII in response/log. Access denial audit may be separately recorded **only if its approved security audit policy explicitly requires it**, and must not mutate business state.
+- **Migration:** populated PostgreSQL rehearsal preserves tenant-qualified FK references, historical buyer link events, accepted order price snapshots, handover receipts, active stock and encryption continuity. A new test table seeded after migration is not a substitute for before/after data comparison.
+
+**Numeric fixture BIZ-QTY-01:** initial `on_hand=10 reserved=0`, one item quantity 3, accepted unit `75.0000 KZT`: PLACED `10/0`, CONFIRMED `10/3`, READY `10/3`, handover COMPLETED `7/0`, exact retry `7/0`; verified RESTOCK of 1 produces `8/0` with a separate new return movement. A distinct QUARANTINE fixture must keep sellable at 7 until explicit authorized RESTOCK resolution. Finance state remains **UNKNOWN/not implemented**, not automatically paid.
+
+### 11.6 Detailed mandatory scenario acceptance catalogue (CORE-P0)
+
+**Scenario IDs below describe exact user behavior; they do not assert a new or executed JUnit method exists.** Map all existing tests before adding code. Test name proposals are descriptive.
+
+| ID | Operation / race | Acceptance oracle and negative path |
+|---|---|---|
+| `CORE-IAM-01` | verified owner creates first tenant | atomic workspace+org+owner; proof of verified email; exact replay one tenant |
+| `CORE-IAM-02` | rejected first tenant (unverified/suspended/foreign) | zero tenant/member/orphan rows |
+| `CORE-IAM-03` | invite→accept→grant→business command | employee active with explicit scoped permissions only |
+| `CORE-IAM-04` | member revoke/suspend × order confirm, both commit orders | no unauthorized committed mutation, no deadlock |
+| `CORE-IAM-05` | global account suspension/deletion × CRM link/checkout | fresh account status, retained immutable references, no new owner reads |
+| `CORE-IAM-06` | warehouse staff assign/revoke × pick/handover | revoked warehouse B cannot be used under A grant |
+| `CORE-ORG-01` | create/update/deactivate/reactivate/close location | row version & recorded audit, warehouse inventory blockers |
+| `CORE-ORG-02` | deactivate/close × live transfer/receipt/confirm | zero stock stranded on inactive warehouse; both orders of commits |
+| `CORE-CRM-01` | create PERSON/COMPANY and contacts | encrypted required PII, tenant A/B isolation, no name-based dedup |
+| `CORE-CRM-02` | customer/contact update and search | optimistic CAS, consistent permissions, proper bounded page/filter |
+| `CORE-CRM-03` | customer/contract archive with open order | immutable SALES order preserved, proposed policy enforced |
+| `CORE-CRM-04` | interaction record→assign→nextAction→complete | no TaskService dependency; correct event history |
+| `CORE-CRM-05` | explicit buyer link propose→verify/confirm→seller own order history | no inferred email match, proof and both CRM_READ/SALES_ORDER_READ |
+| `CORE-CRM-06` | dispute/revoke/deletion × CRM buyer read | fail-closed, immutable link and order evidence, no foreign PII |
+| `CORE-CAT-01` | product draft+source translation+price→publish | only valid product/tenant/currency/price publish |
+| `CORE-CAT-02` | catalog price history and offer commercial price drift | accepted order immutable price+SKU; no cross-currency inference |
+| `CORE-CAT-03` | catalog archive × inventory receive/stocktake/offer publish | archive blocked on relevant committed usage, both orders |
+| `CORE-STO-01` | storefront draft→publish→pause/resume | role/CAS/version and workspace status enforced |
+| `CORE-STO-02` | offer draft→price→publish→pause/hide, duplicate versions | PRODUCT/PUBLISHED only, CAS, historical price retained |
+| `CORE-STO-03` | permission revoke × offer publication; pause × checkout | both commit orders, no stale grant or mixed snapshot |
+| `CORE-SAL-01` | list checkout exact duplicate and conflicting key | one order/receipt/event; conflict denies and creates no extras |
+| `CORE-SAL-02` | checkout after seller pause or price change | rejected/reconfirm, zero order/email-outbox if new request |
+| `CORE-SAL-03` | confirm all lines at one active warehouse | atomic full reserves, order state, original SKU mapping |
+| `CORE-SAL-04` | insufficient stock on last line | all order/reservation/ledger effects rolled back |
+| `CORE-SAL-05` | two concurrent orders on hot SKU / mixed SKU | no oversell/deadlock, at most available quantity reserved |
+| `CORE-SAL-06` | cancel × confirm/fulfill under commit reversal | one coherent terminal state, no reserved imbalance |
+| `CORE-SAL-07` | PREPARING pick vs cancel, both orders | approved unpick/deny policy, preserved physical trace |
+| `CORE-SAL-08` | generic fulfill attempted against QR pickup-required order | **DENY** without receipt/movement/state; allowed non-pickup still qualified separately |
+| `CORE-SAL-09` | generic fulfill × secure pickup race | never two debits; a proof-required COMPLETED always carries receipt |
+| `CORE-SAL-10` | warehouse scoped grants × confirm/prepare/fulfill | explicitly approved location policy; no unauthorized warehouse |
+| `CORE-INV-01` | receive/adjust/transfer/stocktake while reserved | ledger and stock conserved, no stranded reservation |
+| `CORE-INV-02` | paginated reconciliation and concurrent movement | no accidental tenant-wide snapshot claim; version/checkpoint consistency |
+| `CORE-QR-01` | publish/reprint/revoke/reissue stable PRODUCT_OFFER QR | reprint stable, revoked ref cannot create new order |
+| `CORE-QR-02` | anonymous published card with FILES/media | published-only sanitized projection; no PRIVATE data, no mutation |
+| `CORE-QR-03` | regional available/partial/unknown advisory preview | does not reserve or promise delivery |
+| `CORE-QR-04` | QR list checkout price/rowVersion ACK | correct price/qty/currency or explicit reconfirm; no silent reprice |
+| `CORE-QR-05` | buyer/seller alternating counter/accept/reject | actor turn and revision CAS, no self-accept |
+| `CORE-QR-06` | accepted quote shared checkout/consumed once | at most one order, immutable agreed price, request-key namespace |
+| `CORE-QR-07` | quote expire/withdraw/revoke/suspend × checkout | no order after winning revocation, retry semantics coherent |
+| `CORE-PICK-01` | confirm→PREPARING→all PICK→READY | no stock debit before handover, incomplete pick DENY |
+| `CORE-PICK-02` | buyer credential and staff preview | ownership + warehouse scope; preview zero stock effects |
+| `CORE-PICK-03` | exact handover once, reprint/reissue old credential | old token denied, one receipt and one set movements |
+| `CORE-PICK-04` | two scans / two JVM / IAM revoke × physical handover | one winner, same proof, zero second debit |
+| `CORE-PICK-05` | crash before/after receipt or credential consume | total rollback or durable success; safe idempotent recovery |
+| `CORE-RET-01` | buyer RMA after handover, qty bound | no returned qty greater than issued less already accepted |
+| `CORE-RET-02` | seller approve/reject; physical reception with proof | immutable receipt and correct tenant/warehouse; no early on_hand |
+| `CORE-RET-03` | inspection RESTOCK/QUARANTINE/WRITE_OFF | only RESTOCK moves sellable stock; evidence immutable |
+| `CORE-RET-04` | quarantine resolution under concurrent action | one resolution, balances conserved, authorized posting only |
+| `CORE-RET-05` | duplicate reception/posting/crash and retry | no duplicate movement, original order stays COMPLETED |
+| `CORE-XD-01` | complete Business from first tenant to CRM-linked order and stock | physical/identity truth from actual service calls, not fabricated full journey |
+| `CORE-XD-02` | complete QR list/negotiated to pickup and RMA | same owner aggregate and inventory ledger, no double transaction |
+| `CORE-XD-03` | tenant A vs B customer/offer/order/inventory/QR | no foreign UUID enumeration or cross-domain leakage |
+| `CORE-XD-04` | populated PostgreSQL upgrade + restart | historical price/link/receipt/stock and owner scope stable |
+| `CORE-XD-05` | whole platform exact SHA H2 + full PG + security | mandatory tests and non-skips manifest PASS |
+
+**Critical gate:** every `CORE-*` row must map to `test_anchor` and `PASS@RELEASE_SHA` (or an explicit consolidated JUnit method proving all rows in that group with independent oracles). `EXTENDED-P1` entries from the 120 registry follow by separate staged acceptance. Test method names are free to vary; scenario identity and invariants are stable.
+
+### 11.7 120-scenario inventory mapping, exact-SHA evidence and CI isolation
+
+**Two unrelated dimensions:**
+- `Coverage register (120 target descriptions)`: what *must* eventually be covered, with CORE-P0 and EXTENDED-P1; may contain `NOT RUN` rows until implementation;
+- `release admission manifest`: only `CORE-P0` required scenarios and critical whole-platform suites, all executed PASS on exact release SHA. Target number of tests is not evidence.
+
+Every included qualification must have `repo`, `branch`, `head_sha`, `job_id`, `run_url`, `jdk`, `database_version`, `test_class`, `test_method`, `tests`, `errors`, `failures`, `skipped`, `xml_artifact`, `status`, `scenario_ids`. Job completion `success` without Surefire XML for mandatory test names is insufficient. If fixture names differ between H2/PG, explain which physical tests run in PG. Never authorize H2 to replace PostgreSQL concurrency or partial index tests.
+
+**CI isolation:** exact-SHA qualification job should be triggered/locked to immutable candidate SHA and not cancelled by later `base_dev` pushes. Normal branch push workflows may be cancelable; manifest must use the candidate SHA and explicit required job matrix. Distributed QR06B test process pool must fit PostgreSQL connection budget, and any separate job carrying B31/B33/B35 must be mandatory, not optional. Existing populated-upgrade workflows must run against actual old populated data (before/after evidence), not only fresh schema.
+
+**G0 exit:** H2 `0105` compatibility (existing PG active-link unique semantics unchanged), multi-JVM connection resource proof, both H2/full-PG/security workflows and their exact-SHA artifacts PASS. Focused QR-08 jobs passing do not make full QR08 test suite green when full regression fails.
+
+### 11.8 Minimal implementation tickets — no duplicate Java classes
+
+| Ticket | Owner | Exact work & accepted artifact | Depends on |
+|---|---|---|---|
+| `T-FC00-H2-0105` | Schema + QA | isolate H2 syntax and implement supported migration/test compatibility without changing applied PG integrity; clean+populated migration evidence | none |
+| `T-FC00-PG-BUDGET` | QA/CI | measured connection budget, bounded multi-JVM runs B31/B33/B35, full PG green and XML manifest | none |
+| `T-FC00-GATE` | QA | existing exact-SHA manifest mandatory job/method proof, unexpected skip FAIL, race tests not hidden | previous two |
+| `T-FC10-STAFF` | IAM/ORG | real first-tenant+employee/role+warehouse scope matrix and external-adapter-independent tests | G0 |
+| `T-FC20-CRM` | CRM | customer/contact/contract/interaction/link exact method map, explicit buyer proof with SALES, PII/consent race | G0, IAM |
+| `T-FC30-PRICE` | CAT/STORE | archive blockers; current offer price vs catalogue price, QR price ack, pause/revoke/checkout | G0 |
+| `T-FC40-FULFILL-POLICY` | SALES/QR/INVENTORY | decide generic fulfillment vs proof-required pickup; implement minimal owner-scoped protection and exact test oracles | FC10, FC30 |
+| `T-FC40-CANCEL-PICK` | SALES/WAREHOUSE | decide deny-after-pick or audit-safe unpick; implement two-order PG race and no stranded reserve | FC40 current prep |
+| `T-FC40-WH-SCOPE` | IAM/ORG/SALES | explicit staff warehouse policy for confirm/fulfill versus warehouse-specific prep/pickup | FC10 decision |
+| `T-FC50-QR-PICK-RMA` | QR/SALES/INVENTORY | list/quote→order→READY→proof→handover→return→inspection/post; no duplicates | FC30, FC40 |
+| `T-FC50-QR08-R0` | SALES packaging + QA | separate R0 quote/version/payment-neutral acceptance and full regression, no material debit | Optional, not base QR gate |
+| `T-FC60-CORE-E2E` | QA | trust-boundary-aware full Business and QR service journeys + 120 descriptive registry mapping | FC10/20/30/40/50 |
+| `T-FC60-RELEASE` | QA/reviewer | exact release SHA manifest, PostgreSQL fresh+populated, all CORE-P0, no critical skips, independent verdicts | G0–G3 |
+
+**Execution rule:** each ticket begins with actual current HEAD, existing methods/tests, method gap, and accepted product policy; make smallest change. Preserve `base_dev`; do not create independent `TASKS`, second checkout, generic workflow engine, controllers, new branches or fictional `FINANCE` fulfillment.
+
+### 11.9 Review checklist for Codex and technical approver
+
+- [ ] Source HEAD/branch and 7 work packages exact method-map complete.
+- [ ] Both observed FC-00 root causes either fixed and tested or accurately marked BLOCKED, with no skips.
+- [ ] `DEC-FUL-01` settled, generic/direct fulfillment cannot bypass required QR pickup.
+- [ ] `DEC-SAL-02` settled, cancellation after pick leaves no physically unexplained stock.
+- [ ] Warehouse grant authority per operation explicitly approved, and both revoke race orders qualified.
+- [ ] Customer→buyer mapping has explicit consent/identity proof, not guessed from email or name.
+- [ ] CATALOG vs STOREFRONT price authority and historical immutable order snapshot not conflated.
+- [ ] Public offer, accepted quote, QR order, pickup credential, return reference use distinct typed purposes and permissions.
+- [ ] All CORE-P0 scenarios mapped to executed exact-SHA tests with independent DB oracles.
+- [ ] Fresh and populated PostgreSQL migration compatible; PostgreSQL-specific constraints preserved.
+- [ ] QR08 R0 reports own status; current platform full regression must nevertheless be green.
+- [ ] No TASKS, full FINANCE, network holding, controllers or production admissions introduced.
+- [ ] Release notes distinguish `SERVICE FUNCTIONAL PASS`, `QR08 OPTIONAL PASS`, `PILOT HOLD`, `PRODUCTION HOLD`.
+
+**Final R1.2 acceptance of the specification:** The plan is suitable for staged **engineering tickets** and exact-SHA business qualification, subject to the explicit BLOCKER decisions above. This paragraph does not authorize arbitrary code changes, assert that any non-run scenario passed, or supersede the normative `RM-PLATFORM-STANDARD-R2` security model.
