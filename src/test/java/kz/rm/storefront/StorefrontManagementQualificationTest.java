@@ -226,4 +226,57 @@ class StorefrontManagementQualificationTest {
                 .isEqualTo(StorefrontOfferService.State.DRAFT);
     }
 
+    @Test void concurrentSellerPriceUpdateAndCheckoutCannotMixCommercialSnapshot() throws Exception {
+        var t = fixture();
+        grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var storefront = storefronts.createDraft(seller, t.tenant(),
+                "shop-" + UUID.randomUUID());
+        storefronts.publish(seller, t.tenant(), storefront.id(), 0L);
+        UUID sku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, t.tenant(), sku, "RACE-" + UUID.randomUUID());
+        var draft = offers.createDraft(seller, t.tenant(), sku,
+                "Original", new java.math.BigDecimal("10.0000"), "KZT");
+        offers.publish(seller, t.tenant(), draft.id(), 0L);
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        String email = "race-" + UUID.randomUUID() + "@example.kz";
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var order = pool.submit(() -> {
+                gate.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                return autoOrders.checkout(storefront.slug(), email, "offer-race-key-001",
+                        java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(), 2)))
+                        .order().orderId();
+            });
+            var price = pool.submit(() -> {
+                gate.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                return offers.updatePrice(seller, t.tenant(), draft.id(),
+                        "Updated", new java.math.BigDecimal("15.0000"), "KZT", 1L);
+            });
+            gate.countDown();
+            UUID orderId = order.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(price.get(30, java.util.concurrent.TimeUnit.SECONDS).rowVersion())
+                    .isEqualTo(2L);
+            var row = jdbc.queryForMap("""
+                    SELECT title_snapshot,unit_price_snapshot,catalog_item_id_snapshot
+                    FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+                    """, t.tenant(), orderId);
+            assertThat(row.get("catalog_item_id_snapshot")).isEqualTo(sku);
+            java.math.BigDecimal amount = (java.math.BigDecimal) row.get("unit_price_snapshot");
+            if (amount.compareTo(new java.math.BigDecimal("10.0000")) == 0)
+                assertThat(row.get("title_snapshot")).isEqualTo("Original");
+            else {
+                assertThat(amount).isEqualByComparingTo("15.0000");
+                assertThat(row.get("title_snapshot")).isEqualTo("Updated");
+            }
+            assertThat(jdbc.queryForObject("""
+                    SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+                    """, java.math.BigDecimal.class, t.tenant(), orderId))
+                    .isEqualByComparingTo(amount.multiply(java.math.BigDecimal.valueOf(2)));
+        }
+    }
+
 }
