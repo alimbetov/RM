@@ -769,6 +769,113 @@ class InventoryTransferStocktakeQualificationTest {
                 .isEqualTo("CANCELLED");
     }
 
+    /**
+     * UR-R3.3 T1: transfer commits before the diagnostic transaction opens its
+     * MVCC snapshot. The page/position must observe both posted transfer legs.
+     */
+    @Test void urR33PostgresTransferCommitsBeforeReconciliationSnapshot() throws Exception {
+        try (var connection=source.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        receive(f,f.source(),"ur33-seed-"+UUID.randomUUID(),12);
+        var who=actor(f.actor());
+        var transferCommitted=new CountDownLatch(1);
+        try (var pool=Executors.newFixedThreadPool(2)) {
+            var writer=pool.submit(()->{
+                var posted=commands.transfer(who,f.tenant(),f.source(),f.destination(),
+                        f.item(),BigDecimal.valueOf(5),"ur33-transfer-"+UUID.randomUUID());
+                transferCommitted.countDown();
+                return posted;
+            });
+            var reader=pool.submit(()->{
+                if (!transferCommitted.await(15,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Transfer did not commit first");
+                var src=reconciliation.inspect(who,f.tenant(),f.source(),f.item());
+                var dst=reconciliation.inspect(who,f.tenant(),f.destination(),f.item());
+                return List.of(src,dst);
+            });
+            var posted=writer.get(20,TimeUnit.SECONDS);
+            assertThat(posted.quantity()).isEqualByComparingTo("5");
+            var results=reader.get(20,TimeUnit.SECONDS);
+            assertThat(results.get(0).finding())
+                    .isEqualTo(AuthenticatedInventoryReconciliation.Finding.CONSISTENT);
+            assertThat(results.get(1).finding())
+                    .isEqualTo(AuthenticatedInventoryReconciliation.Finding.CONSISTENT);
+            assertThat(results.get(0).onHand()).isEqualByComparingTo("7");
+            assertThat(results.get(1).onHand()).isEqualByComparingTo("5");
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.inv_stock_movement
+                    WHERE tenant_id=? AND source_type='TRANSFER' AND source_id=?
+                    """,Integer.class,f.tenant(),posted.id())).isEqualTo(2);
+        }
+        assertThat(stock(f,f.source()).add(stock(f,f.destination())))
+                .isEqualByComparingTo("12");
+    }
+
+    /**
+     * UR-R3.3 T2: reader pins its REPEATABLE_READ MVCC snapshot before the
+     * writer commits. Both reconciliations inside that transaction see the
+     * old consistent stock state; a fresh transaction sees the posted transfer.
+     */
+    @Test void urR33PostgresReconciliationSnapshotCommitsBeforeTransferVisibility()
+            throws Exception {
+        try (var connection=source.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        receive(f,f.source(),"ur33-snapshot-seed-"+UUID.randomUUID(),12);
+        var who=actor(f.actor());
+        var readerSnapshotReady=new CountDownLatch(1);
+        var transferCommitted=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        try (var pool=Executors.newFixedThreadPool(2)) {
+            var reader=pool.submit(()->tx.execute(status->{
+                var before=reconciliation.inspect(who,f.tenant(),f.source(),f.item());
+                assertThat(before.onHand()).isEqualByComparingTo("12");
+                assertThat(before.finding())
+                        .isEqualTo(AuthenticatedInventoryReconciliation.Finding.CONSISTENT);
+                readerSnapshotReady.countDown();
+                try {
+                    if(!transferCommitted.await(20,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Transfer did not finish");
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+                var pinned=reconciliation.inspect(who,f.tenant(),f.source(),f.item());
+                assertThat(pinned.finding())
+                        .isEqualTo(AuthenticatedInventoryReconciliation.Finding.CONSISTENT);
+                assertThat(pinned.onHand()).isEqualByComparingTo("12");
+                return pinned.onHand();
+            }));
+            var writer=pool.submit(()->{
+                if(!readerSnapshotReady.await(15,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Reader did not pin MVCC snapshot");
+                var posted=commands.transfer(who,f.tenant(),f.source(),f.destination(),
+                        f.item(),BigDecimal.valueOf(5),"ur33-snapshot-transfer-"+UUID.randomUUID());
+                transferCommitted.countDown();
+                return posted;
+            });
+            assertThat(reader.get(25,TimeUnit.SECONDS)).isEqualByComparingTo("12");
+            var posted=writer.get(25,TimeUnit.SECONDS);
+            assertThat(posted.quantity()).isEqualByComparingTo("5");
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.inv_stock_movement
+                    WHERE tenant_id=? AND source_type='TRANSFER' AND source_id=?
+                    """,Integer.class,f.tenant(),posted.id())).isEqualTo(2);
+        }
+        assertThat(reconciliation.inspect(who,f.tenant(),f.source(),f.item()).onHand())
+                .isEqualByComparingTo("7");
+        assertThat(reconciliation.inspect(who,f.tenant(),f.destination(),f.item()).onHand())
+                .isEqualByComparingTo("5");
+        assertThat(stock(f,f.source()).add(stock(f,f.destination())))
+                .isEqualByComparingTo("12");
+    }
+
     @Test void receiptAtTransferDestinationDoesNotCycleWithWarehouseOwnerLocks()
             throws Exception {
         var f=fixture();receive(f,f.source(),"stockQ7Race0001",10);
