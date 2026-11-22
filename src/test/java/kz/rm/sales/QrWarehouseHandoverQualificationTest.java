@@ -3152,4 +3152,86 @@ class QrWarehouseHandoverQualificationTest {
                 .hasMessageContaining("QUARANTINE_REPLAY_CONFLICT");
     }
 
+
+    @Test void qr07R25ConcurrentQuarantineRestockVsDisposeSettlesExactlyOnce()
+            throws Exception {
+        requirePostgres();
+        var c=context();var order=ready(c,false);
+        var claim=qr07R25Quarantined(c,order);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.INVENTORY_ADJUST);
+        UUID sku=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal stockBefore=stock(c,sku,"on_hand");
+        var arrive=new CountDownLatch(2);
+        var release=new CountDownLatch(1);
+        String[] results=new String[2];
+        try(var pool=Executors.newFixedThreadPool(2)){
+            var tasks=new ArrayList<java.util.concurrent.Future<String>>();
+            for(int n=0;n<2;n++){
+                final boolean restock=n==0;
+                tasks.add(pool.submit(()->{
+                    arrive.countDown();
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("R25_RACE_TIMEOUT");
+                    try{
+                        var decision=quarantineResolution.resolve(c.staff(),c.tenant(),
+                                c.warehouse(),claim.requestId(),6,
+                                restock?SalesReturnQuarantineResolutionService.Action.RESTOCK:
+                                    SalesReturnQuarantineResolutionService.Action.DISPOSE,
+                                restock?"QA_RELEASE":"QA_DISPOSAL",key());
+                        return decision.state();
+                    }catch(IllegalStateException expected){
+                        if(!expected.getMessage().contains("QUARANTINE_STATE_VERSION_CONFLICT"))
+                            throw expected;
+                        return "CONFLICT";
+                    }
+                }));
+            }
+            assertThat(arrive.await(15,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            for(int n=0;n<2;n++)results[n]=tasks.get(n).get(90,TimeUnit.SECONDS);
+        }finally{release.countDown();}
+        assertThat(java.util.List.of(results).stream()
+                .filter(v->!v.equals("CONFLICT")).count()).isEqualTo(1);
+        assertThat(java.util.List.of(results)).contains("CONFLICT");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_quarantine_resolution
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT quantity FROM crm.inv_return_quarantine_balance
+                WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),sku))
+                .isEqualByComparingTo("0");
+        assertThat(stock(c,sku,"on_hand")).isEqualByComparingTo(
+                stockBefore.add(BigDecimal.valueOf(results[0].equals("RESTOCKED")?2:0)));
+        assertExactlyOneHandover(c,order,1);
+    }
+
+    @Test void qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross()
+            throws Exception {
+        requirePostgres();
+        var c=context();var other=context();var order=ready(c,false);
+        var claim=qr07R25Quarantined(c,order);
+        assertThatThrownBy(()->quarantineResolution.resolve(other.staff(),
+                c.tenant(),c.warehouse(),claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.RESTOCK,
+                "QA_CROSS_TENANT",key())).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->quarantineResolution.resolve(c.staff(),
+                other.tenant(),other.warehouse(),claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.RESTOCK,
+                "QA_CROSS_TENANT",key())).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_quarantine_resolution
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request
+                WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),claim.requestId()))
+                .isEqualTo("QUARANTINED");
+    }
+
 }
