@@ -2324,3 +2324,56 @@ CREATE TRIGGER trg_sales_offer_identity_immutable
  EXECUTE FUNCTION crm.sales_reject_offer_identity_mutation();
 --rollback DROP TRIGGER trg_sales_offer_identity_immutable ON crm.store_offer;
 --rollback DROP FUNCTION crm.sales_reject_offer_identity_mutation();
+
+
+--changeset rm:0080-inventory-reconciliation-run
+-- Diagnostic evidence only; never mutate stock, reservations or immutable ledger.
+CREATE TABLE crm.inv_reconciliation_run (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ status VARCHAR(16) NOT NULL,
+ started_by UUID NOT NULL,
+ started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ completed_at TIMESTAMP WITH TIME ZONE,
+ cursor_location_id UUID,
+ cursor_item_id UUID,
+ inspected_positions BIGINT NOT NULL DEFAULT 0,
+ finding_count BIGINT NOT NULL DEFAULT 0,
+ failure_code VARCHAR(64),
+ CONSTRAINT pk_inv_reconciliation_run PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_inv_reconciliation_tenant FOREIGN KEY(tenant_id)
+   REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_inv_reconciliation_actor FOREIGN KEY(started_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_inv_reconciliation_status CHECK(status IN ('RUNNING','COMPLETED','FAILED')),
+ CONSTRAINT ck_inv_reconciliation_cursor CHECK(
+   (cursor_location_id IS NULL AND cursor_item_id IS NULL)
+   OR (cursor_location_id IS NOT NULL AND cursor_item_id IS NOT NULL)),
+ CONSTRAINT ck_inv_reconciliation_counters CHECK(inspected_positions>=0 AND finding_count>=0),
+ CONSTRAINT ck_inv_reconciliation_terminal CHECK(
+   (status='RUNNING' AND completed_at IS NULL AND failure_code IS NULL)
+   OR (status='COMPLETED' AND completed_at IS NOT NULL AND failure_code IS NULL)
+   OR (status='FAILED' AND completed_at IS NOT NULL AND failure_code IS NOT NULL))
+);
+CREATE TABLE crm.inv_reconciliation_finding (
+ tenant_id UUID NOT NULL,
+ run_id UUID NOT NULL,
+ location_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ finding_code VARCHAR(48) NOT NULL,
+ on_hand NUMERIC(19,4),
+ reserved NUMERIC(19,4),
+ active_reservations NUMERIC(19,4) NOT NULL,
+ ledger_balance NUMERIC(19,4),
+ inspected_movements BIGINT NOT NULL,
+ recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_inv_reconciliation_finding PRIMARY KEY(tenant_id,run_id,location_id,item_id),
+ CONSTRAINT fk_inv_reconciliation_finding_run FOREIGN KEY(tenant_id,run_id)
+   REFERENCES crm.inv_reconciliation_run(tenant_id,id),
+ CONSTRAINT ck_inv_reconciliation_finding_count CHECK(inspected_movements>=0)
+);
+CREATE INDEX idx_inv_reconciliation_recent
+ ON crm.inv_reconciliation_run(tenant_id,started_at DESC,id);
+--rollback DROP TABLE crm.inv_reconciliation_finding;
+--rollback DROP TABLE crm.inv_reconciliation_run;
