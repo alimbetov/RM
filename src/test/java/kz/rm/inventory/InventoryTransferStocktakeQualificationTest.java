@@ -266,7 +266,8 @@ class InventoryTransferStocktakeQualificationTest {
     }
 
     @Test void stocktakeRequiresFullCountAndDeniesForeignLocation() {
-        var f=fixture(),foreign=fixture();
+        var f=fixture();
+        var foreign=fixture();
         receive(f,f.source(),"stockQ8Guard0001",6);
         var who=actor(f.actor());
         assertThatThrownBy(()->commands.startStocktake(who,f.tenant(),foreign.source(),
