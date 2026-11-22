@@ -130,6 +130,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/verify_rm_qa_01b.py
+      - name: Generate UR-R3.5 exact-SHA unified maturity report
+        if: steps.qualify.outcome == 'success'
+        run: |
+          python3 .github/scripts/rm_r35_maturity_report.py
+          cat rm-r3-maturity-report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Publish immutable manifest and per-domain coverage evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -141,4 +146,6 @@ jobs:
             rm-r3-functional-coverage.md
             rm-user-role-crosswalk-validation.json
             rm-user-role-scenario-results.json
+            rm-r3-maturity-report.json
+            rm-r3-maturity-report.md
           if-no-files-found: error
