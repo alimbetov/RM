@@ -49,6 +49,11 @@ SUITES = {
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
 REQUIRED_CASES = {
     "kms-postgres-surefire": {
+        ("SalesInventoryRbacQualificationTest", "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"),
+        ("SalesInventoryRbacQualificationTest", "urR32InventoryGrantRevokeAndForeignActorPreserveLedger"),
+        ("CrmR1aQualificationTest", "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"),
+        ("FilesR10bQualificationTest", "urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes"),
+        ("OrganizationLocationLifecycleQualificationTest", "urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects"),
         ("UserRoleMatrixR31QualificationTest", "urR31AllFiveMembershipRolesHaveFallbackReadButNoImplicitWrite"),
         ("UserRoleMatrixR31QualificationTest", "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand"),
         ("UserRoleMatrixR31QualificationTest", "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites"),
