@@ -1972,3 +1972,10 @@ ALTER TABLE crm.customer_change_event ADD CONSTRAINT ck_crm_customer_change_acti
  CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED','RESTORED'));
 --rollback ALTER TABLE crm.customer_change_event DROP CONSTRAINT ck_crm_customer_change_action;
 --rollback ALTER TABLE crm.customer_change_event ADD CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED'));
+
+--changeset rm:0065-crm-r14-contact-create-history
+ALTER TABLE crm.contact_change_event DROP CONSTRAINT ck_crm_contact_change_action;
+ALTER TABLE crm.contact_change_event ADD CONSTRAINT ck_crm_contact_change_action
+ CHECK(action_code IN ('CREATED','UPDATED','ARCHIVED','RESTORED'));
+--rollback ALTER TABLE crm.contact_change_event DROP CONSTRAINT ck_crm_contact_change_action;
+--rollback ALTER TABLE crm.contact_change_event ADD CONSTRAINT ck_crm_contact_change_action CHECK(action_code IN ('UPDATED','ARCHIVED','RESTORED'));
