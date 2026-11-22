@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED, **SPEC PROPOSED**, NOT IMPLEMENTED / NOT QUALIFIED. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED / SPEC REFINED, **SPEC PROPOSED**, NOT IMPLEMENTED / NOT QUALIFIED. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -44,7 +44,7 @@
 | Проход | Фокус | Конкретная приёмка | Статус |
 |---:|---|---|---|
 | **01** | User journey + cross-domain source review | Разделы 1–4, gaps ниже, связанные реальные файлы/тесты | **SOURCE REVIEWED; SPEC PROPOSED** |
-| 02 | Каждый метод, DTO и пустые бизнес-ветви | method → SQL/JDBC → actor → state → consumer → негативный тест, без ложных present | OPEN |
+| **02** | Каждый метод, DTO и пустые бизнес-ветви | [Подробный method trace pass 02](../reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md): method → SQL → actor → state → consumer → тест | **SOURCE TRACED / SPEC REFINED** |
 | 03 | Aggregate/schema/DDL | Existing populated PG + offer/SKU snapshot migration, hard FK constraints, legacy rows | OPEN |
 | 04 | Команды и state machine | confirm/cancel/fulfill + approved reject & status progression; legal transitions | OPEN |
 | 05 | Read model и история | seller detail/lines/events, buyer own detail, literal filters and stable paging | OPEN |
@@ -167,8 +167,24 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 
 Не добавлять REST, BFF, UI, Kafka/outbox для SALES ради уже локально атомарных операций, новый заказный агрегат параллельно `crm.sales_order`, универсальную state-machine library, payment placeholder с «PAID», автоматическое создание CRM Customer из email, Redis reservation, microservice boundary или valuation в SALES. Не переписывать квалифицированные reservation/revocation locks без доказанного дефекта.
 
-## 12. Следующий проход (02/12)
+## 12. Следующий проход (03/12)
 
-Составить **полный методный протокол**: все публичные методы `AutoOrderService`, `AuthenticatedBuyerOrders`, SALES facades и внутренние команды/queries; SQL и статусы, входные проверки, external consumers; отдельно проверить immutable `store_offer.catalog_item_id` в текущих migrations, checkout/confirm race и точную mapping таблицу. Проверить, какой из Q01–Q16 действительно обеспечен существующим тестом на актуальном SHA. После 02/12 уточнить ТЗ, не начинать реализацию по непроверенным предпосылкам.
+Методный протокол завершён на source SHA `75a1fc96a732b8dcacf3b63d5e2a9bbf36627bbd`: [PASS 02 — method trace](../reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md). **PASS 03:** установить точную схему/nullable/FK/indexes и повторно сравнить с текущим HEAD, спроектировать безопасный populated-backfill неизменяемого SKU snapshot для старых заказов. Нельзя превращать документ 02 в SQL-миграцию без отдельного ревью и PostgreSQL proof.
 
-**Вердикт 01/12:** SALES/AutoOrder имеет работающее транзакционное ядро, уровень зрелости **2/5 по исходному аудиту**. Его нельзя повысить до 3/5 только написанием ТЗ. Важнейший минимальный шаг — связать immutable SKU snapshot и seller read/detail, не расширяя платежи или логистику.
+**Вердикт 01–02/12:** SALES/AutoOrder имеет работающее транзакционное ядро, уровень зрелости **2/5 по исходному аудиту**. Его нельзя повысить до 3/5 только написанием ТЗ. Важнейший минимальный шаг — связать immutable SKU snapshot и seller read/detail, не расширяя платежи или логистику.
+
+
+## 13. PASS 02 / Method trace — дополнения к ТЗ (2026-11-22)
+
+**Source SHA:** `75a1fc96a732b8dcacf3b63d5e2a9bbf36627bbd`. Полный реестр: [RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02](../reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md). Текущий `store_offer.catalog_item_id` nullable по Liquibase rm:0026, а `sales_order_line` содержит только `offer_id/title_snapshot/quantity/unit_price_snapshot/currency`. Сами `confirm` и `InventoryReservationService.reserve` берут SKU через изменяемую связь.
+
+**Обязательные уточнения до реализации:**
+
+- **SA2-05 / least privilege:** `cancel(PLACED)` сейчас требует одновременно SALES_ORDER_CANCEL и INVENTORY_RELEASE, хотя резервов может не быть. В проходе 04 утвердить право на отмену до подтверждения и не ослаблять защиту release после резерва.
+- **SA2-07 / price consistency:** `checkout` читает `store_offer` раздельно и без явной блокировки, поэтому нужно испытать конкурентную публикацию/изменение цены. Не заменять snapshot на живые цены.
+- **SA2-08 / basket validation:** лимит 1000 проверяется на входной позиции **до** merge; суммарное количество дубликатов может превысить лимит. Установить предельную агрегированную quantity с контролируемой ошибкой.
+- **SA2-09 / buyer linking:** `verifyEmail` обновляет потенциально несколько заказов разных продавцов для одной глобальной identity; это **намеренное** связывание по пользователю, но не дает tenant employee дополнительных прав. Сохранить и квалифицировать.
+- **SA2-11 / tenant operational status:** наличие PUBLISHED `store_front` само по себе не проверяет ACTIVE workspace. Предусмотреть отказ checkout для suspended tenant и race с pause.
+- **SA2-12 / read consistency:** отдельные запросы COUNT и page при конкуренции могут наблюдать разные состояния. Не выдавать stable ordering за атомарный snapshot.
+
+**Зафиксированы факты:** `AuthenticatedBuyerOrders.mine` защищён VerifiedActor, но список неограничен; seller `search` PII-free и page size 1..100, но нет get/lines/history; внутренние SALES команды не пустые и уже имеют негативные/конкурентные тесты. Pass 02 не добавляет нового рабочего кода и не меняет уровень 2/5.
