@@ -146,3 +146,18 @@ The following tests have been added to `src/test/java/kz/rm/crm/CrmInteractionQu
 - Existing tested CRM core scope does not prove missing TASKS, buyer-link or protected NOTE functionality.
 - Source-confirmed: interaction idempotency, tenant-scoped rows, rowVersion transitions, active member checks; CRM PII boundary and existing interaction JUnit class.
 - Do not infer 99-case PostgreSQL PASS, production-ready, or zero gaps from this document.
+
+
+## CRM-R2.1B — PostgreSQL concurrency regression slice (2026-11-22)
+
+Three **PostgreSQL-gated** two-thread JUnit tests have been authored in `CrmInteractionQualificationTest`, protected by `Assumptions.assumeTrue(databaseProductName.contains("PostgreSQL"))`. They use a start latch, separate Spring service transactions / JDBC connections, and bounded Future waits; sequential H2 execution is not qualifying evidence.
+
+| Case | Added test | Scope | Evidence status |
+|---|---|---|---|
+| D04 | `crmR21bPostgresConcurrentCompleteAndCancelAreSingleWinner` | Same row-version complete × cancel; exactly one terminal result; one terminal event | CODE AUTHORED, PG NOT VERIFIED |
+| A07 | `crmR21bPostgresConcurrentArchiveAndRecordFenceNewActivity` | Archive × create; persisted archived status, no new post-archive record and count consistency | CODE AUTHORED, PG NOT VERIFIED |
+| E03 | `crmR21bPostgresConcurrentAssignAndMemberSuspendRejectsSubsequentAssignment` | Concurrent direct membership suspension × assignment; any pre-suspension assignment is admissible; subsequent assignment rejected | SMOKE AUTHORED, PG NOT VERIFIED |
+
+**Strict E03 qualification remains OPEN:** This third test intentionally allows either initial assignment race outcome and does not prove linearization of the membership change and assignment commit. Need two-connection lock-order orchestration with a controlled pending revoke, real trusted IAM suspension service rather than direct SQL, strict commit-order invariants and deadlock/timeout evidence.
+
+**Release evidence requirements:** exact final source commit SHA; PostgreSQL environment version; run URL / exact job / Surefire report; zero skips for the 3 PG-specific tests; repeated runs with distinct schedule order; unchanged audit and revisions on denied commands. Existing prior tests and 99 scenario definitions do not substitute for executed PG tests. Production and controller admission remain HOLD.
