@@ -316,3 +316,10 @@ Owner staff facade: `VerifiedActor + tenantId + STOREFRONT_*`, checks. Public lo
 **Не делать:** общий super-tenant, second identity/customer table, generic entity CRUD, автоматическую выдачу всех прав OWNER, implicit portfolio ACL, legacy SQL schema rename, migration checksum rewrite, fake payment delivery, global file read, автоматический маркетинговый контакт без согласия, RLS «на словах», новые контроллеры, Redis/microservices.
 
 **Программа закрыта только тогда**, когда выбранная организация выполняет квалифицированные user journeys через проверенный внутренний actor/tenant boundary, каждая операция ограничена tenant и object permission, новые сервисы имеют exact-head PostgreSQL evidence, старые функции не регрессировали, а неутверждённые политики не были молча внедрены. Это не означает автоматического допуска в production.
+
+
+## 12. Implementation increment CRM-01A (2026-11-22)
+
+**Code scope:** extend existing `CustomerSearch` with tenant-local category code, half-open creation interval and explicitly dated `expiresWithinDays` for ACTIVE started finite contracts. Legacy 4-argument constructor remains source compatible. `CrmSearchService` uses correlated tenant-scoped `EXISTS` before count and pagination; PERSON PII is not projected or decrypted. Add two-tenant/category-code collision and 0/7/60-day tests in `CrmR1aQualificationTest.crm01aTenantScopedCategoryCreatedWindowAndActiveContractExpiryFilters`.
+
+**No new DDL, entities, controllers or permissions.** This is a **partial CRM-01 implementation**, not a complete expiry-indicator summary. Remaining: `contractIndicator` aggregation/precedence, nearest-contract ID/summary, explicit end-date filters, signed cursor/keyset and validated tenant business date. Do not claim these implemented. **Qualification:** exact-head CI H2/PostgreSQL/populated-PII must pass and real-DB query plan should be checked before marking CRM-01A QUALIFIED.

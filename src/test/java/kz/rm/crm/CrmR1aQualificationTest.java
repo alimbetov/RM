@@ -1339,4 +1339,95 @@ class CrmR1aQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+
+    @Test void crm01aTenantScopedCategoryCreatedWindowAndActiveContractExpiryFilters() {
+        var a=newTenant();
+        var b=newTenant();
+        var actorA=verified(a.actorId());
+        var actorB=verified(b.actorId());
+        var asOf=java.time.LocalDate.of(2026,11,22);
+
+        var soon=secureCommands.createCompany(actorA,a.tenantId(),"A expiring",null);
+        var expired=secureCommands.createCompany(actorA,a.tenantId(),"A expired",null);
+        var later=secureCommands.createCompany(actorA,a.tenantId(),"A later",null);
+        var open=secureCommands.createCompany(actorA,a.tenantId(),"A open ended",null);
+        var unclassified=secureCommands.createCompany(actorA,a.tenantId(),"A other category",null);
+        var foreign=secureCommands.createCompany(actorB,b.tenantId(),"B expiring",null);
+        var categoryA=categoryService.create(actorA,a.tenantId(),"SHARED","Tenant A category");
+        var categoryB=categoryService.create(actorB,b.tenantId(),"SHARED","Tenant B category");
+        for(var customer:java.util.List.of(soon,expired,later,open))
+            categoryService.assignPrimary(actorA,a.tenantId(),customer.id(),categoryA.id());
+        categoryService.assignPrimary(actorB,b.tenantId(),foreign.id(),categoryB.id());
+
+        var soonContract=contractService.create(actorA,a.tenantId(),soon.id(),"A-SOON",
+                asOf.minusDays(5),asOf.plusDays(7),asOf);
+        contractService.changeStatus(actorA,a.tenantId(),soonContract.id(),
+                CustomerContractEntity.Status.ACTIVE,soonContract.rowVersion(),asOf);
+        var expiredContract=contractService.create(actorA,a.tenantId(),expired.id(),"A-OLD",
+                asOf.minusDays(10),asOf.minusDays(1),asOf);
+        contractService.changeStatus(actorA,a.tenantId(),expiredContract.id(),
+                CustomerContractEntity.Status.ACTIVE,expiredContract.rowVersion(),asOf);
+        var laterContract=contractService.create(actorA,a.tenantId(),later.id(),"A-LATER",
+                asOf.minusDays(3),asOf.plusDays(60),asOf);
+        contractService.changeStatus(actorA,a.tenantId(),laterContract.id(),
+                CustomerContractEntity.Status.ACTIVE,laterContract.rowVersion(),asOf);
+        var openContract=contractService.create(actorA,a.tenantId(),open.id(),"A-OPEN",
+                asOf.minusDays(3),null,asOf);
+        contractService.changeStatus(actorA,a.tenantId(),openContract.id(),
+                CustomerContractEntity.Status.ACTIVE,openContract.rowVersion(),asOf);
+        var otherContract=contractService.create(actorA,a.tenantId(),unclassified.id(),"A-OTHER",
+                asOf.minusDays(2),asOf.plusDays(5),asOf);
+        contractService.changeStatus(actorA,a.tenantId(),otherContract.id(),
+                CustomerContractEntity.Status.ACTIVE,otherContract.rowVersion(),asOf);
+        var foreignContract=contractService.create(actorB,b.tenantId(),foreign.id(),"B-SOON",
+                asOf.minusDays(2),asOf.plusDays(7),asOf);
+        contractService.changeStatus(actorB,b.tenantId(),foreignContract.id(),
+                CustomerContractEntity.Status.ACTIVE,foreignContract.rowVersion(),asOf);
+
+        var upcoming=new CustomerSearch("COMPANY","ACTIVE",null,null,
+                "SHARED",null,null,asOf,7);
+        var first=secureQueries.customers(actorA,a.tenantId(),upcoming,0,1);
+        assertThat(first.getTotalElements()).isEqualTo(1);
+        assertThat(first.getContent()).extracting(CustomerSummary::id)
+                .containsExactly(soon.id()).doesNotContain(foreign.id());
+        assertThat(secureQueries.customers(actorA,a.tenantId(),upcoming,1,1).getContent())
+                .isEmpty();
+        assertThat(secureQueries.customers(actorB,b.tenantId(),upcoming,0,10).getContent())
+                .extracting(CustomerSummary::id).containsExactly(foreign.id());
+        assertThat(secureQueries.customers(actorA,a.tenantId(),
+                new CustomerSearch("COMPANY",null,null,null,"SHARED",
+                        null,null,asOf,0),0,10).getTotalElements()).isZero();
+        assertThat(secureQueries.customers(actorA,a.tenantId(),
+                new CustomerSearch("COMPANY",null,null,null,"SHARED",
+                        null,null,asOf,60),0,10).getContent())
+                .extracting(CustomerSummary::id).containsExactlyInAnyOrder(soon.id(),later.id());
+        assertThat(secureQueries.customers(actorA,a.tenantId(),
+                new CustomerSearch(null,null,null,null,null,null,null,asOf,7),0,10)
+                .getContent()).extracting(CustomerSummary::id)
+                .containsExactlyInAnyOrder(soon.id(),unclassified.id());
+
+        var same=java.sql.Timestamp.from(Instant.parse("2026-01-05T12:00:00Z"));
+        jdbc.update("UPDATE crm.customer SET created_at=? WHERE tenant_id=? AND id=?",
+                same,a.tenantId(),soon.id());
+        jdbc.update("UPDATE crm.customer SET created_at=? WHERE tenant_id=? AND id=?",
+                same,b.tenantId(),foreign.id());
+        var timeFilter=new CustomerSearch(null,null,null,null,null,
+                Instant.parse("2026-01-05T12:00:00Z"),
+                Instant.parse("2026-01-05T12:00:01Z"),null,null);
+        assertThat(secureQueries.customers(actorA,a.tenantId(),timeFilter,0,1)
+                .getContent()).extracting(CustomerSummary::id).containsExactly(soon.id());
+        assertThat(secureQueries.customers(actorB,b.tenantId(),timeFilter,0,1)
+                .getContent()).extracting(CustomerSummary::id).containsExactly(foreign.id());
+        assertThatThrownBy(()->new CustomerSearch(null,null,null,null,
+                "SHARED",null,null,null,7)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->new CustomerSearch(null,null,null,null,
+                "bad code",null,null,null,null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->new CustomerSearch(null,null,null,null,
+                null,Instant.parse("2026-01-05T12:00:01Z"),
+                Instant.parse("2026-01-05T12:00:00Z"),null,null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureQueries.customers(actorA,b.tenantId(),upcoming,0,1))
+                .isInstanceOf(SecurityException.class);
+    }
+
 }

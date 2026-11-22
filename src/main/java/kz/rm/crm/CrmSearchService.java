@@ -33,28 +33,64 @@ class CrmSearchService {
         authorization.requireForCommand(actor,tenant,DomainPermission.CRM_READ);
         validatePage(page,size);
         CustomerSearch f=filter==null?new CustomerSearch(null,null,null,null):filter;
-        var predicate=new StringBuilder(" WHERE tenant_id=?");
+        var predicate=new StringBuilder(" WHERE c.tenant_id=?");
         List<Object> args=new ArrayList<>(List.of(tenant));
-        if(f.type()!=null){predicate.append(" AND customer_type=?");args.add(f.type());}
-        if(f.status()!=null){predicate.append(" AND status=?");args.add(f.status());}
-        if(f.regionZoneId()!=null){predicate.append(" AND region_zone_id=?");args.add(f.regionZoneId());}
+        if(f.type()!=null){predicate.append(" AND c.customer_type=?");args.add(f.type());}
+        if(f.status()!=null){predicate.append(" AND c.status=?");args.add(f.status());}
+        if(f.regionZoneId()!=null){predicate.append(" AND c.region_zone_id=?");args.add(f.regionZoneId());}
         if(f.companyNameContains()!=null){
             // Only public company names are searchable, never encrypted person names.
-            predicate.append(" AND customer_type='COMPANY' AND LOWER(organization_label) LIKE ?");
+            predicate.append(" AND c.customer_type='COMPANY' AND LOWER(c.organization_label) LIKE ?");
             String escaped=f.companyNameContains().toLowerCase(java.util.Locale.ROOT)
                     .replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
             predicate.append(" ESCAPE '\\'");
             args.add("%"+escaped+"%");
         }
-        Long count=jdbc.queryForObject("SELECT count(*) FROM crm.customer"+predicate,
+        if (f.categoryCode() != null) {
+            // EXISTS avoids duplicating customers and keeps count/page scopes identical.
+            predicate.append("""
+                    AND EXISTS (SELECT 1 FROM crm.customer_category cat
+                                WHERE cat.tenant_id=c.tenant_id
+                                  AND cat.id=c.primary_category_id
+                                  AND cat.code=?)
+                    """);
+            args.add(f.categoryCode());
+        }
+        if (f.createdFrom() != null) {
+            predicate.append(" AND c.created_at>=?");
+            args.add(java.sql.Timestamp.from(f.createdFrom()));
+        }
+        if (f.createdTo() != null) {
+            predicate.append(" AND c.created_at<?");
+            args.add(java.sql.Timestamp.from(f.createdTo()));
+        }
+        if (f.expiresWithinDays() != null) {
+            // The earliest valid ACTIVE fixed-term contract determines "expires within".
+            // A future/expired, DRAFT, CLOSED or open-ended contract cannot satisfy this.
+            // The correlated tenant FK blocks foreign contracts even with a known customer ID.
+            predicate.append("""
+                    AND EXISTS (SELECT 1 FROM crm.customer_contract ct
+                                WHERE ct.tenant_id=c.tenant_id
+                                  AND ct.customer_id=c.id
+                                  AND ct.status='ACTIVE'
+                                  AND ct.starts_on<=?
+                                  AND ct.ends_on>=?
+                                  AND ct.ends_on<=?)
+                    """);
+            args.add(java.sql.Date.valueOf(f.asOfDate()));
+            args.add(java.sql.Date.valueOf(f.asOfDate()));
+            args.add(java.sql.Date.valueOf(f.asOfDate().plusDays(f.expiresWithinDays())));
+        }
+        Long count=jdbc.queryForObject("SELECT count(*) FROM crm.customer c"+predicate,
                 Long.class,args.toArray());
         var pageArgs=new ArrayList<>(args);
         pageArgs.add(size);pageArgs.add((long)page*size);
         var rows=jdbc.query("""
-                SELECT id,customer_type,organization_label,region_zone_id,status,created_at,row_version
-                FROM crm.customer
+                SELECT c.id,c.customer_type,c.organization_label,c.region_zone_id,
+                       c.status,c.created_at,c.row_version
+                FROM crm.customer c
                 """+predicate+"""
-                 ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?
+                 ORDER BY c.created_at DESC,c.id DESC LIMIT ? OFFSET ?
                 """,(rs,n)->new CustomerSummary(rs.getObject(1,UUID.class),
                     rs.getString(2),rs.getString(3),rs.getString(4),rs.getString(5),
                     rs.getTimestamp(6).toInstant(),rs.getLong(7)),pageArgs.toArray());
