@@ -784,11 +784,21 @@ class SalesInventoryRbacQualificationTest {
                 (tenant_id,location_id,item_id,on_hand,reserved)
             VALUES (?,?,?,10,0)
             """,c.tenant(),c.location(),replacement);
-        jdbc.update("""
-            UPDATE crm.store_offer
-            SET catalog_item_id=?,title='Replacement',unit_price=999
-            WHERE tenant_id=? AND id=?
-            """,replacement,c.tenant(),c.offer());
+        // Post-08.4: the attempted remap must fail at PostgreSQL DB boundary.
+        // H2 does not run the PostgreSQL-only immutability trigger.
+        try(var connection=dataSource.getConnection()) {
+            if(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql")) {
+                assertThatThrownBy(()->jdbc.update("""
+                    UPDATE crm.store_offer
+                    SET catalog_item_id=?,title='Replacement',unit_price=999
+                    WHERE tenant_id=? AND id=?
+                    """,replacement,c.tenant(),c.offer()))
+                    .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            }
+        } catch(java.sql.SQLException ex) {
+            throw new IllegalStateException(ex);
+        }
         UUID fixed=jdbc.queryForObject("""
                 SELECT catalog_item_id_snapshot FROM crm.sales_order_line
                 WHERE tenant_id=? AND order_id=?
