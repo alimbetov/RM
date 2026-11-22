@@ -3220,3 +3220,26 @@ CREATE TRIGGER trg_qr07_quarantine_movement_immutable
  BEFORE UPDATE OR DELETE ON crm.inv_return_quarantine_movement
  FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
 --rollback DROP TRIGGER trg_qr07_quarantine_movement_immutable ON crm.inv_return_quarantine_movement;
+
+
+--changeset rm:0102-qr07-r25-one-time-physical-return-proof
+-- Buyer-issued one-time physical return credential: store digest, never raw token.
+CREATE TABLE crm.sales_return_reception_proof (
+ tenant_id UUID NOT NULL, return_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL, buyer_user_id UUID NOT NULL,
+ digest_sha256 VARCHAR(64) NOT NULL, generation INTEGER NOT NULL,
+ request_key VARCHAR(100) NOT NULL, state VARCHAR(16) NOT NULL,
+ issued_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ consumed_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT pk_qr07_reception_proof PRIMARY KEY (tenant_id,return_id),
+ CONSTRAINT uq_qr07_reception_proof_key UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_qr07_reception_proof_return FOREIGN KEY(tenant_id,return_id)
+ REFERENCES crm.sales_return_request(tenant_id,id),
+ CONSTRAINT fk_qr07_reception_proof_warehouse FOREIGN KEY(tenant_id,warehouse_id)
+ REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT ck_qr07_proof_state CHECK(state IN('ISSUED','CONSUMED')),
+ CONSTRAINT ck_qr07_proof_generation CHECK(generation>0),
+ CONSTRAINT ck_qr07_proof_digest CHECK(LENGTH(digest_sha256)=64)
+);
+--rollback DROP TABLE crm.sales_return_reception_proof;
