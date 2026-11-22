@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED; PASS 07/12 SETTINGS SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -49,7 +49,7 @@
 | **04** | Команды и state machine | [PASS 04 — точная state machine, permissions и запас](../reviews/RM-SALES-AUTOORDER-STATE-MACHINE-PASS-04-2026-11-22.md): actual code, proposed reject/cancel split, concurrency | **SOURCE VERIFIED / SPEC PROPOSED** |
 | **05** | Read model и история | [PASS 05 — seller/buyer query, PII, order-linked reserves](../reviews/RM-SALES-AUTOORDER-READ-MODEL-PASS-05-2026-11-22.md); bounded get/history/mine/ownDetail contracts | **SOURCE REVIEWED / SPEC PROPOSED** |
 | **06** | Idempotency/конкурентность | [PASS 06 — TX, locks, replay, rollback and evidence](../reviews/RM-SALES-AUTOORDER-TRANSACTIONS-PASS-06-2026-11-22.md); existing guards and proposed PG tests | **SOURCE REVIEWED / SPEC PROPOSED** |
-| 07 | Реальность настроек | settings autoReserve/picking/publish state реально потребляются либо явно неактивны | OPEN |
+| **07** | Реальность настроек | [PASS 07 — consumers and settings truth](../reviews/RM-SALES-AUTOORDER-SETTINGS-FEATURE-FLAGS-PASS-07-2026-11-22.md): real STOREFRONT state, mandatory reserve, inert legacy picking and cost policy readiness | **SOURCE REVIEWED / SPEC PROPOSED** |
 | 08 | CATALOG/STOREFRONT/INVENTORY/ORG | publish-to-offer, seller warehouse, immutable snapshot and stock eligibility | OPEN |
 | 09 | IAM/PII/tenant ACL | A/B/AB, verified buyer, revoked staff, seller/buyer separation, read/write | OPEN |
 | 10 | Ошибки и объём | load/lock stripes/large baskets/timeout/retry, bounded lists; measured PG not invented | OPEN |
@@ -248,3 +248,18 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 **Acceptance proposed:** `SALE-TX06-01..16` (concurrent duplicate checkout, PAUSED replay, checkout+IAM failure injection, price/SKU change, multi-SKU rollback, double-commands/cancel-vs-fulfill, revoke on each operation, concurrent read/write, warehouse/catalog lifecycle, measured throughput, exact SHA workflows). Newly proposed IDs are **not implemented or GREEN**.
 
 **Implementation after owner decisions:** SALE-R1.6A receipt recovery + basket bounds → R1.6B immutable offers/SKU after PASS 03 → R1.6C strict replay reconciliation → R1.6D negative PostgreSQL race/rollback suite. No new workers/sagas/distributed locks. **PASS 06 SOURCE REVIEWED**, maturity SALES 2/5, production HOLD. Next **07/12**: settings/feature flags, read/write actual consumer behavior.
+
+
+## 18. PASS 07 — Settings & Feature Flags: real consumer qualification (2026-11-22)
+
+**Reviewed source:** `7d8189bff795956a56b0f14608b82c2e9bd0d113`. [Полный settings audit PASS 07](../reviews/RM-SALES-AUTOORDER-SETTINGS-FEATURE-FLAGS-PASS-07-2026-11-22.md), **13 settings/capability paths**, исходные writers, storage, consumers, тесты и 14 новых qualification IDs `SALE-SET07-01..14`.
+
+**Реальное поведение:** `crm.store_front.state='PUBLISHED'` и `crm.store_offer.state='PUBLISHED'` принимаются checkout; `DRAFT/PAUSED/HIDDEN` ограничивают **новые** checkout. Но tenant-managed `publish/pause/publishOffer/hideOffer` commands пока не подтверждены. `StorefrontSettings.acceptOrders` хранится лишь в Java record, в `crm.store_front` такой колонки нет и checkout не вызывает `canCheckout()`. `defaultLocale` тоже не хранится в `store_front` и не потребляется checkout. Не считать их работающими переключателями.
+
+**Уже правильно ограничено:** `AuthenticatedInventorySettings` возвращает неизменный `ReservationMode.MANDATORY_ON_CONFIRM`, `PickingReadiness.NOT_IMPLEMENTED` и `ValuationReadiness.NOT_CONFIGURED/POLICY_ONLY`. `auto_reserve_on_confirm` остаётся в DB и deprecated `InventoryTenantSettingsService.updatePicking` ещё может менять его, но SALES confirm всегда делает полный reserve. `picking_strategy=FIFO/FEFO/MANUAL` — legacy metadata без picking engine. `allow_negative_stock=FALSE` жёстко запрещён CHECK и stock balance invariants. Не создавать selectable UI switches для этих параметров.
+
+**Valuation vs picking:** `approveCostPolicy` — реальный tenant-scoped immutable policy version и functional currency, но не FIFO/COGS calculation; `POLICY_ONLY` в read facade — правдивая проекция. `CatalogItemService.publish/archive/addPriceRevision` функционируют, но **не создают/обновляют** `crm.store_offer` и цену будущего checkout; нужен осознанный explicit catalog→storefront publication contract, без автозаливки предложения из SKU.
+
+**Минимальные slices:** SALE-R1.7A truthful settings/readiness and deprecated flags isolation → R1.7B authenticated storefront publish/pause & offer hide/publish with CAS/race → R1.7C explicit catalog/offer projection tied to immutable order snapshot PASS 03/06 → R1.7D PostgreSQL synthetic set→effect matrix. Без универсального feature flag сервиса, Redis, новой таблицы SALES settings и UI/HTTP на стадии Feature Freeze.
+
+**Вердикт:** PASS 07/12 **SOURCE REVIEWED / SPEC PROPOSED**, maturity 2/5, без Java/DDL и без newly-qualified tests. Следующий PASS **08/12**: cross-domain ownership and end-to-end contracts.
