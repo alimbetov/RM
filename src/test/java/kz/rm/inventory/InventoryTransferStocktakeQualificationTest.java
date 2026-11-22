@@ -472,6 +472,18 @@ class InventoryTransferStocktakeQualificationTest {
         assertThat(applied.run().findingCount()).isEqualTo(1);
     }
 
+    private void awaitPgRunLock(int backendPid) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            String wait = jdbc.query(
+                    "SELECT wait_event_type FROM pg_stat_activity WHERE pid=?",
+                    rs -> rs.next() ? rs.getString(1) : null, backendPid);
+            if ("Lock".equals(wait)) return;
+            Thread.sleep(25);
+        }
+        throw new AssertionError("Concurrent reconciliation advance did not block on PG lock");
+    }
+
     @Test void postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings()
             throws Exception {
         try (var con = source.getConnection()) {
@@ -490,6 +502,7 @@ class InventoryTransferStocktakeQualificationTest {
         var run = reconciliationRuns.start(who, f.tenant());
         var firstHeld = new CountDownLatch(1);
         var secondAttempt = new CountDownLatch(1);
+        var secondBackend = new java.util.concurrent.atomic.AtomicInteger();
         var release = new CountDownLatch(1);
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
         tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
@@ -509,11 +522,16 @@ class InventoryTransferStocktakeQualificationTest {
             var second = pool.submit(() -> {
                 if (!firstHeld.await(10, TimeUnit.SECONDS))
                     throw new IllegalStateException("First advance did not lock run");
-                secondAttempt.countDown();
-                return reconciliationRuns.advance(who, f.tenant(), run.id(), 1);
+                return tx.execute(status -> {
+                    secondBackend.set(jdbc.queryForObject(
+                            "SELECT pg_backend_pid()", Integer.class));
+                    secondAttempt.countDown();
+                    return reconciliationRuns.advance(who, f.tenant(), run.id(), 1);
+                });
             });
             try {
                 assertThat(secondAttempt.await(10, TimeUnit.SECONDS)).isTrue();
+                awaitPgRunLock(secondBackend.get());
             } finally {
                 release.countDown();
             }
