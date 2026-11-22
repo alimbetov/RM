@@ -3,7 +3,7 @@
 
 **Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12…07/12 — SPECIFIED; **новый этапный рубеж пройден на уровне ТЗ**. Handoff следующему домену разрешён; 08–12 — DEFERRED/NOT DONE, не production admission. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
-**Статус:** ТЗ 01–07 СФОРМИРОВАНО; **ORG-R1.1 service implementation committed on base_dev** (typed create/update, lifecycle, inventory blockers, audit, six test methods). Новые тесты и полный PostgreSQL E2E ещё НЕ ПОДТВЕРЖДЕНЫ GREEN; production HOLD. Feature Freeze: без HTTP-контроллеров и merge в main.
+**Статус:** ТЗ 01–07 СФОРМИРОВАНО; **ORG-R1.1 source implementation and 12 new tests committed** (6 lifecycle + 6 PG races). **Exact-SHA CI GREEN:** `69f757cf4d79c84d0198a6f2af432067a17007b2`, [workflow #44989157721](https://github.com/alimbetov/RM/actions/runs/44989157721). 314 test cases discovered, PostgreSQL 0 failures/0 errors/18 skips, H2 0 failures/0 errors/66 skips. Full production admission remains HOLD; 08–12 pending. No controllers/merge main.
 
 ## 1. Цель и границы
 
@@ -27,7 +27,7 @@
 | OrganizationLocationEntity | @Version, immutable tenant/type/identity; explicit replaceProfile/moveTo (code present) | Verify JPA version increments on real PostgreSQL |
 | OrganizationLocationRepository | Scoped get/search + tenant/id @Lock(PESSIMISTIC_WRITE) (code present) | Literal LIKE and deep-page improvements deferred |
 | KatoLocationPolicy | Отказ для неизвестного/удалённого КАТО, level > 3 | Повторная проверка при изменении/реактивации |
-| OrganizationLocationQueryQualificationTest + LifecycleQualificationTest | Existing A/B/revoke + 6 new lifecycle test methods committed | Test executions not verified; broader Q03..Q07 race matrix pending |
+| OrganizationLocationQueryQualificationTest + LifecycleQualificationTest + R11ConcurrencyQualificationTest | Existing A/B/revoke + 6 lifecycle and 6 PG concurrency methods; GREEN on exact SHA 69f757 | Broader P03..P07 qualification and 08–12 release gates pending |
 
 **Реестр GAP:**
 - ORG-01 **P0 → CODE PRESENT / QA PENDING:** typed transitions ACTIVE/INACTIVE/CLOSED committed; PG race/rollback gates remain.
@@ -41,7 +41,7 @@
 - ORG-09 **P1:** недостаточно PG-проверок двух tenants, mixed membership и конкурентных складских операций.
 - ORG-10 **P2:** в Liquibase имеются два логически эквивалентных unique constraint на (workspace_id,id); отдельно изучить, не удалять во время freeze.
 
-Вывод: исходная зрелость **1/5** была оценена до реализации. Сейчас code-level CRUD/lifecycle расширен, **но до подтверждения независимого PostgreSQL GREEN и pass 08–12 release gates зрелость по доказательной шкале не повышается автоматически**.
+Вывод: исходная зрелость **1/5** была оценена до реализации. Сегодня CRUD/lifecycle и шесть новых PostgreSQL конкурентных сценариев получили **GREEN на точном SHA 69f757**. Это значительное укрепление implementation confidence, но оценка полной production-зрелости требует populated migration, оставшейся P03–P07 матрицы и 08–12 gates; production HOLD.
 
 ## 3. Методика 12 последовательных проходов
 
@@ -389,7 +389,7 @@ P05-01 «transfer locks first location → SKU → second location» относ�
 
 ## 17. ORG-R1.1 — начало реализации после семи проектных проходов
 
-**Протокол и точные source paths:** [RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md](../reviews/RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md). **Состояние:** CODE COMMITTED / INTEGRATION TESTS ADDED / PostgreSQL GREEN PENDING.
+**Протокол и точные source paths:** [RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md](../reviews/RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md). **Состояние:** CODE COMMITTED / 12 INTEGRATION TEST METHODS / **PostgreSQL GREEN on SHA 69f757** / PRODUCTION HOLD.
 
 ### Реализованные публичные контракты на уровне service facade
 
@@ -409,6 +409,26 @@ LocationDto close(VerifiedActor actor, UUID tenant, UUID location, long expected
 - Для changed KATO добавлен консервативный guard не только stock/movement/reservation history, но и `inv_stocktake` history, предотвращая перепривязку старой инвентаризации к другой географии. Неизменённый deprecated KATO при reactivate не проверяется повторно.
 - Вся мутация через tenant/actor `ORGANIZATION_LOCATION_WRITE`, без отложенного авторизационного check после обработки чужих UUID.
 - **Открыто:** P05/P06 legacy fulfillment eligibility в INVENTORY/SALES, immutable SALES SKU snapshot, literal LIKE/deep paging, solo-owner IAM role UX, comprehensive 2–3 connection PG tests, populated-db migration/audit and load.
-- **Статус:** шесть новых test methods в `OrganizationLocationLifecycleQualificationTest` присутствуют. Только фактический запуск Maven/GitHub Actions может подтвердить их результат; не относить их к GREEN заранее. Production admission остаётся HOLD. Отложенные аналитические проходы 08–12 не переименовывать в DONE.
+- **Статус:** 6 lifecycle methods в `OrganizationLocationLifecycleQualificationTest` и 6 real-PostgreSQL race methods в `OrganizationLocationR11ConcurrencyQualificationTest` проверены исходниками и успешно завершились в CI #44989157721. 314 test cases, 0 failures/errors, 18 skipped in PG; все 6 новых PG races executed. Production admission остаётся HOLD; не переименовывать отложенные 08–12 в DONE.
 
-**Следующий технический шаг:** квалифицировать текущий `ORG-R1.1` и исправить обнаруженные дефекты только в ORGANIZATION/INVENTORY owner boundaries; SALES/AutoOrder не менять, так как развивается параллельно.
+**Следующий технический шаг:** хранить шесть race tests как обязательную регрессию при изменении ORGANIZATION/INVENTORY; до расширения предметного scope выполнить отдельные populated migration/recovery/load и release-гейты. SALES/AutoOrder продолжает разрабатываться параллельно и не менялся.
+
+
+---
+
+## 18. ORG-R1.1 — PostgreSQL concurrency qualification на точном commit
+
+**Source:** `69f757cf4d79c84d0198a6f2af432067a17007b2`, **workflow:** [#44989157721 — SUCCESS](https://github.com/alimbetov/RM/actions/runs/44989157721), **детальное evidence:** [R1.1 implementation & concurrency](../reviews/RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md). Проверены оба доменных состояния после фиксации и блокировки, не только HTTP status / thrown exception.
+
+| Реальные новые PG тесты | Доказанный инвариант |
+|---|---|
+| `confirm first → deactivate` | COMMITTED reservation blocks INACTIVE, status CONFIRMED and stock reserved agree |
+| `deactivate first → confirm` | INACTIVE rejects NEW reserve, seller remains PLACED, no partial events |
+| `transfer first → deactivate` | 2 movement legs, conservation 10→6+4, free stock does not block temporary INACTIVE |
+| `deactivate first → transfer` | denies new transfer, no stock/movement side effects |
+| `update × update` on same expectedVersion | one winning profile, rowVersion increment once, exactly one audit |
+| `revoke ORG_WRITE × admitted deactivate` | command commit before permission revocation; follow-up unauthorized edit denied |
+
+**Evidence counts:** PostgreSQL integration: 314 discovered / 18 skipped / 0 failures / 0 errors; all 6 additional PostgreSQL race tests executed. H2 smoke: 314 discovered / 66 skipped / 0 failures / 0 errors; all 6 PG-only race tests deliberately skipped. Populated IAM/PII job passed; this is **not** proof of populated ORGANIZATION migration. `CI GREEN` is attached to the tested SHA, not to all later concurrent commits on `base_dev`.
+
+**Release HOLD remains:** pass 08 literal search and pagination, pass 09 populated ORG migration/audit, pass 10 wider failure/recovery interleavings, pass 11 lock throughput/p95/p99, pass 12 full admission. Neither new SALES/AutoOrder logic nor independent legacy inactive fulfilment gate is delivered in this R1.1 qualification.
