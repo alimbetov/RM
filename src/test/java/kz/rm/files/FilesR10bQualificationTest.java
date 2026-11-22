@@ -50,7 +50,7 @@ class FilesR10bQualificationTest {
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
     @Autowired OrganizationMembershipRepository memberships;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
     @Autowired AuthenticatedFilesCommands files;
     @Autowired FileUploadCompletionService completion;
     @Autowired FileStoragePort storage;
@@ -77,18 +77,18 @@ class FilesR10bQualificationTest {
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),organization.getId(),
                 uploader.getId(),OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",space.getId());
-        var role=roles.createRole(owner.getId(),space.getId(),
+        var role=roles.createRole(verified(owner.getId()),space.getId(),
                 "FILE_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "Uploader");
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_UPLOAD);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_READ);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_ATTACH);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_DETACH);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.CRM_READ);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.CRM_WRITE);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.CRM_PII_READ);
-        roles.assign(owner.getId(),space.getId(),uploader.getId(),role.id());
-        roles.enable(owner.getId(),space.getId());
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.FILES_UPLOAD);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.FILES_READ);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.FILES_ATTACH);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.FILES_DETACH);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.CRM_READ);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.CRM_WRITE);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.CRM_PII_READ);
+        roles.assign(verified(owner.getId()),space.getId(),uploader.getId(),role.id());
+        roles.enable(verified(owner.getId()),space.getId());
         String sub=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",
                 String.class,uploader.getId());
         org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
@@ -97,6 +97,16 @@ class FilesR10bQualificationTest {
                 .expiresAt(Instant.now().plusSeconds(300)).build();
         return new Setup(owner.getId(),uploader.getId(),space.getId(),
                 new OidcActorResolver(decoder,users).resolve("synthetic-only"));
+    }
+    private VerifiedActor verified(UUID id) {
+        String sub=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,id);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                        .header("alg","RS256").subject(sub).issuedAt(Instant.now())
+                        .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder,users).resolve("synthetic-owner-token");
     }
     private static byte[] pdf() {
         return "%PDF-1.4\n1 0 obj\n<< >>\nendobj\n%%EOF\n"
