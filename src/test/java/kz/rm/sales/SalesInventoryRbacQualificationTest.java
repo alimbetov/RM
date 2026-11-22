@@ -43,7 +43,7 @@ class SalesInventoryRbacQualificationTest {
     @Autowired AuthenticatedSalesCommands authenticatedCommands;
     @Autowired AuthenticatedInventoryCommands warehouse;
     @Autowired AutoOrderService checkout;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
     @Autowired UserAccountRepository users;
@@ -120,13 +120,13 @@ class SalesInventoryRbacQualificationTest {
             .order().orderId();
     }
     private void allow(Context c,DomainPermission... permissions) {
-        var role=roles.createRole(c.owner(),c.tenant(),
+        var role=roles.createRole(verified(c.owner()),c.tenant(),
             "OPS_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
             "Warehouse and order operator");
-        for(var permission:permissions)roles.grant(c.owner(),c.tenant(),role.id(),permission);
-        roles.assign(c.owner(),c.tenant(),c.staff(),role.id());
-        roles.assign(c.owner(),c.tenant(),c.backupOwner(),role.id());
-        roles.enable(c.owner(),c.tenant());
+        for(var permission:permissions)roles.grant(verified(c.owner()),c.tenant(),role.id(),permission);
+        roles.assign(verified(c.owner()),c.tenant(),c.staff(),role.id());
+        roles.assign(verified(c.owner()),c.tenant(),c.backupOwner(),role.id());
+        roles.enable(verified(c.owner()),c.tenant());
     }
     private BigDecimal scalar(Context c,String field) {
         if(!field.equals("on_hand") && !field.equals("reserved"))
@@ -190,10 +190,10 @@ class SalesInventoryRbacQualificationTest {
             .isInstanceOf(SecurityException.class);
         assertThat(status(c,id)).isEqualTo("CONFIRMED");
         // A different functional role may add the missing permission.
-        var role=roles.createRole(c.owner(),c.tenant(),"SHIP_"+UUID.randomUUID().toString()
+        var role=roles.createRole(verified(c.owner()),c.tenant(),"SHIP_"+UUID.randomUUID().toString()
                 .replace("-","").substring(0,12).toUpperCase(),"Shipping");
-        roles.grant(c.owner(),c.tenant(),role.id(),DomainPermission.INVENTORY_FULFILL);
-        roles.assign(c.owner(),c.tenant(),c.staff(),role.id());
+        roles.grant(verified(c.owner()),c.tenant(),role.id(),DomainPermission.INVENTORY_FULFILL);
+        roles.assign(verified(c.owner()),c.tenant(),c.staff(),role.id());
         assertThat(commands.fulfill(c.staff(),c.tenant(),id).affectedLines()).isEqualTo(1);
         assertThat(commands.fulfill(c.staff(),c.tenant(),id).affectedLines()).isZero();
         assertThat(status(c,id)).isEqualTo("COMPLETED");
@@ -355,7 +355,7 @@ class SalesInventoryRbacQualificationTest {
             }));
             assertThat(commandAdmitted.await(10,TimeUnit.SECONDS)).isTrue();
             var revoke=pool.submit(()->{
-                roles.revoke(c.owner(),c.tenant(),role,DomainPermission.SALES_ORDER_CONFIRM);
+                roles.revoke(verified(c.owner()),c.tenant(),role,DomainPermission.SALES_ORDER_CONFIRM);
                 return true;
             });
             try {
