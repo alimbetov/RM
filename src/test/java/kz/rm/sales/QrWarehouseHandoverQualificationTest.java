@@ -2692,14 +2692,14 @@ class QrWarehouseHandoverQualificationTest {
         var c=context();var foreign=context();var o=ready(c,false);
         var claim=qr07R2Approved(c,o,1);
         assertThatThrownBy(()->returnPhysical.receive(foreign.staff(),c.tenant(),
-                c.warehouse(),claim.requestId(),2,"SCAN_004",key()))
+                c.warehouse(),claim.requestId(),2,"A".repeat(43),key()))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),
                 c.warehouse(),claim.requestId(),2,key()))
                 .hasMessageContaining("RETURN_PHYSICAL_EVIDENCE_REQUIRED");
         scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
         assertThatThrownBy(()->returnPhysical.receive(c.staff(),c.tenant(),
-                c.warehouse(),claim.requestId(),2,"SCAN_005",key()))
+                c.warehouse(),claim.requestId(),2,"B".repeat(43),key()))
                 .isInstanceOf(SecurityException.class);
         assertThat(jdbc.queryForObject("""
                 SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
