@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class AutoOrderR1QualificationTest {
     @Autowired AutoOrderService orders;
+    @Autowired AuthenticatedBuyerOrders securedBuyerOrders;
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
     @Autowired UserAccountRepository users;
@@ -241,4 +242,40 @@ class AutoOrderR1QualificationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
                 Integer.class,st.tenantId())).isZero();
     }
+
+    @Test void tcrud04BuyerOrdersCannotBeReadBySupplyingAnotherUsersUuid() {
+        var st=store();
+        String aEmail="private-buyer-a-"+UUID.randomUUID()+"@example.kz";
+        String bEmail="private-buyer-b-"+UUID.randomUUID()+"@example.kz";
+        var a=orders.checkout(st.slug(),aEmail,"buyer-a-"+UUID.randomUUID().toString().replace("-",""),
+                List.of(new AutoOrderService.Line(st.offerId(),1)));
+        var b=orders.checkout(st.slug(),bEmail,"buyer-b-"+UUID.randomUUID().toString().replace("-",""),
+                List.of(new AutoOrderService.Line(st.offerId(),1)));
+        UUID buyerA=orders.verifyEmail(challenge(aEmail).id(),challenge(aEmail).token());
+        UUID buyerB=orders.verifyEmail(challenge(bEmail).id(),challenge(bEmail).token());
+        // Email verification is NOT equivalent to OIDC login: provision synthetic links for
+        // this test alone, then resolve both actors through the actual OidcActorResolver.
+        String subjectA="tcrud04-oidc-a-"+UUID.randomUUID();
+        String subjectB="tcrud04-oidc-b-"+UUID.randomUUID();
+        jdbc.update("UPDATE public.iam_user_account SET status='ACTIVE',external_subject=? WHERE id=?",
+                subjectA,buyerA);
+        jdbc.update("UPDATE public.iam_user_account SET status='ACTIVE',external_subject=? WHERE id=?",
+                subjectB,buyerB);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                    .header("alg","RS256").subject(token.equals("buyer-a")?subjectA:subjectB)
+                    .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300)).build();
+        var resolver=new OidcActorResolver(decoder,users);
+        var actorA=resolver.resolve("buyer-a");
+        var actorB=resolver.resolve("buyer-b");
+        assertThat(securedBuyerOrders.mine(actorA))
+                .extracting(AutoOrderService.OrderReceipt::orderId)
+                .containsExactly(a.order().orderId()).doesNotContain(b.order().orderId());
+        assertThat(securedBuyerOrders.mine(actorB))
+                .extracting(AutoOrderService.OrderReceipt::orderId)
+                .containsExactly(b.order().orderId()).doesNotContain(a.order().orderId());
+        assertThatThrownBy(()->securedBuyerOrders.mine(null))
+                .isInstanceOf(SecurityException.class);
+    }
+
 }
