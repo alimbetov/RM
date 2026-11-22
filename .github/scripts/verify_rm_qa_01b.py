@@ -49,6 +49,10 @@ SUITES = {
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
 REQUIRED_CASES = {
     "kms-postgres-surefire": {
+        ("InventoryReservationQualificationTest", "reservationReleaseAndIdempotentReplay"),
+        ("OrganizationLocationQueryQualificationTest", "paginationAndFiltersUseTenantBoundary"),
+        ("KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
+        ("KmsDeploymentGuardTest", "urR34DeploymentConfigurationAcceptsOnlySafeImmutableKeyModes"),
         ("SalesInventoryRbacQualificationTest", "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"),
         ("SalesInventoryRbacQualificationTest", "urR32InventoryGrantRevokeAndForeignActorPreserveLedger"),
         ("CrmR1aQualificationTest", "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"),
@@ -80,6 +84,10 @@ REQUIRED_CASES = {
          "durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings"),
         ("InventoryTransferStocktakeQualificationTest",
          "durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements"),
+    },
+    "rustfs-real-infra-e2e-surefire": {
+        ("RustFsRealClamAvE2ETest",
+         "realClamdRespondsCleanInfectedAndFailClosedForUnavailableEndpoint"),
     },
 }
 
