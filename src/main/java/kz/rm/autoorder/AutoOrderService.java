@@ -74,11 +74,17 @@ public class AutoOrderService {
         List<Offer> offers=new ArrayList<>();
         for(var entry:basket.entrySet()) {
             Offer offer=jdbc.query("""
-                SELECT title,unit_price,currency FROM crm.store_offer
-                WHERE tenant_id=? AND id=? AND state='PUBLISHED'
-                """,rs->{if(!rs.next())throw new IllegalArgumentException("Offer unavailable");
-                    return new Offer(entry.getKey(),rs.getString(1),rs.getBigDecimal(2),rs.getString(3),
-                            entry.getValue());},tenant,entry.getKey());
+                SELECT o.title,o.unit_price,o.currency,o.catalog_item_id
+                FROM crm.store_offer o
+                JOIN crm.cat_item c ON c.tenant_id=o.tenant_id AND c.id=o.catalog_item_id
+                WHERE o.tenant_id=? AND o.id=? AND o.state='PUBLISHED'
+                  AND c.kind='PRODUCT' AND c.state='PUBLISHED'
+                FOR UPDATE
+                """,rs->{if(!rs.next())throw new IllegalArgumentException(
+                        "Offer unavailable or SKU not a published PRODUCT");
+                    return new Offer(entry.getKey(),rs.getString(1),rs.getBigDecimal(2),
+                            rs.getString(3),rs.getObject(4,UUID.class),entry.getValue());
+                },tenant,entry.getKey());
             offers.add(offer);
         }
         String currency=offers.getFirst().currency();
@@ -96,9 +102,12 @@ public class AutoOrderService {
             """,tenant,orderId,identity.identityId(),total,currency,now);
         for(Offer o:offers) {
             jdbc.update("""
-                INSERT INTO crm.sales_order_line(tenant_id,id,order_id,offer_id,title_snapshot,quantity,unit_price_snapshot,currency)
-                VALUES (?,?,?,?,?,?,?,?)
-                """,tenant,UUID.randomUUID(),orderId,o.offerId(),o.title(),o.quantity(),o.unitPrice(),currency);
+                INSERT INTO crm.sales_order_line
+                  (tenant_id,id,order_id,offer_id,title_snapshot,quantity,
+                   unit_price_snapshot,currency,catalog_item_id_snapshot)
+                VALUES (?,?,?,?,?,?,?,?,?)
+                """,tenant,UUID.randomUUID(),orderId,o.offerId(),o.title(),
+                    o.quantity(),o.unitPrice(),currency,o.catalogItemId());
         }
         jdbc.update("""
             INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at)
@@ -152,7 +161,8 @@ public class AutoOrderService {
                 authenticatedUserId);
     }
 
-    private record Offer(UUID offerId,String title,BigDecimal unitPrice,String currency,int quantity){}
+    private record Offer(UUID offerId,String title,BigDecimal unitPrice,String currency,
+                         UUID catalogItemId,int quantity){}
     /**
      * Database row locks are transaction-scoped and shared by pods.
      * Table names are fixed, never built from request data.
