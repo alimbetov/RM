@@ -130,9 +130,10 @@ class InventoryTransferService {
                 INSERT INTO crm.inv_stock_movement
                   (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                    balance_before,balance_after,occurred_at,recorded_at,reason_code,
-                   actor_user_id,source_type,source_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   actor_user_id,source_type,source_id,posting_version)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,tenant,UUID.randomUUID(),location,item,key,delta,before,after,at,at,
-                reason,actor,"TRANSFER",receipt);
+                reason,actor,"TRANSFER",receipt,
+                InventoryPostingVersion.afterBalanceUpdate(jdbc,tenant,location,item));
     }
 }
