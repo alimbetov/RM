@@ -8,6 +8,7 @@ on:
       - 'src/main/java/kz/rm/crm/CrmBuyerLinkService.java'
       - 'src/main/java/kz/rm/iam/GlobalAccountDeletionService.java'
       - 'src/main/java/kz/rm/iam/EmailIdentityService.java'
+      - 'src/main/java/kz/rm/iam/EmailIdentityCrypto.java'
       - 'src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java'
   workflow_dispatch:
 permissions:
