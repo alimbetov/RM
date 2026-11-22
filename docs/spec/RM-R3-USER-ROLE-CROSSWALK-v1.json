@@ -69,8 +69,13 @@
         "test": "functionalRoleIsIsolatedAndActivatedOnlyAfterApproval"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R31-ROLE-FALLBACK",
+        "UR-R31-GRANT-REVOKE",
+        "UR-R31-TENANT-AB",
+        "UR-R31-UNASSIGNED"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -108,8 +113,11 @@
         "test": "commandCannotProceedUntilEarlierRevocationCommits"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R31-GRANT-REVOKE",
+        "UR-R31-INACTIVE"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -760,8 +768,14 @@
         "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R31-ROLE-FALLBACK",
+        "UR-R31-GRANT-REVOKE",
+        "UR-R31-TENANT-AB",
+        "UR-R31-INACTIVE",
+        "UR-R31-UNASSIGNED"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -882,8 +896,12 @@
         "test": "postgresW1SuspensionAndCheckoutSerialize"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R31-GRANT-REVOKE",
+        "UR-R31-TENANT-AB",
+        "UR-R31-INACTIVE"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
