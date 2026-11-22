@@ -37,7 +37,7 @@ public final class QrHandoverProcessWorker {
 
         try(var context=new SpringApplicationBuilder(RmApplication.class)
                 .web(WebApplicationType.SERVLET).profiles("test")
-                .properties("server.port=-1").run()) {
+                .run("--server.port=-1")) {
             JdbcTemplate jdbc=context.getBean(JdbcTemplate.class);
             String subject=jdbc.queryForObject(
                     "SELECT external_subject FROM public.iam_user_account WHERE id=?",
