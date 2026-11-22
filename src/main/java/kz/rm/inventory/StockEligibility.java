@@ -1,0 +1,42 @@
+package kz.rm.inventory;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import java.util.UUID;
+
+/** Tenant-qualified owner metadata. Locks fence concurrent location closure/SKU archive. */
+@Service
+class StockEligibility {
+    private final JdbcTemplate jdbc;
+    StockEligibility(JdbcTemplate jdbc) {this.jdbc=jdbc;}
+
+    void requireReceivable(UUID tenant,UUID location,UUID item) {
+        requireWarehouse(tenant,location);
+        requireProduct(tenant,item,false);
+    }
+    void requireReservable(UUID tenant,UUID location,UUID item) {
+        requireWarehouse(tenant,location);
+        requireProduct(tenant,item,true);
+    }
+    private void requireWarehouse(UUID tenant,UUID location) {
+        if(tenant==null||location==null)throw new IllegalArgumentException("Warehouse required");
+        String[] status=jdbc.query("""
+                SELECT location_type,status FROM public.org_location
+                WHERE workspace_id=? AND id=? FOR UPDATE
+                """,rs->rs.next()?new String[]{rs.getString(1),rs.getString(2)}:null,tenant,location);
+        if(status==null || !"WAREHOUSE".equals(status[0]) || !"ACTIVE".equals(status[1]))
+            throw new IllegalArgumentException("Active tenant WAREHOUSE required");
+    }
+    private void requireProduct(UUID tenant,UUID item,boolean forReservation) {
+        if(item==null)throw new IllegalArgumentException("SKU required");
+        String[] status=jdbc.query("""
+                SELECT kind,state FROM crm.cat_item
+                WHERE tenant_id=? AND id=? FOR UPDATE
+                """,rs->rs.next()?new String[]{rs.getString(1),rs.getString(2)}:null,tenant,item);
+        if(status==null || !"PRODUCT".equals(status[0])
+                || "ARCHIVED".equals(status[1])
+                || (forReservation && !"PUBLISHED".equals(status[1])))
+            throw new IllegalArgumentException(forReservation
+                    ?"Published tenant PRODUCT required":"Non-archived tenant PRODUCT required");
+    }
+}
