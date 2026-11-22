@@ -25,6 +25,8 @@ class StorefrontManagementQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+    @Autowired javax.sql.DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private record Fixture(UUID tenant, UUID owner, UUID staff, UUID organization) {}
 
@@ -55,7 +57,7 @@ class StorefrontManagementQualificationTest {
         return new OidcActorResolver(decoder, users).resolve("synthetic-only");
     }
 
-    private void grant(Fixture fixture, DomainPermission... permissions) {
+    private UUID grant(Fixture fixture, DomainPermission... permissions) {
         var actor = verified(fixture.owner());
         var role = roles.createRole(actor, fixture.tenant(),
                 "STORE_" + UUID.randomUUID().toString().replace("-", "")
@@ -65,6 +67,7 @@ class StorefrontManagementQualificationTest {
             roles.grant(actor, fixture.tenant(), role.id(), permission);
         roles.assign(actor, fixture.tenant(), fixture.staff(), role.id());
         roles.enable(actor, fixture.tenant());
+        return role.id();
     }
 
     @Test void sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck() {
@@ -311,6 +314,121 @@ class StorefrontManagementQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(offers.get(sellerA, a.tenant(), offerA.id()).rowVersion())
                 .isZero();
+    }
+
+    private void postgresOnly() throws Exception {
+        try (var connection = dataSource.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"),
+                    "Real PostgreSQL row-lock test");
+        }
+    }
+
+    @Test void postgresAdmittedSellerCommandCompletesBeforePermissionRevoke() throws Exception {
+        postgresOnly();
+        var t = fixture();
+        UUID role = grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var owner = verified(t.owner());
+        var draft = storefronts.createDraft(seller, t.tenant(), "shop-" + UUID.randomUUID());
+        var published = storefronts.publish(seller, t.tenant(), draft.id(), 0L);
+        var admitted = new java.util.concurrent.CountDownLatch(1);
+        var attempted = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var mutation = pool.submit(() -> tx.execute(status -> {
+                var paused = storefronts.pause(seller, t.tenant(), draft.id(),
+                        published.rowVersion());
+                admitted.countDown();
+                try {
+                    if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Barrier timeout");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return paused;
+            }));
+            var revoke = pool.submit(() -> {
+                if (!admitted.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Admission timeout");
+                attempted.countDown();
+                roles.revoke(owner, t.tenant(), role,
+                        DomainPermission.STOREFRONT_OFFER_PUBLISH);
+                return true;
+            });
+            assertThat(attempted.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(mutation.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                    .isEqualTo(StorefrontSettings.State.PAUSED);
+            assertThat(revoke.get(20, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
+        assertThatThrownBy(() -> storefronts.publish(seller, t.tenant(),
+                draft.id(), 2L)).isInstanceOf(SecurityException.class);
+        assertThat(storefronts.get(seller, t.tenant(), draft.id()).state())
+                .isEqualTo(StorefrontSettings.State.PAUSED);
+    }
+
+    @Test void postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder() throws Exception {
+        postgresOnly();
+        var t = fixture();
+        grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var draft = storefronts.createDraft(seller, t.tenant(), "shop-" + UUID.randomUUID());
+        var published = storefronts.publish(seller, t.tenant(), draft.id(), 0L);
+        UUID product = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, t.tenant(), product, "PG-" + UUID.randomUUID());
+        var offer = offers.createDraft(seller, t.tenant(), product,
+                "Concurrent", new java.math.BigDecimal("5.0000"), "KZT");
+        offers.publish(seller, t.tenant(), offer.id(), 0L);
+        var paused = new java.util.concurrent.CountDownLatch(1);
+        var checkoutStarted = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var pause = pool.submit(() -> tx.execute(status -> {
+                var result = storefronts.pause(seller, t.tenant(), published.id(),
+                        published.rowVersion());
+                paused.countDown();
+                try {
+                    if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Pause barrier timeout");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            var checkout = pool.submit(() -> {
+                if (!paused.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Pause admission timeout");
+                checkoutStarted.countDown();
+                return autoOrders.checkout(published.slug(),
+                        "pause-" + UUID.randomUUID() + "@example.kz",
+                        "paused-pg-0001", java.util.List.of(
+                                new kz.rm.autoorder.AutoOrderService.Line(offer.id(), 1)));
+            });
+            assertThat(checkoutStarted.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(pause.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                    .isEqualTo(StorefrontSettings.State.PAUSED);
+            assertThatThrownBy(() -> checkout.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        } finally {
+            release.countDown();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
+                """, Integer.class, t.tenant())).isZero();
     }
 
 }
