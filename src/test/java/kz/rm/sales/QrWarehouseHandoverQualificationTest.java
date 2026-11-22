@@ -2169,7 +2169,7 @@ class QrWarehouseHandoverQualificationTest {
                 var rows=new ArrayList<String>();
                 for(int i=0;i<40;i++){
                     var o=ready(c,true);
-                    var token=pickup.issue(c.buyer(),o.publicRef(),key());
+                    // QR proof is issued by worker at its scheduled request time.
                     all.add(java.util.Map.entry(c,o));
                     String phase;
                     long dueMs;
@@ -2177,8 +2177,8 @@ class QrWarehouseHandoverQualificationTest {
                     else if(i<15){phase="RAMP";dueMs=20000L+(i-5)*2000L;}
                     else if(i<35){phase="STRESS";dueMs=40000L+(i-15)*1000L;}
                     else {phase="RECOVERY";dueMs=60000L+(i-35)*4000L;}
-                    rows.add(token.rawProof()+"|"+version(c,o)+"|"+key()+"|"+
-                            dueMs+"|"+phase);
+                    rows.add("-"+"|"+version(c,o)+"|"+key()+"|"+
+                            dueMs+"|"+phase+"|"+c.buyer().userId()+"|"+o.publicRef());
                 }
                 var manifest=folder.resolve("tenant-"+tenantIndex+".manifest");
                 java.nio.file.Files.write(manifest,rows);
@@ -2191,10 +2191,10 @@ class QrWarehouseHandoverQualificationTest {
             var readyA=folder.resolve("ready-a");
             var readyB=folder.resolve("ready-b");
             var release=folder.resolve("release");
-            left=startQr06bWorker("B35_RATES",tenants.get(0),
+            left=startQr06bWorker("B35_JIT",tenants.get(0),
                     manifests.get(0).toString(),0,key(),
                     readyA,release,folder.resolve("left.log"));
-            right=startQr06bWorker("B35_RATES",tenants.get(1),
+            right=startQr06bWorker("B35_JIT",tenants.get(1),
                     manifests.get(1).toString(),0,key(),
                     readyB,release,folder.resolve("right.log"));
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
@@ -2210,9 +2210,11 @@ class QrWarehouseHandoverQualificationTest {
                 String log=java.nio.file.Files.readString(folder.resolve(filename));
                 var metrics=log.lines().filter(x->x.contains("QR06B_B35_"))
                         .map(x->x.substring(x.indexOf("QR06B_B35_"))).toList();
-                assertThat(metrics.stream().filter(x->x.contains("_CHILD ")).count()).isEqualTo(4);
+                assertThat(metrics.stream().filter(x->x.contains("_CHILD ")).count()).isEqualTo(8);
                 assertThat(metrics.stream().filter(x->x.contains("_RATE ")).count()).isEqualTo(4);
                 assertThat(metrics.stream().filter(x->x.contains("_POOL ")).count()).isEqualTo(1);
+                assertThat(metrics.stream().filter(x->x.contains("ISSUE_PLUS_COMPLETE")).count())
+                        .isEqualTo(4);
                 for(String phase:List.of("LOW","RAMP","STRESS","RECOVERY")){
                     assertThat(metrics.stream().anyMatch(x->
                             x.contains("phase_outcome="+phase+":COMPLETED"))).isTrue();
