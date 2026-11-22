@@ -402,6 +402,47 @@ class CrmInteractionQualificationTest {
                 """,Integer.class,t.tenantId(),second.id())).isEqualTo(1);
     }
 
+    /**
+     * CRM-99 / human behavior: an operator may not assign responsibility
+     * to a suspended or foreign employee, and a failed assignment must not
+     * advance revision or create an immutable audit event.
+     */
+    @Test void crm99ForeignAndSuspendedAssigneeProduceZeroInteractionSideEffects() {
+        var a=tenant();
+        var b=tenant();
+        var owner=verified(a.actorId());
+        var company=customers.createCompany(owner,a.tenantId(),"Assignment Safety",null);
+        var interaction=interactions.record(owner,a.tenantId(),company.id(),null,
+                CrmInteractionService.Kind.MEETING,a.actorId(),
+                Instant.parse("2026-11-22T09:00:00Z"),null,
+                "c99-assign-"+UUID.randomUUID());
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,a.tenantId(),interaction.id());
+        assertThatThrownBy(()->interactions.assignResponsible(owner,a.tenantId(),
+                interaction.id(),b.actorId(),0)).isInstanceOf(SecurityException.class);
+
+        UUID member=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "c99-inactive-"+UUID.randomUUID(),"Suspended agent")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                a.orgId(),member,OrganizationMembershipEntity.Role.MEMBER));
+        jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",member);
+        assertThatThrownBy(()->interactions.assignResponsible(owner,a.tenantId(),
+                interaction.id(),member,0)).isInstanceOf(SecurityException.class);
+        var persisted=interactions.get(owner,a.tenantId(),interaction.id());
+        assertThat(persisted.rowVersion()).isZero();
+        assertThat(persisted.responsibleUserId()).isEqualTo(a.actorId());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,a.tenantId(),interaction.id())).isEqualTo(before);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,b.tenantId(),interaction.id())).isZero();
+    }
+
     @Test void postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified()
             throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
