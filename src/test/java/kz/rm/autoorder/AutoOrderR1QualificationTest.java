@@ -33,23 +33,27 @@ class AutoOrderR1QualificationTest {
     @Autowired OrganizationRepository orgs;
     @Autowired WorkspaceRepository workspaces;
 
-    private record Store(UUID tenantId,UUID offerId,String slug){}
+    private record Store(UUID tenantId,UUID offerId,String slug,UUID itemId){}
     private Store store() {
         var owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
                 "store-owner-"+UUID.randomUUID(),"Seller"));
         var org=orgs.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),"Shop LLP","Shop","KZ"));
         var tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
         String slug="shop-"+UUID.randomUUID();
-        UUID offerId=UUID.randomUUID();
+        UUID offerId=UUID.randomUUID(),itemId=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,tenant.getId(),itemId,"autoorder-"+UUID.randomUUID());
         jdbc.update("""
             INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at)
             VALUES (?,?,?,'PUBLISHED',?)
             """,tenant.getId(),UUID.randomUUID(),slug,Timestamp.from(Instant.now()));
         jdbc.update("""
-            INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state)
-            VALUES (?,?,?,?,'KZT','PUBLISHED')
-            """,tenant.getId(),offerId,"Notebook",new BigDecimal("125.2500"));
-        return new Store(tenant.getId(),offerId,slug);
+            INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+            VALUES (?,?,?,?,'KZT','PUBLISHED',?)
+            """,tenant.getId(),offerId,"Notebook",new BigDecimal("125.2500"),itemId);
+        return new Store(tenant.getId(),offerId,slug,itemId);
     }
 
     private record Challenge(UUID id, String token) {}
