@@ -358,6 +358,97 @@ class OrganizationLocationR11ConcurrencyQualificationTest {
     }
 
     @Test
+    void postgresReceiptWinsThenDeactivationWaitsAndPreservesPostedMovement() throws Exception {
+        postgresOnly();
+        var f=fixture();
+        var held=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var started=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var receipt=pool.submit(()->tx.execute(s->{
+                inventory.receive(verified(f.staff()),f.tenant(),f.first(),f.item(),
+                        "orgR14ReceiptRace01",BigDecimal.valueOf(2));
+                held.countDown();
+                await(release);
+                return true;
+            }));
+            await(held);
+            var deactivate=pool.submit(()->{
+                started.countDown();
+                return locations.deactivate(verified(f.staff()),f.tenant(),f.first(),0);
+            });
+            await(started);
+            try {
+                assertThatThrownBy(()->deactivate.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(receipt.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(deactivate.get(20,TimeUnit.SECONDS).status())
+                    .isEqualTo(OrganizationLocationEntity.Status.INACTIVE);
+        }
+        assertThat(balance(f,f.first(),"on_hand")).isEqualByComparingTo("12");
+        assertThat(balance(f,f.first(),"reserved")).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                  AND request_key='orgR14ReceiptRace01' AND reason_code='RECEIPT'
+                """,Long.class,f.tenant(),f.first(),f.item())).isEqualTo(1);
+        assertThat(auditActions(f,f.first(),"ORG_LOCATION_DEACTIVATED")).isEqualTo(1);
+        assertThatThrownBy(()->inventory.receive(verified(f.staff()),f.tenant(),
+                f.first(),f.item(),"orgR14ReceiptAfter",BigDecimal.ONE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Active tenant WAREHOUSE required");
+        assertThat(balance(f,f.first(),"on_hand")).isEqualByComparingTo("12");
+    }
+
+    @Test
+    void postgresDeactivationWinsThenReceiptCannotInitializeOrPost() throws Exception {
+        postgresOnly();
+        var f=fixture();
+        var held=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var started=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var deactivate=pool.submit(()->tx.execute(s->{
+                locations.deactivate(verified(f.staff()),f.tenant(),f.second(),0);
+                held.countDown();
+                await(release);
+                return true;
+            }));
+            await(held);
+            var receipt=pool.submit(()->{
+                started.countDown();
+                return inventory.receive(verified(f.staff()),f.tenant(),f.second(),
+                        f.item(),"orgR14BlockedReceipt",BigDecimal.ONE);
+            });
+            await(started);
+            try {
+                assertThatThrownBy(()->receipt.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(deactivate.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(()->receipt.get(20,TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=?
+                """,Long.class,f.tenant(),f.second())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=?
+                """,Long.class,f.tenant(),f.second())).isZero();
+        assertThat(auditActions(f,f.second(),"ORG_LOCATION_DEACTIVATED")).isEqualTo(1);
+    }
+
+    @Test
     void postgresSameVersionCompetingProfilesOnlyOneMutationAndAuditCommit() throws Exception {
         postgresOnly();
         var f=fixture();
