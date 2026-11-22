@@ -1,5 +1,7 @@
 # RM Product Targets & Killer Features — Consolidated Strategy R1
 
+> **SUPERSEDED FOR ACTIVE PRODUCT TARGETS (2026-11-23):** Актуальная стратегия — [RM-PRODUCT-STRATEGY-R2: Business + QR Commerce](RM-PRODUCT-STRATEGY-R2-SMB-QR.md). Направление RM Network больше не активно; TASKS выполняется после P0/P1. Этот документ R1 сохранён как история прежнего трёхсегментного решения, а не исполняемый коммерческий roadmap. Технические стандарты и исторические доказательства не меняются.
+
 **Date:** 2026-11-22
 **Branch:** `base_dev`
 **Status:** PRODUCT STRATEGY PROPOSAL / DESIGN ONLY
