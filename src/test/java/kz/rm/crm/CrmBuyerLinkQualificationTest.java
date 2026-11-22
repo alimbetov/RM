@@ -444,11 +444,12 @@ class CrmBuyerLinkQualificationTest {
         var link=links.propose(owner,s.tenant(),customer.id(),b,
                 "suspend-hist-"+UUID.randomUUID());
         seedSalesOrder(s.tenant(),b);
-        links.confirm(verified(b),s.tenant(),link.id(),0);
+        var buyerActor=verified(b);
+        links.confirm(buyerActor,s.tenant(),link.id(),0);
         assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).hasSize(1);
         accounts.suspendAccount(verified(platformAdmin()),b);
         assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
-        assertThatThrownBy(()->links.disputeByBuyer(verified(b),s.tenant(),link.id(),1))
+        assertThatThrownBy(()->links.disputeByBuyer(buyerActor,s.tenant(),link.id(),1))
                 .isInstanceOf(SecurityException.class);
         assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).state())
                 .isEqualTo(CrmBuyerLinkService.State.CONFIRMED);
@@ -463,7 +464,8 @@ class CrmBuyerLinkQualificationTest {
         var link=links.propose(owner,s.tenant(),customer.id(),b,
                 "delete-fixture-"+UUID.randomUUID());
         seedSalesOrder(s.tenant(),b);
-        links.confirm(verified(b),s.tenant(),link.id(),0);
+        var buyerActor=verified(b);
+        links.confirm(buyerActor,s.tenant(),link.id(),0);
         // Synthetic DELETED fixture: IAM has no trusted account-deletion service
         // yet. Do not simulate a successful administrative deletion command.
         jdbc.update("""
@@ -471,7 +473,7 @@ class CrmBuyerLinkQualificationTest {
                 WHERE id=? AND status='ACTIVE'
                 """,b);
         assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
-        assertThatThrownBy(()->links.confirm(verified(b),s.tenant(),link.id(),1))
+        assertThatThrownBy(()->links.confirm(buyerActor,s.tenant(),link.id(),1))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->jdbc.update(
                 "DELETE FROM public.iam_user_account WHERE id=?",b))
