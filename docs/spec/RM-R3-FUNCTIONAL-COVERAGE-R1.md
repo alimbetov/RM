@@ -47,3 +47,12 @@ A successful `RM-QA-01B` is a **necessary evidence gate, not production admissio
 ## Current exclusions
 
 JaCoCo line/branch coverage is not supplied by this matrix. Browser E2E, a production issuer/JWKS and customer-backed migration validation are not qualified by this test pipeline. The R3 registry is an **initial measurable product baseline**; a complete domain acceptance matrix remains a separate expansion task.
+
+
+## UR-R3.4 canonical proof review
+
+The initial R3-v1 catalogue recorded **41 canonical proof bindings for 46 implemented requirements**. The five previously unlinked requirements (`INV-02`, `FIL-05`, `ORG-04`, `KMS-01`, `KMS-03`) now have separately reviewed, unique test-method bindings. The **candidate** catalogue now has **46/75 implemented with declared proofs**, while implementation remains **46/75** and planned remains **29/75**. No requirement or domain was added or removed.
+
+See [UR-R3.4 Proof Review](RM-UR-R3.4-PROOF-REVIEW.md) for each test's concrete assertions and qualification limits. `FIL-05` is allowed to point to the separately validated `rustfs-real-infra-e2e-surefire` artifact containing a genuine RustFS + ClamAV integration method. Its presence must be proved by the exact-SHA workflow; H2/mock-clam proof would fail.
+
+The count of **verified** requirements is calculated from current-SHA Surefire evidence after `RM-QA-01B=PASS`; until then the five bindings are *declared, not verified*. `KMS-03` checks fail-closed Java deployment guard policy, not live HSM or production distributed fencing. `PRODUCTION HOLD` continues.
