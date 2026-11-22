@@ -16,6 +16,12 @@ public class AuthenticatedBuyerOrders {
         this.orders=orders;
     }
 
+    public org.springframework.data.domain.Page<AutoOrderService.OrderReceipt> history(
+            VerifiedActor actor,int page,int size) {
+        if(actor==null) throw new SecurityException("Verified buyer required");
+        return orders.buyerOrdersPage(actor.userId(),page,size);
+    }
+
     public List<AutoOrderService.OrderReceipt> mine(VerifiedActor actor) {
         if(actor==null) throw new SecurityException("Verified buyer required");
         return orders.buyerOrders(actor.userId());
