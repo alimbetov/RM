@@ -2391,3 +2391,47 @@ ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT uk_inv_movement_posting_versio
 --rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT uk_inv_movement_posting_version;
 --rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_posting_version;
 --rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN posting_version;
+
+
+--changeset rm:0082-store-offer-immutable-price-revisions
+-- The source of truth remains crm.store_offer. Price revisions are append-only
+-- committed evidence, NOT an alternative current-price projection.
+CREATE TABLE crm.store_offer_price_revision (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ offer_row_version BIGINT NOT NULL,
+ old_price NUMERIC(19,4),
+ new_price NUMERIC(19,4) NOT NULL,
+ old_currency CHAR(3),
+ new_currency CHAR(3) NOT NULL,
+ actor_user_id UUID NOT NULL,
+ recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_store_offer_price_revision PRIMARY KEY (tenant_id,id),
+ CONSTRAINT fk_offer_price_revision_offer FOREIGN KEY(tenant_id,offer_id)
+   REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_offer_price_revision_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uk_offer_price_revision_version UNIQUE(tenant_id,offer_id,offer_row_version),
+ CONSTRAINT ck_offer_price_revision_positive CHECK(new_price>0 AND
+   (old_price IS NULL OR old_price>0)),
+ CONSTRAINT ck_offer_price_revision_baseline CHECK(
+   (old_price IS NULL AND old_currency IS NULL)
+   OR (old_price IS NOT NULL AND old_currency IS NOT NULL))
+);
+CREATE INDEX idx_offer_price_revision_history
+ ON crm.store_offer_price_revision(tenant_id,offer_id,offer_row_version DESC);
+--rollback DROP TABLE crm.store_offer_price_revision;
+
+--changeset rm:0083-store-offer-price-revision-immutability dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_price_revision_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Offer price revisions are immutable';
+END;
+$$;
+CREATE TRIGGER trg_offer_price_revision_immutable
+ BEFORE UPDATE OR DELETE ON crm.store_offer_price_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_price_revision_mutation();
+--rollback DROP TRIGGER trg_offer_price_revision_immutable ON crm.store_offer_price_revision;
+--rollback DROP FUNCTION crm.reject_price_revision_mutation();
