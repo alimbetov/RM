@@ -122,6 +122,58 @@ class SellerOfferQualificationTest {
             Long.class,c.tenant(),draft.id())).isZero();
     }
 
+    @Test void postgresRevokeVersusSellerCommandHasOneAuthorizationOrder() throws Exception {
+        requirePostgres();
+        Context c=context();
+        var role=roles.createRole(verified(c.owner()),c.tenant(),
+            "OFFER_RACE_"+UUID.randomUUID().toString().replace("-","").substring(0,10).toUpperCase(),
+            "Seller command and revoke race");
+        roles.grant(verified(c.owner()),c.tenant(),role.id(),
+            DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.assign(verified(c.owner()),c.tenant(),c.seller(),role.id());
+        roles.enable(verified(c.owner()),c.tenant());
+        var seller=verified(c.seller());
+        var owner=verified(c.owner());
+        var draft=offers.createDraft(seller,c.tenant(),c.sku(),"Concurrent revoke",
+            BigDecimal.TEN,"KZT");
+        var barrier=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->{
+                barrier.await(5,TimeUnit.SECONDS);
+                try {
+                    offers.changePrice(seller,c.tenant(),draft.id(),0,
+                        new BigDecimal("20"),"KZT");
+                    return true;
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            });
+            var revoke=pool.submit(()->{
+                barrier.await(5,TimeUnit.SECONDS);
+                roles.revoke(owner,c.tenant(),role.id(),
+                    DomainPermission.STOREFRONT_OFFER_MANAGE);
+                return true;
+            });
+            barrier.countDown();
+            boolean succeeded=command.get(30,TimeUnit.SECONDS);
+            assertThat(revoke.get(30,TimeUnit.SECONDS)).isTrue();
+            Long version=jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),draft.id());
+            assertThat(version).isEqualTo(succeeded?1L:0L);
+            assertThat(jdbc.queryForObject("""
+                SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,BigDecimal.class,c.tenant(),draft.id()))
+                .isEqualByComparingTo(succeeded?"20":"10");
+        }
+        // Revocation must fence every newly admitted command after it commits.
+        assertThatThrownBy(()->offers.changePrice(seller,c.tenant(),draft.id(),
+            jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),draft.id()),new BigDecimal("30"),"KZT"))
+            .isInstanceOf(SecurityException.class);
+    }
+
     @Test void postgresOfferCatalogIdentityCannotBeRemapped() throws Exception {
         requirePostgres();
         Context c=context();
