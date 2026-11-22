@@ -2138,4 +2138,114 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+
+    /**
+     * B3.5 ENTRY: time-paced four-phase successful-throughput baseline.
+     * Each of the two JVMs owns 40 unique orders in a different tenant.
+     * Admission checks phase-by-outcome telemetry, no hidden technical errors,
+     * durable ledger correctness and recovery-phase completion.
+     * This is not the full 120-300 seconds PER LEVEL capacity qualification.
+     */
+    @org.junit.jupiter.api.Timeout(value=230,unit=TimeUnit.SECONDS)
+    @Test void qr06bPgB35TwoJvmRateStepsAndRecoveryEntry() throws Exception {
+        requirePostgres();
+        var tenants=List.of(context(),context());
+        var all=new ArrayList<java.util.Map.Entry<Context,Order>>();
+        var folder=java.nio.file.Files.createTempDirectory("qr06b-b35-");
+        Process left=null,right=null;
+        var manifests=new ArrayList<java.nio.file.Path>();
+        long deadlocksBefore=jdbc.queryForObject("""
+                SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
+                """,Long.class);
+        try {
+            for(int tenantIndex=0;tenantIndex<2;tenantIndex++){
+                var c=tenants.get(tenantIndex);
+                roles.grant(c.owner(),c.tenant(),assignedRole(c),
+                        DomainPermission.INVENTORY_RECEIVE);
+                inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemOne(),key(),new BigDecimal("300"));
+                inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemTwo(),key(),new BigDecimal("300"));
+                var rows=new ArrayList<String>();
+                for(int i=0;i<40;i++){
+                    var o=ready(c,true);
+                    var token=pickup.issue(c.buyer(),o.publicRef(),key());
+                    all.add(java.util.Map.entry(c,o));
+                    String phase;
+                    long dueMs;
+                    if(i<5){phase="LOW";dueMs=i*4000L;}
+                    else if(i<15){phase="RAMP";dueMs=20000L+(i-5)*2000L;}
+                    else if(i<35){phase="STRESS";dueMs=40000L+(i-15)*1000L;}
+                    else {phase="RECOVERY";dueMs=60000L+(i-35)*4000L;}
+                    rows.add(token.rawProof()+"|"+version(c,o)+"|"+key()+"|"+
+                            dueMs+"|"+phase);
+                }
+                var manifest=folder.resolve("tenant-"+tenantIndex+".manifest");
+                java.nio.file.Files.write(manifest,rows);
+                try{
+                    java.nio.file.Files.setPosixFilePermissions(manifest,
+                            java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                }catch(UnsupportedOperationException ignored){}
+                manifests.add(manifest);
+            }
+            var readyA=folder.resolve("ready-a");
+            var readyB=folder.resolve("ready-b");
+            var release=folder.resolve("release");
+            left=startQr06bWorker("B35_RATES",tenants.get(0),
+                    manifests.get(0).toString(),0,key(),
+                    readyA,release,folder.resolve("left.log"));
+            right=startQr06bWorker("B35_RATES",tenants.get(1),
+                    manifests.get(1).toString(),0,key(),
+                    readyB,release,folder.resolve("right.log"));
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
+            while(!java.nio.file.Files.exists(readyA)||!java.nio.file.Files.exists(readyB)){
+                assertThat(left.isAlive()&&right.isAlive()).isTrue();
+                if(System.nanoTime()>deadline)throw new AssertionError("B35 readiness timeout");
+                Thread.sleep(20);
+            }
+            java.nio.file.Files.writeString(release,"START");
+            assertThat(waitQr06bProcess(left,folder.resolve("left.log"),150)).isZero();
+            assertThat(waitQr06bProcess(right,folder.resolve("right.log"),150)).isZero();
+            for(String filename:List.of("left.log","right.log")){
+                String log=java.nio.file.Files.readString(folder.resolve(filename));
+                var metrics=log.lines().filter(x->x.contains("QR06B_B35_"))
+                        .map(x->x.substring(x.indexOf("QR06B_B35_"))).toList();
+                assertThat(metrics.stream().filter(x->x.contains("_CHILD ")).count()).isEqualTo(4);
+                assertThat(metrics.stream().filter(x->x.contains("_RATE ")).count()).isEqualTo(4);
+                assertThat(metrics.stream().filter(x->x.contains("_POOL ")).count()).isEqualTo(1);
+                for(String phase:List.of("LOW","RAMP","STRESS","RECOVERY")){
+                    assertThat(metrics.stream().anyMatch(x->
+                            x.contains("phase_outcome="+phase+":COMPLETED"))).isTrue();
+                }
+                assertThat(metrics.stream().anyMatch(x->x.contains("technical_failures=0")))
+                        .isTrue();
+                metrics.forEach(System.out::println);
+            }
+            assertThat(all).hasSize(80);
+            for(var entry:all)assertExactlyOneHandover(entry.getKey(),entry.getValue(),2);
+            for(var c:tenants){
+                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("120");
+                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("200");
+                assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+                assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+                assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
+                        """,Integer.class,c.tenant())).isEqualTo(40);
+            }
+            long deadlocksAfter=jdbc.queryForObject("""
+                    SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
+                    """,Long.class);
+            assertThat(deadlocksAfter-deadlocksBefore).isZero();
+            System.out.println("QR06B_B35_RESULT phases=4 jvms=2 tenants=2 completed=80 "+
+                    "recovery_completed=10 technical_failures=0 deadlocks=0");
+        }finally{
+            if(left!=null&&left.isAlive())left.destroyForcibly();
+            if(right!=null&&right.isAlive())right.destroyForcibly();
+            for(var path:manifests)java.nio.file.Files.deleteIfExists(path);
+            for(String name:List.of("ready-a","ready-b","release","left.log","right.log"))
+                java.nio.file.Files.deleteIfExists(folder.resolve(name));
+            java.nio.file.Files.deleteIfExists(folder);
+        }
+    }
+
 }
