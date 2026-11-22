@@ -2288,7 +2288,10 @@ class QrWarehouseHandoverQualificationTest {
         var issued=pickup.issue(c.buyer(),o.publicRef(),key());
         pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),
                 true,version(c,o),key());
-        UUID source=o.lines().getFirst();
+        UUID source=jdbc.queryForObject("""
+                SELECT id FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=? AND quantity=5
+                """,UUID.class,c.tenant(),o.id());
         String requestKey=key();
         var first=returns.request(c.buyer(),o.publicRef(),source,2,
                 "DAMAGED","UAT_1",requestKey);
