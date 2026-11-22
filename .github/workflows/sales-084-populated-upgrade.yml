@@ -3,14 +3,8 @@ name: SALES 08.4 Populated PostgreSQL Upgrade Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/storefront/**'
-      - 'src/main/java/kz/rm/autoorder/**'
-      - 'src/main/java/kz/rm/iam/**'
-      - 'src/main/resources/db/changelog/**'
-      - 'src/test/java/kz/rm/storefront/**'
-      - 'src/test/java/kz/rm/autoorder/**'
-      - '.github/workflows/sales-084-populated-upgrade.yml'
+    # Required for exact-SHA commercial admission on every candidate,
+    # including inventory-only changes; never reuse a prior-SHA PASS.
   workflow_dispatch:
 
 # Run qualification for the latest branch revision; do not accumulate stale SHA jobs.
