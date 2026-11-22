@@ -59,7 +59,8 @@ class PackagingServiceCatalogQualificationTest {
         var role=roles.createRole(admin,tenant,
             "PKG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
             "Packaging manager");
-        if(permission)roles.grant(admin,tenant,role.id(),DomainPermission.SALES_PACKAGING_MANAGE);
+        roles.grant(admin,tenant,role.id(),permission
+            ? DomainPermission.SALES_PACKAGING_MANAGE : DomainPermission.CRM_READ);
         roles.assign(admin,tenant,staff,role.id());
         roles.enable(admin,tenant);
         return new Fixture(tenant,verified(staff));
