@@ -223,3 +223,18 @@
 5. Service-only progress does not mean live public endpoint, real SMTP, or production-ready storefront.
 
 **Revised ticket statuses:** `RM-STORE-01 = CODE PRESENT / NOT QUALIFIED (partial: create/publish/pause/get)`; `RM-STORE-02/03 = OPEN`; `RM-SALE-084 = OPEN`; `RM-COM-E2E = HOLD`. Next safe step: exact-HEAD H2/PG CI and schema/cardinality check, then additive version CAS and seller-offer lifecycle, never silently broadening the product policy.
+
+
+## 14. STORE-R1.1B — код и QA на текущем кандидатном SHA (2026-11-22)
+
+**Source candidate:** `fba500ddfbc94c380587732907d30beb233a3b29` (после этого документа HEAD может измениться). Полный независимый аудит: [RM-SERVICE-MATURITY-DEEP-REVIEW-2026-11-22](../reviews/RM-SERVICE-MATURITY-DEEP-REVIEW-2026-11-22.md).
+
+**Код добавлен в `base_dev`:**
+- `StorefrontManagementService` использует существующий `store_front.row_version` для строгого CAS; без нового DDL, `uk_store_tenant` обеспечивает ровно одну витрину на tenant.
+- `StorefrontOfferService` — seller `createDraft/updatePrice/publish/pause/hide/get`; `store_offer.row_version` уже предоставлен changeset `0078`, existing immutable SKU trigger `0079`; price/offer управляются только через `STOREFRONT_OFFER_MANAGE/PUBLISH`.
+- Согласованный порядок блокировок `store_front → store_offer → cat_item`; PRODUCT/SERVICE валидируется, каталог не превращается во второй источник цены оффера; SALES PASS 08.1–08.3 не переписывался.
+- `StorefrontManagementQualificationTest` дополнен CAS/ABA, cross-tenant, отсутствие publish grant, checkout snapshot после новой цены, simultaneous price update×checkout, PG admission/revoke и pause×checkout barriers, synthetic IAM keys.
+
+**Статус:** `RM-STORE-01 = IMPLEMENTED / TEST SOURCE PRESENT / NOT QUALIFIED`, `RM-STORE-02 = IMPLEMENTED / TEST SOURCE PRESENT / NOT QUALIFIED`, `RM-STORE-03 = PARTIAL`, `RM-SALE-084 = PARTIAL (existing immutable SKU + new offer writer; integration gate OPEN)`. Нет нового подтверждённого exact-HEAD GREEN. Найденные Actions workflow IDs [44991446904](https://github.com/alimbetov/RM/actions/runs/44991446904) и [44991727545](https://github.com/alimbetov/RM/actions/runs/44991727545) были `QUEUED` на момент проверки. Статусы обязательно перечитать; работу нельзя назвать полностью завершённой без успешных job outcomes + SHA.
+
+**P0 оставшиеся:** полный вариант обеих порядков `revoke×publish` и `pause×checkout`, populated 0078–0080 test на актуальном коде, duplicate slug/offer creation idempotency/failure injection, Catalog.archive×offer publication/stock, seller authorized offer search/price history. IAM email/OIDC production — отдельно HOLD.
