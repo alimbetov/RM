@@ -1348,6 +1348,7 @@ class QrWarehouseHandoverQualificationTest {
                         }));
                     }
                     assertThat(prepared.await(30,TimeUnit.SECONDS)).isTrue();
+                    started=System.nanoTime();
                     go.countDown();
                     for(var future:futures) {
                         B31Probe result=future.get(120,TimeUnit.SECONDS);
@@ -1371,7 +1372,7 @@ class QrWarehouseHandoverQualificationTest {
                         "attempts_per_sec=%.2f p50_ms=%d p95_ms=%d p99_ms=%d%n",
                         System.getenv().getOrDefault("GITHUB_SHA","local"),
                         clients,repetition,successes,conflicts,
-                        clients*1.0/Math.max(1.0,wallNanos/1e9),
+                        clients*1.0/Math.max(1e-9,wallNanos/1e9),
                         b3Percentile(responseTimes,50),
                         b3Percentile(responseTimes,95),
                         b3Percentile(responseTimes,99));
