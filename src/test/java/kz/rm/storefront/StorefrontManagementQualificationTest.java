@@ -279,4 +279,38 @@ class StorefrontManagementQualificationTest {
         }
     }
 
+    @Test void foreignOfferAndServiceCatalogCannotEnterStockBackedStorefront() {
+        var a = fixture();
+        var b = fixture();
+        grant(a, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        grant(b, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var sellerA = verified(a.staff());
+        var sellerB = verified(b.staff());
+        storefronts.createDraft(sellerA, a.tenant(), "shop-" + UUID.randomUUID());
+        storefronts.createDraft(sellerB, b.tenant(), "shop-" + UUID.randomUUID());
+        UUID serviceSku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'SERVICE','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, a.tenant(), serviceSku, "SVC-" + UUID.randomUUID());
+        assertThatThrownBy(() -> offers.createDraft(sellerA, a.tenant(), serviceSku,
+                "Non-stock service", java.math.BigDecimal.ONE, "KZT"))
+                .isInstanceOf(IllegalStateException.class);
+        UUID productSku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, a.tenant(), productSku, "ST-" + UUID.randomUUID());
+        var offerA = offers.createDraft(sellerA, a.tenant(), productSku,
+                "Valid", java.math.BigDecimal.ONE, "KZT");
+        assertThatThrownBy(() -> offers.get(sellerB, b.tenant(), offerA.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> offers.publish(sellerB, b.tenant(), offerA.id(), 0L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(offers.get(sellerA, a.tenant(), offerA.id()).rowVersion())
+                .isZero();
+    }
+
 }
