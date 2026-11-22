@@ -3,7 +3,7 @@
 **Branch:** `base_dev` (no changes to `main`, no new controllers)  
 **Candidate exact-SHA:** `b7cfb3734eb2150d38274f8f348f2d7020197486`  
 **CI:** https://github.com/alimbetov/RM/actions/runs/45038309495  
-**Admission:** **HOLD** until measured exact-SHA PostgreSQL job success; full 300s production-style saturation remains separate.
+**Admission:** staged 60/300s B3.4 qualification PASS on exact-SHA; maximum sustainable capacity and production admission remain HOLD.
 
 ## Implemented first-stage B3.4
 
@@ -72,3 +72,46 @@ The first B3.4 job at exact SHA `b7cfb3734eb2150d38274f8f348f2d7020197486` compl
 These figures explicitly **disprove any claim that the baseline reached connection-pool saturation**; peak response time improvement reflects a different arrival profile and warmup, not demonstrated high-load resilience.
 
 The enhanced exact-SHA target `de7b4f0170721257d46acbbedf6e274cd0885df2` is a **different** code candidate that changes PEAK to simultaneous arrivals, adds asymmetric tenant groups (50/30 for 60s and 240/160 for 300s), instruments 100ms PostgreSQL waiter samples and executes two 60s runs plus one 300s run. It must be evaluated separately. The documentation commits do not themselves count as source-code test qualification.
+
+## Confirmed enhanced saturation evidence — exact SHA `de7b4f0170721257d46acbbedf6e274cd0885df2`
+
+**CI:** https://github.com/alimbetov/RM/actions/runs/45038810734  
+**Result:** all five jobs SUCCESS: B3.4, B3.3, B3.2, B3.1, and `qr06b-postgresql`. The common regression job reports **43 tests; 0 failures; 0 errors; 0 skipped; BUILD SUCCESS** (32 handover qualification and 11 IAM revocation tests). Dedicated B3.4 CI ran its JUnit test three times (two 60s, one 300s); all three PASS with zero failures or skips.
+
+### Load and reliability
+
+| Trial | Tenant A completed | Tenant B completed | Total | Hikari A peak active / waiting | Hikari B peak active / waiting | PG sampled max waiting sessions | New deadlocks |
+|---|---:|---:|---:|---|---|---:|---:|
+| 60s #1 | 50 | 30 | 80 | 10 / 15 | 10 / 5 | 16 | 0 |
+| 60s #2 | 50 | 30 | 80 | 10 / 15 | 10 / 5 | 15 | 0 |
+| 300s | 240 | 160 | 400 | 10 / 110 | 10 / 70 | 17 | 0 |
+
+Every independent pickup was verified against the durable order/receipt/fulfillment journal and expected inventory balances. All phases reported only `COMPLETED`; there were **zero technical failures** in these scenarios. Total independent successful handovers across the three runs: **560**.
+
+### Latency by phase (success-only, p95 / p99 in ms; microsecond source rounded)
+
+| Trial | Tenant | LOW | PEAK | RECOVERY |
+|---|---|---:|---:|---:|
+| 60s #1 | A | 165 / 165 | 797 / 811 | 29 / 29 |
+| 60s #1 | B | 175 / 175 | 688 / 688 | 30 / 30 |
+| 60s #2 | A | 267 / 267 | 690 / 705 | 29 / 29 |
+| 60s #2 | B | 258 / 258 | 554 / 554 | 25 / 25 |
+| 300s | A | 108 / 381 | 2,646 / 2,687 | 23 / 26 |
+| 300s | B | 74 / 332 | 2,169 / 2,261 | 25 / 27 |
+
+The PEAK creates a **real connection-pool waiting queue** with `peak_active=10` and `peak_connections=10` in both JVMs; under the 300s trial peaks of `threadsAwaitingConnection=110` and `70` were measured. Meanwhile p95 increased sharply in the peak, then fell again for RECOVERY, while all requests completed correctly.
+
+PG `pg_stat_activity` polling about every 100 ms recorded sample sums **75**, **63**, and **350** waiter-count observations respectively, and maximum waiting sessions 16/15/17. These are **counts of waiting sessions in sampled instants**, NOT 75/63/350 distinct waits, nor measured wait time in milliseconds. Observed `pg_stat_database.deadlocks` delta was zero in each isolated trial.
+
+### Decision and unresolved admission
+
+**B3.4 staged burst saturation and recovery: PASS for tested 60/300 second shapes.** This supports that the limited Hikari pool was saturated transiently, queueing increased latency, and the operation remained correct and recovered during the subsequent low-rate phase. The test **does not** establish maximum *sustainable* throughput: the peak stage is a synchronized burst of finite orders, not a stepped series of steady-state offered rates until a stable throughput knee is characterized.
+
+Still required for capacity release:
+
+- Fixed hardware, repeatable warm throughput-duration sweeps (e.g. 3–5 levels, each 120–300s) with measured offered, accepted and completed orders/sec and pool pending-queue occupancy over time.
+- p95/p99 segmented by outcome (successful, expected business denial, technical error), timeout/error rate, per-tenant fairness under unequal offered load and effective rate.
+- Query/DB lock wait duration and connection-pool saturation/recovery beyond one peak observation, high-confidence variance across replicated 300s runs.
+- Fault recovery after overload, transport packet-loss injection, external IAM/OIDC, HTTPS and scanner integration.
+
+**Production admission HOLD.** No controllers introduced, no changes to `main`, QR-07 and QR-08 not started. The documentation commit incorporating results is not itself the qualified source SHA.
