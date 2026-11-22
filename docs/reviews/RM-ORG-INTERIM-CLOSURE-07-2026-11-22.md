@@ -89,3 +89,10 @@
 - **Владелец следующего аудита:** предлагается **CATALOG**: `cat_item PRODUCT/DRAFT/PUBLISHED/ARCHIVED`, `store_offer.catalog_item_id`, publisher rights и immutable SKU snapshot зависимы от CATALOG при INVENTORY/Sales. Логичен перекрёстный разбор его собственной CRUD-зрелости, после чего можно связать решение SALES snapshot с реальным publish/archive flow. Это **предложенный handoff**, не утверждение, что CATALOG уже проверен или выбран пользователем.
 
 **Decision record:** завершить *предметное обследование* ORGANIZATION на 07/12 и перейти к следующему сервису, **не** объявляя реализацию, 08–12 или production readiness закрытыми.
+
+
+---
+
+## Актуализация handoff: следующий домен выбран — CATALOG
+
+Пользователь утвердил CATALOG как следующий домен и запустил source-grounded pass 01. Организационные проходы 08–12 по-прежнему **DEFERRED / NOT DONE**, жизненный цикл ORGANIZATION не объявлен реализованным. Источник нового доменного аудита: [RM-CATALOG-FUNCTIONAL-DEPTH-PASS01-2026-11-22.md](RM-CATALOG-FUNCTIONAL-DEPTH-PASS01-2026-11-22.md); [основное ТЗ CATALOG](../spec/RM-CATALOG-FUNCTIONAL-DEPTH-R1-12-PASSES.md). Handoff подтверждает смену последовательности **аудита**, не release/merge ORGANIZATION.
