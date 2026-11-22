@@ -24,6 +24,7 @@ class CrmBuyerLinkQualificationTest {
     @Autowired TenantKeyService keys;
     @Autowired JdbcTemplate jdbc;
     @Autowired GlobalAccountStatusService accounts;
+    @Autowired GlobalAccountDeletionService deletion;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     record Seller(UUID tenant, UUID owner) {}
@@ -565,6 +566,161 @@ class CrmBuyerLinkQualificationTest {
             assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
                     .isEqualTo(confirmFirst);
         }
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).state())
+                .isEqualTo(confirmFirst?CrmBuyerLinkService.State.CONFIRMED:
+                        CrmBuyerLinkService.State.PENDING);
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactlyElementsOf(confirmFirst
+                        ?java.util.List.of("PROPOSED","CONFIRMED")
+                        :java.util.List.of("PROPOSED"));
+    }
+
+
+    @Test void accountDeletionRetainsSalesAndCrmHistoryButScrubsLiveIamIdentity() {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Deletion retention",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "delete-real-"+UUID.randomUUID());
+        UUID order=seedSalesOrder(s.tenant(),b);
+        var buyerActor=verified(b);
+        links.confirm(buyerActor,s.tenant(),link.id(),0);
+        jdbc.update("""
+                INSERT INTO iam_pii.user_profile_secret
+                (user_id,display_name_envelope,phone_envelope,phone_lookup_hmac,
+                 row_version,created_at,updated_at)
+                VALUES (?,?,?,?,0,?,?)
+                """,b,new byte[]{1,2,3},new byte[]{4,5,6},
+                UUID.randomUUID().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                java.sql.Timestamp.from(Instant.now()),java.sql.Timestamp.from(Instant.now()));
+        UUID adminId=platformAdmin();
+        var admin=verified(adminId);
+        String key="delete-account-"+UUID.randomUUID();
+        deletion.deleteAccount(admin,b,key);
+        deletion.deleteAccount(admin,b,key); // same request is idempotent
+        assertThatThrownBy(()->deletion.deleteAccount(admin,b,"new-key-"+UUID.randomUUID()))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,b)).isEqualTo("DELETED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_user_account
+                WHERE id=? AND external_subject IS NULL AND email_normalized IS NULL
+                  AND display_name IS NULL AND phone_e164 IS NULL
+                """,Integer.class,b)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM iam_pii.user_profile_secret WHERE user_id=?
+                """,Integer.class,b)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_identity
+                WHERE user_id=? AND lifecycle_state='HISTORICAL'
+                AND current_owner_id IS NULL AND pending_owner_id IS NULL
+                AND active_lookup_hmac IS NULL
+                """,Integer.class,b)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order
+                WHERE tenant_id=? AND id=? AND buyer_user_id=?
+                """,Integer.class,s.tenant(),order,b)).isEqualTo(1);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED","CONFIRMED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_account_deletion_event WHERE target_user_id=?
+                """,Integer.class,b)).isEqualTo(1);
+        assertThatThrownBy(()->links.revokeByBuyer(buyerActor,s.tenant(),link.id(),1))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void accountDeletionRejectsUnprivilegedActorAndOwnerWithoutSideEffects() {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Privileged deletion",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "del-denied-"+UUID.randomUUID());
+        assertThatThrownBy(()->deletion.deleteAccount(owner,b,
+                "bad-deletion-"+UUID.randomUUID())).isInstanceOf(SecurityException.class);
+        var admin=verified(platformAdmin());
+        assertThatThrownBy(()->deletion.deleteAccount(admin,s.owner(),
+                "owner-deletion-"+UUID.randomUUID())).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_account_deletion_event
+                WHERE target_user_id IN (?,?)
+                """,Integer.class,b,s.owner())).isZero();
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).id())
+                .isEqualTo(link.id());
+    }
+
+    @Test void postgresDeletedAccountAuditCannotBeTamperedWith() throws Exception {
+        requirePostgres();
+        var b=buyer();var admin=verified(platformAdmin());
+        deletion.deleteAccount(admin,b,"audit-deletion-"+UUID.randomUUID());
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM public.iam_account_deletion_event WHERE target_user_id=?
+                """,b)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE public.iam_account_deletion_event SET request_key='forged'
+                WHERE target_user_id=?
+                """,b)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_account_deletion_event WHERE target_user_id=?
+                """,Integer.class,b)).isEqualTo(1);
+    }
+
+    @Test void postgresBothCommitOrdersForDeleteVersusConfirm() throws Exception {
+        requirePostgres();
+        assertDeleteConfirmOrder(true);
+        assertDeleteConfirmOrder(false);
+    }
+
+    private void assertDeleteConfirmOrder(boolean confirmFirst) throws Exception {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Delete race",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "del-race-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        var buyerActor=verified(b);
+        var admin=verified(platformAdmin());
+        String key="del-race-key-"+UUID.randomUUID();
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var challengerStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                if(confirmFirst) links.confirm(buyerActor,s.tenant(),link.id(),0);
+                else deletion.deleteAccount(admin,b,key);
+                entered.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Delete fence barrier timed out");
+                }catch(InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(entered.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                challengerStarted.countDown();
+                try{
+                    if(confirmFirst) deletion.deleteAccount(admin,b,key);
+                    else links.confirm(buyerActor,s.tenant(),link.id(),0);
+                    return true;
+                }catch(SecurityException denied){return false;}
+            });
+            assertThat(challengerStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally {release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(confirmFirst);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,b)).isEqualTo("DELETED");
         assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
         assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).state())
                 .isEqualTo(confirmFirst?CrmBuyerLinkService.State.CONFIRMED:
