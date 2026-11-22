@@ -284,4 +284,28 @@ class InventoryTransferStocktakeQualificationTest {
         assertThat(commands.cancelStocktake(who,f.tenant(),started.id()).status())
                 .isEqualTo("CANCELLED");
     }
+
+    @Test void receiptAtTransferDestinationDoesNotCycleWithWarehouseOwnerLocks()
+            throws Exception {
+        var f=fixture();receive(f,f.source(),"stockQ7Race0001",10);
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var movement=pool.submit(()->{
+                gate.await(10,TimeUnit.SECONDS);
+                return commands.transfer(actor(f.actor()),f.tenant(),f.source(),
+                        f.destination(),f.item(),BigDecimal.valueOf(4),"transferRace0001");
+            });
+            var incoming=pool.submit(()->{
+                gate.await(10,TimeUnit.SECONDS);
+                return commands.receive(actor(f.actor()),f.tenant(),f.destination(),f.item(),
+                        "receiptRace0001",BigDecimal.ONE);
+            });
+            gate.countDown();
+            assertThat(movement.get(30,TimeUnit.SECONDS).id()).isNotNull();
+            assertThat(incoming.get(30,TimeUnit.SECONDS).id()).isNotNull();
+        }
+        assertThat(stock(f,f.source())).isEqualByComparingTo("6");
+        assertThat(stock(f,f.destination())).isEqualByComparingTo("5");
+    }
+
 }
