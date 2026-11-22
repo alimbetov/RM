@@ -1,0 +1,486 @@
+package kz.rm.sales;
+
+import kz.rm.autoorder.AutoOrderService;
+import kz.rm.iam.*;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.TestPropertySource;
+
+import javax.sql.DataSource;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * QR-05/06 real H2/PostgreSQL owner tests. Synthetic actors/owned mailbox are
+ * deliberate service fixtures, NOT external OIDC, cameras or infrastructure.
+ */
+@SpringBootTest
+@TestPropertySource(properties={
+    "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+})
+class QrWarehouseHandoverQualificationTest {
+    @Autowired SalesOrderPreparationService prep;
+    @Autowired SalesPickupHandoverService pickup;
+    @Autowired SalesInventoryCommandService sales;
+    @Autowired SalesOrderQrReferenceService orderRefs;
+    @Autowired WarehouseStaffScopeService scopes;
+    @Autowired AutoOrderService checkout;
+    @Autowired VerifiedTenantRoleCommands roles;
+    @Autowired OrganizationRepository organizations;
+    @Autowired WorkspaceRepository workspaces;
+    @Autowired OrganizationMembershipRepository memberships;
+    @Autowired UserAccountRepository users;
+    @Autowired EmailIdentityCrypto crypto;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired DataSource dataSource;
+
+    private record Context(UUID tenant,UUID warehouse,UUID otherWarehouse,
+                           UUID itemOne,UUID itemTwo,UUID offerOne,UUID offerTwo,
+                           String storeSlug,VerifiedActor owner,
+                           VerifiedActor staff,VerifiedActor buyer,String buyerEmail) {}
+    private record Order(UUID id,List<UUID> lines,String publicRef) {}
+
+    private VerifiedActor verified(UUID id){
+        String subject=jdbc.queryForObject("""
+                SELECT external_subject FROM public.iam_user_account WHERE id=?
+                """,String.class,id);
+        JwtDecoder decoder=token->Jwt.withTokenValue(token)
+                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600)).build();
+        return new OidcActorResolver(decoder,users).resolve("synthetic-warehouse");
+    }
+    private static String key(){return "PICK_"+UUID.randomUUID().toString().replace("-","");}
+    private Context context(){
+        var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
+                "QR Warehouse Company","Warehouse","KZ"));
+        UUID tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(
+                UUID.randomUUID(),org.getId())).getId();
+        UUID owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "warehouse-owner-"+UUID.randomUUID(),"Owner")).getId();
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "warehouse-staff-"+UUID.randomUUID(),"Staff")).getId();
+        UUID buyer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "warehouse-buyer-"+UUID.randomUUID(),"Buyer")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),org.getId(),owner,OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),org.getId(),staff,OrganizationMembershipEntity.Role.MEMBER));
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
+        String buyerEmail="qr-pick-"+UUID.randomUUID()+"@example.kz";
+        Timestamp now=Timestamp.from(Instant.now());
+        jdbc.update("""
+                INSERT INTO public.iam_email_identity
+                 (id,user_id,lookup_hmac,email_envelope,verified_at,created_at,
+                  lifecycle_state,active_lookup_hmac,current_owner_id)
+                VALUES (?,?,?,?,?,?,'CURRENT',?,?)
+                """,UUID.randomUUID(),buyer,crypto.lookup(buyerEmail),
+                crypto.encrypt(buyerEmail),now,now,crypto.lookup(buyerEmail),buyer);
+        VerifiedActor ownerActor=verified(owner),staffActor=verified(staff);
+        var role=roles.createRole(ownerActor,tenant,
+                "PICK_"+UUID.randomUUID().toString().replace("-","")
+                        .substring(0,12).toUpperCase(),"Stock pickup staff");
+        for(var perm:new DomainPermission[]{
+                DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_READ,DomainPermission.INVENTORY_STOCK_READ,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL})
+            roles.grant(ownerActor,tenant,role.id(),perm);
+        roles.assign(ownerActor,tenant,staff,role.id());
+        roles.enable(ownerActor,tenant);
+        String kato=jdbc.queryForObject("""
+                SELECT code FROM public.ref_kato_territory
+                WHERE is_deleted=FALSE AND level_no<=3 ORDER BY code LIMIT 1
+                """,String.class);
+        UUID warehouse=UUID.randomUUID(),other=UUID.randomUUID();
+        for(UUID w:List.of(warehouse,other)){
+            jdbc.update("""
+                    INSERT INTO public.org_location
+                     (id,workspace_id,location_type,name,kato_code,status,
+                      created_at,updated_at,row_version)
+                    VALUES (?,?,'WAREHOUSE','Warehouse',?,'ACTIVE',?,?,0)
+                    """,w,tenant,kato,now,now);
+        }
+        scopes.assign(ownerActor,tenant,warehouse,staff);
+        UUID one=UUID.randomUUID(),two=UUID.randomUUID();
+        UUID offerOne=UUID.randomUUID(),offerTwo=UUID.randomUUID();
+        String slug="qr-pick-"+UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.store_front
+                 (tenant_id,id,slug,state,created_at)
+                VALUES (?,?,?,'PUBLISHED',?)
+                """,tenant,UUID.randomUUID(),slug,now);
+        for(UUID item:List.of(one,two)){
+            jdbc.update("""
+                    INSERT INTO crm.cat_item
+                     (tenant_id,id,sku,kind,source_locale,state,created_at)
+                    VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',?)
+                    """,tenant,item,"SKU-"+UUID.randomUUID(),now);
+            jdbc.update("""
+                    INSERT INTO crm.inv_stock_balance
+                     (tenant_id,location_id,item_id,on_hand,reserved,row_version)
+                    VALUES (?,?,?,20,0,0)
+                    """,tenant,warehouse,item);
+        }
+        for(int i=0;i<2;i++){
+            jdbc.update("""
+                    INSERT INTO crm.store_offer
+                     (tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+                    VALUES (?,?,'Item',100,'KZT','PUBLISHED',?)
+                    """,tenant,i==0?offerOne:offerTwo,i==0?one:two);
+        }
+        return new Context(tenant,warehouse,other,one,two,offerOne,offerTwo,
+                slug,ownerActor,staffActor,verified(buyer),buyerEmail);
+    }
+    private Order order(Context c,boolean twoLines){
+        var basket=twoLines?List.of(new AutoOrderService.Line(c.offerOne(),5),
+                new AutoOrderService.Line(c.offerTwo(),3))
+                :List.of(new AutoOrderService.Line(c.offerOne(),5));
+        UUID id=checkout.checkout(c.storeSlug(),c.buyerEmail(),key(),basket)
+                .order().orderId();
+        UUID challenge=jdbc.queryForObject("""
+                SELECT id FROM public.iam_email_verification_challenge
+                WHERE email_identity_id=(
+                    SELECT id FROM public.iam_email_identity
+                    WHERE user_id=? AND lifecycle_state='CURRENT')
+                ORDER BY created_at DESC,id DESC LIMIT 1
+                """,UUID.class,c.buyer().userId());
+        byte[] envelope=jdbc.queryForObject("""
+                SELECT token_envelope FROM public.iam_email_verification_challenge
+                WHERE id=?
+                """,byte[].class,challenge);
+        UUID verifiedBuyer=checkout.verifyEmail(challenge,crypto.decrypt(envelope));
+        assertThat(verifiedBuyer).isEqualTo(c.buyer().userId());
+        List<UUID> lines=jdbc.query("""
+                SELECT id FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                ORDER BY catalog_item_id_snapshot,id
+                """,(rs,n)->rs.getObject(1,UUID.class),c.tenant(),id);
+        String orderRef=jdbc.queryForObject("""
+                SELECT public_ref FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,String.class,c.tenant(),id);
+        return new Order(id,lines,orderRef);
+    }
+    private long version(Context c,Order o){
+        return jdbc.queryForObject("""
+                SELECT row_version FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),o.id());
+    }
+    private BigDecimal stock(Context c,UUID item,String field){
+        if(!List.of("on_hand","reserved").contains(field))
+            throw new IllegalArgumentException("Bad stock field");
+        return jdbc.queryForObject("SELECT "+field+"""
+                FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),item);
+    }
+    private String status(Context c,Order o){
+        return jdbc.queryForObject("""
+                SELECT status FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),o.id());
+    }
+    private Order ready(Context c,boolean two){
+        Order o=order(c,two);
+        sales.confirm(c.staff().userId(),c.tenant(),o.id(),c.warehouse());
+        var start=prep.startPreparing(c.staff(),c.tenant(),o.id(),c.warehouse(),
+                version(c,o),key());
+        assertThat(start.status()).isEqualTo("PREPARING");
+        for(UUID line:o.lines()){
+            int quantity=jdbc.queryForObject("""
+                    SELECT quantity FROM crm.sales_order_line
+                    WHERE tenant_id=? AND id=?
+                    """,Integer.class,c.tenant(),line);
+            prep.confirmPicked(c.staff(),c.tenant(),o.id(),c.warehouse(),line,
+                    quantity,version(c,o),key());
+        }
+        var mark=prep.markReadyForPickup(c.staff(),c.tenant(),o.id(),
+                c.warehouse(),version(c,o),key());
+        assertThat(mark.status()).isEqualTo("READY_FOR_PICKUP");
+        return o;
+    }
+    private void requirePostgres() throws Exception {
+        try(var connection=dataSource.getConnection()){
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+    }
+
+    @Test void qr05PreparingAndReadyRequireFullPickWithoutDebitingStock(){
+        var c=context();var o=order(c,true);
+        sales.confirm(c.staff().userId(),c.tenant(),o.id(),c.warehouse());
+        long v=version(c,o);
+        var started=prep.startPreparing(c.staff(),c.tenant(),o.id(),
+                c.warehouse(),v,key());
+        assertThat(started.rowVersion()).isEqualTo(v+1);
+        assertThatThrownBy(()->prep.markReadyForPickup(c.staff(),c.tenant(),o.id(),
+                c.warehouse(),version(c,o),key())).hasMessage("PICKING_INCOMPLETE");
+        UUID first=o.lines().getFirst();
+        int qty=jdbc.queryForObject("""
+                SELECT quantity FROM crm.sales_order_line WHERE tenant_id=? AND id=?
+                """,Integer.class,c.tenant(),first);
+        String firstKey=key();
+        var picked=prep.confirmPicked(c.staff(),c.tenant(),o.id(),c.warehouse(),
+                first,qty,version(c,o),firstKey);
+        assertThat(prep.confirmPicked(c.staff(),c.tenant(),o.id(),c.warehouse(),
+                first,qty,picked.rowVersion()-1,firstKey)).isEqualTo(picked);
+        assertThatThrownBy(()->prep.markReadyForPickup(c.staff(),c.tenant(),o.id(),
+                c.warehouse(),version(c,o),key())).hasMessage("PICKING_INCOMPLETE");
+        UUID last=o.lines().getLast();
+        int lastQty=jdbc.queryForObject("""
+                SELECT quantity FROM crm.sales_order_line WHERE tenant_id=? AND id=?
+                """,Integer.class,c.tenant(),last);
+        prep.confirmPicked(c.staff(),c.tenant(),o.id(),c.warehouse(),last,
+                lastQty,version(c,o),key());
+        prep.markReadyForPickup(c.staff(),c.tenant(),o.id(),c.warehouse(),
+                version(c,o),key());
+        assertThat(status(c,o)).isEqualTo("READY_FOR_PICKUP");
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+        assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant())).isZero();
+    }
+
+    @Test void qr05WrongWarehouseAndRevokedAssignmentBlockPreparation(){
+        var c=context();var o=order(c,false);
+        sales.confirm(c.staff().userId(),c.tenant(),o.id(),c.warehouse());
+        assertThatThrownBy(()->prep.startPreparing(c.staff(),c.tenant(),o.id(),
+                c.otherWarehouse(),version(c,o),key()))
+                .isInstanceOf(SecurityException.class);
+        scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
+        assertThatThrownBy(()->prep.startPreparing(c.staff(),c.tenant(),o.id(),
+                c.warehouse(),version(c,o),key()))
+                .hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThat(status(c,o)).isEqualTo("CONFIRMED");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+    }
+
+    @Test void qr06CredentialRequiresVerifiedBuyerAndReadyState(){
+        var c=context();var o=order(c,false);
+        assertThatThrownBy(()->pickup.issue(c.buyer(),o.publicRef(),key()))
+                .hasMessage("ORDER_NOT_READY");
+        var ready=ready(c,false);
+        var other=context();
+        assertThatThrownBy(()->pickup.issue(other.buyer(),ready.publicRef(),key()))
+                .isInstanceOf(SecurityException.class);
+        var issued=pickup.issue(c.buyer(),ready.publicRef(),key());
+        assertThat(issued.rawProof()).hasSize(43);
+        assertThat(issued.generation()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_credential
+                WHERE tenant_id=? AND order_id=? AND state='ISSUED'
+                """,Integer.class,c.tenant(),ready.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_credential
+                WHERE tenant_id=? AND credential_digest=?
+                """,Integer.class,c.tenant(),
+                issued.rawProof().getBytes(java.nio.charset.StandardCharsets.UTF_8))).isZero();
+    }
+
+    @Test void qr06PreviewDoesNotConsumeAndCompletedHandoverDebitsOnce(){
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        var preview=pickup.preview(c.staff(),c.tenant(),c.warehouse(),issued.rawProof());
+        assertThat(preview.status()).isEqualTo("READY_FOR_PICKUP");
+        assertThat(preview.lines()).isEqualTo(2);
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
+                """,Integer.class,c.tenant())).isZero();
+        long before=version(c,o);
+        String handoverKey=key();
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),false,before,handoverKey))
+                .hasMessage("EXPLICIT_HANDOVER_CONFIRM_REQUIRED");
+        var completed=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,before,handoverKey);
+        assertThat(completed.status()).isEqualTo("COMPLETED");
+        assertThat(completed.fulfilledLines()).isEqualTo(2);
+        assertThat(pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,before,handoverKey)).isEqualTo(completed);
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,before,key()))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(status(c,o)).isEqualTo("COMPLETED");
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+        assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover_line
+                WHERE tenant_id=? AND handover_id=?
+                """,Integer.class,c.tenant(),completed.handoverId())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=? AND event_type='COMPLETED'
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_credential
+                WHERE tenant_id=? AND order_id=? AND state='CONSUMED'
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+    }
+
+    @Test void qr06ReissueInvalidatesOldSecretAndExpiredProofNeverDebits(){
+        var c=context();var o=ready(c,false);
+        String firstKey=key();
+        var first=pickup.issue(c.buyer(),o.publicRef(),firstKey);
+        assertThatThrownBy(()->pickup.issue(c.buyer(),o.publicRef(),firstKey))
+                .hasMessage("PICKUP_PROOF_RECOVERY_REQUIRED");
+        var next=pickup.issue(c.buyer(),o.publicRef(),key());
+        assertThat(next.generation()).isEqualTo(2);
+        assertThat(next.rawProof()).isNotEqualTo(first.rawProof());
+        assertThatThrownBy(()->pickup.preview(c.staff(),c.tenant(),c.warehouse(),
+                first.rawProof())).isInstanceOf(SecurityException.class);
+        jdbc.update("""
+                UPDATE crm.sales_pickup_credential
+                SET issued_at=?,expires_at=?
+                WHERE tenant_id=? AND order_id=? AND state='ISSUED'
+                """,Timestamp.from(Instant.now().minusSeconds(3600)),
+                Timestamp.from(Instant.now().minusSeconds(1)),c.tenant(),o.id());
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                next.rawProof(),true,version(c,o),key()))
+                .hasMessage("PICKUP_CREDENTIAL_EXPIRED");
+        assertThat(status(c,o)).isEqualTo("READY_FOR_PICKUP");
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+    }
+
+    @Test void qr06ForeignWarehouseAndSuspendedStaffCannotUseProof(){
+        var c=context();var o=ready(c,false);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        assertThatThrownBy(()->pickup.preview(c.staff(),c.tenant(),c.otherWarehouse(),
+                issued.rawProof())).isInstanceOf(SecurityException.class);
+        jdbc.update("""
+                UPDATE public.iam_user_account SET status='SUSPENDED'
+                WHERE id=?
+                """,c.staff().userId());
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,version(c,o),key()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+    }
+
+    @Test void qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce() throws Exception {
+        requirePostgres();var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long v=version(c,o);
+        CountDownLatch latch=new CountDownLatch(1);
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
+            var one=pool.submit(()->{
+                latch.await(10,TimeUnit.SECONDS);
+                try {return pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                        issued.rawProof(),true,v,key()).handoverId();}
+                catch(IllegalStateException | SecurityException invalid){return null;}
+            });
+            var two=pool.submit(()->{
+                latch.await(10,TimeUnit.SECONDS);
+                try {return pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                        issued.rawProof(),true,v,key()).handoverId();}
+                catch(IllegalStateException | SecurityException invalid){return null;}
+            });
+            latch.countDown();
+            UUID a=one.get(30,TimeUnit.SECONDS),b=two.get(30,TimeUnit.SECONDS);
+            assertThat(a!=null||b!=null).isTrue();
+            assertThat(a==null||b==null).isTrue();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant())).isEqualTo(2);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+    }
+
+    @Test void qr06PostgresLastMovementFailureRollsBackEveryLineAndProof() throws Exception {
+        requirePostgres();var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long v=version(c,o);
+        // Test-only trigger injected at the second stock movement. The call
+        // MUST roll back its first reservation, stock write, movement and audit.
+        UUID lastItem=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot
+                FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                ORDER BY catalog_item_id_snapshot DESC LIMIT 1
+                """,UUID.class,c.tenant(),o.id());
+        String fn="test_qr06_fail_"+UUID.randomUUID().toString().replace("-","");
+        String trigger="trg_qr06_fail_"+UUID.randomUUID().toString().replace("-","");
+        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $$ "+
+                "BEGIN IF NEW.item_id = '"+lastItem+"'::uuid THEN "+
+                "RAISE EXCEPTION 'QR06_FAULT_INJECTED'; END IF; RETURN NEW; END; $$");
+        jdbc.execute("CREATE TRIGGER "+trigger+
+                " BEFORE INSERT ON crm.inv_stock_movement "+
+                " FOR EACH ROW EXECUTE FUNCTION crm."+fn+"()");
+        try {
+            assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                    issued.rawProof(),true,v,key()))
+                    .isInstanceOf(Exception.class);
+            assertThat(status(c,o)).isEqualTo("READY_FOR_PICKUP");
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.inv_stock_movement
+                    WHERE tenant_id=? AND movement_kind='FULFILLMENT'
+                    """,Integer.class,c.tenant())).isZero();
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.sales_pickup_handover
+                    WHERE tenant_id=? AND order_id=?
+                    """,Integer.class,c.tenant(),o.id())).isZero();
+            assertThat(jdbc.queryForObject("""
+                    SELECT state FROM crm.sales_pickup_credential
+                    WHERE tenant_id=? AND order_id=? AND state='ISSUED'
+                    """,String.class,c.tenant(),o.id())).isEqualTo("ISSUED");
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS "+trigger+
+                    " ON crm.inv_stock_movement");
+            jdbc.execute("DROP FUNCTION IF EXISTS crm."+fn+"()");
+        }
+        var repaired=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,v,key());
+        assertThat(repaired.fulfilledLines()).isEqualTo(2);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+    }
+
+    @Test void qr06PostgresImmutableHandoverReceiptsRejectTampering() throws Exception {
+        requirePostgres();var c=context();var o=ready(c,false);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        var completed=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,version(c,o),key());
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.sales_pickup_handover
+                WHERE tenant_id=? AND id=?
+                """,c.tenant(),completed.handoverId()))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.sales_pickup_handover_line SET quantity=999
+                WHERE tenant_id=? AND handover_id=?
+                """,c.tenant(),completed.handoverId()))
+                .isInstanceOf(Exception.class);
+    }
+}

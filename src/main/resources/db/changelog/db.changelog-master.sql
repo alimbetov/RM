@@ -2791,3 +2791,188 @@ CREATE TRIGGER trg_price_proposal_receipt_immutable
 --rollback DROP TRIGGER trg_price_proposal_receipt_immutable ON crm.sales_proposal_command_receipt;
 --rollback DROP TRIGGER trg_price_proposal_event_immutable ON crm.sales_price_proposal_event;
 --rollback DROP FUNCTION crm.reject_price_proposal_event_mutation();
+
+
+--changeset rm:0092-qr-warehouse-scope-and-preparation
+-- Active staff+warehouse assignment is an explicit additional IAM scope.
+CREATE TABLE public.iam_warehouse_staff_scope (
+ tenant_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL,
+ state VARCHAR(12) NOT NULL,
+ granted_by UUID NOT NULL,
+ granted_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ changed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_iam_warehouse_staff_scope PRIMARY KEY(tenant_id,warehouse_id,actor_user_id),
+ CONSTRAINT fk_warehouse_scope_location FOREIGN KEY(tenant_id,warehouse_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_warehouse_scope_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_warehouse_scope_grantor FOREIGN KEY(granted_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_warehouse_scope_state CHECK(state IN('ACTIVE','REVOKED')),
+ CONSTRAINT ck_warehouse_scope_version CHECK(row_version>=0)
+);
+CREATE INDEX idx_warehouse_scope_actor ON public.iam_warehouse_staff_scope(tenant_id,actor_user_id,state);
+
+-- The complete order line is picked once; corrections need a separate supervised workflow.
+CREATE TABLE crm.sales_order_pick_confirmation (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ order_id UUID NOT NULL,
+ order_line_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ quantity INTEGER NOT NULL,
+ picked_by UUID NOT NULL,
+ picked_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sales_pick_confirmation PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_sales_pick_line UNIQUE(tenant_id,order_line_id),
+ CONSTRAINT fk_sales_pick_line FOREIGN KEY(tenant_id,order_id,order_line_id)
+   REFERENCES crm.sales_order_line(tenant_id,order_id,id),
+ CONSTRAINT fk_sales_pick_wh FOREIGN KEY(tenant_id,warehouse_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_sales_pick_actor FOREIGN KEY(picked_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_sales_pick_item FOREIGN KEY(tenant_id,item_id)
+   REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT ck_sales_pick_qty CHECK(quantity BETWEEN 1 AND 1000)
+);
+CREATE INDEX idx_sales_pick_order ON crm.sales_order_pick_confirmation(tenant_id,order_id);
+
+CREATE TABLE crm.sales_preparation_receipt (
+ tenant_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ actor_user_id UUID NOT NULL,
+ action_code VARCHAR(16) NOT NULL,
+ order_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,
+ line_id UUID,
+ request_sha256 VARCHAR(64) NOT NULL,
+ result_status VARCHAR(24) NOT NULL,
+ result_row_version BIGINT NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sales_prep_receipt PRIMARY KEY(tenant_id,request_key),
+ CONSTRAINT fk_sales_prep_order FOREIGN KEY(tenant_id,order_id)
+   REFERENCES crm.sales_order(tenant_id,id),
+ CONSTRAINT fk_sales_prep_location FOREIGN KEY(tenant_id,warehouse_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_sales_prep_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_sales_prep_action CHECK(action_code IN('START','PICK','READY')),
+ CONSTRAINT ck_sales_prep_result CHECK(result_row_version>=0 AND LENGTH(request_sha256)=64)
+);
+--rollback DROP TABLE crm.sales_preparation_receipt;
+--rollback DROP TABLE crm.sales_order_pick_confirmation;
+--rollback DROP TABLE public.iam_warehouse_staff_scope;
+
+--changeset rm:0093-qr-one-time-pickup-and-handover
+CREATE TABLE crm.sales_pickup_credential (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ order_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,
+ active_order_id UUID,
+ credential_digest BYTEA NOT NULL,
+ issued_by UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ generation INTEGER NOT NULL,
+ state VARCHAR(12) NOT NULL,
+ issued_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ consumed_at TIMESTAMP WITH TIME ZONE,
+ revoked_at TIMESTAMP WITH TIME ZONE,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_pickup_credential PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_pickup_order FOREIGN KEY(tenant_id,order_id)
+   REFERENCES crm.sales_order(tenant_id,id),
+ CONSTRAINT fk_pickup_warehouse FOREIGN KEY(tenant_id,warehouse_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_pickup_issuer FOREIGN KEY(issued_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uq_pickup_request UNIQUE(tenant_id,request_key),
+ CONSTRAINT uq_pickup_digest UNIQUE(credential_digest),
+ CONSTRAINT uq_pickup_active_order UNIQUE(tenant_id,active_order_id),
+ CONSTRAINT uq_pickup_generation UNIQUE(tenant_id,order_id,generation),
+ CONSTRAINT ck_pickup_generation CHECK(generation>0 AND row_version>=0),
+ CONSTRAINT ck_pickup_expiry CHECK(expires_at>issued_at),
+ CONSTRAINT ck_pickup_state CHECK(
+   (state='ISSUED' AND active_order_id=order_id AND revoked_at IS NULL AND consumed_at IS NULL)
+   OR(state='REVOKED' AND active_order_id IS NULL AND revoked_at IS NOT NULL AND consumed_at IS NULL)
+   OR(state='CONSUMED' AND active_order_id IS NULL AND consumed_at IS NOT NULL AND revoked_at IS NULL))
+);
+CREATE INDEX idx_pickup_credential_history
+ ON crm.sales_pickup_credential(tenant_id,order_id,generation DESC);
+
+CREATE TABLE crm.sales_pickup_handover (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ order_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,
+ credential_id UUID NOT NULL,
+ staff_actor_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ request_sha256 VARCHAR(64) NOT NULL,
+ status_event_id UUID NOT NULL,
+ happened_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_pickup_handover PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_pickup_handover_order UNIQUE(tenant_id,order_id),
+ CONSTRAINT uq_pickup_handover_credential UNIQUE(tenant_id,credential_id),
+ CONSTRAINT uq_pickup_handover_key UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_handover_order FOREIGN KEY(tenant_id,order_id)
+   REFERENCES crm.sales_order(tenant_id,id),
+ CONSTRAINT fk_handover_wh FOREIGN KEY(tenant_id,warehouse_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_handover_credential FOREIGN KEY(tenant_id,credential_id)
+   REFERENCES crm.sales_pickup_credential(tenant_id,id),
+ CONSTRAINT fk_handover_staff FOREIGN KEY(staff_actor_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_handover_event FOREIGN KEY(tenant_id,status_event_id)
+   REFERENCES crm.sales_order_status_event(tenant_id,id),
+ CONSTRAINT ck_handover_hash CHECK(LENGTH(request_sha256)=64)
+);
+CREATE TABLE crm.sales_pickup_handover_line (
+ tenant_id UUID NOT NULL,
+ handover_id UUID NOT NULL,
+ reservation_id UUID NOT NULL,
+ movement_id UUID NOT NULL,
+ quantity NUMERIC(19,4) NOT NULL,
+ CONSTRAINT pk_handover_line PRIMARY KEY(tenant_id,handover_id,reservation_id),
+ CONSTRAINT uq_handover_movement UNIQUE(tenant_id,movement_id),
+ CONSTRAINT fk_handover_line_receipt FOREIGN KEY(tenant_id,handover_id)
+   REFERENCES crm.sales_pickup_handover(tenant_id,id),
+ CONSTRAINT fk_handover_line_reservation FOREIGN KEY(tenant_id,reservation_id)
+   REFERENCES crm.inv_stock_reservation(tenant_id,id),
+ CONSTRAINT fk_handover_line_movement FOREIGN KEY(tenant_id,movement_id)
+   REFERENCES crm.inv_stock_movement(tenant_id,id),
+ CONSTRAINT ck_handover_line_qty CHECK(quantity>0)
+);
+--rollback DROP TABLE crm.sales_pickup_handover_line;
+--rollback DROP TABLE crm.sales_pickup_handover;
+--rollback DROP TABLE crm.sales_pickup_credential;
+
+--changeset rm:0094-qr-warehouse-receipt-immutability dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_pickup_receipt_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Pickup and preparation proof is append-only';
+END;
+$$;
+CREATE TRIGGER trg_pick_confirmation_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_order_pick_confirmation
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+CREATE TRIGGER trg_prep_receipt_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_preparation_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+CREATE TRIGGER trg_handover_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_pickup_handover
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+CREATE TRIGGER trg_handover_line_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_pickup_handover_line
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+--rollback DROP TRIGGER trg_handover_line_immutable ON crm.sales_pickup_handover_line;
+--rollback DROP TRIGGER trg_handover_immutable ON crm.sales_pickup_handover;
+--rollback DROP TRIGGER trg_prep_receipt_immutable ON crm.sales_preparation_receipt;
+--rollback DROP TRIGGER trg_pick_confirmation_immutable ON crm.sales_order_pick_confirmation;
+--rollback DROP FUNCTION crm.reject_pickup_receipt_mutation();
