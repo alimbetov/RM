@@ -873,6 +873,85 @@ class CrmBuyerLinkQualificationTest {
                 """,Integer.class,target)).isEqualTo(1);
     }
 
+
+    @Test void postgresBothCommitOrdersForDeleteVersusCheckoutEmailProof() throws Exception {
+        requirePostgres();
+        assertCheckoutProofDeleteOrder(true);
+        assertCheckoutProofDeleteOrder(false);
+    }
+
+    private void assertCheckoutProofDeleteOrder(boolean proofFirst) throws Exception {
+        UUID target=buyer();
+        var tenant=seller();
+        seedSalesOrder(tenant.tenant(),target);
+        UUID emailId=jdbc.queryForObject("""
+                SELECT id FROM public.iam_email_identity WHERE user_id=?
+                """,UUID.class,target);
+        emailIdentity.queueVerification(emailId);
+        var proof=jdbc.query("""
+                SELECT id,token_envelope FROM public.iam_email_verification_challenge
+                WHERE email_identity_id=? AND purpose='CHECKOUT'
+                ORDER BY created_at DESC LIMIT 1
+                """,rs->{
+                    if(!rs.next())throw new IllegalStateException("Checkout proof not queued");
+                    return new java.util.AbstractMap.SimpleEntry<>(
+                            rs.getObject(1,UUID.class),emailCrypto.decrypt(rs.getBytes(2)));
+                },emailId);
+        var admin=verified(platformAdmin());
+        String requestKey="proof-delete-"+UUID.randomUUID();
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var started=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var first=pool.submit(()->tx.execute(status->{
+                if(proofFirst) emailIdentity.verifyEmail(proof.getKey(),proof.getValue());
+                else deletion.deleteAccount(admin,target,requestKey);
+                entered.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Proof/delete barrier timeout");
+                }catch(InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(entered.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                started.countDown();
+                try {
+                    if(proofFirst) deletion.deleteAccount(admin,target,requestKey);
+                    else emailIdentity.verifyEmail(proof.getKey(),proof.getValue());
+                    return true;
+                }catch(SecurityException denied){return false;}
+            });
+            assertThat(started.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally{release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(proofFirst);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,target)).isEqualTo("DELETED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_verification_challenge
+                WHERE id=? AND consumed_at IS NOT NULL
+                """,Integer.class,proof.getKey())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_delivery_outbox
+                WHERE email_identity_id=? AND state='PENDING'
+                """,Integer.class,emailId)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_deletion_oidc_revocation_outbox
+                WHERE target_user_id=? AND state='PENDING'
+                """,Integer.class,target)).isEqualTo(1);
+    }
+
     private void requirePostgres() throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
             org.junit.jupiter.api.Assumptions.assumeTrue(
