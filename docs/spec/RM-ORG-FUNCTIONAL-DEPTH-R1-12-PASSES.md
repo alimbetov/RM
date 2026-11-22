@@ -1,7 +1,7 @@
 
 # RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**Документ:** RM-ORG-FUNC-R1. **Проход:** 01/12. **Ветка:** base_dev.
+**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12 и 02/12. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
 **Статус:** ТЗ СФОРМИРОВАНО; РЕАЛИЗАЦИЯ НЕ НАЧАТА. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
@@ -50,7 +50,7 @@
 | Проход | Тема | Результат | Сейчас |
 |---|---|---|---|
 | 01 | Исходники + перекрёстный аудит | Карта функций, GAP, данное ТЗ | SPECIFIED |
-| 02 | Бизнес-сценарии | Пути администратора, кладовщика, продавца и отрицательные действия | OPEN |
+| 02 | Бизнес-сценарии | Пути администратора, кладовщика, продавца и отрицательные действия | SPECIFIED |
 | 03 | State machine | Политика складских зависимостей, переходы, ограничения | OPEN |
 | 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | OPEN |
 | 05 | INVENTORY | Допуск активного склада для приёмки/коррекции/резерва | OPEN |
@@ -147,3 +147,46 @@
 ## 10. Следующий пакет: проход 02/12
 
 Разобрать реальные пути сотрудника склада, менеджера филиала/POS и подтверждающего заказ продавца. Уточнить семантику временной остановки склада с остатком, все ошибочные переходы, SQL usage-count и lock ordering до изменения runtime-кода. Следующий домен — только после 12/12.
+
+
+---
+
+## 11. Дополнение после прохода 02/12: реальные бизнес-сценарии
+
+**Подробный источник:** [RM-ORG-FUNC-R1-P02 — предметное обследование](../reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS02-2026-11-22.md). Снимок исходников `base_dev`: `2b4afbbabc6be0193def86a933d7947163f964ae`, доменный runtime не изменён относительно начального аудита. **Статус:** сценарии описаны и сверены с исходным кодом; новых сервисов и E2E ещё нет.
+
+### 11.1 Уточнение трёх целевых бизнес-путей
+
+| Роль / объект | Действующая последовательность | Достроить минимально |
+|---|---|---|
+| Сотрудник склада / WAREHOUSE | IAM выдаёт grants → ORG.create → ORG.get/search → INVENTORY.receive/correct → SALES.confirm → reserve → fulfill/cancel | Идемпотентная нулевая SKU-позиция в INVENTORY, eligibility ACTIVE WAREHOUSE, edit/status/CAS, guard остатка/резервов |
+| Менеджер филиала / BRANCH | IAM grants → ORG.create → ORG.get/search | Редактирование, временная деактивация, повторная активация, закрытие; без локальных hardcoded IAM-ролей |
+| Сотрудник торговой точки / POINT_OF_SALE | ORG.create → ORG.get/search | Lifecycle локации; **не** приравнивать к настоящей кассе или интернет-магазину, потому что `store_front` tenant-scoped без location_id |
+
+### 11.2 Новые междоменные риски и приоритеты
+
+| ID | Приоритет | Проверенное наблюдение | Обязательное решение |
+|---|---|---|---|
+| ORG-11 | **P0, dependency INVENTORY** | `InventoryMovementService.adjust` требует существующий `inv_stock_balance` и выдаёт «Stock position not initialized», а тесты insert stock position напрямую SQL | INVENTORY должен предоставить защищённую операцию `initializePosition` / create-zero-if-absent с tenant+item+location, idempotent contract и immutable boundary; E2E ORG не seed SQL |
+| ORG-12 | P2, separate STOREFRONT scope | `crm.store_front` связан с tenant, не location, а POS не привязан к offer | В R1 не обещать POS checkout/кассу; отдельное решение после ORGANIZATION |
+| ORG-13 | **P0, prerequisite IAM** | `PlatformTenantBootstrapService.provision` включает RBAC enforced для нового tenant, но не выдаёт функциональных прав; `TenantRoleService.assign` блокирует self-assignment | До create location провести обычное подтверждённое назначение staff нужных ORG_READ/WRITE без wildcard; не менять security ради обхода |
+| ORG-14 | **P1** | Нет типизированного location usage summary для команды close | Минимальный read-only INVENTORY blocker (onHand/reserved/active reservation), без деталей SKU и без нового ORG stock ledger |
+
+### 11.3 Уточнённая политика операций со складами
+
+- Новый `receive/correct` и резервирование требуют ACTIVE WAREHOUSE внутри общей транзакции. Для SALES confirm дополнительно обязательны `SALES_ORDER_CONFIRM` + `INVENTORY_RESERVE`.
+- **Cancel/release** — это cleanup существующего резерва, его нельзя запрещать только из-за legacy INACTIVE location, иначе возможны зависшие резервы; обязательны действующие права и корректная идемпотентность.
+- Успешно выполненная раньше операция movement с прежним requestKey может быть безопасно возвращена **без повторной записи** после CLOSED, но только после проверки актуального IAM, identity и полного payload. Новый requestKey при CLOSED отклоняется. Для реализации проверить lock order уже существующего request stripe.
+- Fulfill с ACTIVE reservation у INACTIVE/CLOSED указывает на нарушение инварианта; не делать новую negative movement. Terminal replay допускается без новых побочных эффектов.
+- Не менять `org_location.status` при попытке `deactivate`, если есть положительные остатки, забронированный товар или активный резерв. Исторические закрытые движения сохранять; не делать каскадную очистку.
+- `SALES` не содержит warehouse_id у заказа до confirm, поэтому «незавершённые PLACED orders на складе» сегодня не определены как связанная зависимость.
+- Новый location lock нужно вводить с учётом существующего `inv_movement_request_lock`, `sales_order FOR UPDATE`, `stock_balance FOR UPDATE` и `reservation`; слепое внедрение глобального lock первым запрещено до теста deadlock.
+- Для ORG административного `get/search` не раскрывать количество товара без `INVENTORY_STOCK_READ`. Команда close может получить ограниченный код блокировки без инвентарных сумм.
+
+### 11.4 Изменение очереди реализации
+
+Уточнить `ORG-R1.1B`: помимо active warehouse admission, предусмотреть dependency `INVENTORY initializePosition` как **отдельную реализацию владельца INVENTORY**, а в приёмке ORGANIZATION запускать путь `создал склад → создал нулевую stock position → принял товар` без тестового прямого INSERT. Не писать таблицу `crm.inv_stock_balance` из ORGANIZATION.
+
+**Дополнительные приёмочные сценарии:** `ORG-BJ01..ORG-BJ12` в подробном ревью 02/12, включая create/edit/close BRANCH, lifecycle POS без побочных эффектов на STOREFRONT, исторический idempotent retry, concurrent deactivate-vs-receive/confirm, onboarding с реальным IAM grant.
+
+**Граница прохода 03/12:** окончательно утвердить матрицу status transitions, strict SQL dependency checks и lock-order; для R1 оставить консервативный запрет деактивации склада с положительным stock до отдельного решения. **Домен в целом по-прежнему 1/5; runtime не менялся.**
