@@ -31,7 +31,7 @@
 | INACTIVE | close(expectedVersion) | Не существует SKU с onHand>0 или reserved>0; нет ACTIVE reservations | CLOSED, rowVersion+1, updatedAt, audit |
 | ACTIVE | close | Любые | INVALID_TRANSITION, 0 mutation |
 | CLOSED | reactivate/deactivate/update | Любые | LOCATION_CLOSED, 0 mutation |
-| ACTIVE | reactivate, INACTIVE | deactivate, CLOSED | close | Только повтор с точным expectedVersion → тот же DTO без записи/event; stale version → STALE_VERSION |
+| ACTIVE → ACTIVE, INACTIVE → INACTIVE, CLOSED → CLOSED | Повтор прежней команды, совпадающий expectedVersion | Не меняет состояние | Тот же DTO без изменения версии/времени/event; stale version → STALE_VERSION |
 | ACTIVE или INACTIVE | update(name,address,kato,expectedVersion) | Editable fields only, KATO acceptance, no changed tenant/type/id | Состояние не меняется; CAS на изменение атрибутов |
 | CLOSED | get/search | ORG READ, выбранный tenant | Историческая карточка доступна, warehouse picker не показывает |
 
