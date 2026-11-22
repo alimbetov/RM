@@ -305,4 +305,160 @@ class OrganizationLocationLifecycleQualificationTest {
                 WHERE tenant_id=? AND location_id=?
                 """,Integer.class,t.id(),loc.id())).isZero();
     }
+
+    /**
+     * INV-R1.4: a committed pause must fence a later transfer even when
+     * on_hand remains positive. The target cannot acquire an invented leg.
+     */
+    @Test
+    void postgresDeactivateBeforeTransferRejectsBothLedgerLegs() throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        var who=actor(t.employee());
+        var source=locations.create(who,t.id(),new LocationCreateRequest(
+                OrganizationLocationEntity.Type.WAREHOUSE,"Pause before transfer source",kato(),null));
+        var target=locations.create(who,t.id(),new LocationCreateRequest(
+                OrganizationLocationEntity.Type.WAREHOUSE,"Pause before transfer target",kato(),null));
+        UUID item=product(t);
+        inventory.receive(who,t.id(),source.id(),item,"r14PreTransferReceipt",BigDecimal.valueOf(5));
+        var held=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var pause=pool.submit(()->tx.execute(s->{
+                locations.deactivate(actor(t.employee()),t.id(),source.id(),0);
+                held.countDown();
+                try {
+                    if(!finish.await(15,TimeUnit.SECONDS)) throw new IllegalStateException("Pause timeout");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(held.await(10,TimeUnit.SECONDS)).isTrue();
+            var entered=new CountDownLatch(1);
+            var transfer=pool.submit(()->{
+                entered.countDown();
+                try {
+                    inventory.transfer(actor(t.employee()),t.id(),source.id(),target.id(),
+                            item,BigDecimal.valueOf(2),"r14TransferAfterPause");
+                    return true;
+                } catch(IllegalArgumentException denied) {
+                    return false;
+                }
+            });
+            assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->transfer.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finish.countDown();
+            }
+            assertThat(pause.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(transfer.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThat(locations.get(who,t.id(),source.id()).status())
+                .isEqualTo(OrganizationLocationEntity.Status.INACTIVE);
+        assertThat(jdbc.queryForObject("""
+                SELECT on_hand FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,t.id(),source.id(),item)).isEqualByComparingTo("5");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_transfer
+                WHERE tenant_id=? AND request_key='r14TransferAfterPause'
+                """,Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND reason_code IN ('TRANSFER_IN','TRANSFER_OUT')
+                  AND (location_id=? OR location_id=?)
+                """,Integer.class,t.id(),source.id(),target.id())).isZero();
+    }
+
+    /**
+     * INV-R1.3/R1.4: warehouse status update waits for an admitted physical
+     * transfer. After a full drain, the source can be paused without losing
+     * ledger legs; the target remains active and receives exactly five units.
+     */
+    @Test
+    void postgresTransferBeforeDeactivateCommitsAndPauseSeesDrainedStock() throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        var who=actor(t.employee());
+        var source=locations.create(who,t.id(),new LocationCreateRequest(
+                OrganizationLocationEntity.Type.WAREHOUSE,"Drain before pause",kato(),null));
+        var target=locations.create(who,t.id(),new LocationCreateRequest(
+                OrganizationLocationEntity.Type.WAREHOUSE,"Drain target",kato(),null));
+        UUID item=product(t);
+        inventory.receive(who,t.id(),source.id(),item,"r14DrainReceipt",BigDecimal.valueOf(5));
+        var held=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var transfer=pool.submit(()->tx.execute(s->{
+                inventory.transfer(actor(t.employee()),t.id(),source.id(),target.id(),
+                        item,BigDecimal.valueOf(5),"r14DrainTransfer");
+                held.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS)) throw new IllegalStateException("Transfer timeout");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(held.await(10,TimeUnit.SECONDS)).isTrue();
+            var started=new CountDownLatch(1);
+            var pause=pool.submit(()->{
+                started.countDown();
+                return locations.deactivate(actor(t.employee()),t.id(),source.id(),0);
+            });
+            assertThat(started.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->pause.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(transfer.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(pause.get(20,TimeUnit.SECONDS).status())
+                    .isEqualTo(OrganizationLocationEntity.Status.INACTIVE);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT on_hand FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,t.id(),source.id(),item)).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT on_hand FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,t.id(),target.id(),item)).isEqualByComparingTo("5");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND source_type='TRANSFER'
+                  AND reason_code IN ('TRANSFER_OUT','TRANSFER_IN')
+                """,Integer.class,t.id())).isEqualTo(2);
+    }
+
+    @Test
+    void r14ConcurrentProfileVersionCannotOverwriteCommittedPause() {
+        var t=tenant();
+        var who=actor(t.employee());
+        var location=locations.create(who,t.id(),new LocationCreateRequest(
+                OrganizationLocationEntity.Type.WAREHOUSE,"CAS pause warehouse",kato(),null));
+        var paused=locations.deactivate(who,t.id(),location.id(),0);
+        assertThat(paused.rowVersion()).isEqualTo(1);
+        assertThatThrownBy(()->locations.update(who,t.id(),location.id(),
+                new LocationUpdateRequest("Stale warehouse rename",kato(),null,0)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STALE_LOCATION_VERSION");
+        assertThat(locations.get(who,t.id(),location.id()).name())
+                .isEqualTo("CAS pause warehouse");
+        assertThat(locations.get(who,t.id(),location.id()).rowVersion()).isEqualTo(1);
+    }
 }
