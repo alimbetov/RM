@@ -3325,3 +3325,11 @@ CREATE TRIGGER trg_qr07_quarantine_resolution_immutable
  BEFORE UPDATE OR DELETE ON crm.sales_return_quarantine_resolution
  FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
 --rollback DROP TRIGGER trg_qr07_quarantine_resolution_immutable ON crm.sales_return_quarantine_resolution;
+
+
+--changeset rm:0104-crm-r22-buyer-link-event-immutable dbms:postgresql splitStatements:false
+-- Buyer confirmation evidence cannot be rewritten or deleted after commit.
+CREATE TRIGGER trg_crm_r22_buyer_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.customer_buyer_link_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_crm_r22_buyer_event_immutable ON crm.customer_buyer_link_event;
