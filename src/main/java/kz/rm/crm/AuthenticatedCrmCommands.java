@@ -47,4 +47,16 @@ public class AuthenticatedCrmCommands {
         service.archiveCustomer(id(actor),tenant,customer,expectedVersion);
     }
 
+
+    public CrmCustomerService.Contact updateContact(VerifiedActor actor, UUID tenant, UUID contact,
+            String name, String email, String phone, long expectedVersion) {
+        return service.updateContact(id(actor),tenant,contact,name,email,phone,expectedVersion);
+    }
+    public void archiveContact(VerifiedActor actor, UUID tenant, UUID contact, long expectedVersion) {
+        service.archiveContact(id(actor),tenant,contact,expectedVersion);
+    }
+    public void restoreContact(VerifiedActor actor, UUID tenant, UUID contact, long expectedVersion) {
+        service.restoreContact(id(actor),tenant,contact,expectedVersion);
+    }
+
 }
