@@ -3390,3 +3390,25 @@ CREATE TRIGGER trg_crm_r22c_adjudication_immutable
  BEFORE UPDATE OR DELETE ON crm.customer_buyer_dispute_decision
  FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_crm_r22c_adjudication_immutable ON crm.customer_buyer_dispute_decision;
+
+
+--changeset rm:0108-iam-global-account-deletion-audit
+-- Keep durable tombstone and non-PII provenance, not user profile or email plaintext.
+CREATE TABLE public.iam_account_deletion_event (
+ id UUID NOT NULL PRIMARY KEY,
+ actor_user_id UUID NOT NULL,
+ target_user_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_iam_deletion_actor FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_iam_deletion_target FOREIGN KEY(target_user_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT uk_iam_deletion_target UNIQUE(target_user_id),
+ CONSTRAINT uk_iam_deletion_request UNIQUE(actor_user_id,request_key)
+);
+--rollback DROP TABLE public.iam_account_deletion_event;
+
+--changeset rm:0109-iam-global-account-deletion-audit-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_iam_account_deletion_event_immutable
+ BEFORE UPDATE OR DELETE ON public.iam_account_deletion_event
+ FOR EACH ROW EXECUTE FUNCTION public.iam_reject_account_status_event_mutation();
+--rollback DROP TRIGGER trg_iam_account_deletion_event_immutable ON public.iam_account_deletion_event;
