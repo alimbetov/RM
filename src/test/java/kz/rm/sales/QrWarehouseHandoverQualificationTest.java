@@ -2169,7 +2169,7 @@ class QrWarehouseHandoverQualificationTest {
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
                         c.itemOne(),key(),BigDecimal.valueOf(extended?(tenantIndex==0?1400:1000):300));
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
-                        c.itemTwo(),key(),new BigDecimal("300"));
+                        c.itemTwo(),key(),BigDecimal.valueOf(extended?(tenantIndex==0?1400:1000):300));
                 var rows=new ArrayList<String>();
                 int[] phaseCounts=extended
                         ?(tenantIndex==0?new int[]{30,60,120,30}:new int[]{20,40,80,20})
