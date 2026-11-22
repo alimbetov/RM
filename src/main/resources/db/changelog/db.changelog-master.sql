@@ -2118,3 +2118,38 @@ CREATE INDEX idx_inv_movement_tenant_item_history
 --rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN source_id;
 --rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN source_type;
 --rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN actor_user_id;
+
+
+--changeset rm:0071-inventory-transfer
+CREATE TABLE crm.inv_stock_transfer (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ source_location_id UUID NOT NULL,
+ target_location_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ quantity NUMERIC(19,4) NOT NULL,
+ posted_by UUID NOT NULL,
+ posted_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_inv_stock_transfer PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_inv_stock_transfer_request UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_inv_transfer_source FOREIGN KEY(tenant_id,source_location_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_inv_transfer_target FOREIGN KEY(tenant_id,target_location_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_inv_transfer_item FOREIGN KEY(tenant_id,item_id)
+   REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT fk_inv_transfer_actor FOREIGN KEY(posted_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_inv_transfer_two_locations CHECK(source_location_id<>target_location_id),
+ CONSTRAINT ck_inv_transfer_qty CHECK(quantity>0)
+);
+CREATE INDEX idx_inv_transfer_source_time
+ ON crm.inv_stock_transfer(tenant_id,source_location_id,posted_at DESC,id);
+--rollback DROP TABLE crm.inv_stock_transfer;
+
+--changeset rm:0072-inventory-transfer-immutable dbms:postgresql
+CREATE TRIGGER trg_inv_transfer_immutable
+ BEFORE UPDATE OR DELETE ON crm.inv_stock_transfer
+ FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_movement_mutation();
+--rollback DROP TRIGGER trg_inv_transfer_immutable ON crm.inv_stock_transfer;
