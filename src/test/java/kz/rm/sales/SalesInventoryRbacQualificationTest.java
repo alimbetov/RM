@@ -3,6 +3,8 @@ package kz.rm.sales;
 import kz.rm.autoorder.AutoOrderService;
 import kz.rm.iam.*;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
+import kz.rm.inventory.AuthenticatedInventoryQueries;
+import kz.rm.inventory.dto.InventoryMovementSearch;
 import kz.rm.inventory.AuthenticatedInventorySettings;
 import kz.rm.inventory.OrderInventoryPort;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,6 +45,7 @@ class SalesInventoryRbacQualificationTest {
     @Autowired SalesInventoryCommandService commands;
     @Autowired AuthenticatedSalesCommands authenticatedCommands;
     @Autowired AuthenticatedInventoryCommands warehouse;
+    @Autowired AuthenticatedInventoryQueries inventoryReads;
     @Autowired AuthenticatedInventorySettings inventorySettings;
     @Autowired AutoOrderService checkout;
     @Autowired VerifiedTenantRoleCommands roles;
@@ -708,6 +711,62 @@ class SalesInventoryRbacQualificationTest {
                 """,Integer.class,c.tenant(),id,c.staff())).isEqualTo(1);
         assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
         assertThat(scalar(c,"on_hand")).isEqualByComparingTo("7");
+    }
+
+
+    @Test void q9WarehouseFirstReceiptToSellerFulfillmentProducesAuditableQuantityChain() {
+        Context c=context(0);
+        // Remove legacy synthetic zero position: the real verified receipt must
+        // initialize the new tenant/warehouse/SKU itself.
+        jdbc.update("""
+                DELETE FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,c.tenant(),c.location(),c.item());
+        allow(c,DomainPermission.INVENTORY_RECEIVE,DomainPermission.INVENTORY_STOCK_READ,
+                DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        var actor=verified(c.staff());
+        var first=warehouse.receive(actor,c.tenant(),c.location(),c.item(),
+                "e2eReceipt0001",BigDecimal.TEN);
+        assertThat(first.before()).isEqualByComparingTo("0");
+        assertThat(first.after()).isEqualByComparingTo("10");
+        assertThat(inventoryReads.getPosition(actor,c.tenant(),c.location(),c.item())
+                .available()).isEqualByComparingTo("10");
+        UUID order=order(c,3);
+        var confirmed=authenticatedCommands.confirm(actor,c.tenant(),order,c.location());
+        assertThat(confirmed.status()).isEqualTo("CONFIRMED");
+        assertThat(inventoryReads.getPosition(actor,c.tenant(),c.location(),c.item())
+                .reserved()).isEqualByComparingTo("3");
+        var fulfilled=authenticatedCommands.fulfill(actor,c.tenant(),order);
+        assertThat(fulfilled.status()).isEqualTo("COMPLETED");
+        var position=inventoryReads.getPosition(actor,c.tenant(),c.location(),c.item());
+        assertThat(position.onHand()).isEqualByComparingTo("7");
+        assertThat(position.reserved()).isEqualByComparingTo("0");
+        assertThat(position.available()).isEqualByComparingTo("7");
+        var history=inventoryReads.searchMovements(actor,c.tenant(),
+                new InventoryMovementSearch(c.location(),c.item(),null,null,null),0,20);
+        assertThat(history.getTotalElements()).isEqualTo(2);
+        assertThat(history.getContent()).extracting(m->m.reasonCode())
+                .containsExactlyInAnyOrder("RECEIPT","ORDER_FULFILLMENT");
+        assertThat(history.getContent()).allSatisfy(m->
+                assertThat(m.actorUserId()).isEqualTo(c.staff()));
+        assertThat(history.getContent()).anySatisfy(m->{
+            if("SALES_ORDER".equals(m.sourceType())) {
+                assertThat(m.sourceId()).isEqualTo(order);
+                assertThat(m.delta()).isEqualByComparingTo("-3");
+            }
+        });
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_reservation_event e
+                JOIN crm.inv_stock_reservation r
+                  ON r.tenant_id=e.tenant_id AND r.id=e.reservation_id
+                WHERE e.tenant_id=? AND r.order_id=? AND e.actor_user_id=?
+                """,Integer.class,c.tenant(),order,c.staff())).isEqualTo(2);
+        assertThat(authenticatedCommands.fulfill(actor,c.tenant(),order).affectedLines())
+                .isZero();
+        assertThat(inventoryReads.searchMovements(actor,c.tenant(),
+                new InventoryMovementSearch(c.location(),c.item(),null,null,null),0,20)
+                .getTotalElements()).isEqualTo(2);
     }
 
 }
