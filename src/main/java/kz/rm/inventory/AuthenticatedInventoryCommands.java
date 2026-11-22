@@ -2,6 +2,8 @@ package kz.rm.inventory;
 
 import kz.rm.iam.VerifiedActor;
 import kz.rm.inventory.dto.StockTransferDto;
+import kz.rm.inventory.dto.InventoryStocktakeDto;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -32,5 +34,25 @@ public class AuthenticatedInventoryCommands {
         if(actor==null)throw new SecurityException("Verified actor required");
         return commands.transfer(actor.userId(),tenant,sourceLocation,targetLocation,
                 item,qty,requestKey);
+    }    public InventoryStocktakeDto startStocktake(VerifiedActor actor,UUID tenant,
+             UUID location,List<UUID> items,String requestKey) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return commands.startStocktake(actor.userId(),tenant,location,items,requestKey);
+    }
+    public InventoryStocktakeDto recordCount(VerifiedActor actor,UUID tenant,
+             UUID stocktake,UUID item,BigDecimal counted,long expectedLineVersion) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return commands.recordCount(actor.userId(),tenant,stocktake,item,counted,
+                expectedLineVersion);
+    }
+    public InventoryStocktakeDto postStocktake(VerifiedActor actor,UUID tenant,
+             UUID stocktake,String requestKey) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return commands.postStocktake(actor.userId(),tenant,stocktake,requestKey);
+    }
+    public InventoryStocktakeDto cancelStocktake(VerifiedActor actor,UUID tenant,
+             UUID stocktake) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return commands.cancelStocktake(actor.userId(),tenant,stocktake);
     }
 }
