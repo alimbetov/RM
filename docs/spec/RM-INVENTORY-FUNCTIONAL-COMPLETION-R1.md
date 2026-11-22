@@ -2,7 +2,7 @@
 
 **Тип:** специализированное детальное ТЗ + 12-проходный перекрёстный аудит одного домена.  
 **Дата / ветка / source SHA:** 2026-11-22 · `base_dev` · `c776baec5c82e0dfd4c7930aa6a68629202fa5fd`.  
-**Статус:** INV-Q1–Q3 `IMPLEMENTED / POSTGRESQL QUALIFIED` (см. §15, exact code SHA), INV-Q4–Q9 и INV-VAL остаются `PROPOSED/HOLD`. Прочие `DECISION` вне Q1–Q3 требуют отдельного согласования.  
+**Статус:** INV-Q1–Q3 `POSTGRESQL QUALIFIED` (§15); INV-Q4–Q9 `IMPLEMENTED / CI QUALIFICATION PENDING` (§16); INV-VAL остаётся `HOLD`. Любой production admission — HOLD.  
 **Цель:** зрелый *количественный* складской сервис с завершённым сценарием кладовщика и безопасной интеграцией SALES, CATALOG, ORG, IAM — без общего CRUD-framework, новых микросервисов, HTTP-контроллеров и самодельного workflow-engine.  
 **Смежные документы:** `RM-PLATFORM-STANDARD-R2.md` (нормативный), `RM-SVC-FUNCTIONAL-DEPTH-AUDIT-2026-11-22.md` (обобщённый аудит), `RM-TENANT-SERVICES-COMPLETION-R1.md`, `RM-INVENTORY-VALUATION-R1.md`, `RM-SERVICE-FIRST-SALES-INVENTORY-R1.2.md`, `RM-SVC-R2-SERVICE-COMPLETION-CROSS-DOMAIN-CONSISTENCY.md`. Новый документ **не отменяет** иммутабельные согласованные механизмы reserve/fulfill, DDL 0022–0030 или dual-permission SALES+INVENTORY. При противоречии — нормативный стандарт R2 и принятое доменное решение выше проекта.
 
@@ -292,3 +292,25 @@ INVENTORY quantity-R1 может получить статус **FUNCTIONALLY MA
 **Квалификация INV-Q1–Q3:** source/code SHA `d9819250089872ead3ddb869f821974041bd46a4`. GitHub Actions [RM Domain Security and PostgreSQL Qualification / run 44985067340](https://github.com/alimbetov/RM/actions/runs/44985067340): H2 smoke, PostgreSQL integration, populated IAM PII **SUCCESS**; обновлённый `InventoryQ123QualificationTest` **4 tests, 0 failures, 0 errors, 0 skipped** на PostgreSQL (включая 2-connection revoke/read race), `InventoryReservationQualificationTest` и `SalesInventoryRbacQualificationTest` — SUCCESS. Повторный run 44985071453 также SUCCESS. CRM populated upgrade run 44985067351 SUCCESS. RustFS E2E [run 44985067336](https://github.com/alimbetov/RM/actions/runs/44985067336) **SUCCESS** (инфраструктурная регрессия, не предметная логика INVENTORY).
 
 **Квалифицированная область:** Q1 authenticated settings + fenced read; Q2 первое поступление, новый ACTIVE WAREHOUSE/PRODUCT admission и конкурентная первая запись; Q3 mandatory reservation при старом FALSE и честный operational DTO. Не принимать это за закрытие Q4–Q9, FIN valuation, всех существующих TCRUD-00/03 методов или production deployment. Из-за row-lock owner metadata проверить p95/p99 под нагрузкой до production; не выводить производительность из synthetic single-row test.
+
+
+## 16. Реализация INV-Q4–Q9: кодовая вертикаль, статус до CI
+
+**Branch `base_dev`**, фактическая реализация (source-based; точный квалифицированный SHA указывать *после* полного CI). Не пересматривать ранее принятые Q1–Q3 инварианты.
+
+| Этап | Код | Предметный результат |
+|---|---|---|
+| **Q4** | `InventoryMovementService`, `InventoryReservationService`, `OrderInventoryPort`, migration 0070 | Новые ручные движения, резерв и fulfillment записывают `actor_user_id`; fulfillment также хранит `source_type=SALES_ORDER`, `source_id=orderId`; исторические события сохраняют `NULL` как неизвестного автора; служебные request prefixes отделены от пользовательских |
+| **Q5** | `InventoryHistoryQueryService`, `AuthenticatedInventoryQueries`, публичные typed DTO | Tenant-fenced `getPosition`, `searchMovements`, `reservationHistory`, отдельный stocktake detail; фильтры по локации/SKU/reason/времени, bounded page 1..100, ordered history, no raw repository transport |
+| **Q6** | `AuthenticatedInventoryCommands.writeOff`, `InventoryAuthorizedCommandService` | Явное списание положительного количества с `WriteOffCause(DAMAGE/LOSS/EXPIRED/OTHER)`, ledger `WRITE_OFF`, `INVENTORY_ADJUST`, не ниже резерва; конфликтное повторение ключа с иной причиной отвергается |
+| **Q7** | `InventoryTransferService`, `StockTransferDto`, migrations 0071–0072 | Синхронный трансфер между 2 ACTIVE WAREHOUSE в одном tenant, условие `available>=qty`, детерминированный порядок lock по UUID локации, receipt + две immutable ledger legs (TRANSFER_OUT/IN), сумма delta=0, повтор ключа идемпотентен |
+| **Q8** | `InventoryStocktakeService`, `InventoryStocktakeDto`, migrations 0073–0074 | Count snapshot 1..100 SKU, `count` не меняет баланс, `post` сверяет версии до проводки и пересчитывает только дельту, запрет `counted<reserved`; terminal POSTED/CANCELLED неизменяемы в PostgreSQL; нулевая дельта не создаёт фиктивную проводку |
+| **Q9** | `SalesInventoryRbacQualificationTest.q9WarehouseFirstReceiptToSellerFulfillmentProducesAuditableQuantityChain` | Сквозной service-only E2E: первый приход без исходной balance row → PLACED order → confirm/reserve → fulfill → ledger and actor/source evidence; повтор не создаёт движения |
+
+**Тесты, которые обязаны быть GREEN на одном source SHA:** `InventoryQ123QualificationTest.q456ProvenanceWriteOffAndTenantHistoryAreRealOperations`, `q456WriteOffRequiresAdjustmentPermission`, `postgresSyntheticParallelReceiptLockProbePreservesAllMovements`; `InventoryTransferStocktakeQualificationTest` (идемпотентность/две ноги, обратные потоки, подтверждение физического количества, stale version, counted<reserved, no-change, terminal PG immutable); `SalesInventoryRbacQualificationTest.q4SalesReserveAndFulfillKeepStaffAttributionAndSourceOrder` и `q9WarehouseFirstReceiptToSellerFulfillmentProducesAuditableQuantityChain`; существующие INV-Q1–Q3, RBAC revoke и SALES/FILES регрессии.
+
+**Ограничение нагрузки:** синтетический PostgreSQL lock probe = 24 поступления одного SKU на 8 workers; он выводит *измеренные* p95/p99 в CI, но **не является production capacity test** и не заменяет отдельное измерение SKU fanout, нескольких локаций, confirm/fulfill overlap или EXPLAIN/lock wait analysis.
+
+**Nongoals и открытые границы:** нет реальных FIFO/FEFO/lot batches, COGS/финансовой себестоимости, перманентного stock-freeze, межтенантных перемещений, per-warehouse RBAC и транспортных HTTP endpoint. Для переноса старого склада архивированного SKU и корректировок после деактивации ORG нужен отдельный согласованный historical remediation flow. Production остаётся HOLD.
+
+**Admission gate:** H2 и PostgreSQL integration, обе populated миграции, RustFS regression (не является тестом INVENTORY), SKU concurrency, revocation fence, immutable SQL triggers — все на exact source SHA. До фактических результатов этих workflow статус Q4–Q9 = **IMPLEMENTED / NOT YET QUALIFIED**.
