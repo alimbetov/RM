@@ -7,7 +7,8 @@ import java.util.UUID;
 
 /** Physical quantity count. Financial valuation is not implied. */
 public record InventoryStocktakeDto(UUID id,UUID tenantId,UUID locationId,String status,
-        UUID startedBy,Instant startedAt,UUID postedBy,Instant postedAt,long rowVersion,
+        UUID startedBy,Instant startedAt,UUID postedBy,Instant postedAt,
+        UUID cancelledBy,Instant cancelledAt,long rowVersion,
         List<Line> lines) {
     public record Line(UUID itemId,BigDecimal bookOnHand,BigDecimal bookReserved,
                        BigDecimal countedOnHand,long expectedStockVersion,
