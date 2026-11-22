@@ -2296,3 +2296,31 @@ ALTER TABLE crm.store_offer ADD CONSTRAINT ck_store_offer_version
 --rollback ALTER TABLE crm.store_offer DROP CONSTRAINT ck_store_offer_state;
 --rollback ALTER TABLE crm.store_offer ADD CONSTRAINT ck_store_offer_state CHECK (state IN ('PUBLISHED','HIDDEN'));
 -- Downgrade intentionally fails closed while DRAFT/PAUSED rows exist.
+
+
+--changeset rm:0079-sales-offer-sku-stability dbms:postgresql splitStatements:false
+-- A published offer identity may not be reassigned to another SKU or tenant.
+-- Historical NULL offers may acquire their first verified SKU binding, but not silently remap.
+CREATE FUNCTION crm.sales_reject_offer_identity_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
+    OR NEW.id IS DISTINCT FROM OLD.id THEN
+    RAISE EXCEPTION 'Offer identity is immutable';
+ END IF;
+ IF OLD.catalog_item_id IS NOT NULL
+    AND NEW.catalog_item_id IS DISTINCT FROM OLD.catalog_item_id THEN
+    RAISE EXCEPTION 'Offer catalog mapping is immutable';
+ END IF;
+ IF OLD.catalog_item_id IS NULL AND OLD.state='PUBLISHED'
+    AND NEW.catalog_item_id IS DISTINCT FROM OLD.catalog_item_id THEN
+    RAISE EXCEPTION 'Published offer cannot be backfilled without new offer identity';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_sales_offer_identity_immutable
+ BEFORE UPDATE ON crm.store_offer FOR EACH ROW
+ EXECUTE FUNCTION crm.sales_reject_offer_identity_mutation();
+--rollback DROP TRIGGER trg_sales_offer_identity_immutable ON crm.store_offer;
+--rollback DROP FUNCTION crm.sales_reject_offer_identity_mutation();
