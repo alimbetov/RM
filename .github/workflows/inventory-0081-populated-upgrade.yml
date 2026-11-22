@@ -7,6 +7,7 @@ on:
       - 'src/main/java/kz/rm/inventory/**'
       - 'src/main/resources/db/changelog/**'
       - 'src/test/java/kz/rm/inventory/**'
+      - 'src/test/java/kz/rm/integration/**'
       - '.github/workflows/inventory-0081-populated-upgrade.yml'
   workflow_dispatch:
 
@@ -66,7 +67,7 @@ jobs:
           ref: ${{ github.sha }}
           clean: true
       - name: Upgrade populated PostgreSQL and qualify movement contract
-        run: mvn -B -ntp -Dtest=InventoryMovementQualificationTest test
+        run: mvn -B -ntp -Dtest=InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest#postgresW2ConcurrentReceiveTransferAndReconciliationAcrossTwoPositions,CommercialCoreE2EQualificationTest#postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger test
       - name: Verify legacy rows retained and explicitly unverified
         env:
           PG_SERVICE_ID: ${{ job.services.postgres.id }}
