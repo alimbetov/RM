@@ -41,6 +41,7 @@ class AutoOrderR1QualificationTest {
                 "store-owner-"+UUID.randomUUID(),"Seller"));
         var org=orgs.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),"Shop LLP","Shop","KZ"));
         var tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant.getId());
         String slug="shop-"+UUID.randomUUID();
         UUID offerId=UUID.randomUUID(),itemId=UUID.randomUUID();
         jdbc.update("""
