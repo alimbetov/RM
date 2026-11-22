@@ -4,7 +4,7 @@
 **Branch:** `base_dev`  
 **Exact tested source SHA:** `b5dd6e570c75d61ab3a5eb10beb10243477188d9`  
 **GitHub Actions:** https://github.com/alimbetov/RM/actions/runs/45036428295  
-**Evidence:** `qr06b-b32-success-throughput` completed SUCCESS, 3 JUnit tests; 0 failures, 0 errors, 0 skipped. Regression job result recorded below when available.  
+**Evidence:** `qr06b-b32-success-throughput` completed SUCCESS, 3 JUnit tests; 0 failures, 0 errors, 0 skipped. Regression job `qr06b-postgresql` SUCCESS at the same exact SHA.  
 **Decision:** B3.2 synthetic successful-operations qualification is PASS in its tested scope; comprehensive B3.2 and production admission remain **HOLD**.
 
 ## What ran
@@ -43,3 +43,12 @@ The paced soak offered 4 orders per second during 20 one-second windows, complet
 **B3.3 — workload realism and variance:** multiple warm repeated durations of 60–300 seconds with prescribed offered rate, at least two independent Java processes, independently fulfillable orders, interference from stock movements, tenant-balanced acceptance rate, p50/p95/p99 by success/business rejection/technical fault, database lock wait and deadlock metrics, and immutable SQL proof after every phase. Do not call observed short-burst throughput a capacity guarantee.
 
 **Production admission = HOLD.**
+
+## Exact-SHA full regression and closure of this test candidate
+
+All three jobs in the workflow completed SUCCESS:
+- `qr06b-b32-success-throughput`: **3 tests, 0 failures/errors/skips**, including 20-second, 80-success paced soak.
+- `qr06b-b31-mixed-load`: SUCCESS, requalified the 100/250 contention and cross-JVM profiles.
+- `qr06b-postgresql`: **41 tests** = `QrWarehouseHandoverQualificationTest` 30 and `TenantRbacRevocationQualificationTest` 11, **0 failures, 0 errors, 0 skipped; BUILD SUCCESS**.
+
+**Decision:** the specific B3.2 synthetic profiles PASS at source SHA `b5dd6e570c75d61ab3a5eb10beb10243477188d9`. This version has zero claim of a 60–300 second continuous production-representative capacity test. An exact-SHA follow-up documentation commit is not a code retest. Full release and external qualification remain HOLD.
