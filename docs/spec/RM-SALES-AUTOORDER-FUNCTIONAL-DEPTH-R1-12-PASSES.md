@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -48,7 +48,7 @@
 | **03** | Aggregate/schema/DDL | [Schema and populated-safe migration evidence](../reviews/RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03-2026-11-22.md): six actual tables, PK/FK/CHECK/index, legacy provenance | **DDL SOURCE VERIFIED / SPEC PROPOSED** |
 | **04** | Команды и state machine | [PASS 04 — точная state machine, permissions и запас](../reviews/RM-SALES-AUTOORDER-STATE-MACHINE-PASS-04-2026-11-22.md): actual code, proposed reject/cancel split, concurrency | **SOURCE VERIFIED / SPEC PROPOSED** |
 | **05** | Read model и история | [PASS 05 — seller/buyer query, PII, order-linked reserves](../reviews/RM-SALES-AUTOORDER-READ-MODEL-PASS-05-2026-11-22.md); bounded get/history/mine/ownDetail contracts | **SOURCE REVIEWED / SPEC PROPOSED** |
-| 06 | Idempotency/конкурентность | checkout same-key, cross-seller keys, revoke vs confirm, cancel vs fulfill, no double stock | OPEN |
+| **06** | Idempotency/конкурентность | [PASS 06 — TX, locks, replay, rollback and evidence](../reviews/RM-SALES-AUTOORDER-TRANSACTIONS-PASS-06-2026-11-22.md); existing guards and proposed PG tests | **SOURCE REVIEWED / SPEC PROPOSED** |
 | 07 | Реальность настроек | settings autoReserve/picking/publish state реально потребляются либо явно неактивны | OPEN |
 | 08 | CATALOG/STOREFRONT/INVENTORY/ORG | publish-to-offer, seller warehouse, immutable snapshot and stock eligibility | OPEN |
 | 09 | IAM/PII/tenant ACL | A/B/AB, verified buyer, revoked staff, seller/buyer separation, read/write | OPEN |
@@ -235,3 +235,16 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 **Тесты:** `SALE-RD05-01..14` — future PostgreSQL qualification criteria, не существующие тесты. Порядок исполнения `SALE-R1.5A` seller detail, `R1.5B` bounded history, `R1.5C` buyer paging/own detail, `R1.5D` search improvements по запросам. Никаких новых REST, CQRS, JPA aggregate copies или финансовых сущностей.
 
 **Вердикт:** PASS 05/12 **SOURCE REVIEWED / SPEC PROPOSED**, зрелость 2/5, код и Liquibase не менялись. Следующий **06/12** — транзакции, idempotency, concurrency и rollback read/write.
+
+
+## 17. PASS 06 — Transactions, Idempotency & Concurrency (2026-11-22)
+
+**Reviewed source SHA:** `51d410865c90cfb92e5b28df5f273f7d9c355103`; [полный источник, lock graph и FAIL/rollback matrix](../reviews/RM-SALES-AUTOORDER-TRANSACTIONS-PASS-06-2026-11-22.md). Source-verified facts: checkout one TX + 256 checkout stripe locks + global IAM identity stripe + unique tenant/idempotency key receipt; confirm/cancel/fulfill each one seller order row lock + transaction-bound paired IAM decisions + INVENTORY MANDATORY reserve/release/fulfill. Stock movement UNIQUE tenant/reservation protects repeated debits. IAM revocation can be fenced against admitted command; PostgreSQL cancel-vs-fulfill and failure-injection tests already exist for core SALES, but NOT for all new scenarios.
+
+**Точечные уточнения и product decisions:** checkout same-key returns same order ID and current status (не immutable PLACED response). PUBLISHED storefront проверяется перед receipt, поэтому PAUSED делает even same-key replay недоступным — рекомендуется чтение принятого receipt до gate на **новый** checkout, с неизменяемым slug→tenant mapping и отдельной suspend policy. Email resend — отдельная IAM operation, а не повторный order. Multiple unlocked offers may be read from different revisions: after PASS 03 immutable SKU snapshot, use deterministic row locks and PG price-change race. Replay CONFIRMED/COMPLETED needs per-line reservation/item/qty/location/movement verification, not only counts. `cancel(PLACED)` still over-requires INVENTORY_RELEASE. New buyer paging and snapshot semantics owned by PASS 05.
+
+**Rollback:** checkout failure after identity/line/receipt/outbox must leave no orphan and no sent uncommitted email; confirm second SKU failure must rollback first reserve; cancel or fulfill any subfailure must rollback every stock delta, reservation/event, and state. Preserve existing lock order IAM actor/workspace→sales order→warehouse+SKU→stock→reservation, and same transaction dual decisions. `READ COMMITTED` two seller search SELECTs do not guarantee same revision, so do not claim snapshot consistency without specific read-side qualification.
+
+**Acceptance proposed:** `SALE-TX06-01..16` (concurrent duplicate checkout, PAUSED replay, checkout+IAM failure injection, price/SKU change, multi-SKU rollback, double-commands/cancel-vs-fulfill, revoke on each operation, concurrent read/write, warehouse/catalog lifecycle, measured throughput, exact SHA workflows). Newly proposed IDs are **not implemented or GREEN**.
+
+**Implementation after owner decisions:** SALE-R1.6A receipt recovery + basket bounds → R1.6B immutable offers/SKU after PASS 03 → R1.6C strict replay reconciliation → R1.6D negative PostgreSQL race/rollback suite. No new workers/sagas/distributed locks. **PASS 06 SOURCE REVIEWED**, maturity SALES 2/5, production HOLD. Next **07/12**: settings/feature flags, read/write actual consumer behavior.
