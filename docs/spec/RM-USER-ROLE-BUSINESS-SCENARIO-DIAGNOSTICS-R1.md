@@ -396,3 +396,143 @@ JUnit IT-PG должен исполнять оба порядка для \`check
 **Не входить** в работу с REST controllers, OAuth login-flow, MockMvc, браузером, frontend или email transport. Даже если в репозитории уже есть HTTP-код, он не используется и не расширяется данным ТЗ.
 
 **Production HOLD** остаётся независимо от результатов JUnit. L4 Real User E2E и production admission потребуют отдельной будущей спецификации и пользовательского транспорта.
+
+
+---
+
+## 18. R1.2 — интеграция RM-STRATEGY-R3 и RM-QA-01B (нормативное расширение)
+
+**Основание:** \`docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json\`, \`RM-R3-FUNCTIONAL-COVERAGE-R1.md\`, \`.github/scripts/verify_rm_qa_01b.py\`, \`.github/workflows/rm-exact-sha-admission.yml\`.
+
+**Решение по объёму:** это **JUnit-only** диагностика Java application/service contracts, H2 и реального PostgreSQL. Никаких дополнительных REST controllers, MockMvc, browser, внешнего OIDC/Keycloak или новых бизнес-сервисов. Даже если HTTP endpoints уже существуют, тесты этой квалификации должны вызывать доверенные сервисные фасады и проверять авторитетные таблицы. Реальный пользовательский E2E остаётся отдельным \`RM-E2E-04\`, не условием запуска R1.2.
+
+### 18.1. Базовая матрица R3-v1 — неизменяемая точка сравнения
+
+На исходной редакции реестра: **16 контуров, 75 требований, 46 IMPLEMENTED, 29 PLANNED; 41 реализованное требование снабжено индивидуальной proof-привязкой**. Это свойства текущего каталога, **не автоматическая констатация PASS на HEAD документа**. Подтверждённость устанавливается только после успешного exact-SHA \`RM-QA-01B\` и реального PostgreSQL Surefire-доказательства. Базовые доли: \`46/75=61,33%\` с реализацией; \`41/75=54,67%\` с индивидуальной PostgreSQL proof-привязкой при успешном gate; \`29/75=38,67%\` не реализовано. Отчёт \`857 executions / 743 passed / 114 skipped / 0 failed\` относится к переданной исторической QA-квалификации, включает дублируемые тестовые исполнения и **не используется как число уникальных сценариев и не наследуется новым SHA**.
+
+| Контур / R3 ID prefix | Всего | Реализовано | Proof в R3-v1 | Запланировано | Диагностический фокус |
+|---|---:|---:|---:|---:|---|
+| IAM / RBAC (\`IAM-\`) | 6 | 5 | 5 | 1 | identity, membership, роль, grant/revoke, command fencing |
+| CRM Core (\`CRM-\`) | 6 | 5 | 5 | 1 | ownership, read/write, PII, consent |
+| CRM Interaction (\`INT-\`) | 4 | 2 | 2 | 2 | tenant-scoped interaction lifecycle |
+| CATALOG (\`CAT-\`) | 4 | 3 | 3 | 1 | SKU, публикация, archiving constraints |
+| STOREFRONT (\`STO-\`) | 5 | 4 | 4 | 1 | фасады, CAS, цена и история |
+| SALES / AutoOrder (\`SAL-\`) | 7 | 5 | 5 | 2 | buyer/seller, snapshot, reserve, fulfill |
+| INVENTORY (\`INV-\`) | 7 | 6 | 5 | 1 | stock/ledger, reservations, reconciliation |
+| FILES (\`FIL-\`) | 6 | 5 | 4 | 1 | tenant-scoped file rights and storage invariants |
+| ORGANIZATION (\`ORG-\`) | 5 | 4 | 3 | 1 | membership/location access |
+| GEO (\`GEO-\`) | 3 | 2 | 2 | 1 | reference data and protected modifications |
+| KMS (\`KMS-\`) | 4 | 3 | 1 | 1 | envelope, guard, key operation rights |
+| AUDIT (\`AUD-\`) | 4 | 2 | 2 | 2 | protected evidence, immutability, retention |
+| TASKS (\`TSK-\`) | 4 | 0 | 0 | 4 | future planned contract, \`NOT_IMPLEMENTED\` |
+| FINANCE (\`FIN-\`) | 4 | 0 | 0 | 4 | future planned contract, \`NOT_IMPLEMENTED\` |
+| MARKETING (\`MKT-\`) | 3 | 0 | 0 | 3 | future planned contract, \`NOT_IMPLEMENTED\` |
+| SUBSCRIPTION (\`SUB-\`) | 3 | 0 | 0 | 3 | future planned contract, \`NOT_IMPLEMENTED\` |
+| **ИТОГО** | **75** | **46** | **41** | **29** | **Реестр не является полным перечнем CRM/ERP** |
+
+**Scope invariant:** новые пользовательские истории, отсутствующие в 75 требованиях, получают \`strategyMappingStatus=UNMAPPED_CANDIDATE\`; их нельзя просто не учитывать. После согласования расширяют **версию каталога** отдельным reviewed change, а не изменяют знаменатель задним числом. Исторические проценты сравнимы **только при одинаковых catalogue ID/version/denominator**.
+
+### 18.2. Уникальные идентификаторы и двунаправленная трассировка
+
+Существующие \`IAM-01\`, \`INV-02\` и аналогичные ID в R3 — **идентификаторы функциональных требований**. Локальные коды тестовой матрицы из §14 не должны конфликтовать с ними: код операции стандартизировать как \`OP:IAM.ROLE_GRANT\`, \`OP:SALES.CONFIRM\`, \`OP:INVENTORY.RESERVE\` и т.п.; ID диагностического случая — \`UR-<DOMAIN>-<SEQ>-<VARIANT>\`. Старыe \`BS-01..BS-15\` остаются ID **историй**, а не требований. Ни один случай не выдаёт себя за требование \`RM-R3\`.
+
+Для каждой строки реестра R3 должны быть указаны или явно отсутствовать:
+
+\`requirementId → capabilityTitle → domainOwner → delivery → serviceContract → requiredPermissionsAllOf → objectOwnership → actorProfiles → businessStoryIds → unitCaseIds → h2CaseIds → postgresCaseIds → negativeCaseIds → concurrencyCaseIds → R3Proof → exactShaRun → verdict\`.
+
+Связь много-ко-многим допускается между требованиями и историями/кейсами; **старый R3-v1 proof по-прежнему один уникальный \`artifact/suite/test\` на реализованное требование** согласно существующему валидатору. Дополнительные regression tests, запреты и гонки записываются в отдельный расширенный реестр и **не подменяют** каноническую proof-привязку R3. Нельзя автоматически приписать proof по совпадению префикса, имени Java-класса или факту запуска suite.
+
+\`R3 proof verified\` и \`role scenario verified\` — два самостоятельных измерения. Положительный single-case \`INV-02\` не доказывает отсутствие утечки данных по всем ролям. У каждого обязательного role-сценария есть собственные assertions, а агрегатор ссылается на **конкретные** Surefire testcases и digest артефакта.
+
+### 18.3. Матрица обязательных измерений для каждого реализованного требования
+
+Обязательные измерения не сводятся к декартову произведению всех пользователей на все операции; применяется **risk-based minimal complete matrix**, с зафиксированным генератором и обоснованным сокращением:
+
+| Измерение | Обязательные варианты |
+|---|---|
+| Actor status | ACTIVE, SUSPENDED, unknown, null trusted actor |
+| Membership | OWNER, ADMIN, MANAGER, MEMBER, VIEWER; отсутствует / INVITED / SUSPENDED / LEFT — где применимо |
+| RBAC | enforced=false fallback, enforced=true grant, enforced=true missing grant, revoke/unassign |
+| Object ownership | свой tenant A, чужой tenant B, actor A+B с разными правами, неизвестный objectId |
+| Permission conjunction | все нужные grants; нет каждого обязательного grant по отдельности |
+| Data confidentiality | публичные поля, секретные PII, ссылки на чужие объекты, отсутствие секретов в exceptions |
+| Mutable operations | valid CAS, stale CAS, no-op, retry, rejected operation and persisted zero delta |
+| Monetary/stock history | immutable accepted price, version, posting order, reservation balance, evidence retention |
+| Concurrency P0 | оба линеаризованных порядка + rollback/retry на отдельных PostgreSQL connections |
+| Fault | failed DB statement, transaction rollback, missing dependency, restart where in scope |
+
+**Минимальная обязательность:** каждый реально исполняемый domain command должен иметь один ALLOW, missing-grant DENY, foreign-tenant DENY и inactive-user DENY; для заявленных sensitive/multi-grant/concurrent операций обязательны соответствующие дополнительные варианты. Для \`PLANNED\` отсутствующий сервис отмечается \`NOT_IMPLEMENTED\`, не имитируется искусственным \`SecurityException\`. Будущий код из TASKS/FINANCE/MARKETING/SUBSCRIPTION не может быть объявлен реализованным от наличия схемы или enum.
+
+### 18.4. Пять не квалифицированных индивидуально требований
+
+Первые приоритеты для **доказательного** связывания, а не механического повышения процентов:
+
+| R3 ID | Требование | Необходимое самостоятельное доказательство |
+|---|---|---|
+| \`INV-02\` | Резервы/освобождение запасов | reserve/release, двойной retry, concurrency, quantity invariants, owner/grant deny, zero unauthorized delta |
+| \`FIL-05\` | RustFS и проверка файлов | результат live RustFS + antivirus E2E в *подходящем обязательном artifact*; разделить тест с fake adapter и real infrastructure |
+| \`ORG-04\` | Поиск/чтение локаций склада | bounded search/list, tenant A/B object isolation, no-grant, SUSPENDED tenant и negative no data leak |
+| \`KMS-01\` | Envelope encryption + key wrapping | реальные crypto round-trip, key context separation, wrong-key rejection, отсутствие plaintext и grant bypass |
+| \`KMS-03\` | Защита конфигурации крипто-инфраструктуры | fail-fast on invalid/missing config, запрещённый downgrade, подтверждение guard при старте; не путать unit config check с production HSM |
+
+**Правило:** выделить независимые \`@Test\` методы/уточнить существующие только если они действительно покрывают требование, проверить реальные PostgreSQL test executions и назначить неповторяющуюся каноническую proof. Если подходящего доказательства нет, R3 status остаётся \`IMPLEMENTED_WITHOUT_VERIFIED_PROOF\`; нельзя повысить процент по одному имени тестового класса. Для RustFS не выдавать JUnit/H2 unit adapter за реальную infra-квалификацию, и не менять политику валидатора скрыто: если нужна поддержка infra-proof, сначала утвердить и реализовать **явный отдельный тип доказательства** с SHA и artifact digest.
+
+### 18.5. Совместимость с RM-QA-01B exact-SHA evidence
+
+\`RM-QA-01B\` остаётся **верхнеуровневым gate**. Входы нового JUnit role-qualification дополнительно, не взамен пяти уже обязательных workflow:
+
+- \`rm-r3-functional-coverage.json\` + \`rm-r3-functional-coverage.md\` (75 capabilities, 16 assessment rows);
+- \`rm-exact-sha-manifest.json\` с \`qa01bGate\`, workflow SHA, именованными обязательными артефактами, Surefire XML, skip reasons, SHA-256 evidence hashes и Liquibase fingerprint;
+- \`rm-user-role-scenario-results.json\` (только реальные JUnit результаты по \`UR-...\` кейсам);
+- \`rm-user-role-coverage.json\` (раздельное actor, role, permission, tenant, negative, concurrency coverage).
+
+**Требуемая проверка:** \`qa01bGate=PASS\` И все обязательные user-role cases исполнены со статусом PASS на том же commit SHA/каталоге/миграциях. Глобальный QA-01B PASS **не** означает \`USER_ROLE_SERVICE_QUALIFIED\`, если новая ролевая матрица ещё не интегрирована в обязательный CI. Сначала включить проверку новых тестов/артефактов как обязательный шаг workflow, затем принимать новый gate; запуск тестового класса отдельно не считается admission.
+
+Обязательные идентификаторы evidence: \`catalogueSchema\`, \`catalogueSha256\`, \`gitSha\`, \`migrationFingerprint\`, \`artifactName\`, \`artifactSha256\`, \`junitSuite\`, \`junitTest\`, \`database\`, \`testStatus\`, \`skipReason\`, \`assertionCategory\`, \`actorAlias\`, \`tenantAlias\`, \`scenarioId\`, \`requirementIds\`, \`runUrl\`. Не писать персональные данные, реальные токены и шифровальные ключи в evidence.
+
+При изменении каталога, test names или suite mapping должен выполняться explicit validation: unknown R3 ID, duplicate canonical proof, missing suite, skipped PG test, mixed commit, changed migration set, incorrect catalogue hash → **FAIL/HOLD**, не silent fallback. Новый документ может ссылаться на исторический успешный SHA, но текущие показатели квалификации — только из фактического текущего HEAD.
+
+### 18.6. Правила процентов и запрет накрутки покрытия
+
+Сохраняются показатели R3-v1:
+
+- \`r3ImplementationPct = implementedR3 / totalR3 × 100\`;
+- \`r3VerifiedPct = admittedR3Proofs / totalR3 × 100\` только при \`qa01bGate=PASS\`;
+- \`r3MissingPct = plannedR3 / totalR3 × 100\`.
+
+Параллельно, **отдельно**:
+
+- \`roleCaseVerifiedPct = passedMandatoryRoleCases / totalMandatoryRoleCases × 100\`;
+- \`rolePermissionCoverage = exercisedPermissionVariants / requiredPermissionVariants × 100\`;
+- \`roleNegativeCoverage = passedDenyCasesWithZeroForbiddenDelta / mandatoryDenyCases × 100\`;
+- \`businessJourneyCoverage = completePassedServiceJourneys / mandatoryServiceJourneys × 100\`.
+
+Ни один тест не засчитывается дважды в **уникальное количество кейсов** из-за повторного запуска H2/PostgreSQL, но database-specific executions учитываются в собственных отчётах. \`857 executions\` не является знаменателем функциональной готовности. \`NOT_RUN\`, \`BLOCKED_REQUIRED\`, \`SKIPPED\`, \`NOT_IMPLEMENTED\`, \`FAILED\` всегда остаются в обязательном знаменателе.
+
+Показывать три явно разных вывода: **(A) RM-R3 capability coverage**, **(B) RM-QUAL-USER role/business case coverage**, **(C) release admission**. Отчёты A и B не означают (C) и не заменяют S2/security или production approval.
+
+### 18.7. Пошаговая реализация без REST
+
+| Wave | Реализация | Приёмка |
+|---|---|---|
+| \`UR-R3.0\` | Ревизия 75 R3 ID; crosswalk 16 domains → 18 групп операций/15 историй; versioned actor/role/case catalogue | Каждый R3 ID размечен как \`MAPPED\`/\`PLANNED\`/\`UNMAPPED\`, дубликаты ID запрещены |
+| \`UR-R3.1\` | JUnit unit + Spring/H2 service tests для allOf grants, membership states, RBAC on/off, A/B/AB | Отказ без запрещённых side effects, coverage denominator фиксирован |
+| \`UR-R3.2\` | Реальный PostgreSQL JUnit integration по seller/buyer, price CAS, reserve/fulfill, CRM/FILES/ORG/KMS | Positive/negative persisted assertions и schema constraints |
+| \`UR-R3.3\` | Named PostgreSQL concurrency: revoke × command, checkout × suspend, transfer × reconciliation, retry/rollback | Два детерминированных порядка и source-of-truth invariants |
+| \`UR-R3.4\` | Разбор 5 unmapped proofs, привязка конкретных подтверждённых JUnit methods | У каждого из 5 либо доказанный unique proof, либо честный HOLD |
+| \`UR-R3.5\` | Итоговый crosswalk, новые JSON/Markdown артефакты, интеграция с точным QA-01B SHA | \`qa01bGate=PASS\` + \`USER_ROLE_SERVICE_QUALIFIED\`, Production HOLD |
+
+**Не расширять** 75 требований до «полного CRM/ERP» автоматически. Полный каталог пользовательских возможностей RM-STRATEGY-R3 — отдельная ревизия с владельцами, приоритетами, функциональными acceptance cases и согласованным изменением знаменателя.
+
+### 18.8. Definition of Done этого расширения
+
+1. Все 75 R3 requirements представлены в crosswalk, включая все 29 \`PLANNED\`; 16 контуров не пропадают из итогового отчёта.
+2. Каждый существующий \`IMPLEMENTED\` имеет source и доказанный primary proof либо помечен как proof gap; доказательства прав/грантов дополнительно связаны с отдельными JUnit role cases.
+3. Для каждого P0 command есть actor/membership/grant/cross-tenant/denied-side-effect qualification.
+4. Для каждого P0 race имеются контролируемые обе сериализации на реальном PostgreSQL, не случайный \`CountDownLatch\` smoke.
+5. В отчёте имеются три раздельных измерения: R3 capability, service role/scenario, QA/release.
+6. При любом недостающем обязательном test/case, skipped PostgreSQL, несовпадающем SHA или неверном checksum gate выдаёт FAIL/HOLD.
+7. Документ и каталоги хранятся в \`base_dev\`; новые ветки и merge в \`main\` не требуются для разработки.
+8. **Реальные HTTP, OAuth/OIDC login, браузер, email delivery, frontend, tenant-wide certified reconciliation и production admission не включены в данный объём.**
+
+**Нормативный итог:** завершённый \`RM-QA-01B\` удостоверяет технические evidence на квалифицированном SHA; \`RM-QUAL-USER\` доказывает **правильные бизнес-эффекты для разных ролей и tenants**, а \`RM-STRATEGY-R3\` измеряет **долю пользовательских возможностей из явно перечисленного каталога**. Эти три утверждения запрещено взаимно подменять. **Production HOLD** сохраняется.
