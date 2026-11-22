@@ -1172,4 +1172,134 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+
+    private record B3Attempt(boolean completed,long elapsedNanos) {}
+
+    private static long b3Percentile(java.util.List<Long> nanos,int percentile) {
+        if(nanos.isEmpty())throw new IllegalArgumentException("No B3 measurements");
+        var copy=new java.util.ArrayList<>(nanos);
+        copy.sort(Long::compareTo);
+        int index=Math.max(0,(int)Math.ceil(percentile*copy.size()/100.0)-1);
+        return TimeUnit.NANOSECONDS.toMillis(copy.get(index));
+    }
+
+    /**
+     * B3 ENTRY load: real PostgreSQL with 10/50 competing attempts to spend
+     * the same physical stock. Measurements are diagnostic, not production SLO.
+     */
+    @Test void qr06bPgB3HotOrderContentionMeasuresLatencyAndLedger() throws Exception {
+        requirePostgres();
+        for(int clients:new int[]{10,50}) {
+            var c=context();var o=ready(c,true);
+            var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+            long initialVersion=version(c,o);
+            var readyToStart=new CountDownLatch(clients),go=new CountDownLatch(1);
+            var measurements=new java.util.ArrayList<Long>();
+            int completed=0,denied=0;
+            try(var pool=Executors.newFixedThreadPool(clients)) {
+                var futures=new java.util.ArrayList<java.util.concurrent.Future<B3Attempt>>();
+                for(int n=0;n<clients;n++) futures.add(pool.submit(()->{
+                    readyToStart.countDown();
+                    if(!go.await(20,TimeUnit.SECONDS))
+                        throw new IllegalStateException("B3_HOT_START_TIMEOUT");
+                    long start=System.nanoTime();
+                    try {
+                        pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                                issued.rawProof(),true,initialVersion,key());
+                        return new B3Attempt(true,System.nanoTime()-start);
+                    }catch(IllegalStateException | SecurityException expected) {
+                        return new B3Attempt(false,System.nanoTime()-start);
+                    }
+                }));
+                assertThat(readyToStart.await(20,TimeUnit.SECONDS)).isTrue();
+                go.countDown();
+                for(var future:futures) {
+                    var attempt=future.get(90,TimeUnit.SECONDS);
+                    measurements.add(attempt.elapsedNanos());
+                    if(attempt.completed())completed++; else denied++;
+                }
+            } finally {
+                go.countDown();
+            }
+            assertThat(completed).isEqualTo(1);
+            assertThat(denied).isEqualTo(clients-1);
+            assertExactlyOneHandover(c,o,2);
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+            System.out.printf(java.util.Locale.ROOT,
+                    "QR06B_B3_HOT clients=%d completed=%d rejected=%d p50_ms=%d p95_ms=%d p99_ms=%d%n",
+                    clients,completed,denied,b3Percentile(measurements,50),
+                    b3Percentile(measurements,95),b3Percentile(measurements,99));
+        }
+    }
+
+    /**
+     * B3 ENTRY mixed: warehouse access revocation competes with physical
+     * checkout. Zero or one handover is allowed depending on commit order,
+     * but never a duplicate or a partial stock mutation.
+     */
+    @Test void qr06bPgB3MixedHandoverAndWarehouseRevokePreservesInvariants() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        int clients=20;
+        var readyToStart=new CountDownLatch(clients+1),go=new CountDownLatch(1);
+        var latencies=new java.util.ArrayList<Long>();
+        int completed=0,denied=0;
+        try(var pool=Executors.newFixedThreadPool(clients+1)) {
+            var futures=new java.util.ArrayList<java.util.concurrent.Future<B3Attempt>>();
+            for(int n=0;n<clients;n++) futures.add(pool.submit(()->{
+                readyToStart.countDown();
+                if(!go.await(20,TimeUnit.SECONDS))
+                    throw new IllegalStateException("B3_MIXED_START_TIMEOUT");
+                long start=System.nanoTime();
+                try {
+                    pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                            issued.rawProof(),true,initialVersion,key());
+                    return new B3Attempt(true,System.nanoTime()-start);
+                }catch(IllegalStateException | SecurityException expected) {
+                    return new B3Attempt(false,System.nanoTime()-start);
+                }
+            }));
+            var revoke=pool.submit(()->{
+                readyToStart.countDown();
+                if(!go.await(20,TimeUnit.SECONDS))
+                    throw new IllegalStateException("B3_REVOKE_START_TIMEOUT");
+                scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
+                return true;
+            });
+            assertThat(readyToStart.await(20,TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            for(var future:futures) {
+                var result=future.get(90,TimeUnit.SECONDS);
+                latencies.add(result.elapsedNanos());
+                if(result.completed())completed++; else denied++;
+            }
+            assertThat(revoke.get(90,TimeUnit.SECONDS)).isTrue();
+        }finally {
+            go.countDown();
+        }
+        assertThat(completed).isBetween(0,1);
+        assertThat(denied).isEqualTo(clients-completed);
+        if(completed==1) {
+            assertExactlyOneHandover(c,o,2);
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+        } else {
+            assertNoHandoverEffects(c,o);
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM public.iam_warehouse_staff_scope
+                WHERE tenant_id=? AND warehouse_id=? AND actor_user_id=?
+                """,String.class,c.tenant(),c.warehouse(),c.staff().userId()))
+                .isEqualTo("REVOKED");
+        System.out.printf(java.util.Locale.ROOT,
+                "QR06B_B3_MIXED clients=%d completed=%d rejected=%d p50_ms=%d p95_ms=%d p99_ms=%d%n",
+                clients,completed,denied,b3Percentile(latencies,50),
+                b3Percentile(latencies,95),b3Percentile(latencies,99));
+    }
+
 }
