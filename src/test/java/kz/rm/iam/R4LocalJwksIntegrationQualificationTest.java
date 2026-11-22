@@ -1,0 +1,98 @@
+package kz.rm.iam;
+
+import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.Signature;
+import java.security.interfaces.RSAPublicKey;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * Integration with a REAL HTTP JWKS endpoint and JCA signature validation.
+ * Isolated ephemeral loopback server is NOT an external IdP or HTTPS qualification.
+ * The production configuration requires an HTTPS JWKS endpoint.
+ */
+@SpringBootTest
+class R4LocalJwksIntegrationQualificationTest {
+    @Autowired UserAccountRepository users;
+
+    private static String b64(byte[] data) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(data);
+    }
+    private static String unsigned(java.math.BigInteger number) {
+        byte[] bytes=number.toByteArray();
+        return b64(bytes.length>1 && bytes[0]==0
+                ?java.util.Arrays.copyOfRange(bytes,1,bytes.length):bytes);
+    }
+    private static String signed(PrivateKey key, String kid,String iss,String aud,
+                                 String subject,long notBefore,long expires) throws Exception {
+        String head="{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\""+kid+"\"}";
+        String body="{\"iss\":\""+iss+"\",\"aud\":[\""+aud+"\"],\"sub\":\""
+                +subject+"\",\"iat\":"+notBefore+",\"exp\":"+expires+"}";
+        String part=b64(head.getBytes(StandardCharsets.UTF_8))+"."
+                +b64(body.getBytes(StandardCharsets.UTF_8));
+        Signature signature=Signature.getInstance("SHA256withRSA");
+        signature.initSign(key);
+        signature.update(part.getBytes(StandardCharsets.US_ASCII));
+        return part+"."+b64(signature.sign());
+    }
+
+    @Test void localJwksFetchVerifiesSignatureIssuerAudienceExpirySubjectAndRejectsForeignKey()
+            throws Exception {
+        KeyPairGenerator generator=KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair trusted=generator.generateKeyPair(), foreign=generator.generateKeyPair();
+        var pub=(RSAPublicKey)trusted.getPublic();
+        String kid="rm-r4-"+UUID.randomUUID();
+        String jwk="{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\""+kid
+                +"\",\"alg\":\"RS256\",\"n\":\""+unsigned(pub.getModulus())
+                +"\",\"e\":\""+unsigned(pub.getPublicExponent())+"\"}]}";
+        HttpServer server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/jwks",exchange->{
+            byte[] payload=jwk.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type","application/json");
+            exchange.sendResponseHeaders(200,payload.length);
+            try(var stream=exchange.getResponseBody()){stream.write(payload);}
+        });
+        server.start();
+        try {
+            String issuer="https://issuer.example.test/rm";
+            String subject="r4-jwks-sub-"+UUID.randomUUID();
+            UUID user=UUID.randomUUID();
+            users.saveAndFlush(new UserAccountEntity(user,subject,"JWKS test user"));
+            var decoder=NimbusJwtDecoder.withJwkSetUri(
+                    "http://127.0.0.1:"+server.getAddress().getPort()+"/jwks").build();
+            OidcJwtConfiguration.configureValidation(decoder,issuer,"rm-api");
+            var resolver=new OidcActorResolver(decoder,users);
+            long now=Instant.now().getEpochSecond();
+            assertThat(resolver.resolve(signed(trusted.getPrivate(),kid,issuer,"rm-api",
+                    subject,now-10,now+600)).userId()).isEqualTo(user);
+            assertThatThrownBy(()->resolver.resolve(signed(foreign.getPrivate(),kid,issuer,
+                    "rm-api",subject,now-10,now+600))).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->resolver.resolve(signed(trusted.getPrivate(),kid,issuer,
+                    "wrong-audience",subject,now-10,now+600))).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->resolver.resolve(signed(trusted.getPrivate(),kid,
+                    "https://wrong.test", "rm-api",subject,now-10,now+600)))
+                    .isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->resolver.resolve(signed(trusted.getPrivate(),kid,issuer,
+                    "rm-api",subject,now-600,now-300))).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->resolver.resolve(signed(trusted.getPrivate(),kid,issuer,
+                    "rm-api","unknown-"+UUID.randomUUID(),now-10,now+600)))
+                    .isInstanceOf(SecurityException.class);
+        } finally {
+            server.stop(0);
+        }
+    }
+}
