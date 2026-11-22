@@ -113,6 +113,25 @@ class R4FirstTenantOnboardingQualificationTest {
         assertThat(events(aTenant)).isEqualTo(1);
     }
 
+    @Test void inactivePriorMembershipCannotBeBypassedAsASecondFirstTenant() {
+        UUID user=account(),original=UUID.randomUUID(),attempt=UUID.randomUUID();
+        verifyEmail(user);
+        onboarding.createFirstTenant(actor(user),original,"Old LLP","Old","KZ");
+        UUID organization=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,original);
+        jdbc.update("""
+                UPDATE public.iam_org_membership
+                SET status='SUSPENDED' WHERE organization_id=? AND user_id=?
+                """,organization,user);
+        assertThat(access.myTenants(actor(user))).isEmpty();
+        assertThatThrownBy(()->onboarding.createFirstTenant(actor(user),attempt,
+                "New LLP","New","KZ")).isInstanceOf(SecurityException.class);
+        assertThat(tenantRows(attempt)).isZero();
+        assertThat(events(attempt)).isZero();
+        assertThat(tenantRows(original)).isEqualTo(1);
+    }
+
     @Test void concurrentFirstTenantRequestsProduceOneOwnerAndNoOrphanRows() throws Exception {
         UUID user=account();
         verifyEmail(user);
