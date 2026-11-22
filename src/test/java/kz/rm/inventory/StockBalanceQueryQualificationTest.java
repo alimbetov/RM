@@ -21,7 +21,7 @@ class StockBalanceQueryQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
 
     private record Fixture(UUID tenant, UUID actor, UUID location, UUID stockItem,
                            UUID emptyItem) {}
@@ -131,16 +131,16 @@ class StockBalanceQueryQualificationTest {
                 ownerA,OrganizationMembershipEntity.Role.OWNER));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
                 ownerB,OrganizationMembershipEntity.Role.OWNER));
-        var ar=roles.createRole(ownerA,a.tenant(),
+        var ar=roles.createRole(verified(ownerA),a.tenant(),
                 "INV_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A stock");
-        roles.grant(ownerA,a.tenant(),ar.id(),DomainPermission.INVENTORY_STOCK_READ);
-        roles.assign(ownerA,a.tenant(),staff,ar.id());
-        roles.enable(ownerA,a.tenant());
-        var br=roles.createRole(ownerB,b.tenant(),
+        roles.grant(verified(ownerA),a.tenant(),ar.id(),DomainPermission.INVENTORY_STOCK_READ);
+        roles.assign(verified(ownerA),a.tenant(),staff,ar.id());
+        roles.enable(verified(ownerA),a.tenant());
+        var br=roles.createRole(verified(ownerB),b.tenant(),
                 "INV_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B nonstock");
-        roles.grant(ownerB,b.tenant(),br.id(),DomainPermission.CRM_READ);
-        roles.assign(ownerB,b.tenant(),staff,br.id());
-        roles.enable(ownerB,b.tenant());
+        roles.grant(verified(ownerB),b.tenant(),br.id(),DomainPermission.CRM_READ);
+        roles.assign(verified(ownerB),b.tenant(),staff,br.id());
+        roles.enable(verified(ownerB),b.tenant());
         var shared=actor(staff);
         var first=queries.search(shared,a.tenant(),null,0,1);
         var second=queries.search(shared,a.tenant(),null,1,1);
