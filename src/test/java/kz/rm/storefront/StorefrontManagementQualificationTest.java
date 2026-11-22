@@ -15,6 +15,11 @@ import static org.assertj.core.api.Assertions.*;
 
 /** RM-STORE-01 service-only tests: no HTTP or fake global storefront privileges. */
 @SpringBootTest
+@org.springframework.test.context.TestPropertySource(properties={
+        "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+})
 class StorefrontManagementQualificationTest {
     @Autowired StorefrontManagementService storefronts;
     @Autowired StorefrontOfferService offers;
