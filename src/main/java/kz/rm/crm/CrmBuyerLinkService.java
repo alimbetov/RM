@@ -223,12 +223,41 @@ public class CrmBuyerLinkService {
      * Dispute resolution is fail-closed: seller closes DISPUTED to REVOKED,
      * never silently restores CONFIRMED. New consent requires a new proposal.
      */
+    public enum DisputeReason { IDENTITY_MISMATCH, BUYER_DENIED, INSUFFICIENT_EVIDENCE }
+
     @Transactional
-    public Link closeDispute(VerifiedActor seller, UUID tenant, UUID linkId, long expectedVersion) {
-        UUID sellerId=requireSeller(seller,tenant,DomainPermission.CRM_WRITE);
+    public Link closeDispute(VerifiedActor reviewer, UUID tenant, UUID linkId, long expectedVersion) {
+        return adjudicateDispute(reviewer,tenant,linkId,expectedVersion,
+                DisputeReason.INSUFFICIENT_EVIDENCE);
+    }
+
+    /**
+     * A second, independently authorized CRM writer makes the final decision.
+     * The original proposer cannot review their own proposal. Revoke-only:
+     * a disputed identity never becomes CONFIRMED without new buyer consent.
+     */
+    @Transactional
+    public Link adjudicateDispute(VerifiedActor reviewer, UUID tenant, UUID linkId,
+                                 long expectedVersion, DisputeReason reason) {
+        UUID reviewerId=requireSeller(reviewer,tenant,DomainPermission.CRM_WRITE);
+        if(reason==null || linkId==null) throw new IllegalArgumentException("Reason and link required");
         Link current=lockLink(tenant,linkId);
         if(current==null) throw new IllegalArgumentException("No tenant link");
-        return transition(current,expectedVersion,sellerId,
+        UUID proposer=jdbc.queryForObject("""
+                SELECT proposed_by FROM crm.customer_buyer_link WHERE tenant_id=? AND id=?
+                """,UUID.class,tenant,linkId);
+        if(reviewerId.equals(proposer) || reviewerId.equals(current.buyerUserId()))
+            throw new SecurityException("Independent reviewer required");
+        if(expectedVersion<0 || expectedVersion!=current.rowVersion())
+            throw new IllegalStateException("Stale dispute decision");
+        if(current.state()!=State.DISPUTED)
+            throw new IllegalStateException("Only disputed links may be adjudicated");
+        jdbc.update("""
+                INSERT INTO crm.customer_buyer_dispute_decision
+                (tenant_id,link_id,reviewer_user_id,reason_code,decided_at)
+                VALUES (?,?,?,?,?)
+                """,tenant,linkId,reviewerId,reason.name(),Timestamp.from(Instant.now()));
+        return transition(current,expectedVersion,reviewerId,
                 new State[]{State.DISPUTED},State.REVOKED,"DISPUTE_CLOSED");
     }
 
