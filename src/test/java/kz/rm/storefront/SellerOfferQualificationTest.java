@@ -155,6 +155,45 @@ class SellerOfferQualificationTest {
             .isInstanceOf(IllegalArgumentException.class).hasMessage("Offer unavailable");
     }
 
+    @Test void invalidPriceCurrencyAndNonStockableSkuFailBeforeOfferCreation() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(c.seller());
+        assertThatThrownBy(()->offers.createDraft(actor,c.tenant(),c.sku(),"Free",
+            BigDecimal.ZERO,"KZT")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->offers.createDraft(actor,c.tenant(),c.sku(),"Unknown currency",
+            BigDecimal.ONE,"ZZZ")).isInstanceOf(IllegalArgumentException.class);
+        UUID service=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'SERVICE','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,c.tenant(),service,"service-"+UUID.randomUUID());
+        assertThatThrownBy(()->offers.createDraft(actor,c.tenant(),service,"Service",
+            BigDecimal.ONE,"KZT")).isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("OFFER_SKU_NOT_SELLABLE");
+        assertThat(jdbc.queryForObject(
+            "SELECT count(*) FROM crm.store_offer WHERE tenant_id=?",
+            Integer.class,c.tenant())).isZero();
+    }
+
+    @Test void offerPublishRequiresPublishedProductAndPublishedStorefront() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"Guarded",BigDecimal.TEN,"KZT");
+        offers.changeStorefrontState(actor,c.tenant(),0,"PAUSED");
+        assertThatThrownBy(()->offers.publish(actor,c.tenant(),draft.id(),0))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("STOREFRONT_UNAVAILABLE");
+        offers.changeStorefrontState(actor,c.tenant(),1,"PUBLISHED");
+        jdbc.update("UPDATE crm.cat_item SET state='ARCHIVED' WHERE tenant_id=? AND id=?",
+            c.tenant(),c.sku());
+        assertThatThrownBy(()->offers.publish(actor,c.tenant(),draft.id(),0))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("OFFER_SKU_NOT_SELLABLE");
+        assertThat(jdbc.queryForObject(
+            "SELECT state FROM crm.store_offer WHERE tenant_id=? AND id=?",
+            String.class,c.tenant(),draft.id())).isEqualTo("DRAFT");
+    }
+
     @Test void tenantAuthorizedStorefrontDraftCreationAndStateCas() {
         Context c=context();
         grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
