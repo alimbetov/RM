@@ -2896,4 +2896,112 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+
+    @Test void qr07R25ProofRejectsForgeryAndRotationAndConsumesOnce() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2Approved(c,o,1);
+        var first=returnProof.issue(c.buyer(),c.tenant(),claim.requestId(),key());
+        assertThatThrownBy(()->returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,"FORGED_RETURN_PROOF",key()))
+                .hasMessageContaining("RETURN_PROOF_INVALID");
+        var second=returnProof.issue(c.buyer(),c.tenant(),claim.requestId(),key());
+        assertThat(second.generation()).isEqualTo(2);
+        assertThatThrownBy(()->returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,first.rawProof(),key()))
+                .hasMessageContaining("RETURN_PROOF_UNAVAILABLE");
+        String scanKey=key();
+        var receipt=returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,second.rawProof(),scanKey);
+        assertThat(receipt.state()).isEqualTo("RECEIVED");
+        assertThat(returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,second.rawProof(),scanKey).evidenceId())
+                .isEqualTo(receipt.evidenceId());
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_reception_proof
+                WHERE tenant_id=? AND return_id=?
+                """,String.class,c.tenant(),claim.requestId())).isEqualTo("CONSUMED");
+        assertThat(jdbc.queryForObject("""
+                SELECT evidence_ref FROM crm.sales_return_reception
+                WHERE tenant_id=? AND return_id=?
+                """,String.class,c.tenant(),claim.requestId()))
+                .isNotEqualTo(second.rawProof()).hasSize(64);
+        assertThatThrownBy(()->returnProof.issue(c.buyer(),c.tenant(),
+                claim.requestId(),key()))
+                .hasMessageContaining("RETURN_PROOF_REQUIRES_APPROVAL");
+    }
+
+    @Test void qr07R25RevokedPostIamCannotCreateQuarantineMovement() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2Approved(c,o,1);
+        var proof=qr07PhysicalProof(c,claim.requestId());
+        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,proof,key());
+        returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),4,SalesReturnPhysicalService.Disposition.QUARANTINE,
+                "INSPECT_Q_R25",key());
+        UUID role=assignedRole(c);
+        roles.revoke(c.owner(),c.tenant(),role,DomainPermission.SALES_RETURN_POST);
+        assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),5,key())).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_return_quarantine_movement
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isZero();
+        roles.grant(c.owner(),c.tenant(),role,DomainPermission.SALES_RETURN_POST);
+        roles.revoke(c.owner(),c.tenant(),role,DomainPermission.INVENTORY_RECEIVE);
+        assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),5,key())).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_posting
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isZero();
+    }
+
+    @Test void qr07R25QuarantineLedgerConservesSameSkuAcrossReturns() throws Exception {
+        requirePostgres();
+        var c=context();
+        var first=ready(c,false);
+        var one=qr07R2Approved(c,first,1);
+        var item=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),one.orderLineId());
+        var second=ready(c,false);
+        var two=qr07R2Approved(c,second,2);
+        var itemTwo=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),two.orderLineId());
+        // Fixture may choose different random SKUs: both movements must
+        // agree with each item-specific immutable quarantine balance.
+        for(var claim:java.util.List.of(one,two)){
+            returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                    claim.requestId(),2,qr07PhysicalProof(c,claim.requestId()),key());
+            returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),
+                    claim.requestId(),4,SalesReturnPhysicalService.Disposition.QUARANTINE,
+                    "INSPECT_Q_"+claim.requestId(),key());
+            assertThat(returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                    claim.requestId(),5,key()).state()).isEqualTo("QUARANTINED");
+        }
+        for(UUID sku:java.util.Set.of(item,itemTwo)){
+            BigDecimal sum=jdbc.queryForObject("""
+                    SELECT COALESCE(SUM(delta_quantity),0)
+                    FROM crm.inv_return_quarantine_movement
+                    WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                    """,BigDecimal.class,c.tenant(),c.warehouse(),sku);
+            BigDecimal balance=jdbc.queryForObject("""
+                    SELECT quantity FROM crm.inv_return_quarantine_balance
+                    WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                    """,BigDecimal.class,c.tenant(),c.warehouse(),sku);
+            assertThat(balance).isEqualByComparingTo(sum);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_return_quarantine_movement
+                WHERE tenant_id=? AND return_id IN (?,?)
+                """,Integer.class,c.tenant(),one.requestId(),two.requestId()))
+                .isEqualTo(2);
+    }
+
 }
