@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/main/java/kz/rm/sales/SalesReturn*.java'
       - 'src/main/java/kz/rm/iam/DomainPermission.java'
+      - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - 'src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java'
       - '.github/workflows/rm-qr07-r0-pg.yml'
