@@ -54,7 +54,9 @@ public class CrmContractService {
         dates(starts, ends);
         if (asOf == null || code == null || !CODE.matcher(code).matches())
             throw new IllegalArgumentException("Invalid contract code or reference date");
-        jdbc.queryForObject("SELECT id FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE", UUID.class, tenant, customer);
+        var lockedCustomers=jdbc.query("SELECT id FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE",
+                (rs,n)->rs.getObject(1,UUID.class),tenant,customer);
+        if (lockedCustomers.isEmpty()) throw new IllegalArgumentException("Customer not found in tenant");
         var client = customers.findByTenantIdAndId(tenant, customer)
                 .orElseThrow(() -> new IllegalArgumentException("Customer not found in tenant"));
         if (client.getStatus() != CrmCustomerEntity.Status.ACTIVE)
