@@ -34,6 +34,7 @@ class Tcrud04VerifiedEntrypointQualificationTest {
                 AuthenticatedOrganizationLocations.class,
                 AuthenticatedSalesCommands.class, AuthenticatedSalesQueries.class,
                 AuthenticatedInventoryCommands.class, AuthenticatedInventoryQueries.class,
+                AuthenticatedInventorySettings.class,
                 AuthenticatedFilesCommands.class, AuthenticatedFilesQueries.class,
                 AuthenticatedFilesAttachments.class, AuthenticatedFilesBinaryReads.class,
                 AuthenticatedBuyerOrders.class, VerifiedTenantRoleCommands.class,
@@ -54,6 +55,15 @@ class Tcrud04VerifiedEntrypointQualificationTest {
                         .isEqualTo(VerifiedActor.class);
             }
         }
+    }
+
+    @Test void inventorySettingsUuidBackendMustStayInternal() {
+        assertThat(Modifier.isPublic(InventoryTenantSettingsService.class.getModifiers())).isFalse();
+        var raw=java.util.Arrays.stream(InventoryTenantSettingsService.class.getDeclaredMethods())
+                .filter(m->!m.isSynthetic() && !Modifier.isStatic(m.getModifiers()))
+                .filter(m->m.getParameterCount()>0 && m.getParameterTypes()[0]==UUID.class).toList();
+        assertThat(raw).allSatisfy(m->assertThat(Modifier.isPublic(m.getModifiers()))
+                .as("Settings raw actor bypass: "+m).isFalse());
     }
 
     @Test void buyerOrdersRawUuidIsNoLongerPublic() throws Exception {
