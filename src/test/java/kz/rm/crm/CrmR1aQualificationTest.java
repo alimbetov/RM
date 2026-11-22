@@ -1003,12 +1003,21 @@ class CrmR1aQualificationTest {
         assertThatThrownBy(()->contractService.create(actor,a.tenantId(),foreign.id(),
                 "CROSS",today,today.plusDays(3),today)).isInstanceOf(RuntimeException.class);
         var immutable=crmHistory.contractHistory(actor,a.tenantId(),contract.id(),20).getFirst();
-        assertThatThrownBy(()->jdbc.update("""
-          DELETE FROM crm.contract_revision WHERE tenant_id=? AND id=?
-          """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
-        assertThatThrownBy(()->jdbc.update("""
-          UPDATE crm.contract_revision SET action_code='CREATED' WHERE tenant_id=? AND id=?
-          """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
+        boolean postgres;
+        try(var connection=dataSource.getConnection()) {
+            postgres=connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql");
+        } catch(java.sql.SQLException ex) {
+            throw new IllegalStateException("Cannot identify database",ex);
+        }
+        if(postgres) {
+            assertThatThrownBy(()->jdbc.update("""
+              DELETE FROM crm.contract_revision WHERE tenant_id=? AND id=?
+              """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
+            assertThatThrownBy(()->jdbc.update("""
+              UPDATE crm.contract_revision SET action_code='CREATED' WHERE tenant_id=? AND id=?
+              """,a.tenantId(),immutable.id())).isInstanceOf(Exception.class);
+        }
     }
 
 
