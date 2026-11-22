@@ -3,6 +3,9 @@ package kz.rm.inventory;
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.inventory.dto.StockBalanceDto;
+import kz.rm.inventory.dto.InventoryMovementSearch;
+import kz.rm.inventory.dto.InventoryMovementDto;
+import kz.rm.inventory.dto.InventoryReservationEventDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -24,17 +27,6 @@ import java.util.UUID;
  */
 @Service
 class InventoryHistoryQueryService {
-    public record MovementSearch(UUID locationId, UUID itemId, String reasonCode,
-                                 Instant from, Instant before) {}
-    public record MovementRow(UUID id, UUID tenantId, UUID locationId, UUID itemId,
-                              BigDecimal delta, BigDecimal beforeQuantity,
-                              BigDecimal afterQuantity, String movementKind,
-                              String reasonCode, String businessReasonCode,
-                              UUID actorUserId, String sourceType, UUID sourceId,
-                              UUID reservationId, Instant recordedAt) {}
-    public record ReservationEvent(UUID id,UUID reservationId,String eventType,
-                                   UUID actorUserId,Instant occurredAt) {}
-
     private final TenantAuthorization authorization;
     private final JdbcTemplate jdbc;
     InventoryHistoryQueryService(TenantAuthorization authorization,JdbcTemplate jdbc) {
@@ -64,11 +56,11 @@ class InventoryHistoryQueryService {
     }
 
     @Transactional
-    Page<MovementRow> searchMovements(UUID actor,UUID tenant,MovementSearch search,
+    Page<InventoryMovementDto> searchMovements(UUID actor,UUID tenant,InventoryMovementSearch search,
                                       int page,int size) {
         admit(actor,tenant);
         page(page,size);
-        MovementSearch f=search==null?new MovementSearch(null,null,null,null,null):search;
+        InventoryMovementSearch f=search==null?new InventoryMovementSearch(null,null,null,null,null):search;
         if(f.from()!=null && f.before()!=null && !f.from().isBefore(f.before()))
             throw new IllegalArgumentException("Movement interval must be half-open and increasing");
         if(f.reasonCode()!=null && (f.reasonCode().isBlank() ||
@@ -91,7 +83,7 @@ class InventoryHistoryQueryService {
                 FROM crm.inv_stock_movement
                 """+predicate+"""
                  ORDER BY recorded_at DESC,id DESC LIMIT ? OFFSET ?
-                """,(rs,n)->new MovementRow(rs.getObject(1,UUID.class),
+                """,(rs,n)->new InventoryMovementDto(rs.getObject(1,UUID.class),
                   rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
                   rs.getObject(4,UUID.class),rs.getBigDecimal(5),rs.getBigDecimal(6),
                   rs.getBigDecimal(7),rs.getString(8),rs.getString(9),rs.getString(10),
@@ -102,7 +94,7 @@ class InventoryHistoryQueryService {
     }
 
     @Transactional
-    Page<ReservationEvent> reservationHistory(UUID actor,UUID tenant,UUID reservationId,
+    Page<InventoryReservationEventDto> reservationHistory(UUID actor,UUID tenant,UUID reservationId,
                                                int page,int size) {
         admit(actor,tenant);
         page(page,size);
@@ -116,7 +108,7 @@ class InventoryHistoryQueryService {
                 FROM crm.inv_reservation_event e
                 WHERE e.tenant_id=? AND e.reservation_id=?
                 ORDER BY e.occurred_at DESC,e.id DESC LIMIT ? OFFSET ?
-                """,(rs,n)->new ReservationEvent(rs.getObject(1,UUID.class),
+                """,(rs,n)->new InventoryReservationEventDto(rs.getObject(1,UUID.class),
                   rs.getObject(2,UUID.class),rs.getString(3),
                   rs.getObject(4,UUID.class),rs.getTimestamp(5).toInstant()),
                   tenant,reservationId,size,(long)page*size);
