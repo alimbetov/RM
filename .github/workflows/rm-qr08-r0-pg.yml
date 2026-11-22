@@ -1,0 +1,121 @@
+name: RM QR-08 R0 Packaging PostgreSQL Qualification
+
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/kz/rm/sales/OrderPackagingService.java'
+      - 'src/main/java/kz/rm/sales/PackagingServiceCatalogService.java'
+      - 'src/test/java/kz/rm/sales/OrderPackagingQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/PackagingServiceCatalogQualificationTest.java'
+      - 'src/main/java/kz/rm/iam/DomainPermission.java'
+      - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
+      - 'src/main/resources/db/changelog/db.changelog-master.sql'
+      - '.github/workflows/rm-qr08-r0-pg.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qr08-r0-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify exact SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Qualify packaging catalog and order lifecycle on PostgreSQL 17
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+          RM_TEST_DB_USERNAME: rm
+          RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+        run: |
+          mkdir -p target/qr08-r0-evidence
+          set -o pipefail
+          mvn -B -ntp -Dtest=PackagingServiceCatalogQualificationTest,OrderPackagingQualificationTest test 2>&1 | tee target/qr08-r0-evidence/console.log
+          echo "$GITHUB_SHA" > target/qr08-r0-evidence/exact-sha.txt
+      - name: Preserve focused test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qr08-r0-pg-${{ github.sha }}
+          path: |
+            target/surefire-reports/
+            target/qr08-r0-evidence/
+          if-no-files-found: warn
+
+  qr08-full-postgresql-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify exact full PostgreSQL SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Run all Maven service tests on PostgreSQL 17
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+          RM_TEST_DB_USERNAME: rm
+          RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+        run: |
+          mkdir -p target/qr08-full-pg
+          set -o pipefail
+          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr08-classpath.txt
+          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr08-classpath.txt)"
+          timeout --signal=TERM --kill-after=30s 3000s mvn -B -ntp test 2>&1 | tee target/qr08-full-pg/console.log
+          echo "$GITHUB_SHA" > target/qr08-full-pg/exact-sha.txt
+      - name: Preserve full-project regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qr08-full-pg-${{ github.sha }}
+          path: |
+            target/surefire-reports/
+            target/qr08-full-pg/
+          if-no-files-found: warn
