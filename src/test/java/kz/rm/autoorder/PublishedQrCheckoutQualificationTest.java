@@ -345,7 +345,7 @@ class PublishedQrCheckoutQualificationTest {
         VerifiedActor buyer=verifyBuyer(buyerEmail);
         UUID id=placed.order().orderId();
         var initial=orderQr.ownReference(buyer,f.tenant(),id);
-        var rotated=orderQr.rotateOwned(buyer,f.tenant(),id,initial.rowVersion());
+        var rotated=orderQr.rotateOwned(buyer,f.tenant(),id,initial.publicRef(),initial.rowVersion());
         assertThat(rotated.publicRef()).isNotEqualTo(initial.publicRef());
         assertThat(rotated.generation()).isEqualTo(2);
         assertThatThrownBy(()->orderQr.readOwn(buyer,initial.publicRef()))
@@ -353,7 +353,7 @@ class PublishedQrCheckoutQualificationTest {
         assertThat(orderQr.readOwn(buyer,rotated.publicRef()).status())
                 .isEqualTo("PLACED");
         assertThatThrownBy(()->orderQr.rotateOwned(buyer,f.tenant(),id,
-                initial.rowVersion()))
+                initial.publicRef(),initial.rowVersion()))
                 .hasMessage("ORDER_QR_VERSION_CONFLICT");
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_order_qr_reference
@@ -509,7 +509,7 @@ class PublishedQrCheckoutQualificationTest {
             var rotator=pool.submit(()->{
                 start.await(10,TimeUnit.SECONDS);
                 return orderQr.rotateOwned(buyer,f.tenant(),
-                        orderId,original.rowVersion());
+                        orderId,original.publicRef(),original.rowVersion());
             });
             start.countDown();
             UUID observed=reader.get(30,TimeUnit.SECONDS);

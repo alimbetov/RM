@@ -111,13 +111,18 @@ public class SalesOrderQrReferenceService {
      */
     @Transactional
     public Reference rotateOwned(VerifiedActor buyer, UUID tenant, UUID orderId,
+                                 String expectedPublicRef,
                                  long expectedReferenceVersion) {
         UUID actor = admitBuyer(buyer);
         Ordered order = lockOrder(tenant, orderId);
         if (!actor.equals(order.owner()))
             throw new SecurityException("ORDER_NOT_ACCESSIBLE");
         Reference existing = active(tenant, orderId);
-        if (existing == null || existing.rowVersion() != expectedReferenceVersion)
+        // Public refs identify GENERATIONS. Version alone restarts at zero
+        // on each new row and is vulnerable to ABA from stale requests.
+        if (existing == null || expectedPublicRef == null
+                || !existing.publicRef().equals(expectedPublicRef)
+                || existing.rowVersion() != expectedReferenceVersion)
             throw new IllegalStateException("ORDER_QR_VERSION_CONFLICT");
         int updated = jdbc.update("""
                 UPDATE crm.sales_order_qr_reference

@@ -19,7 +19,7 @@
 - ownReference(VerifiedActor buyer,tenant,orderId) requires ACTIVE global user, CURRENT verified IAM email and buyer_user_id exact match. Reprints existing ACTIVE ref. For pre-QR legacy orders without any ref, creates the first generation only after ownership proof.
 - readOwn(VerifiedActor buyer, publicRef) requires the same fresh identity admission, tenant-qualified order join and exact buyer_user_id check. It returns a sanitized order status timeline, immutable line prices, total, currency and timestamps only; never email, buyer UUID, raw IAM identity, storage key or confidential payload.
 - readSeller(VerifiedActor seller,tenant,publicRef) and sellerReprint require fresh SALES_ORDER_READ admission in the declared tenant. Neither accepts a buyer UUID or bypasses tenant RBAC.
-- rotateOwned(VerifiedActor buyer,tenant,orderId,expectedReferenceVersion) explicitly revokes old ref and creates new generation under an existing SALES order lock; old ref cannot read after commit. A rotation never changes the order, price, stock or receipt.
+- rotateOwned(VerifiedActor buyer,tenant,orderId,expectedPublicRef,expectedReferenceVersion) explicitly revokes old ref and creates new generation under an existing SALES order lock; old ref cannot read after commit. A rotation never changes the order, price, stock or receipt.
 
 **Migration 0088:** crm.sales_order_qr_reference, PK(tenant,id), tenant+order FK, global UNIQUE(public_ref), UNIQUE(tenant,active_order_id) with null for revoked, UNIQUE(tenant,order_id,generation), state/version lifecycle constraints. Issuer is NULL for internally created PLACED (no fictitious staff actor); subsequent buyer rotations are audited.
 
@@ -28,7 +28,7 @@
 ## Ordering, concurrency, immutable facts
 
 - PLACED: checkout stripe → seller workspace/offer/catalog → IAM verified email provision → order/line/receipt/event → QR insert, one transaction; no new checkout uniqueness namespace.
-- Buyer reprint/legacy issue/rotate: ACTIVE IAM user row admission → verified CURRENT email evidence → sales_order row FOR UPDATE → QR read/revoke/insert. Explicit race CAS on reference row_version.
+- Buyer reprint/legacy issue/rotate: ACTIVE IAM user row admission → verified CURRENT email evidence → sales_order row FOR UPDATE → QR read/revoke/insert. Explicit race CAS on BOTH reference identity (publicRef/generation) and row_version; row_version alone restarts at zero for each generation and would allow ABA.
 - Seller read: TenantAuthorization.requireForCommand actor/workspace fence → sales_order row FOR UPDATE → lines/events; do not acquire IAM after locking SALES.
 - Status reads lock the order before loading its lines/event history, preventing official seller status updates from interleaving between projection queries.
 - No QR read or rotation changes existing stock reservations and no additional price snapshot is invented.
