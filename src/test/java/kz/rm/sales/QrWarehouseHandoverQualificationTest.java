@@ -183,7 +183,7 @@ class QrWarehouseHandoverQualificationTest {
     private BigDecimal stock(Context c,UUID item,String field){
         if(!List.of("on_hand","reserved").contains(field))
             throw new IllegalArgumentException("Bad stock field");
-        return jdbc.queryForObject("SELECT "+field+"""
+        return jdbc.queryForObject("SELECT "+field+" "+"""
                 FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?
                 """,BigDecimal.class,c.tenant(),c.warehouse(),item);
     }
