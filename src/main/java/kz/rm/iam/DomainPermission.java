@@ -20,6 +20,7 @@ public enum DomainPermission {
     SALES_RETURN_RECEIVE(DomainModule.SALES),
     SALES_RETURN_INSPECT(DomainModule.SALES),
     SALES_RETURN_POST(DomainModule.SALES),
+    SALES_PACKAGING_MANAGE(DomainModule.SALES),
     INVENTORY_RECEIVE(DomainModule.INVENTORY),
     INVENTORY_ADJUST(DomainModule.INVENTORY),
     INVENTORY_RESERVE(DomainModule.INVENTORY),
