@@ -301,6 +301,73 @@ public class CrmCustomerService {
         history.customer(tenantId,customerId,actorId,"ARCHIVED",expectedVersion,expectedVersion+1);
     }
 
+
+    /** Complete contact PII replacement, keeping original stable per-contact AAD. */
+    @Transactional
+    Contact updateContact(UUID actor, UUID tenant, UUID id, String name, String email,
+                          String phone, long expectedVersion) {
+        requireOrganizationMember(actor,tenant,true);
+        if(name==null || name.isBlank() || name.length()>200
+                || (email!=null && email.length()>320) || (phone!=null && phone.length()>50))
+            throw new IllegalArgumentException("Invalid contact fields");
+        keys.active(tenant);
+        var trimmedName=name.strip();
+        var nameCipher=seal(tenant,id,"name",trimmedName);
+        var emailCipher=email==null?null:seal(tenant,id,"email",email);
+        var phoneCipher=phone==null?null:seal(tenant,id,"phone",phone);
+        var rows=jdbc.query("""
+            SELECT customer_id FROM crm.contact
+            WHERE tenant_id=? AND id=? AND status='ACTIVE' AND row_version=?
+              AND EXISTS (SELECT 1 FROM crm.customer cu
+                  WHERE cu.tenant_id=crm.contact.tenant_id
+                    AND cu.id=crm.contact.customer_id AND cu.status='ACTIVE')
+            FOR UPDATE
+            """,(rs,n)->rs.getObject(1,UUID.class),tenant,id,expectedVersion);
+        if(rows.isEmpty()) throw new IllegalStateException("Contact not found, archived or stale");
+        int changed=jdbc.update("""
+            UPDATE crm.contact SET row_version=row_version+1
+            WHERE tenant_id=? AND id=? AND row_version=? AND status='ACTIVE'
+            """,tenant,id,expectedVersion);
+        if(changed!=1) throw new IllegalStateException("Stale contact revision");
+        int secrets=jdbc.update("""
+            UPDATE crm_pii.contact_secret
+            SET name_envelope=?,email_envelope=?,phone_envelope=?,row_version=row_version+1
+            WHERE tenant_id=? AND contact_id=?
+            """,nameCipher,emailCipher,phoneCipher,tenant,id);
+        if(secrets!=1) throw new IllegalStateException("Contact secret missing");
+        history.contact(tenant,id,rows.getFirst(),actor,"UPDATED",expectedVersion,expectedVersion+1);
+        return new Contact(tenant,id,rows.getFirst(),trimmedName,email,phone);
+    }
+
+    @Transactional
+    void archiveContact(UUID actor, UUID tenant, UUID id, long expectedVersion) {
+        changeContactStatus(actor,tenant,id,expectedVersion,"ACTIVE","ARCHIVED","ARCHIVED");
+    }
+
+    @Transactional
+    void restoreContact(UUID actor, UUID tenant, UUID id, long expectedVersion) {
+        changeContactStatus(actor,tenant,id,expectedVersion,"ARCHIVED","ACTIVE","RESTORED");
+    }
+
+    private void changeContactStatus(UUID actor, UUID tenant, UUID id, long version,
+                                     String expected, String target, String action) {
+        requireOrganizationMember(actor,tenant,true);
+        var rows=jdbc.query("""
+            SELECT c.customer_id FROM crm.contact c
+            JOIN crm.customer u ON u.tenant_id=c.tenant_id AND u.id=c.customer_id
+            WHERE c.tenant_id=? AND c.id=? AND c.status=? AND c.row_version=?
+              AND u.status='ACTIVE'
+            FOR UPDATE OF c
+            """,(rs,n)->rs.getObject(1,UUID.class),tenant,id,expected,version);
+        if(rows.isEmpty()) throw new IllegalStateException("Contact not found, parent archived or stale");
+        int changed=jdbc.update("""
+            UPDATE crm.contact SET status=?,row_version=row_version+1
+            WHERE tenant_id=? AND id=? AND status=? AND row_version=?
+            """,target,tenant,id,expected,version);
+        if(changed!=1) throw new IllegalStateException("Stale contact revision");
+        history.contact(tenant,id,rows.getFirst(),actor,action,version,version+1);
+    }
+
     private String zone(String katoCode) {
         if(katoCode==null) return null;
         if(katoCode.length()<2) throw new IllegalArgumentException("Invalid KATO code");
