@@ -101,10 +101,12 @@ public class CrmCustomerService {
         requireOrganizationMember(actorId,tenantId,true);
         if (name==null || name.isBlank()) throw new IllegalArgumentException("Contact name required");
         // Ensures same-tenant and existing active customer before inserting a contact.
-        Integer count=jdbc.queryForObject("""
-            SELECT count(*) FROM crm.customer WHERE tenant_id=? AND id=? AND status='ACTIVE'
-            """,Integer.class,tenantId,customerId);
-        if(count==null || count!=1) throw new IllegalArgumentException("Customer not found in tenant");
+        // Consistent lock order: customer before contact; archive takes the same customer lock.
+        var statuses=jdbc.query("""
+            SELECT status FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE
+            """,(rs,n)->rs.getString(1),tenantId,customerId);
+        if(statuses.isEmpty() || !"ACTIVE".equals(statuses.getFirst()))
+            throw new IllegalArgumentException("Customer not found in tenant");
         keys.active(tenantId);
         UUID id=UUID.randomUUID();
         byte[] nameCipher=seal(tenantId,id,"name",name);
@@ -316,15 +318,7 @@ public class CrmCustomerService {
         var nameCipher=seal(tenant,id,"name",trimmedName);
         var emailCipher=email==null?null:seal(tenant,id,"email",email);
         var phoneCipher=phone==null?null:seal(tenant,id,"phone",phone);
-        var rows=jdbc.query("""
-            SELECT customer_id FROM crm.contact
-            WHERE tenant_id=? AND id=? AND status='ACTIVE' AND row_version=?
-              AND EXISTS (SELECT 1 FROM crm.customer cu
-                  WHERE cu.tenant_id=crm.contact.tenant_id
-                    AND cu.id=crm.contact.customer_id AND cu.status='ACTIVE')
-            FOR UPDATE
-            """,(rs,n)->rs.getObject(1,UUID.class),tenant,id,expectedVersion);
-        if(rows.isEmpty()) throw new IllegalStateException("Contact not found, archived or stale");
+        UUID customer=lockActiveContact(tenant,id,"ACTIVE",expectedVersion);
         int changed=jdbc.update("""
             UPDATE crm.contact SET row_version=row_version+1
             WHERE tenant_id=? AND id=? AND row_version=? AND status='ACTIVE'
@@ -336,8 +330,8 @@ public class CrmCustomerService {
             WHERE tenant_id=? AND contact_id=?
             """,nameCipher,emailCipher,phoneCipher,tenant,id);
         if(secrets!=1) throw new IllegalStateException("Contact secret missing");
-        history.contact(tenant,id,rows.getFirst(),actor,"UPDATED",expectedVersion,expectedVersion+1);
-        return new Contact(tenant,id,rows.getFirst(),trimmedName,email,phone);
+        history.contact(tenant,id,customer,actor,"UPDATED",expectedVersion,expectedVersion+1);
+        return new Contact(tenant,id,customer,trimmedName,email,phone);
     }
 
     @Transactional
@@ -353,20 +347,13 @@ public class CrmCustomerService {
     private void changeContactStatus(UUID actor, UUID tenant, UUID id, long version,
                                      String expected, String target, String action) {
         requireOrganizationMember(actor,tenant,true);
-        var rows=jdbc.query("""
-            SELECT c.customer_id FROM crm.contact c
-            JOIN crm.customer u ON u.tenant_id=c.tenant_id AND u.id=c.customer_id
-            WHERE c.tenant_id=? AND c.id=? AND c.status=? AND c.row_version=?
-              AND u.status='ACTIVE'
-            FOR UPDATE OF c
-            """,(rs,n)->rs.getObject(1,UUID.class),tenant,id,expected,version);
-        if(rows.isEmpty()) throw new IllegalStateException("Contact not found, parent archived or stale");
+        UUID customer=lockActiveContact(tenant,id,expected,version);
         int changed=jdbc.update("""
             UPDATE crm.contact SET status=?,row_version=row_version+1
             WHERE tenant_id=? AND id=? AND status=? AND row_version=?
             """,target,tenant,id,expected,version);
         if(changed!=1) throw new IllegalStateException("Stale contact revision");
-        history.contact(tenant,id,rows.getFirst(),actor,action,version,version+1);
+        history.contact(tenant,id,customer,actor,action,version,version+1);
     }
 
 
@@ -391,6 +378,30 @@ public class CrmCustomerService {
             """,(rs,n)->CrmCustomerEntity.Status.valueOf(rs.getString(1)),tenant,customer);
         if(matches.isEmpty()) throw new IllegalArgumentException("Customer not found in tenant");
         return matches.getFirst();
+    }
+
+
+    /**
+     * Lock parent before contact to serialize archive/create/update/restore with customer lifecycle.
+     * The first contact lookup is only a locator; identity/status/version are rechecked under lock.
+     */
+    private UUID lockActiveContact(UUID tenant, UUID id, String status, long version) {
+        var parents=jdbc.query("""
+            SELECT customer_id FROM crm.contact WHERE tenant_id=? AND id=?
+            """,(rs,n)->rs.getObject(1,UUID.class),tenant,id);
+        if(parents.isEmpty()) throw new IllegalStateException("Contact not found in tenant");
+        UUID customer=parents.getFirst();
+        var state=jdbc.query("""
+            SELECT status FROM crm.customer WHERE tenant_id=? AND id=? FOR UPDATE
+            """,(rs,n)->rs.getString(1),tenant,customer);
+        if(state.isEmpty() || !"ACTIVE".equals(state.getFirst()))
+            throw new IllegalStateException("Contact parent is archived or missing");
+        var locked=jdbc.query("""
+            SELECT customer_id FROM crm.contact
+            WHERE tenant_id=? AND id=? AND customer_id=? AND status=? AND row_version=? FOR UPDATE
+            """,(rs,n)->rs.getObject(1,UUID.class),tenant,id,customer,status,version);
+        if(locked.isEmpty()) throw new IllegalStateException("Contact archived or stale");
+        return customer;
     }
 
     private String zone(String katoCode) {
