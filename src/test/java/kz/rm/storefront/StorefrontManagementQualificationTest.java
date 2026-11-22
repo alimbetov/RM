@@ -183,6 +183,28 @@ class StorefrontManagementQualificationTest {
                 .hasMessageContaining("STALE");
     }
 
+    @Test void pass09PausedStorefrontCannotBeBypassedThroughSecondOfferService() {
+        var t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(t.staff());
+        var draftStore=storefronts.createDraft(actor,t.tenant(),"shop-"+UUID.randomUUID());
+        var publishedStore=storefronts.publish(actor,t.tenant(),draftStore.id(),0);
+        UUID sku=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,t.tenant(),sku,"sku-"+UUID.randomUUID());
+        var draftOffer=offers.createDraft(actor,t.tenant(),sku,
+                "Not published while shop paused",java.math.BigDecimal.TEN,"KZT");
+        storefronts.pause(actor,t.tenant(),publishedStore.id(),publishedStore.rowVersion());
+        assertThatThrownBy(()->offers.publish(actor,t.tenant(),draftOffer.id(),0))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STOREFRONT_UNAVAILABLE");
+        assertThat(offers.get(actor,t.tenant(),draftOffer.id()).state())
+                .isEqualTo(StorefrontOfferService.State.DRAFT);
+    }
+
     @Test void managementAndPublicationPermissionsAreIndependent() {
         var t = fixture();
         grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE);
