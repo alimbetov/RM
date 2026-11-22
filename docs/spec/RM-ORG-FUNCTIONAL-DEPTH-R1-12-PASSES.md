@@ -1,7 +1,7 @@
 
 # RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12 и 03/12. **Ветка:** base_dev.
+**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12, 03/12 и 04/12. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
 **Статус:** ТЗ СФОРМИРОВАНО; lifecycle ORGANIZATION НЕ РЕАЛИЗОВАН, смежные INVENTORY INV-Q1..Q3 уже реализованы/квалифицированы отдельно. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
@@ -52,7 +52,7 @@
 | 01 | Исходники + перекрёстный аудит | Карта функций, GAP, данное ТЗ | SPECIFIED |
 | 02 | Бизнес-сценарии | Пути администратора, кладовщика, продавца и отрицательные действия | SPECIFIED |
 | 03 | State machine | Политика складских зависимостей, переходы, ограничения | SPECIFIED |
-| 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | OPEN |
+| 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | SPECIFIED |
 | 05 | INVENTORY | Допуск активного склада для приёмки/коррекции/резерва | OPEN |
 | 06 | SALES | Подтверждение, повторы, отмена, отгрузка, порядок блокировок | OPEN |
 | 07 | IAM и RBAC | VerifiedActor, A/B/AB, чужие UUID, revoke race | OPEN |
@@ -68,17 +68,17 @@
 
 | Метод фасада | Аргументы/результат | Правило |
 |---|---|---|
-| create | actor, tenant, type, name, kato, address → LocationDto | ACTIVE по умолчанию, валидировать, audit CREATE |
-| update | actor, tenant, id, patch, expectedVersion → LocationDto | Только name/address/KATO, CAS, audit UPDATE |
+| create | actor, tenant, LocationCreateRequest(type,name,kato,address) → LocationDto; совместимый legacy overload | ACTIVE по умолчанию, нормализовать, audit CREATE; сервер выдаёт UUID |
+| update | actor, tenant, id, LocationUpdateRequest(name,kato,address,expectedVersion) → LocationDto | **Полное замещение только редактируемых полей**, не generic PATCH; JPA scoped lock + @Version CAS; no-op без audit |
 | deactivate | actor, tenant, id, expectedVersion → LocationDto | ACTIVE → INACTIVE, проверка использования, audit |
 | reactivate | actor, tenant, id, expectedVersion → LocationDto | INACTIVE → ACTIVE, повторная проверка КАТО, audit |
 | close | actor, tenant, id, expectedVersion → LocationDto | INACTIVE → CLOSED, проверка использования, audit |
 | get | actor, tenant, id → LocationDto | Административное чтение в том числе исторической закрытой локации |
 | search | actor, tenant, filter, page, size → Page | Административная выдача включает все статусы; операционный выбор склада — только ACTIVE WAREHOUSE |
 
-**Правила атрибутов:** name: trim + Unicode NFC, не пустое, максимум 200, без управляющих символов. addressLine: null допустим, максимум 500, trim + NFC. КАТО проверяется через GEO. Тип, tenant, id, createdAt нельзя изменять. Для смены КАТО при наличии исторических складских операций или текущих остатков — отказ; создать новую физическую локацию. Исправление имени/адреса не переписывает immutable историю INVENTORY/SALES. Физический delete не поддерживать.
+**Правила атрибутов (DEC-ORG-04-A):** name: `strip()+NFC`, 1..200 Unicode code points, без control/bidi override; addressLine: `null`/blank→NULL, иначе `strip()+NFC`, максимум 500 code points. `katoCode` — точная строка `[0-9]{2,16}` с ведущими нулями, при create/реальном изменении проверяется GEO; сохранённый неизменённый deprecated KATO не препятствует редактированию имени/адреса. При смене КАТО — запрет при ненулевом stock, любой истории inv_stock_movement (включая transfer) или любой inv_stock_reservation. Тип, tenant, id, createdAt нельзя изменять. Дубликаты названия разрешены, update CLOSED запрещён. Физический delete не поддерживать.
 
-**Оптимистическая конкурентность:** expectedVersion обязателен для update/deactivate/reactivate/close; проверять rowVersion и изменение только через JPA @Version/CAS. При устаревшей версии — STALE_VERSION, rollback, никакого audit-event. Повтор с устаревшей версией — конфликт, а не обещание exactly-once: отдельную receipt-таблицу без необходимости не вводить. updatedAt меняется один раз при успешном изменении.
+**Оптимистическая конкурентность:** expectedVersion обязателен для update/deactivate/reactivate/close; в 04 `update` выполняется после `TenantAuthorization.requireForCommand`, через scoped `lockByWorkspaceIdAndId` с `PESSIMISTIC_WRITE`, явное сравнение rowVersion и JPA @Version. При устаревшей версии — STALE_VERSION и rollback даже если новые значения совпадают. Если полное нормализованное содержимое совпадает и expectedVersion актуален — no-op: не меняются updatedAt/rowVersion/audit. При фактическом изменении — ровно +1 version, один audit. CREATE без stable requestKey не является идемпотентным: два вызова создают две записи с разными UUID, и дубликаты name разрешены.
 
 ## 5. Состояния и правила переходов
 
@@ -224,4 +224,34 @@
 
 **Масштаб:** существующие типы/статусы/JPA/DDL сохраняются. Минимальная доработка — сервисные state methods, shared row lock, inventory usage read port, атомарный audit и тесты. Не создавать новые микросервисы/дополнительные состояния/саги.
 
-**Следующий проход 04/12:** точный patch-контракт name/address/KATO, неизменяемость tenant/type, CAS и оптимистические обновления с подтверждением PostgreSQL. Приоритет завершения ORGANIZATION сохраняется.
+**Проход 04/12 закрыт на уровне ТЗ:** точный full-profile update, DTO, tenant-scoped locked JPA CAS, правила KATO history и 20 запланированных P04 tests. Следующий 05/12 — сопряжение с INVENTORY/transfer, не реализации Java в текущем документе.
+
+
+---
+
+## 13. Дополнение после прохода 04/12 — Create, Update & Data Integrity
+
+**Детальное ревью/нормативная конкретизация:** [RM-ORG-FUNC-R1-P04](../reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS04-2026-11-22.md). **Source SHA:** `5d3eff7362ea895eb6af3b78a7fa478937569662`, `base_dev`. **Статус:** DESIGN SPECIFIED, **не новый реализованный CRUD / не выполнены P04 tests**.
+
+### DEC-ORG-04-A: минимальный контракт без generic PATCH
+
+- `LocationCreateRequest(Type type,String name,String katoCode,String addressLine)`; `LocationUpdateRequest(String name,String katoCode,String addressLine,long expectedVersion)`. Два typed records, без универсальной PATCH-модели. Обязательные `name/katoCode` всегда передаются полностью, `addressLine=null/blank` очищает адрес; `id/tenant/type/status` неизменяемы и не могут попасть в update payload.
+- `AuthenticatedOrganizationLocations.create(VerifiedActor,UUID,LocationCreateRequest)` и `update(VerifiedActor,UUID,UUID,LocationUpdateRequest)`; сохранить existing legacy create overload для квалификационных тестов. Actor ID никогда не принимать из DTO. Операционная WRITE авторизация должна опережать чтение чужого ID или GEO.
+- Normalize once for create and update: Unicode NFC+`strip`, name 1..200 codepoints, optional address 0..500 codepoints, reject controls/invalid surrogate; exact ASCII digits KATO 2..16, no integer conversion/leading-zero loss. Общих BeanValidation framework/extensions для трех полей не вводить.
+- KATO eligibility: только create или **changed code**. Для неизменённого сохранённого (возможно deprecated) КАТО разрешать name/address correction, согласованную с проходом 03.
+- Changed KATO запрещён при любой `inv_stock_movement` истории (включая IN/OUT INV-Q7 transfers), любой `inv_stock_reservation` истории или положительных `on_hand/reserved`; проверять `EXISTS` внутри transaction после `org_location FOR UPDATE`. Простой нулевой `inv_stock_balance` без ledger допускает корректировку. Это предотвращает перепривязку истории товара к новой географии, не блокируя исправление текста адреса.
+- Создание `id=UUID.randomUUID()`, `status=ACTIVE`, `rowVersion=0`, audit `ORG_LOCATION_CREATE`. Name не уникален; network retry create **не exactly-once** без request-id. Отдельный idempotency store и уникальность name в R1 не вводить.
+- Update `@Transactional`: `requireForCommand(WRITE) → scoped JPA @Lock(PESSIMISTIC_WRITE) → version/status check → normalize → changed KATO history/GEO → domain applyProfile → @Version flush → crm.audit_event UPDATE → commit`. Stale version conflict **даже если** значения такие же. Успешный no-op при актуальной версии — без `rowVersion/updatedAt/audit` изменений; успешная реальная мутация — increment version once и одно audit evidence.
+- Hibernate JPA-generated UPDATE по `id+rowVersion` может физически **не включать workspace_id**: tenant-изоляцию доказывает **только scoped locked SELECT и immutable workspaceId + глобальный PRIMARY KEY id**. Не создавать unscoped `findById` write-flow. Это явный выбор scoped JPA/R1 без нового SQL-CAS-engine; проверить emitted SQL в PG.
+- Существующая DDL `org_location` уже поддерживает профиль, nullable address, version, FK и enum CHECK. Дополнительную таблицу не вводить. Blank-name DB constraint/заполненные данные — отдельно в 09 (populated-safe); существующий JPA constructor пока не нормализует значения.
+- Для update CLOSED всегда отказ, INACTIVE редактируется, ACTIVE редактируется. Переходы статуса по-прежнему отдельные команды из 03.
+
+### Изменения исходников при будущей реализации
+
+`OrganizationLocationRepository.lockByWorkspaceIdAndId` — scoped JPA query с `@Lock(PESSIMISTIC_WRITE)`. `OrganizationLocationEntity.applyProfile` — package-bound method, меняет только `name,katoCode,addressLine,updatedAt`; не делать публичные setters для tenant/type/status. `OrganizationLocationService` — без нового микросервиса: нормализация, версия, changed-KATO proof, транзакционный audit. Для changed-KATO history использовать минимум scoped EXISTS по INVENTORY таблицам после согласования internal owner-port; не отдавать staff SKU/quantities без `INVENTORY_STOCK_READ`.
+
+### Приёмка
+
+План `ORG-P04-Q01…Q20` включён в подробное ревью: create трех типов, Unicode/границы, blank/invalid KATO, duplicate names, A/B tenant authorization, update/full replacement, null-address clearing, no-op/stale/no audit, changed-KATO before/after movements/reservations/transfers, INACTIVE/CLOSED, two-connection update-vs-update и update-vs-deactivate/receive, rollback + revoke fence. **Все новые P04 tests — NOT RUN.**
+
+**Домен ORGANIZATION остаётся 1/5. Следующий проход 05/12:** INVENTORY owner-boundary, receipt/correct/transfer, влияние INACTIVE на операции и SQL lock/concurrency; без контроллеров и реализации ранее утверждённых ТЗ во время аудита.
