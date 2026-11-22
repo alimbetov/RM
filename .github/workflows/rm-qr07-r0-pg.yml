@@ -1,4 +1,4 @@
-name: RM QR-07 R0 Return Foundation PostgreSQL Qualification
+name: RM QR-07 R0/R1 Return Foundation and Review PostgreSQL Qualification
 
 on:
   push:
@@ -42,7 +42,7 @@ jobs:
           cache: maven
       - name: Verify exact SHA for QR-07
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Qualify R0 migration and buyer return service on real PostgreSQL
+      - name: Qualify R0/R1 migration buyer claims and reviewer transitions on PostgreSQL
         env:
           SPRING_PROFILES_ACTIVE: test
           RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
@@ -54,13 +54,13 @@ jobs:
         run: |
           mkdir -p target/qr07-r0-evidence
           set -o pipefail
-          mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr07R0*' test 2>&1 | tee target/qr07-r0-evidence/console.log
+          mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr07R*' test 2>&1 | tee target/qr07-r0-evidence/console.log
           printf '%s\n' "${GITHUB_SHA}" > target/qr07-r0-evidence/exact-sha.txt
       - name: Preserve migration and service test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qr07-r0-${{ github.sha }}
+          name: qr07-r0-r1-${{ github.sha }}
           path: |
             target/surefire-reports/
             target/qr07-r0-evidence/
