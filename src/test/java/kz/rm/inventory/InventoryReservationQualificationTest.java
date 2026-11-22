@@ -44,6 +44,7 @@ class InventoryReservationQualificationTest {
         var org=organizations.saveAndFlush(new OrganizationEntity(
                 UUID.randomUUID(),"Reservation Shop LLP","Reservation Shop","KZ"));
         UUID tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId())).getId();
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
         Timestamp now=Timestamp.from(Instant.now());
         UUID location=UUID.randomUUID(),item=UUID.randomUUID(),offer=UUID.randomUUID();
         String slug="res-"+UUID.randomUUID();
