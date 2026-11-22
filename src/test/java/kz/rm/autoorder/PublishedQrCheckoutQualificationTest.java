@@ -262,6 +262,13 @@ class PublishedQrCheckoutQualificationTest {
     private VerifiedActor verifyBuyer(String email) {
         EmailProof token=proof(email);
         UUID user=auto.verifyEmail(token.challengeId(),token.token());
+        // Synthetic test-only bridge. Email verification does not mint OIDC.
+        // The separate production OIDC link remains a release gate.
+        jdbc.update("""
+                UPDATE public.iam_user_account
+                SET external_subject=?,status='ACTIVE',row_version=row_version+1
+                WHERE id=?
+                ""","qr03b-synthetic-oidc-"+UUID.randomUUID(),user);
         return verified(user);
     }
     private String storedOrderRef(Fixture f,UUID order) {
