@@ -10,6 +10,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -20,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -48,6 +51,7 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired PlatformTransactionManager transactionManager;
 
     private record Context(UUID tenant,UUID warehouse,UUID otherWarehouse,
                            UUID itemOne,UUID itemTwo,UUID offerOne,UUID offerTwo,
@@ -483,4 +487,193 @@ class QrWarehouseHandoverQualificationTest {
                 """,c.tenant(),completed.handoverId()))
                 .isInstanceOf(Exception.class);
     }
+
+    /** QR-06B/B1: persisted effect proof, not merely a successful service return. */
+    private void assertExactlyOneHandover(Context c,Order o,int expectedLines) {
+        assertThat(status(c,o)).isEqualTo("COMPLETED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=? AND event_type='COMPLETED'
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover_line hl
+                JOIN crm.sales_pickup_handover h
+                  ON h.tenant_id=hl.tenant_id AND h.id=hl.handover_id
+                WHERE h.tenant_id=? AND h.order_id=?
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(expectedLines);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement m
+                JOIN crm.inv_stock_reservation r
+                  ON r.tenant_id=m.tenant_id AND r.id=m.reservation_id
+                WHERE m.tenant_id=? AND r.order_id=? AND m.movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(expectedLines);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_credential
+                WHERE tenant_id=? AND order_id=? AND state='CONSUMED'
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND (reserved < 0 OR on_hand < reserved)
+                """,Integer.class,c.tenant())).isZero();
+    }
+
+    private void assertNoHandoverEffects(Context c,Order o) {
+        assertThat(status(c,o)).isEqualTo("READY_FOR_PICKUP");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,c.tenant(),o.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=? AND event_type='COMPLETED'
+                """,Integer.class,c.tenant(),o.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement m
+                JOIN crm.inv_stock_reservation r
+                  ON r.tenant_id=m.tenant_id AND r.id=m.reservation_id
+                WHERE m.tenant_id=? AND r.order_id=? AND m.movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant(),o.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_credential
+                WHERE tenant_id=? AND order_id=? AND state='ISSUED'
+                """,Integer.class,c.tenant(),o.id())).isEqualTo(1);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND (reserved < 0 OR on_hand < reserved)
+                """,Integer.class,c.tenant())).isZero();
+    }
+
+    /** The admitted physical handover keeps its PG locks until the outer commit.
+     * Warehouse scope revocation must not commit in the middle of that operation. */
+    @Test void qr06bPgHandoverCommitPrecedesConcurrentScopeRevocation() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        var handoverDone=new CountDownLatch(1);
+        var releaseCommit=new CountDownLatch(1);
+        var revokeEntered=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var handover=pool.submit(()->tx.execute(t->{
+                var result=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                        issued.rawProof(),true,initialVersion,key());
+                handoverDone.countDown();
+                try {
+                    if(!releaseCommit.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("HANDOVER_COMMIT_GATE_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            assertThat(handoverDone.await(10,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                revokeEntered.countDown();
+                scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
+                return true;
+            });
+            assertThat(revokeEntered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->revoke.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                releaseCommit.countDown();
+            }
+            assertThat(handover.get(20,TimeUnit.SECONDS).status()).isEqualTo("COMPLETED");
+            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
+        } finally {
+            releaseCommit.countDown();
+        }
+        assertExactlyOneHandover(c,o,2);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM public.iam_warehouse_staff_scope
+                WHERE tenant_id=? AND warehouse_id=? AND actor_user_id=?
+                """,String.class,c.tenant(),c.warehouse(),c.staff().userId()))
+                .isEqualTo("REVOKED");
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,key())).isInstanceOf(SecurityException.class);
+        assertExactlyOneHandover(c,o,2);
+    }
+
+    /** If revocation acquires the IAM scope row first, checkout must fail closed. */
+    @Test void qr06bPgScopeRevocationCommitPrecedesHandoverAdmission() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        var revokedButUncommitted=new CountDownLatch(1);
+        var allowRevokeCommit=new CountDownLatch(1);
+        var handoverEntered=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var revoke=pool.submit(()->tx.execute(t->{
+                scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
+                revokedButUncommitted.countDown();
+                try {
+                    if(!allowRevokeCommit.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("REVOKE_COMMIT_GATE_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(revokedButUncommitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var handover=pool.submit(()->{
+                handoverEntered.countDown();
+                try {
+                    pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                            issued.rawProof(),true,initialVersion,key());
+                    return false;
+                } catch(SecurityException denied) {
+                    return true;
+                }
+            });
+            assertThat(handoverEntered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->handover.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                allowRevokeCommit.countDown();
+            }
+            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(handover.get(20,TimeUnit.SECONDS)).isTrue();
+        } finally {
+            allowRevokeCommit.countDown();
+        }
+        assertNoHandoverEffects(c,o);
+    }
+
+    /** A lost client response after COMMIT must not cause a second debit.
+     * Even retries with a different idempotency key are negative business operations. */
+    @Test void qr06bPgAmbiguousResponseReplayCannotDuplicateInventory() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        String originalKey=key();
+        var completed=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,originalKey);
+        // Simulate loss of the response by discarding it and reconstructing a retry.
+        var replay=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,originalKey);
+        assertThat(replay).isEqualTo(completed);
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,key()))
+                .isInstanceOf(IllegalStateException.class);
+        assertExactlyOneHandover(c,o,2);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+        assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+    }
+
 }
