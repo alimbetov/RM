@@ -174,3 +174,11 @@
 ## 10. Ближайшая исполняемая задача Codex
 
 **TCRUD-00 + TCRUD-02 discovery:** проанализировать Java в текущем `base_dev`, вывести method-level inventory из §7 и проверить PII responses в `AuthenticatedCrmCommands`/`CrmCustomerService`. Не менять контроллеры, роли или бизнес-правила до утверждения DEC-OWNER-01. Подготовить один адресный PR/commit в `base_dev` только с доказанным P0 fix и PostgreSQL negative tests, затем обновить этот документ с фактическими CI evidence. Никакого merge в `main`.
+
+
+## 11. Wave 0 implementation record — TCRUD-00 / TCRUD-02
+
+- **TCRUD-00 discovery:** [method inventory](../reviews/RM-TCRUD-00-METHOD-INVENTORY-2026-11-22.md) enumerates the public facade/selected service signatures captured from source baseline `81c6a4a`. Entries are labeled `PRESENT` only. Full service-to-SQL-to-test qualification remains an **open evidence task**; this inventory must not be described as final TCRUD-00 completion.
+- **TCRUD-02 chosen response contract:** keep the current `Customer`/`Contact` Java return types to avoid a broad breaking API change. `AuthenticatedCrmCommands.createPerson/updatePerson` redact `Customer.name`; `addContact/updateContact` redact `Contact.name/email/phone` **for every caller**, regardless of their permissions. A null response field means **withheld**, not cleared in the database. `createCompany/updateCompany` may return public organization labels. Future adapters should use explicit mutation-result DTOs with no PII members.
+- Read-back of PERSON name or Contact fields continues to require `CRM_PII_READ` on the independently authorized query path. A role with only `CRM_WRITE` can mutate but cannot read PII; a negative regression test qualifies that distinction. Encrypted AAD, JDBC writes, consent, audit and historic revisions remain unchanged.
+- **Gate:** this record only states code intent. Mark `TESTED`/`QUALIFIED` once actual GitHub Actions H2, PostgreSQL, populated migration and RustFS jobs succeed on the **same exact SHA**. Existing historical GREEN does not qualify a new commit.
