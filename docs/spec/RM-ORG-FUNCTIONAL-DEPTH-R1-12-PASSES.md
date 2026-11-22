@@ -3,7 +3,7 @@
 
 **Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12…07/12 — SPECIFIED; **новый этапный рубеж пройден на уровне ТЗ**. Handoff следующему домену разрешён; 08–12 — DEFERRED/NOT DONE, не production admission. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
-**Статус:** ТЗ СФОРМИРОВАНО; lifecycle ORGANIZATION НЕ РЕАЛИЗОВАН, смежные INVENTORY INV-Q1..Q3 уже реализованы/квалифицированы отдельно. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
+**Статус:** ТЗ 01–07 СФОРМИРОВАНО; **ORG-R1.1 service implementation committed on base_dev** (typed create/update, lifecycle, inventory blockers, audit, six test methods). Новые тесты и полный PostgreSQL E2E ещё НЕ ПОДТВЕРЖДЕНЫ GREEN; production HOLD. Feature Freeze: без HTTP-контроллеров и merge в main.
 
 ## 1. Цель и границы
 
@@ -21,27 +21,27 @@
 
 | Компонент | Фактически реализовано | Недостающее |
 |---|---|---|
-| AuthenticatedOrganizationLocations | Публичный VerifiedActor-фасад create/get/search | update/deactivate/reactivate/close |
-| OrganizationLocationService | Package-private create, WRITE permission, GEO validation, JPA save | Изменение профиля, статусы, CAS |
+| AuthenticatedOrganizationLocations | VerifiedActor-фасад create/get/search, typed update/deactivate/reactivate/close (code present R1.1) | Runtime PG E2E и повторные конкурентные проверки |
+| OrganizationLocationService | Transaction-bound WRITE, normalized create/update, status CAS, dependency blockers, same-TX audit (code present) | PG QUALIFICATION, failure injection, migration preflight |
 | OrganizationLocationQueryService | Tenant-scoped get/search, READ, Page size 1..100 | Экранирование LIKE; защита от глубокого OFFSET |
-| OrganizationLocationEntity | @Version, timestamps, ACTIVE/INACTIVE/CLOSED | Нет методов переходов и изменения полей |
-| OrganizationLocationRepository | Scoped get/search, createdAt DESC и id ASC | Поиск literal name, целевой порядок id DESC |
+| OrganizationLocationEntity | @Version, immutable tenant/type/identity; explicit replaceProfile/moveTo (code present) | Verify JPA version increments on real PostgreSQL |
+| OrganizationLocationRepository | Scoped get/search + tenant/id @Lock(PESSIMISTIC_WRITE) (code present) | Literal LIKE and deep-page improvements deferred |
 | KatoLocationPolicy | Отказ для неизвестного/удалённого КАТО, level > 3 | Повторная проверка при изменении/реактивации |
-| OrganizationLocationQueryQualificationTest | A/B tenant, rollback, VerifiedActor, revoke race, фильтры | Нет lifecycle/stock closure/update-race испытаний |
+| OrganizationLocationQueryQualificationTest + LifecycleQualificationTest | Existing A/B/revoke + 6 new lifecycle test methods committed | Test executions not verified; broader Q03..Q07 race matrix pending |
 
 **Реестр GAP:**
-- ORG-01 **P0:** нет явных переходов статуса.
-- ORG-02 **P0 → частично закрыт с INV-Q1..Q3:** новые INVENTORY receive/correct уже используют StockEligibility ACTIVE WAREHOUSE; не квалифицированы гонки с ещё не реализованным deactivate и пропускная способность row lock.
-- ORG-03 **P0 → частично закрыт с INV-Q1..Q3:** reserve вызывается через StockEligibility ACTIVE WAREHOUSE и откатывает confirm при отказе; отдельная квалификация нового ORG lifecycle и fulfillment на legacy INACTIVE остаётся OPEN.
-- ORG-04 **P1:** отсутствие update(name/address/KATO).
-- ORG-05 **P1:** имеющийся rowVersion не используется как обязательное предусловие новых команд.
+- ORG-01 **P0 → CODE PRESENT / QA PENDING:** typed transitions ACTIVE/INACTIVE/CLOSED committed; PG race/rollback gates remain.
+- ORG-02 **P0 → CODE PRESENT / QA PENDING:** INVENTORY location guard and ORG.deactivate now share the location row fence; comprehensive PG mixed-command concurrency and lock throughput not yet qualified.
+- ORG-03 **P0 → PARTIALLY IMPLEMENTED:** reserve requires ACTIVE WAREHOUSE, ORG lifecycle blockers now present; cross-domain confirm/deactivate PG and legacy INACTIVE fulfill gap remain OPEN.
+- ORG-04 **P1 → CODE PRESENT:** full normalized name/address/KATO update, changed-KATO history guard; QA pending.
+- ORG-05 **P1 → CODE PRESENT:** update and lifecycle require expectedVersion with scoped PESSIMISTIC_WRITE; QA pending.
 - ORG-06 **P1:** % и _ в параметре LIKE интерпретируются как шаблон; требуется буквальный поиск. Это не доказанная SQL injection: значение параметризовано.
 - ORG-07 **P1:** безлимитный глубокий OFFSET; существующий id ASC детерминирован, но отличается от целевого createdAt DESC/id DESC.
-- ORG-08 **P1:** операции не пишут предметное доказательство изменения в аудит.
+- ORG-08 **P1 → CODE PRESENT:** create/profile/state changes append tenant+actor+location+action to crm.audit_event in same TX; immutable/partitioned PG QA pending.
 - ORG-09 **P1:** недостаточно PG-проверок двух tenants, mixed membership и конкурентных складских операций.
 - ORG-10 **P2:** в Liquibase имеются два логически эквивалентных unique constraint на (workspace_id,id); отдельно изучить, не удалять во время freeze.
 
-Вывод: текущая зрелость **1/5** по исходной методике. Наличие статуса в enum — ещё не работающий lifecycle; source GAP — не утверждение об эксплуатации уязвимости.
+Вывод: исходная зрелость **1/5** была оценена до реализации. Сейчас code-level CRUD/lifecycle расширен, **но до подтверждения независимого PostgreSQL GREEN и pass 08–12 release gates зрелость по доказательной шкале не повышается автоматически**.
 
 ## 3. Методика 12 последовательных проходов
 
@@ -383,3 +383,32 @@ P05-01 «transfer locks first location → SKU → second location» относ�
 **Промежуточный closure:** все 07 проходов исходного анализа/ТЗ `SPECIFIED`; жизненный цикл ORGANIZATION `NOT IMPLEMENTED`, зрелость по прежней шкале **1/5**, production HOLD. **08–12** сознательно `DEFERRED / NOT DONE` и возвращаются в release backlog. Handoff к следующему предметному сервису допустим **только как переключение аудита**, не как знак зрелости ORGANIZATION. Предпочтительная кандидатура следующего обследования — CATALOG: PRODUCT state, catalog identity/offer SKU, publisher permission непосредственно влияют на INVENTORY/Sales.
 
 **Реализация по итогам семи проходов:** `ORG-IMP-01..05`, `ORG-QA-ALL`, `IAM-DEC-01`, `IAM-QUAL-02`, `INV-IMP-01`, `SALE-IMP-01` определены в промежуточном заключении. Перед merge или production required functional CRUD lifecycle E2E, initialized/current permissions, populated PG upgrade, tests 08–12/release evidence.
+
+
+---
+
+## 17. ORG-R1.1 — начало реализации после семи проектных проходов
+
+**Протокол и точные source paths:** [RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md](../reviews/RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md). **Состояние:** CODE COMMITTED / INTEGRATION TESTS ADDED / PostgreSQL GREEN PENDING.
+
+### Реализованные публичные контракты на уровне service facade
+
+~~~java
+LocationDto create(VerifiedActor actor, UUID tenant, LocationCreateRequest request);
+LocationDto update(VerifiedActor actor, UUID tenant, UUID location, LocationUpdateRequest request);
+LocationDto deactivate(VerifiedActor actor, UUID tenant, UUID location, long expectedVersion);
+LocationDto reactivate(VerifiedActor actor, UUID tenant, UUID location, long expectedVersion);
+LocationDto close(VerifiedActor actor, UUID tenant, UUID location, long expectedVersion);
+~~~
+
+Старый `create(actor,tenant,type,name,kato,address)` и `get/search` сохранены, контроллеров нет. `LocationFields` нормализует поля, `OrganizationLocationRepository.lockByWorkspaceIdAndId` берёт tenant-scoped exclusive row lock, `InventoryLocationUsagePort` read-only `EXISTS` по остаткам, активным резервам, OPEN инвентаризации и истории. Каждое успешное **изменение** добавляет `ORG_LOCATION_*` в `crm.audit_event` вместе с JPA mutation, в одной transaction. No-op в актуальной версии не создаёт событие.
+
+### Политика и остающиеся блокировки
+
+- Положительный свободный stock разрешает temporary INACTIVE; `reserved>0`, ACTIVE reservation или OPEN stocktake блокируют. `CLOSED` требует дополнительно `onHand=0`.
+- Для changed KATO добавлен консервативный guard не только stock/movement/reservation history, но и `inv_stocktake` history, предотвращая перепривязку старой инвентаризации к другой географии. Неизменённый deprecated KATO при reactivate не проверяется повторно.
+- Вся мутация через tenant/actor `ORGANIZATION_LOCATION_WRITE`, без отложенного авторизационного check после обработки чужих UUID.
+- **Открыто:** P05/P06 legacy fulfillment eligibility в INVENTORY/SALES, immutable SALES SKU snapshot, literal LIKE/deep paging, solo-owner IAM role UX, comprehensive 2–3 connection PG tests, populated-db migration/audit and load.
+- **Статус:** шесть новых test methods в `OrganizationLocationLifecycleQualificationTest` присутствуют. Только фактический запуск Maven/GitHub Actions может подтвердить их результат; не относить их к GREEN заранее. Production admission остаётся HOLD. Отложенные аналитические проходы 08–12 не переименовывать в DONE.
+
+**Следующий технический шаг:** квалифицировать текущий `ORG-R1.1` и исправить обнаруженные дефекты только в ORGANIZATION/INVENTORY owner boundaries; SALES/AutoOrder не менять, так как развивается параллельно.
