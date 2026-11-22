@@ -3,12 +3,8 @@ name: INVENTORY 0081 Populated PostgreSQL Upgrade Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/inventory/**'
-      - 'src/main/resources/db/changelog/**'
-      - 'src/test/java/kz/rm/inventory/**'
-      - 'src/test/java/kz/rm/integration/**'
-      - '.github/workflows/inventory-0081-populated-upgrade.yml'
+    # Required for RM-QA-01B: every admission SHA must requalify
+    # the populated inventory upgrade and concurrent PostgreSQL tests.
   workflow_dispatch:
 
 concurrency:
