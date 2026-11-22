@@ -2782,7 +2782,7 @@ class QrWarehouseHandoverQualificationTest {
         String req=key();
         try {
             worker=startQr07R2Worker("POST_HALT_BEFORE_COMMIT",c,claim.requestId(),
-                    5,req,dir.resolve("-"),dir.resolve("-"),dir.resolve("worker.log"));
+                    5,req,java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),dir.resolve("worker.log"));
             assertThat(waitQr06bProcess(worker,dir.resolve("worker.log"),90))
                     .isEqualTo(86);
             assertThat(stock(c,item,"on_hand")).isEqualByComparingTo(before);
@@ -2816,7 +2816,7 @@ class QrWarehouseHandoverQualificationTest {
         String req=key();
         try {
             worker=startQr07R2Worker("POST_HALT_AFTER_COMMIT",c,claim.requestId(),
-                    5,req,dir.resolve("-"),dir.resolve("-"),dir.resolve("worker.log"));
+                    5,req,java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),dir.resolve("worker.log"));
             assertThat(waitQr06bProcess(worker,dir.resolve("worker.log"),90))
                     .isEqualTo(87);
             assertThat(stock(c,item,"on_hand"))
