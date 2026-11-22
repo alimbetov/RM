@@ -2651,7 +2651,7 @@ class QrWarehouseHandoverQualificationTest {
         var posted=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
                 claim.requestId(),5,key());
         assertThat(posted.state()).isEqualTo("DISPOSED");
-        assertThat(jdbc.queryForObject("""
+        assertThat(jdbc.query("""
                 SELECT movement_id FROM crm.sales_return_posting
                 WHERE tenant_id=? AND return_id=?
                 """,rs->rs.next()?rs.getObject(1,UUID.class):null,
