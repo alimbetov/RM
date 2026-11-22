@@ -1004,4 +1004,149 @@ class QrWarehouseHandoverQualificationTest {
         assertExactlyOneHandover(c,o,2);
     }
 
+
+    /** B2 process runner: new java.exe, new Spring context and PG connection pool. */
+    private Process startQr06bWorker(String mode, Context c, String proofFile,
+                                     long version, String requestKey,
+                                     java.nio.file.Path ready,java.nio.file.Path gate,
+                                     java.nio.file.Path output) throws Exception {
+        String cp=System.getenv("RM_QR06B_JAVA_CLASSPATH");
+        if(cp==null||cp.isBlank())
+            throw new IllegalStateException("RM_QR06B_JAVA_CLASSPATH required for process qualification");
+        String java=java.nio.file.Path.of(System.getProperty("java.home"),
+                "bin","java").toString();
+        return new ProcessBuilder(java,"-cp",cp,
+                "kz.rm.sales.QrHandoverProcessWorker",
+                mode,c.tenant().toString(),c.warehouse().toString(),
+                c.staff().userId().toString(),Long.toString(version),
+                proofFile,requestKey,ready.toString(),gate.toString())
+                .redirectErrorStream(true).redirectOutput(output.toFile()).start();
+    }
+
+    private static java.nio.file.Path writeQr06bSecret(java.nio.file.Path dir,String proof)
+            throws Exception {
+        java.nio.file.Path path=dir.resolve("credential");
+        java.nio.file.Files.writeString(path,proof);
+        try {
+            java.nio.file.Files.setPosixFilePermissions(path,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        } catch(UnsupportedOperationException ignored) { /* non-POSIX developer host */ }
+        return path;
+    }
+
+    private static int waitQr06bProcess(Process p,java.nio.file.Path output) throws Exception {
+        if(!p.waitFor(65,TimeUnit.SECONDS)) {
+            p.destroyForcibly();
+            throw new AssertionError("QR06B child JVM timed out; log: "+output);
+        }
+        int exit=p.exitValue();
+        // Child logs are retained as CI runner temporary diagnostics only;
+        // never print a raw QR secret or subprocess arguments.
+        return exit;
+    }
+
+    /** Genuine JVM halt before outer transaction COMMIT. On restart the caller
+     * sees READY + original inventory, then can complete once. */
+    @Test void qr06bPgJVMKilledBeforeCommitRollsBackAndRetrySucceeds() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long version=version(c,o),before;
+        String req=key();
+        java.nio.file.Path dir=java.nio.file.Files.createTempDirectory("qr06b-pre-");
+        Process child=null;
+        try {
+            var secret=writeQr06bSecret(dir,issued.rawProof());
+            child=startQr06bWorker("HALT_BEFORE_COMMIT",c,secret.toString(),version,req,
+                    dir.resolve("no-ready"),dir.resolve("no-gate"),dir.resolve("child.log"));
+            assertThat(waitQr06bProcess(child,dir.resolve("child.log"))).isEqualTo(86);
+            assertNoHandoverEffects(c,o);
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+            var retried=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                    issued.rawProof(),true,version,req);
+            assertThat(retried.status()).isEqualTo("COMPLETED");
+            assertExactlyOneHandover(c,o,2);
+        } finally {
+            if(child!=null&&child.isAlive())child.destroyForcibly();
+            java.nio.file.Files.deleteIfExists(dir.resolve("credential"));
+            java.nio.file.Files.deleteIfExists(dir.resolve("child.log"));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
+    /** Actual process ends AFTER the COMMIT, but BEFORE any response is sent.
+     * Another JVM (the test runner) replays and verifies the identical receipt. */
+    @Test void qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long version=version(c,o);
+        String req=key();
+        java.nio.file.Path dir=java.nio.file.Files.createTempDirectory("qr06b-post-");
+        Process child=null;
+        try {
+            var secret=writeQr06bSecret(dir,issued.rawProof());
+            child=startQr06bWorker("HALT_AFTER_COMMIT",c,secret.toString(),version,req,
+                    dir.resolve("no-ready"),dir.resolve("no-gate"),dir.resolve("child.log"));
+            assertThat(waitQr06bProcess(child,dir.resolve("child.log"))).isEqualTo(87);
+            assertExactlyOneHandover(c,o,2);
+            var receipt=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                    issued.rawProof(),true,version,req);
+            assertThat(receipt.status()).isEqualTo("COMPLETED");
+            assertExactlyOneHandover(c,o,2);
+            assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                    issued.rawProof(),true,version,key()))
+                    .isInstanceOf(IllegalStateException.class);
+            assertExactlyOneHandover(c,o,2);
+        } finally {
+            if(child!=null&&child.isAlive())child.destroyForcibly();
+            java.nio.file.Files.deleteIfExists(dir.resolve("credential"));
+            java.nio.file.Files.deleteIfExists(dir.resolve("child.log"));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
+    /** Two independently bootstrapped JVMs release a file barrier together
+     * and race for the same physical order; exactly one can post stock. */
+    @Test void qr06bPgTwoIndependentJVMsCompeteForOneHandover() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long version=version(c,o);
+        var dir=java.nio.file.Files.createTempDirectory("qr06b-two-");
+        Process a=null,b=null;
+        try {
+            var secret=writeQr06bSecret(dir,issued.rawProof());
+            var gate=dir.resolve("gate");
+            var readyA=dir.resolve("ready-a");
+            var readyB=dir.resolve("ready-b");
+            a=startQr06bWorker("COMPETE",c,secret.toString(),version,key(),
+                    readyA,gate,dir.resolve("a.log"));
+            b=startQr06bWorker("COMPETE",c,secret.toString(),version,key(),
+                    readyB,gate,dir.resolve("b.log"));
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
+            while(!java.nio.file.Files.exists(readyA)||!java.nio.file.Files.exists(readyB)) {
+                if(!a.isAlive()||!b.isAlive())
+                    throw new AssertionError("QR06B worker exited before start barrier");
+                if(System.nanoTime()>deadline)
+                    throw new AssertionError("QR06B two JVMs did not start in time");
+                Thread.sleep(30);
+            }
+            java.nio.file.Files.writeString(gate,"GO");
+            int ea=waitQr06bProcess(a,dir.resolve("a.log"));
+            int eb=waitQr06bProcess(b,dir.resolve("b.log"));
+            assertThat(java.util.List.of(ea,eb)).containsExactlyInAnyOrder(0,2);
+            assertExactlyOneHandover(c,o,2);
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+        } finally {
+            if(a!=null&&a.isAlive())a.destroyForcibly();
+            if(b!=null&&b.isAlive())b.destroyForcibly();
+            for(String file:java.util.List.of("credential","gate","ready-a","ready-b","a.log","b.log"))
+                java.nio.file.Files.deleteIfExists(dir.resolve(file));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
 }
