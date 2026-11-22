@@ -35,6 +35,7 @@ class SalesOrderQueryQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+    @Autowired TenantRoleService roles;
 
     private record Shop(UUID actor,UUID tenant,String slug,UUID offer) {}
     private Shop shop() {
@@ -160,4 +161,55 @@ class SalesOrderQueryQualificationTest {
         assertThatThrownBy(()->new SalesOrderSearch("UNKNOWN",null,null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void tcrud03MixedMembershipSalesReadIsTenantBoundAndCannotBorrowPermission() {
+        Shop a=shop(),b=shop();
+        UUID first=order(a),second=order(a),foreign=order(b);
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud03-sales-"+UUID.randomUUID(),"Seller cross tenant member")).getId();
+        UUID orgA=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,a.tenant());
+        UUID orgB=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,b.tenant());
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgA,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        var roleA=roles.createRole(a.actor(),a.tenant(),
+                "SELL_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Sales read A");
+        roles.grant(a.actor(),a.tenant(),roleA.id(),DomainPermission.SALES_ORDER_READ);
+        roles.assign(a.actor(),a.tenant(),staff,roleA.id());
+        roles.enable(a.actor(),a.tenant());
+        var roleB=roles.createRole(b.actor(),b.tenant(),
+                "SELL_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "No sales read B");
+        roles.grant(b.actor(),b.tenant(),roleB.id(),DomainPermission.CRM_READ);
+        roles.assign(b.actor(),b.tenant(),staff,roleB.id());
+        roles.enable(b.actor(),b.tenant());
+        String subject=jdbc.queryForObject("SELECT external_subject FROM iam_user_account WHERE id=?",
+                String.class,staff);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300)).build();
+        var actor=new OidcActorResolver(decoder,users).resolve("synthetic-only");
+
+        var page0=trustedQueries.search(actor,a.tenant(),null,0,1);
+        var page1=trustedQueries.search(actor,a.tenant(),null,1,1);
+        assertThat(page0.getTotalElements()).isEqualTo(2);
+        assertThat(page1.getTotalElements()).isEqualTo(2);
+        assertThat(List.of(page0.getContent().getFirst().id(),page1.getContent().getFirst().id()))
+                .containsExactlyInAnyOrder(first,second).doesNotContain(foreign);
+        assertThat(trustedQueries.search(actor,a.tenant(),
+                new SalesOrderSearch("CANCELLED",null,null),0,10).getTotalElements()).isZero();
+        assertThatThrownBy(()->trustedQueries.search(actor,b.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedQueries.search(actor,b.tenant(),
+                new SalesOrderSearch("PLACED",null,null),0,1))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedQueries.search(null,a.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
 }
