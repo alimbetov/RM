@@ -48,7 +48,7 @@ class CrmSearchService {
         }
         if (f.categoryCode() != null) {
             // EXISTS avoids duplicating customers and keeps count/page scopes identical.
-            predicate.append("""
+            predicate.append(" ").append("""
                     AND EXISTS (SELECT 1 FROM crm.customer_category cat
                                 WHERE cat.tenant_id=c.tenant_id
                                   AND cat.id=c.primary_category_id
@@ -68,7 +68,7 @@ class CrmSearchService {
             // The earliest valid ACTIVE fixed-term contract determines "expires within".
             // A future/expired, DRAFT, CLOSED or open-ended contract cannot satisfy this.
             // The correlated tenant FK blocks foreign contracts even with a known customer ID.
-            predicate.append("""
+            predicate.append(" ").append("""
                     AND EXISTS (SELECT 1 FROM crm.customer_contract ct
                                 WHERE ct.tenant_id=c.tenant_id
                                   AND ct.customer_id=c.id
