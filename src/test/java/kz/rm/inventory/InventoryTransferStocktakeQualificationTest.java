@@ -158,6 +158,69 @@ class InventoryTransferStocktakeQualificationTest {
                 """,Integer.class,f.tenant())).isZero();
     }
 
+    @Test void postgresConcurrentTransferAndReceiptWithSameKeyCommitExactlyOneOperation()
+            throws Exception {
+        try(var con=source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        receive(f,f.source(),"namespaceRaceSeed01",10);
+        String requestKey="namespaceRaceShared01";
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var transfer=pool.submit(()->{
+                gate.await(10,TimeUnit.SECONDS);
+                try {
+                    commands.transfer(actor(f.actor()),f.tenant(),f.source(),
+                            f.destination(),f.item(),BigDecimal.valueOf(3),requestKey);
+                    return "TRANSFER";
+                } catch(IllegalArgumentException conflict) {
+                    return "CONFLICT";
+                }
+            });
+            var incoming=pool.submit(()->{
+                gate.await(10,TimeUnit.SECONDS);
+                try {
+                    commands.receive(actor(f.actor()),f.tenant(),f.source(),f.item(),
+                            requestKey,BigDecimal.valueOf(2));
+                    return "RECEIPT";
+                } catch(IllegalArgumentException conflict) {
+                    return "CONFLICT";
+                }
+            });
+            gate.countDown();
+            var outcomes=List.of(transfer.get(30,TimeUnit.SECONDS),
+                    incoming.get(30,TimeUnit.SECONDS));
+            assertThat(outcomes).contains("CONFLICT");
+            assertThat(outcomes.stream().filter("CONFLICT"::equals).count()).isEqualTo(1);
+            int transferRows=jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.inv_stock_transfer
+                    WHERE tenant_id=? AND request_key=?
+                    """,Integer.class,f.tenant(),requestKey);
+            int receiptRows=jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.inv_stock_movement
+                    WHERE tenant_id=? AND request_key=?
+                    """,Integer.class,f.tenant(),requestKey);
+            assertThat(transferRows+receiptRows).isEqualTo(1);
+            if(outcomes.contains("TRANSFER")) {
+                assertThat(stock(f,f.source())).isEqualByComparingTo("7");
+                assertThat(stock(f,f.destination())).isEqualByComparingTo("3");
+                assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.inv_stock_movement
+                        WHERE tenant_id=? AND source_type='TRANSFER'
+                        """,Integer.class,f.tenant())).isEqualTo(2);
+            } else {
+                assertThat(outcomes).contains("RECEIPT");
+                assertThat(stock(f,f.source())).isEqualByComparingTo("12");
+                assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.inv_stock_movement
+                        WHERE tenant_id=? AND source_type='TRANSFER'
+                        """,Integer.class,f.tenant())).isZero();
+            }
+        }
+    }
+
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
         var f=fixture();receive(f,f.source(),"stockQ7A0001",10);
         receive(f,f.destination(),"stockQ7B0001",10);
