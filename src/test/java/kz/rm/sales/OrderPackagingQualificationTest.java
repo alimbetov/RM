@@ -125,7 +125,7 @@ class OrderPackagingQualificationTest {
     """,BigDecimal.class,f.tenant(),accepted.serviceLineId())).isEqualByComparingTo("500");
   assertThat(jdbc.queryForObject("""
     SELECT count(*) FROM crm.inv_stock_movement
-    WHERE tenant_id=? AND reason_code='PACKAGING_CONSUMPTION'
+    WHERE tenant_id=?
     """,Integer.class,f.tenant())).isZero();
  }
  @Test void repeatOfferAndDecisionReturnOriginalReceiptButDifferentPayloadConflicts(){
