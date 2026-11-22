@@ -1005,6 +1005,18 @@ class QrWarehouseHandoverQualificationTest {
     }
 
 
+
+    private static String qr06bDiagnostics(java.nio.file.Path path,String rawProof) {
+        try {
+            String content=java.nio.file.Files.exists(path)
+                    ?java.nio.file.Files.readString(path):"<missing child log>";
+            content=content.replace(rawProof,"[REDACTED_QR_SECRET]");
+            return content.substring(Math.max(0,content.length()-5000));
+        } catch(Exception e) {
+            return "<child log unavailable: "+e.getClass().getSimpleName()+">";
+        }
+    }
+
     /** B2 process runner: new java.exe, new Spring context and PG connection pool. */
     private Process startQr06bWorker(String mode, Context c, String proofFile,
                                      long version, String requestKey,
@@ -1059,7 +1071,10 @@ class QrWarehouseHandoverQualificationTest {
             var secret=writeQr06bSecret(dir,issued.rawProof());
             child=startQr06bWorker("HALT_BEFORE_COMMIT",c,secret.toString(),version,req,
                     java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),dir.resolve("child.log"));
-            assertThat(waitQr06bProcess(child,dir.resolve("child.log"))).isEqualTo(86);
+            assertThat(waitQr06bProcess(child,dir.resolve("child.log")))
+                    .withFailMessage(()->"B2 pre-COMMIT worker diagnostics: "+
+                            qr06bDiagnostics(dir.resolve("child.log"),issued.rawProof()))
+                    .isEqualTo(86);
             assertNoHandoverEffects(c,o);
             assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
             assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
@@ -1089,7 +1104,10 @@ class QrWarehouseHandoverQualificationTest {
             var secret=writeQr06bSecret(dir,issued.rawProof());
             child=startQr06bWorker("HALT_AFTER_COMMIT",c,secret.toString(),version,req,
                     java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),dir.resolve("child.log"));
-            assertThat(waitQr06bProcess(child,dir.resolve("child.log"))).isEqualTo(87);
+            assertThat(waitQr06bProcess(child,dir.resolve("child.log")))
+                    .withFailMessage(()->"B2 post-COMMIT worker diagnostics: "+
+                            qr06bDiagnostics(dir.resolve("child.log"),issued.rawProof()))
+                    .isEqualTo(87);
             assertExactlyOneHandover(c,o,2);
             var receipt=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
                     issued.rawProof(),true,version,req);
@@ -1128,7 +1146,9 @@ class QrWarehouseHandoverQualificationTest {
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
             while(!java.nio.file.Files.exists(readyA)||!java.nio.file.Files.exists(readyB)) {
                 if(!a.isAlive()||!b.isAlive())
-                    throw new AssertionError("QR06B worker exited before start barrier");
+                    throw new AssertionError("QR06B worker exited before start barrier: A="+
+                            qr06bDiagnostics(dir.resolve("a.log"),issued.rawProof())+
+                            " B="+qr06bDiagnostics(dir.resolve("b.log"),issued.rawProof()));
                 if(System.nanoTime()>deadline)
                     throw new AssertionError("QR06B two JVMs did not start in time");
                 Thread.sleep(30);
@@ -1136,7 +1156,10 @@ class QrWarehouseHandoverQualificationTest {
             java.nio.file.Files.writeString(gate,"GO");
             int ea=waitQr06bProcess(a,dir.resolve("a.log"));
             int eb=waitQr06bProcess(b,dir.resolve("b.log"));
-            assertThat(java.util.List.of(ea,eb)).containsExactlyInAnyOrder(0,2);
+            assertThat(java.util.List.of(ea,eb)).withFailMessage(()->
+                    "QR06B two JVM exits: "+qr06bDiagnostics(dir.resolve("a.log"),issued.rawProof())+
+                    " ; "+qr06bDiagnostics(dir.resolve("b.log"),issued.rawProof()))
+                    .containsExactlyInAnyOrder(0,2);
             assertExactlyOneHandover(c,o,2);
             assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
             assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
