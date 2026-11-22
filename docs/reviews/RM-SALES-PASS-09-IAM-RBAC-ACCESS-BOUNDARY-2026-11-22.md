@@ -16,7 +16,7 @@
 | Buyer history | `AuthenticatedBuyerOrders` → package-private `AutoOrderService.buyerOrders` | Verified identity; checks verified current email and active global account; filters buyer_user_id; anonymous/public transport remains HOLD |
 | CRM list | `CrmSearchService.customers` | Tenant-bounded paging/count, company labels only, no person plaintext |
 | CRM contact PII | `CrmSearchService.contacts` and `CrmCustomerService.getContact` | `CRM_PII_READ` required; encrypted secrets decrypted using per-record tenant-associated crypto context |
-| Offer mutation | `SellerOfferService` and separate `StorefrontOfferService` | Two command paths with different behaviors: retain as architectural P1 until consolidated or documented as a single authoritative port |
+| Offer mutation | `SellerOfferService` and separate `StorefrontOfferService` | Consolidated: StorefrontOfferService owns mutations, row locks, audit and CAS; SellerOfferService is a compatibility facade; cross-facade qualification added |
 | Offer publication vs paused storefront | `StorefrontOfferService.transition` | **Confirmed functional access-control gap**: publication previously ignored storefront state; now rejects non-PUBLISHED storefront |
 | Storefront/offer metadata read | `StorefrontManagementService.get`, `StorefrontOfferService.get` | Strengthened to `requireForCommand` in writable transaction for same lock/revoke fence as mutations |
 | Log / API / outbox safety | no qualified public SALES HTTP controller in reviewed scope | Cannot certify HTTP status codes, transport rate limits, distributed structured logs or production PII masking from source-only tests |
@@ -52,7 +52,7 @@ Note: when tenant RBAC is **not enabled**, `TenantAuthorization.permitted` inten
 3. Public transport/anti-abuse and JWT admission remain independently unqualified. Do not claim real HTTP authorization or public checkout release.
 
 **P1 design issues:**
-1. Consolidate duplicate `SellerOfferService` and `StorefrontOfferService` behavior: inconsistent noop/CAS, title/currency constraints, state transitions, and audit. Prefer one existing authoritative implementation and preserve compatibility without introducing new architecture.
+1. **Implemented, exact-SHA GREEN pending:** canonical `StorefrontOfferService` now owns offer commands; compatibility `SellerOfferService` delegates; `StorefrontManagementService` owns storefront state. Cross-facade CAS and single audit test added; verify both on exact SHA.
 2. Explicitly decide whether `SALES_ORDER_READ` fallback for every active member while functional RBAC is disabled is acceptable to release; require `enforced=TRUE` otherwise.
 3. Add transport-specific negative tests to demonstrate no foreign entity counts/IDs in HTTP failures, URLs, pagination and logs once trusted adapters exist.
 
@@ -61,3 +61,7 @@ Note: when tenant RBAC is **not enabled**, `TenantAuthorization.permitted` inten
 No PASS 09 closure before CI evidence (run URL, exact SHA, completed result, failed/skipped tests, PostgreSQL report) is attached to this review. Status remains **SOURCE REVIEWED / IMPLEMENTED PARTIALLY / HOLD**.
 
 This review records service-level findings, not a completed penetration test or verification of deployed traffic, databases, or live log systems.
+
+## 6. PASS 09 canonical offer command convergence
+
+Code commits `0f98003d`, `d67be2de`, `14e27598`, `5e375e98` align the two previously divergent paths with one shared commercial offer mutation service and one audit history. The compatibility facade does not update `crm.store_offer` directly. Changes include publication permission separation, positive and ISO-4217-constrained offer prices, and consistent invalid-state/CAS handling. A new interoperability test checks mutation through both facades against the same row/version and event sequence. **Not qualified until the full H2 + PostgreSQL test and populated migration evidence is GREEN for the same head commit**.
