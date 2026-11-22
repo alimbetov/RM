@@ -48,9 +48,9 @@ Proof still needed:
 ## 4. Candidate test commands in a checked-out repo
 
 ~~~bash
-./mvnw -Dtest=OrganizationLocationLifecycleQualificationTest,OrganizationLocationQueryQualificationTest test
+mvn -Dtest=OrganizationLocationLifecycleQualificationTest,OrganizationLocationQueryQualificationTest test
 # Then run existing integration regressions with a real PostgreSQL configuration:
-./mvnw -Dtest=InventoryMovementQualificationTest,InventoryReservationQualificationTest,InventoryTransferStocktakeQualificationTest,SalesInventoryRbacQualificationTest test
+mvn -Dtest=InventoryMovementQualificationTest,InventoryReservationQualificationTest,InventoryTransferStocktakeQualificationTest,SalesInventoryRbacQualificationTest test
 ~~~
 
-The repository's actual test launcher and environment must be verified before invocation. A command in this report is not evidence it has been executed. Attach GitHub Actions run ID, exact commit SHA, test counts and failure logs to move `ORG-R1.1` from `CODE PRESENT` to `GREEN/QUALIFIED`.
+The repository has a root pom.xml and no mvnw/gradlew in the reviewed tree; use a Maven-capable environment with the project's required JDK and PostgreSQL test configuration. A command in this report is not evidence it has been executed. Attach GitHub Actions run ID, exact commit SHA, test counts and failure logs to move `ORG-R1.1` from `CODE PRESENT` to `GREEN/QUALIFIED`.
