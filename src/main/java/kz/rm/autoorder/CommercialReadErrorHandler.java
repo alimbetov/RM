@@ -1,0 +1,33 @@
+package kz.rm.autoorder;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.Map;
+
+/**
+ * Avoids returning internal IAM identities, SQL causes, foreign resource
+ * existence or bearer token contents to untrusted HTTP clients.
+ * Invalid/expired/missing JWTs are handled before MVC by the resource server.
+ */
+@RestControllerAdvice(assignableTypes=CommercialAuthenticatedReadsController.class)
+@ConditionalOnProperty(name="rm.security.oidc.enabled",havingValue="true")
+public class CommercialReadErrorHandler {
+    @ExceptionHandler(SecurityException.class)
+    ResponseEntity<Map<String,String>> accessDenied(SecurityException ignored) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("code","ACCESS_DENIED"));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    ResponseEntity<Map<String,String>> invalidInput(IllegalArgumentException error) {
+        boolean missing=error.getMessage()!=null &&
+                (error.getMessage().contains("not found in tenant") ||
+                 error.getMessage().contains("Offer not found"));
+        return ResponseEntity.status(missing?HttpStatus.NOT_FOUND:HttpStatus.BAD_REQUEST)
+                .body(Map.of("code",missing?"RESOURCE_NOT_FOUND":"INVALID_REQUEST"));
+    }
+}
