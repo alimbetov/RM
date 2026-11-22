@@ -2976,3 +2976,77 @@ CREATE TRIGGER trg_handover_line_immutable
 --rollback DROP TRIGGER trg_prep_receipt_immutable ON crm.sales_preparation_receipt;
 --rollback DROP TRIGGER trg_pick_confirmation_immutable ON crm.sales_order_pick_confirmation;
 --rollback DROP FUNCTION crm.reject_pickup_receipt_mutation();
+
+
+--changeset rm:0095-qr07-return-domain-r0
+-- QR-07 R0: a return case is separate from, and never rewrites, completed SALES.
+-- Source order/line and immutable pickup receipt are referenced in one tenant.
+ALTER TABLE crm.sales_pickup_handover
+ ADD CONSTRAINT uq_qr07_handover_tenant_order_id UNIQUE (tenant_id,order_id,id);
+
+CREATE TABLE crm.sales_return_request (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ order_id UUID NOT NULL,
+ source_handover_id UUID NOT NULL,
+ buyer_user_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ request_fingerprint VARCHAR(64) NOT NULL,
+ state VARCHAR(32) NOT NULL,
+ reason_code VARCHAR(40) NOT NULL,
+ policy_version VARCHAR(40) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_sales_return_request PRIMARY KEY (tenant_id,id),
+ CONSTRAINT uq_sales_return_request_key UNIQUE (tenant_id,request_key),
+ CONSTRAINT uq_sales_return_request_order UNIQUE (tenant_id,order_id,id),
+ CONSTRAINT fk_sales_return_request_source FOREIGN KEY (tenant_id,order_id,source_handover_id)
+   REFERENCES crm.sales_pickup_handover(tenant_id,order_id,id),
+ CONSTRAINT fk_sales_return_request_buyer FOREIGN KEY (buyer_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_sales_return_request_fingerprint CHECK (LENGTH(request_fingerprint)=64),
+ CONSTRAINT ck_sales_return_request_state CHECK(state IN
+   ('REQUESTED','UNDER_REVIEW','APPROVED','REJECTED','AWAITING_RECEIPT',
+    'RECEIVED','INSPECTED','RESTOCKED','DISPOSED','CANCELLED_BY_BUYER')),
+ CONSTRAINT ck_sales_return_request_version CHECK(row_version>=0)
+);
+CREATE INDEX idx_sales_return_order ON crm.sales_return_request(tenant_id,order_id,created_at);
+
+CREATE TABLE crm.sales_return_line (
+ tenant_id UUID NOT NULL,
+ return_id UUID NOT NULL,
+ order_id UUID NOT NULL,
+ order_line_id UUID NOT NULL,
+ quantity INTEGER NOT NULL,
+ CONSTRAINT pk_sales_return_line PRIMARY KEY(tenant_id,return_id,order_line_id),
+ CONSTRAINT fk_sales_return_line_request FOREIGN KEY(tenant_id,order_id,return_id)
+   REFERENCES crm.sales_return_request(tenant_id,order_id,id),
+ CONSTRAINT fk_sales_return_line_original FOREIGN KEY(tenant_id,order_id,order_line_id)
+   REFERENCES crm.sales_order_line(tenant_id,order_id,id),
+ CONSTRAINT ck_sales_return_line_quantity CHECK(quantity>0)
+);
+CREATE INDEX idx_sales_return_line_source ON crm.sales_return_line(tenant_id,order_id,order_line_id);
+
+CREATE TABLE crm.sales_return_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ return_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL,
+ event_type VARCHAR(40) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sales_return_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_sales_return_event_request FOREIGN KEY(tenant_id,return_id)
+   REFERENCES crm.sales_return_request(tenant_id,id),
+ CONSTRAINT fk_sales_return_event_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id)
+);
+--rollback DROP TABLE crm.sales_return_event;
+--rollback DROP TABLE crm.sales_return_line;
+--rollback DROP TABLE crm.sales_return_request;
+--rollback ALTER TABLE crm.sales_pickup_handover DROP CONSTRAINT uq_qr07_handover_tenant_order_id;
+
+--changeset rm:0096-qr07-return-event-immutability dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_qr07_return_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_return_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+--rollback DROP TRIGGER trg_qr07_return_event_immutable ON crm.sales_return_event;
