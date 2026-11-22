@@ -537,4 +537,46 @@ class FilesR10bQualificationTest {
     @Test void unavailableDefaultScannerNeverClaimsClean() {
         assertThat(new UnavailableFileScanner().scan("synthetic")).isEqualTo(FileScanPort.Verdict.ERROR);
     }
+
+    @Test void tcrud03BinaryReadDoesNotWriteAnyBytesForWrongOwnerOrMissingPiiPermission()
+            throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var a=setup(); var b=setup();
+        UUID customerA=crm.createCompany(a.actor(),a.tenant(),"Private owner A",null).id();
+        UUID customerB=crm.createCompany(b.actor(),b.tenant(),"Private owner B",null).id();
+        byte[] bytes=pdf();
+        var intent=draft(a,bytes);
+        completion.acceptAndComplete(a.actor(),a.tenant(),intent.fileId(),
+                new ByteArrayInputStream(bytes));
+        UUID link=attachments.attachCustomer(a.actor(),a.tenant(),intent.fileId(),
+                customerA,"INVOICE");
+        // The caller knows the exact attachment UUID but cannot select another tenant.
+        var crossTenantSink=new java.io.ByteArrayOutputStream();
+        assertThatThrownBy(()->binaryReads.copyCustomerAttachment(
+                b.actor(),b.tenant(),link,crossTenantSink))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(crossTenantSink.size()).isZero();
+
+        // Another same-tenant CRM customer is not an alternative owner of the same attachment.
+        var original=attachments.listCustomer(a.actor(),a.tenant(),customerA,10);
+        assertThat(original).isNotEmpty();
+        assertThat(attachments.listCustomer(b.actor(),b.tenant(),customerB,10)).isEmpty();
+
+        var nullActorSink=new java.io.ByteArrayOutputStream();
+        assertThatThrownBy(()->binaryReads.copyCustomerAttachment(null,a.tenant(),link,nullActorSink))
+                .isInstanceOf(SecurityException.class);
+        assertThat(nullActorSink.size()).isZero();
+
+        // FILES_READ alone is not sufficient for classified CRM customer documents.
+        jdbc.update("""
+            DELETE FROM public.iam_tenant_role_permission
+            WHERE tenant_id=? AND permission_code='CRM_PII_READ'
+            """,a.tenant());
+        var piiDeniedSink=new java.io.ByteArrayOutputStream();
+        assertThatThrownBy(()->binaryReads.copyCustomerAttachment(
+                a.actor(),a.tenant(),link,piiDeniedSink))
+                .isInstanceOf(SecurityException.class);
+        assertThat(piiDeniedSink.size()).isZero();
+    }
+
 }
