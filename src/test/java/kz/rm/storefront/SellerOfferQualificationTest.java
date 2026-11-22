@@ -90,6 +90,46 @@ class SellerOfferQualificationTest {
         roles.enable(verified(c.owner()),c.tenant());
     }
 
+    @Test void r10PriceHistoryIsImmutableAndNoOpOrStaleCasCannotAppend() throws Exception {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var seller=verified(c.seller());
+        var draft=offers.createDraft(seller,c.tenant(),c.sku(),"Revisions",
+                new BigDecimal("100.0000"),"KZT");
+        var baseline=canonical.priceHistory(seller,c.tenant(),draft.id(),0,10);
+        assertThat(baseline).hasSize(1);
+        assertThat(baseline.getFirst().oldPrice()).isNull();
+        assertThat(baseline.getFirst().newPrice()).isEqualByComparingTo("100");
+        assertThat(baseline.getFirst().offerRowVersion()).isZero();
+        assertThat(offers.changePrice(seller,c.tenant(),draft.id(),0,
+                new BigDecimal("100.00"),"KZT").rowVersion()).isZero();
+        assertThat(canonical.priceHistory(seller,c.tenant(),draft.id(),0,10)).hasSize(1);
+        var changed=offers.changePrice(seller,c.tenant(),draft.id(),0,
+                new BigDecimal("125"),"KZT");
+        assertThat(changed.rowVersion()).isEqualTo(1);
+        var revisions=canonical.priceHistory(seller,c.tenant(),draft.id(),0,10);
+        assertThat(revisions).hasSize(2);
+        assertThat(revisions.getFirst().oldPrice()).isEqualByComparingTo("100");
+        assertThat(revisions.getFirst().newPrice()).isEqualByComparingTo("125");
+        assertThat(revisions.getFirst().offerRowVersion()).isEqualTo(1);
+        assertThat(canonical.priceHistory(seller,c.tenant(),draft.id(),1,1))
+                .singleElement().extracting(StorefrontOfferService.PriceRevision::offerRowVersion)
+                .isEqualTo(0L);
+        assertThatThrownBy(()->offers.changePrice(seller,c.tenant(),draft.id(),0,
+                new BigDecimal("150"),"KZT")).isInstanceOf(IllegalStateException.class);
+        assertThat(canonical.priceHistory(seller,c.tenant(),draft.id(),0,10)).hasSize(2);
+        assertThatThrownBy(()->canonical.priceHistory(seller,c.tenant(),draft.id(),0,101))
+                .isInstanceOf(IllegalArgumentException.class);
+        Context other=context();
+        grant(other,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        assertThatThrownBy(()->canonical.priceHistory(verified(other.seller()),
+                other.tenant(),draft.id(),0,10)).isInstanceOf(IllegalArgumentException.class);
+        requirePostgres();
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.store_offer_price_revision WHERE tenant_id=? AND offer_id=?
+                """,c.tenant(),draft.id())).isInstanceOf(Exception.class);
+    }
+
     @Test void pass09TwoOfferFacadesShareOneVersionAndOneAuditHistory() {
         Context c=context();
         grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
