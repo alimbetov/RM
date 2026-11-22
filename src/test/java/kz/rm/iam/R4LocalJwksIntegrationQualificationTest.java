@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 import java.net.InetSocketAddress;
@@ -25,7 +27,16 @@ import static org.assertj.core.api.Assertions.*;
  * The production configuration requires an HTTPS JWKS endpoint.
  */
 @SpringBootTest
+@TestPropertySource(properties={
+    "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+})
 class R4LocalJwksIntegrationQualificationTest {
+    @Autowired EmailIdentityService emailService;
+    @Autowired EmailIdentityCrypto crypto;
+    @Autowired SelfServiceTenantOnboardingService onboarding;
+    @Autowired JdbcTemplate jdbc;
     @Autowired UserAccountRepository users;
 
     private static String b64(byte[] data) {
@@ -77,8 +88,31 @@ class R4LocalJwksIntegrationQualificationTest {
             OidcJwtConfiguration.configureValidation(decoder,issuer,"rm-api");
             var resolver=new OidcActorResolver(decoder,users);
             long now=Instant.now().getEpochSecond();
-            assertThat(resolver.resolve(signed(trusted.getPrivate(),kid,issuer,"rm-api",
-                    subject,now-10,now+600)).userId()).isEqualTo(user);
+            String accepted=signed(trusted.getPrivate(),kid,issuer,"rm-api",
+                    subject,now-10,now+600);
+            var validated=resolver.resolve(accepted);
+            assertThat(validated.userId()).isEqualTo(user);
+            // Real JWKS signature check feeds the actual tenant creation command.
+            String email="r4-jwks-"+UUID.randomUUID()+"@example.kz";
+            emailService.requestInitialVerification(validated,email);
+            Object[] proof=jdbc.query("""
+                    SELECT c.id,c.token_envelope
+                    FROM public.iam_email_verification_challenge c
+                    JOIN public.iam_email_identity e ON e.id=c.email_identity_id
+                    WHERE e.user_id=? AND c.purpose='REGISTRATION'
+                    """,rs->{
+                        if(!rs.next())throw new IllegalStateException("Missing email challenge");
+                        return new Object[]{rs.getObject(1,UUID.class),rs.getBytes(2)};
+                    },user);
+            assertThat(emailService.verifyRegistration((UUID)proof[0],
+                    crypto.decrypt((byte[])proof[1]))).isTrue();
+            UUID tenant=UUID.randomUUID();
+            var acceptedTenant=onboarding.createFirstTenant(validated,tenant,
+                    "JWKS Owner LLP","JWKS Owner","KZ");
+            assertThat(acceptedTenant.tenantId()).isEqualTo(tenant);
+            assertThat(onboarding.selectTenant(resolver.resolve(accepted),tenant).tenantId())
+                    .isEqualTo(tenant);
+
             assertThatThrownBy(()->resolver.resolve(signed(foreign.getPrivate(),kid,issuer,
                     "rm-api",subject,now-10,now+600))).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->resolver.resolve(signed(trusted.getPrivate(),kid,issuer,
