@@ -51,7 +51,7 @@ jobs:
           cache: maven
       - name: Qualify buyer link and CRM regressions on PostgreSQL
         run: mvn -B -ntp -Dtest=CrmBuyerLinkQualificationTest,CrmInteractionQualificationTest,CrmR1aQualificationTest test
-      - name: Require seven buyer tests with no errors or skips
+      - name: Require all twelve buyer lifecycle tests with no errors or skips
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET,pathlib,json
@@ -62,7 +62,12 @@ jobs:
                     'archivedCustomerCannotBeLinkedOrExposeOrderHistory',
                     'postgresBuyerLinkEventsCannotBeUpdatedOrDeleted',
                     'postgresConcurrentProposalsPreserveOneCustomerOneBuyer',
-                    'postgresConcurrentBuyerConfirmHasOneCommittedEvent'}
+                    'postgresConcurrentBuyerConfirmHasOneCommittedEvent',
+                    'buyerRevocationStopsHistoryAndAllowsNewExplicitConsent',
+                    'disputeFreezesSalesVisibilityAndSellerCanOnlyCloseFailClosed',
+                    'sellerReleaseCannotForgeNewBuyerConsentAndHistoryStaysImmutable',
+                    'foreignTenantAndStaleRevisionCannotRevokeOrResolve',
+                    'postgresOrderedConfirmVersusRevokeAdmitsOneCoherentHistory'}
           assert files,'No CRM Surefire reports'
           cases=[c for f in files for c in ET.parse(f).getroot().iter('testcase')]
           names={c.get('name') for c in cases}
