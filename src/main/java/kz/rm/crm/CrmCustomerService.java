@@ -404,6 +404,17 @@ public class CrmCustomerService {
         return customer;
     }
 
+
+    @Transactional
+    CrmContactEntity.Status contactStatus(UUID actor, UUID tenant, UUID contact) {
+        requireOrganizationMember(actor,tenant,false);
+        var matches=jdbc.query("""
+            SELECT status FROM crm.contact WHERE tenant_id=? AND id=?
+            """,(rs,n)->CrmContactEntity.Status.valueOf(rs.getString(1)),tenant,contact);
+        if(matches.isEmpty()) throw new IllegalArgumentException("Contact not found in tenant");
+        return matches.getFirst();
+    }
+
     private String zone(String katoCode) {
         if(katoCode==null) return null;
         if(katoCode.length()<2) throw new IllegalArgumentException("Invalid KATO code");
