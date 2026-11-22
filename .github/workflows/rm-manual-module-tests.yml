@@ -12,6 +12,7 @@ on:
           - UR-R3
           - UR-R3.2
           - UR-R3.3
+          - R4-W0.1
           - SALES
           - INVENTORY
           - CRM
@@ -69,6 +70,7 @@ jobs:
             UR-R3)       suites='UserRoleMatrixR31QualificationTest' ;;
             UR-R3.2)     suites='UserRoleMatrixR31QualificationTest,SalesInventoryRbacQualificationTest,CrmR1aQualificationTest,FilesR10bQualificationTest,OrganizationLocationLifecycleQualificationTest' ;;
             UR-R3.3)     suites='TenantRbacRevocationQualificationTest,CommercialCoreE2EQualificationTest,InventoryTransferStocktakeQualificationTest' ;;
+            R4-W0.1)     suites='R4FirstTenantOnboardingQualificationTest,R4LocalJwksIntegrationQualificationTest,IamInitialEmailRegistrationQualificationTest,IamUserOnboardingProcessQualificationTest' ;;
             SALES)       suites='SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest' ;;
             INVENTORY)   suites='InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest' ;;
             CRM)         suites='CrmR1aQualificationTest,CrmInteractionQualificationTest' ;;
