@@ -105,6 +105,8 @@ jobs:
         run: |
           mkdir -p target/qr06b-evidence
           set -o pipefail
+          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr06b-classpath.txt
+          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr06b-classpath.txt)"
           mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB31*' test 2>&1 | tee target/qr06b-evidence/load.log
           grep 'QR06B_B31_' target/qr06b-evidence/load.log > target/qr06b-evidence/measurements.txt
           printf '%s\n' "${GITHUB_SHA}" > target/qr06b-evidence/exact-sha.txt
