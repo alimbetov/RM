@@ -255,6 +255,41 @@ class InventoryTransferStocktakeQualificationTest {
                 foreign.source(),foreign.item())).isInstanceOf(SecurityException.class);
     }
 
+    @Test void tenantWideReconciliationPaginatesAndReportsDriftWithoutRepair() {
+        var f=fixture();
+        receive(f,f.source(),"scanReceiptR1501",10);
+        receive(f,f.destination(),"scanReceiptR1502",4);
+        var who=actor(f.actor());
+        var first=reconciliation.scan(who,f.tenant(),null,1);
+        assertThat(first.inspected()).isEqualTo(1);
+        assertThat(first.hasMore()).isTrue();
+        assertThat(first.nextCursor()).isNotNull();
+        var second=reconciliation.scan(who,f.tenant(),first.nextCursor(),1);
+        assertThat(second.inspected()).isEqualTo(1);
+        assertThat(second.hasMore()).isFalse();
+        assertThat(first.findings()).isEmpty();
+        assertThat(second.findings()).isEmpty();
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET reserved=2,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
+        var scan=reconciliation.scan(who,f.tenant(),null,50);
+        assertThat(scan.inspected()).isEqualTo(2);
+        assertThat(scan.findings()).hasSize(1);
+        assertThat(scan.findings().getFirst().finding())
+                .isEqualTo(AuthenticatedInventoryReconciliation.Finding.RESERVED_MISMATCH);
+        assertThat(jdbc.queryForObject("""
+                SELECT reserved FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,f.tenant(),f.source(),f.item()))
+                .isEqualByComparingTo("2"); // diagnostic must never repair
+        assertThatThrownBy(()->reconciliation.scan(who,f.tenant(),null,51))
+                .isInstanceOf(IllegalArgumentException.class);
+        var foreign=fixture();
+        assertThatThrownBy(()->reconciliation.scan(who,foreign.tenant(),null,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
         var f=fixture();receive(f,f.source(),"stockQ7A0001",10);
         receive(f,f.destination(),"stockQ7B0001",10);
