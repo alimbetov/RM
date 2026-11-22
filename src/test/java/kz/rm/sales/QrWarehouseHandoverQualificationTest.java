@@ -1013,9 +1013,9 @@ class QrWarehouseHandoverQualificationTest {
         String cp=System.getenv("RM_QR06B_JAVA_CLASSPATH");
         if(cp==null||cp.isBlank())
             throw new IllegalStateException("RM_QR06B_JAVA_CLASSPATH required for process qualification");
-        String java=java.nio.file.Path.of(System.getProperty("java.home"),
+        String javaExecutable=java.nio.file.Path.of(System.getProperty("java.home"),
                 "bin","java").toString();
-        return new ProcessBuilder(java,"-cp",cp,
+        return new ProcessBuilder(javaExecutable,"-cp",cp,
                 "kz.rm.sales.QrHandoverProcessWorker",
                 mode,c.tenant().toString(),c.warehouse().toString(),
                 c.staff().userId().toString(),Long.toString(version),
