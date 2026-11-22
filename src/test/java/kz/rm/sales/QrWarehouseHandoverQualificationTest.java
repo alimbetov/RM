@@ -1935,6 +1935,15 @@ class QrWarehouseHandoverQualificationTest {
             assertThat(waitQr06bProcess(workerB,dir.resolve("b.log")))
                     .withFailMessage(()->qr06bDiagnostics(dir.resolve("b.log"),"REDACTED"))
                     .isZero();
+            // Export per-process success-only percentiles into immutable CI output.
+            for(String logName:List.of("a.log","b.log")) {
+                var childLog=java.nio.file.Files.readAllLines(dir.resolve(logName));
+                var metrics=childLog.stream()
+                        .filter(line->line.contains("QR06B_B33_CHILD ")).toList();
+                assertThat(metrics).hasSize(1);
+                for(String metric:metrics)
+                    System.out.println(metric.substring(metric.indexOf("QR06B_B33_CHILD ")));
+            }
             long elapsed=System.nanoTime()-started;
             long deadlocksAfter=jdbc.queryForObject("""
                     SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
