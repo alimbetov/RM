@@ -43,3 +43,31 @@ Add a test in existing `CrmR1aQualificationTest` (reuse existing PostgreSQL/H2 f
 1. Expand to mixed-member SALES and ORGANIZATION, including list totals and foreign IDs.
 2. Expand INVENTORY and FILES binary reads with denied stream pre-I/O tests.
 3. Add exact-SHA evidence and per-facade negative coverage matrix before claiming TCRUD-03 QUALIFIED.
+
+
+## Wave 0.2 — cross-domain adversarial qualification
+
+**Source baseline:** `154acf8cda2f989d2f51c14b668d887b44aae4ef` (earlier CRM-only GREEN). This section records *new* tests on the next `base_dev` commit; **no exact-HEAD CI status is asserted before jobs finish**.
+
+| Domain | New scenario / exact test method | Adversarial input | Expected security outcome |
+|---|---|---|---|
+| ORGANIZATION | `OrganizationLocationQueryQualificationTest.tcrud03SameGlobalMemberDifferentLocationGrantsAndForeignIdDenied` | Global member in tenant A and B; writer A / reader-only B; same names; page 0/1; foreign location UUID | Per-tenant count, isolation on each page, foreign GET not found, write in B denied |
+| SALES | `SalesOrderQueryQualificationTest.tcrud03MixedMembershipSalesReadIsTenantBoundAndCannotBorrowPermission` | Global member A/B; SALES_ORDER_READ in A but not B; filtered/offset list | A pages/count only A orders; B read denied despite membership; null actor denied |
+| INVENTORY | `StockBalanceQueryQualificationTest.tcrud03SharedMemberInventoryReadCannotBorrowOtherTenantGrants` | Global member A/B; INVENTORY_STOCK_READ only A; foreign location/item UUID predicates; paging | B denied, foreign filters return zero; stock rows A-only |
+| FILES | `FilesR10bQualificationTest.tcrud03BinaryReadDoesNotWriteAnyBytesForWrongOwnerOrMissingPiiPermission` | Existing confidential CRM-owned clean file; foreign tenant + attachment UUID; null actor; CRM_PII_READ revoked | No bytes written to any output stream before authorization |
+
+### Existing tests re-used, not copied
+
+- `TenantRbacRevocationQualificationTest` — active command vs later revoke; earlier revoke vs command; global suspension; membership/tenant suspension; stale JPA membership/workspace.
+- `OrganizationLocationQueryQualificationTest.postgresLocationCreationFencesConcurrentPermissionRevocation`.
+- `SalesInventoryRbacQualificationTest.postgresSalesConfirmationFencesConcurrentPermissionRevocation`, `concurrentOrdersCannotOversellAndCrossTenantCannotCommand`, `finalSecGateRejectsMixedActorTenantAndMissingInventoryPermits`.
+- `InventoryReservationQualificationTest.tenantIsolationAndReservationEventImmutability`; `InventoryMovementQualificationTest.cannotReduceBelowReservedOrCrossTenantReference`, `concurrentSameKeyPostsExactlyOneMovement`.
+- `FilesR10bQualificationTest.wrongTenantAndRevokedPermissionNeverReadBinaryStream`, `authorizedPlaintextCustomerReadIsScopedAndImmediatelyRevoked`; live RustFS/ClamAV workflow.
+
+**Qualification distinction:** Existing cases cover selected command paths, not every possible foreign UUID in every method. Do not report all of TCRUD-03 as QUALIFIED until all entrypoint/SQL/test mappings are complete and the unmapped cells are closed.
+
+### Completion gate
+
+- H2 smoke; full isolated PostgreSQL integration; 200-account populated IAM; populated CRM migration; RustFS/ClamAV real infra on the **same exact commit**.
+- Verify all four new adversarial cases pass on both test DB profiles where supported, and PostgreSQL-only race tests are actually executed, not skipped.
+- If any workflow fails, report HOLD and repair in `base_dev`; previous commit GREEN is not inherited.
