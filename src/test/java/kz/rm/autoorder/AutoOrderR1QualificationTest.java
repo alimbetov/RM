@@ -29,6 +29,8 @@ class AutoOrderR1QualificationTest {
     @Autowired AuthenticatedBuyerOrders securedBuyerOrders;
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
+    @Autowired javax.sql.DataSource source;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired UserAccountRepository users;
     @Autowired OrganizationRepository orgs;
     @Autowired WorkspaceRepository workspaces;
@@ -377,4 +379,69 @@ class AutoOrderR1QualificationTest {
                 SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
                 """,Integer.class,store.tenantId())).isZero();
     }
+
+    @Test void sale08CrossTenantSkuMappingIsRejectedByCompositeForeignKey() {
+        Store own=store(),foreign=store();
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.store_offer SET catalog_item_id=?
+                WHERE tenant_id=? AND id=?
+                """,foreign.itemId(),own.tenantId(),own.offerId()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,UUID.class,own.tenantId(),own.offerId())).isEqualTo(own.itemId());
+    }
+
+    @Test void sale08PostgresConcurrentOfferPauseFencesCheckoutBeforeAnyIdentityCreation()
+            throws Exception {
+        try(var con=source.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    con.getMetaData().getDatabaseProductName().toLowerCase(
+                            java.util.Locale.ROOT).contains("postgresql"));
+        }
+        Store st=store();
+        String email="pause-race-"+UUID.randomUUID()+"@example.kz";
+        var locked=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var pause=pool.submit(()->new org.springframework.transaction.support.TransactionTemplate(
+                    transactionManager).execute(tx->{
+                jdbc.queryForObject("""
+                        SELECT catalog_item_id FROM crm.store_offer
+                        WHERE tenant_id=? AND id=? FOR UPDATE
+                        """,UUID.class,st.tenantId(),st.offerId());
+                locked.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Offer update not released");
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+                return jdbc.update("""
+                        UPDATE crm.store_offer SET state='HIDDEN'
+                        WHERE tenant_id=? AND id=?
+                        """,st.tenantId(),st.offerId());
+            }));
+            assertThat(locked.await(15,TimeUnit.SECONDS)).isTrue();
+            var checkoutAttempt=pool.submit(()->orders.checkout(
+                    st.slug(),email,"sale08-pause-race-001",
+                    List.of(new AutoOrderService.Line(st.offerId(),1))));
+            try {
+                assertThatThrownBy(()->checkoutAttempt.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {release.countDown();}
+            assertThat(pause.get(15,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThatThrownBy(()->checkoutAttempt.get(15,TimeUnit.SECONDS))
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
+                """,Integer.class,st.tenantId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_identity WHERE lookup_hmac=?
+                """,Integer.class,crypto.lookup(email))).isZero();
+    }
+
 }
