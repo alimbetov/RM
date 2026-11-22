@@ -135,9 +135,9 @@ public class GlobalAccountDeletionService {
         if(externalSubject!=null && !externalSubject.isBlank()) {
             jdbc.update("""
                     INSERT INTO public.iam_deletion_oidc_revocation_outbox
-                    (deletion_event_id,target_user_id,provider_subject_envelope,state,created_at)
-                    VALUES (?,?,?,'PENDING',?)
-                    """,deletionId,targetId,crypto.encryptOidcSubject(externalSubject),now);
+                    (deletion_event_id,target_user_id,provider_subject_envelope,state,created_at,next_attempt_at)
+                    VALUES (?,?,?,'PENDING',?,?)
+                    """,deletionId,targetId,crypto.encryptOidcSubject(externalSubject),now,now);
         }
     }
 
