@@ -756,10 +756,10 @@ class CrmBuyerLinkQualificationTest {
                 """,String.class,b);
         jdbc.execute("""
                 CREATE FUNCTION public.crm_r22e_injected_outbox_failure()
-                RETURNS trigger LANGUAGE plpgsql AS $
+                RETURNS trigger LANGUAGE plpgsql AS $fault$
                 BEGIN
                   RAISE EXCEPTION 'injected deletion outbox failure';
-                END; $
+                END; $fault$
                 """);
         jdbc.execute("""
                 CREATE TRIGGER trg_crm_r22e_injected_outbox_failure
