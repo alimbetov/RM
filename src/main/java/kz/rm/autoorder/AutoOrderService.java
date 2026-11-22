@@ -42,7 +42,13 @@ public class AutoOrderService {
         for(Line line:lines) {
             if(line==null||line.offerId()==null||line.quantity()<1||line.quantity()>1000)
                 throw new IllegalArgumentException("Invalid line");
-            basket.merge(line.offerId(),line.quantity(),Math::addExact);
+            // The per-line limit must also hold after duplicate offer IDs are merged.
+            // Reject before reading tenant data or creating any IAM/SALES side effects.
+            basket.merge(line.offerId(),line.quantity(),(current, added) -> {
+                int total=Math.addExact(current,added);
+                if(total>1000) throw new IllegalArgumentException("Aggregated offer quantity exceeds limit");
+                return total;
+            });
         }
         UUID tenant=jdbc.query("""
             SELECT tenant_id FROM crm.store_front WHERE slug=? AND state='PUBLISHED'
