@@ -1406,6 +1406,54 @@ class CrmR1aQualificationTest {
                 .getContent()).extracting(CustomerSummary::id)
                 .containsExactlyInAnyOrder(soon.id(),unclassified.id());
 
+        // CRM-01B — the exact same selected-tenant contract determines the card
+        // indicator, and all contract counts are computed on one as-of date.
+        var asOfFilter=new CustomerSearch(null,null,null,null,
+                null,null,null,asOf,null);
+        var projectionA=secureQueries.customers(actorA,a.tenantId(),asOfFilter,0,30)
+                .getContent().stream().collect(java.util.stream.Collectors.toMap(
+                        CustomerSummary::id,java.util.function.Function.identity()));
+        var soonSummary=projectionA.get(soon.id());
+        assertThat(soonSummary.categoryCode()).isEqualTo("SHARED");
+        assertThat(soonSummary.contractExpiry().contractId()).isEqualTo(soonContract.id());
+        assertThat(soonSummary.contractExpiry().daysRemaining()).isEqualTo(7L);
+        assertThat(soonSummary.contractExpiry().indicator())
+                .isEqualTo(CustomerContractExpiry.Indicator.CRITICAL);
+        assertThat(soonSummary.contractExpiry().activeContractCount()).isEqualTo(1L);
+        assertThat(soonSummary.contractExpiry().asOfDate()).isEqualTo(asOf);
+        assertThat(projectionA.get(expired.id()).contractExpiry().indicator())
+                .isEqualTo(CustomerContractExpiry.Indicator.EXPIRED);
+        assertThat(projectionA.get(expired.id()).contractExpiry().daysRemaining())
+                .isEqualTo(-1L);
+        assertThat(projectionA.get(expired.id()).contractExpiry().expiredContractCount())
+                .isEqualTo(1L);
+        assertThat(projectionA.get(later.id()).contractExpiry().indicator())
+                .isEqualTo(CustomerContractExpiry.Indicator.ACTIVE);
+        assertThat(projectionA.get(open.id()).contractExpiry().indicator())
+                .isEqualTo(CustomerContractExpiry.Indicator.OPEN_ENDED);
+        assertThat(projectionA.get(open.id()).contractExpiry().daysRemaining()).isNull();
+        assertThat(projectionA.get(unclassified.id()).categoryCode()).isNull();
+
+        var secondExpired=contractService.create(actorA,a.tenantId(),soon.id(),
+                "A-SECOND-EXPIRED",asOf.minusDays(10),asOf.minusDays(2),asOf);
+        contractService.changeStatus(actorA,a.tenantId(),secondExpired.id(),
+                CustomerContractEntity.Status.ACTIVE,secondExpired.rowVersion(),asOf);
+        var afterExpired=secureQueries.customers(actorA,a.tenantId(),asOfFilter,0,30)
+                .getContent().stream().filter(c->c.id().equals(soon.id()))
+                .findFirst().orElseThrow().contractExpiry();
+        assertThat(afterExpired.contractId()).isEqualTo(soonContract.id());
+        assertThat(afterExpired.indicator()).isEqualTo(CustomerContractExpiry.Indicator.CRITICAL);
+        assertThat(afterExpired.activeContractCount()).isEqualTo(1L);
+        assertThat(afterExpired.expiredContractCount()).isEqualTo(1L);
+        assertThat(secureQueries.customers(actorA,a.tenantId(),
+                new CustomerSearch(null,null,null,null),0,1)
+                .getContent().getFirst().contractExpiry()).isNull();
+        assertThat(secureQueries.customers(actorB,b.tenantId(),asOfFilter,0,30)
+                .getContent()).extracting(CustomerSummary::id).containsExactly(foreign.id());
+        assertThat(secureQueries.customers(actorB,b.tenantId(),asOfFilter,0,30)
+                .getContent().getFirst().contractExpiry().contractId())
+                .isEqualTo(foreignContract.id());
+
         var same=java.sql.Timestamp.from(Instant.parse("2026-01-05T12:00:00Z"));
         jdbc.update("UPDATE crm.customer SET created_at=? WHERE tenant_id=? AND id=?",
                 same,a.tenantId(),soon.id());

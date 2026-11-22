@@ -13,8 +13,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Internal bounded and tenant-scoped CRM read model. No transport controllers. */
@@ -87,14 +92,117 @@ class CrmSearchService {
         pageArgs.add(size);pageArgs.add((long)page*size);
         var rows=jdbc.query("""
                 SELECT c.id,c.customer_type,c.organization_label,c.region_zone_id,
-                       c.status,c.created_at,c.row_version
+                       c.status,c.created_at,c.row_version,cat.code
                 FROM crm.customer c
+                LEFT JOIN crm.customer_category cat
+                  ON cat.tenant_id=c.tenant_id AND cat.id=c.primary_category_id
                 """+predicate+"""
                  ORDER BY c.created_at DESC,c.id DESC LIMIT ? OFFSET ?
                 """,(rs,n)->new CustomerSummary(rs.getObject(1,UUID.class),
                     rs.getString(2),rs.getString(3),rs.getString(4),rs.getString(5),
-                    rs.getTimestamp(6).toInstant(),rs.getLong(7)),pageArgs.toArray());
-        return new PageImpl<>(rows,PageRequest.of(page,size),count==null?0:count);
+                    rs.getTimestamp(6).toInstant(),rs.getLong(7),rs.getString(8),null),pageArgs.toArray());
+        List<CustomerSummary> projected = f.asOfDate()==null || rows.isEmpty()
+                ? rows : enrichContractExpiry(tenant, f.asOfDate(), rows);
+        return new PageImpl<>(projected,PageRequest.of(page,size),count==null?0:count);
+    }
+
+
+    /**
+     * One bounded database round trip for all customers on the requested page.
+     * The rank represents the contract shown on the customer card, not an arbitrary
+     * expired agreement when a valid active contract also exists.
+     *
+     * No N+1 reads, plaintext person-name projection, or cross-tenant references.
+     * Contract events remain immutable; this is a calculated as-of view.
+     */
+    private List<CustomerSummary> enrichContractExpiry(UUID tenant, LocalDate asOf,
+                                                       List<CustomerSummary> rows) {
+        String placeholders=String.join(",", Collections.nCopies(rows.size(), "?"));
+        var args=new ArrayList<Object>();
+        args.add(java.sql.Date.valueOf(asOf));
+        args.add(tenant);
+        rows.forEach(row->args.add(row.id()));
+
+        String sql="""
+                WITH ranked AS (
+                    SELECT ct.customer_id,ct.id,ct.starts_on,ct.ends_on,ct.status,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY ct.customer_id
+                               ORDER BY
+                                 CASE
+                                   WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                        AND ct.ends_on>=d.as_of THEN 0
+                                   WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                        AND ct.ends_on IS NULL THEN 1
+                                   WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                        AND ct.ends_on<d.as_of THEN 2
+                                   WHEN ct.status='ACTIVE' AND ct.starts_on>d.as_of THEN 3
+                                   ELSE 4 END,
+                                 CASE WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                        AND ct.ends_on>=d.as_of THEN ct.ends_on END ASC NULLS LAST,
+                                 CASE WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                        AND ct.ends_on<d.as_of THEN ct.ends_on END DESC NULLS LAST,
+                                 CASE WHEN ct.status='ACTIVE' AND ct.starts_on>d.as_of
+                                        THEN ct.starts_on END ASC NULLS LAST,
+                                 ct.id ASC
+                           ) AS rank_no,
+                           SUM(CASE WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                  AND (ct.ends_on IS NULL OR ct.ends_on>=d.as_of)
+                                   THEN 1 ELSE 0 END) OVER (
+                                   PARTITION BY ct.customer_id) AS active_count,
+                           SUM(CASE WHEN ct.status='ACTIVE' AND ct.starts_on<=d.as_of
+                                  AND ct.ends_on<d.as_of
+                                   THEN 1 ELSE 0 END) OVER (
+                                   PARTITION BY ct.customer_id) AS expired_count
+                    FROM crm.customer_contract ct
+                    CROSS JOIN (SELECT CAST(? AS DATE) AS as_of) d
+                    WHERE ct.tenant_id=? AND ct.customer_id IN (
+                """+placeholders+"""
+                    )
+                )
+                SELECT customer_id,id,starts_on,ends_on,status,active_count,expired_count
+                FROM ranked WHERE rank_no=1
+                """;
+        Map<UUID,CustomerContractExpiry> byCustomer=new HashMap<>();
+        jdbc.query(sql,rs->{
+            UUID customer=rs.getObject("customer_id",UUID.class);
+            UUID contract=rs.getObject("id",UUID.class);
+            LocalDate start=rs.getDate("starts_on").toLocalDate();
+            var endValue=rs.getDate("ends_on");
+            LocalDate end=endValue==null?null:endValue.toLocalDate();
+            String status=rs.getString("status");
+            Long days=end==null?null:ChronoUnit.DAYS.between(asOf,end);
+            var indicator=expiryIndicator(status,start,end,asOf,days);
+            byCustomer.put(customer,new CustomerContractExpiry(contract,end,days,indicator,
+                    rs.getLong("active_count"),rs.getLong("expired_count"),asOf));
+        },args.toArray());
+        var enriched=new ArrayList<CustomerSummary>(rows.size());
+        for(CustomerSummary row:rows){
+            var projection=byCustomer.getOrDefault(row.id(),
+                    new CustomerContractExpiry(null,null,null,
+                            CustomerContractExpiry.Indicator.NO_CONTRACT,0,0,asOf));
+            enriched.add(new CustomerSummary(row.id(),row.type(),row.companyLabel(),
+                    row.regionZoneId(),row.status(),row.createdAt(),row.rowVersion(),
+                    row.categoryCode(),projection));
+        }
+        return enriched;
+    }
+
+    private static CustomerContractExpiry.Indicator expiryIndicator(
+            String status, LocalDate starts, LocalDate ends, LocalDate asOf, Long days) {
+        if(!"ACTIVE".equals(status))
+            return CustomerContractExpiry.Indicator.NO_ACTIVE_CONTRACT;
+        if(starts.isAfter(asOf))
+            return CustomerContractExpiry.Indicator.NOT_STARTED;
+        if(ends==null)
+            return CustomerContractExpiry.Indicator.OPEN_ENDED;
+        if(ends.isBefore(asOf))
+            return CustomerContractExpiry.Indicator.EXPIRED;
+        if(days<=7)
+            return CustomerContractExpiry.Indicator.CRITICAL;
+        if(days<=30)
+            return CustomerContractExpiry.Indicator.EXPIRING_SOON;
+        return CustomerContractExpiry.Indicator.ACTIVE;
     }
 
     @Transactional
