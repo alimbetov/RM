@@ -56,17 +56,35 @@ public class EmailIdentityCrypto {
     }
 
     public byte[] encrypt(String cleartext) {
+        return encryptWithContext(cleartext,"rm:iam:email:v1");
+    }
+
+    /** Separate AEAD domain for OIDC logout subjects; never email ciphertext. */
+    public byte[] encryptOidcSubject(String subject) {
+        if(subject==null || subject.isBlank())throw new IllegalArgumentException("OIDC subject required");
+        return encryptWithContext(subject,"rm:iam:oidc-subject:v1");
+    }
+
+    public String decryptOidcSubject(byte[] envelope) {
+        return decryptWithContext(envelope,"rm:iam:oidc-subject:v1");
+    }
+
+    private byte[] encryptWithContext(String cleartext,String context) {
         try {
             byte[] nonce=new byte[12];random.nextBytes(nonce);
             Cipher c=Cipher.getInstance("AES/GCM/NoPadding");
             c.init(Cipher.ENCRYPT_MODE,new SecretKeySpec(secret(encryptionB64),"AES"),new GCMParameterSpec(128,nonce));
-            c.updateAAD("rm:iam:email:v1".getBytes(StandardCharsets.UTF_8));
+            c.updateAAD(context.getBytes(StandardCharsets.UTF_8));
             byte[] encrypted=c.doFinal(cleartext.getBytes(StandardCharsets.UTF_8));
             return ByteBuffer.allocate(1+nonce.length+encrypted.length).put((byte)1).put(nonce).put(encrypted).array();
         } catch(Exception e){throw new IllegalStateException("Identity encryption unavailable",e);}
     }
 
     public String decrypt(byte[] encrypted) {
+        return decryptWithContext(encrypted,"rm:iam:email:v1");
+    }
+
+    private String decryptWithContext(byte[] encrypted,String context) {
         try {
             ByteBuffer b=ByteBuffer.wrap(encrypted);
             if(b.remaining()<30 || b.get()!=1)throw new IllegalArgumentException("Unknown identity envelope");
