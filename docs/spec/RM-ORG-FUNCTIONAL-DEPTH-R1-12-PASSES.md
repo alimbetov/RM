@@ -1,9 +1,9 @@
 
 # RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12 и 02/12. **Ветка:** base_dev.
+**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12 и 03/12. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
-**Статус:** ТЗ СФОРМИРОВАНО; РЕАЛИЗАЦИЯ НЕ НАЧАТА. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
+**Статус:** ТЗ СФОРМИРОВАНО; lifecycle ORGANIZATION НЕ РЕАЛИЗОВАН, смежные INVENTORY INV-Q1..Q3 уже реализованы/квалифицированы отдельно. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
 ## 1. Цель и границы
 
@@ -31,8 +31,8 @@
 
 **Реестр GAP:**
 - ORG-01 **P0:** нет явных переходов статуса.
-- ORG-02 **P0:** INVENTORY receive/correct меняет складские данные без ACTIVE/WAREHOUSE проверки.
-- ORG-03 **P0:** SALES confirm получает locationId, но не проверяет его status/type.
+- ORG-02 **P0 → частично закрыт с INV-Q1..Q3:** новые INVENTORY receive/correct уже используют StockEligibility ACTIVE WAREHOUSE; не квалифицированы гонки с ещё не реализованным deactivate и пропускная способность row lock.
+- ORG-03 **P0 → частично закрыт с INV-Q1..Q3:** reserve вызывается через StockEligibility ACTIVE WAREHOUSE и откатывает confirm при отказе; отдельная квалификация нового ORG lifecycle и fulfillment на legacy INACTIVE остаётся OPEN.
 - ORG-04 **P1:** отсутствие update(name/address/KATO).
 - ORG-05 **P1:** имеющийся rowVersion не используется как обязательное предусловие новых команд.
 - ORG-06 **P1:** % и _ в параметре LIKE интерпретируются как шаблон; требуется буквальный поиск. Это не доказанная SQL injection: значение параметризовано.
@@ -51,7 +51,7 @@
 |---|---|---|---|
 | 01 | Исходники + перекрёстный аудит | Карта функций, GAP, данное ТЗ | SPECIFIED |
 | 02 | Бизнес-сценарии | Пути администратора, кладовщика, продавца и отрицательные действия | SPECIFIED |
-| 03 | State machine | Политика складских зависимостей, переходы, ограничения | OPEN |
+| 03 | State machine | Политика складских зависимостей, переходы, ограничения | SPECIFIED |
 | 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | OPEN |
 | 05 | INVENTORY | Допуск активного склада для приёмки/коррекции/резерва | OPEN |
 | 06 | SALES | Подтверждение, повторы, отмена, отгрузка, порядок блокировок | OPEN |
@@ -84,14 +84,14 @@
 
 | Откуда → куда | Разрешение |
 |---|---|
-| ACTIVE → INACTIVE | Если нет on_hand > 0, reserved > 0, ACTIVE резервов или реально связанных незавершённых операций |
-| INACTIVE → ACTIVE | Workspace по-прежнему ACTIVE, КАТО допустим |
+| ACTIVE → INACTIVE | Разрешено при любом свободном onHand, если reserved=0 по всем SKU и нет ACTIVE reservations; полноценный row-lock fence |
+| INACTIVE → ACTIVE | Workspace ACTIVE; сохранённый KATO существует: прежний deprecated код не препятствует возврату склада с остатком, новое значение КАТО требует GEO eligible |
 | INACTIVE → CLOSED | Зависимости отсутствуют; исторические ссылки не удалять |
 | ACTIVE → CLOSED | Нет: предварительно деактивировать |
 | CLOSED → любое состояние | Нет, CLOSED — финальный |
 | Повтор текущего состояния | Только явно определённая no-op семантика, после permission/version check |
 
-**Консервативное решение на R1:** склад с ненулевыми остатками нельзя отключить/закрыть. Это соответствует ранее установленной строгой политике RM-SVC-R2 и защищает от «брошенного» запаса. INVENTORY transfer/stocktake ещё не готов; не обнулять остатки фиктивной коррекцией. Если требуется временная остановка склада с остатком, это отдельное согласование на проходе 03, с явным запретом всех новых операций и безопасным возвратом.
+**Решение DEC-ORG-03-A (проход 03):** склад с ненулевым свободным остатком **можно** временно деактивировать при reserved=0 и отсутствии ACTIVE reservations. Новые receive/correct/reserve/confirm запрещены до реактивации. **Закрыть** склад с onHand>0 нельзя: сначала выполнить законный вывод товара после реактивации (или будущий qualified transfer/stocktake). Запрещена фиктивная корректировка ради закрытия. Причины/SQL/гонки — в ревью прохода 03.
 
 ## 6. Перекрёстная согласованность и блокировки
 
@@ -120,7 +120,7 @@
 | ORG-Q02 | null actor, foreign tenant/location, отсутствие/отзыв READ/WRITE | Отказ до данных, нет раскрытия чужого объекта |
 | ORG-Q03 | edit name/address/KATO, invalid/type/tenant change | Только допустимые поля, rowVersion/updatedAt |
 | ORG-Q04 | Два edit с одним expectedVersion | Один commit, один STALE_VERSION; без ложного audit |
-| ORG-Q05 | onHand>0, reserved>0, ACTIVE reservation | Deactivate/close запрещены без частичной записи |
+| ORG-Q05 | onHand>0 при reserved=0 и отсутствии ACTIVE; отдельно reserved>0/ACTIVE reservation | Deactivate разрешён только в первом случае, close не разрешён при onHand>0; без частичной записи |
 | ORG-Q06 | ACTIVE→INACTIVE→ACTIVE; INACTIVE→CLOSED | Все допустимые переходы и закрытый финальный статус |
 | ORG-Q07 | Одновременно deactivate и receive/correct/confirm | Сериализация, нет записи на неактивном складе |
 | ORG-Q08 | INVENTORY/SALES с INACTIVE/CLOSED/BRANCH/foreign | Отказ до движения и изменения заказа |
@@ -159,7 +159,7 @@
 
 | Роль / объект | Действующая последовательность | Достроить минимально |
 |---|---|---|
-| Сотрудник склада / WAREHOUSE | IAM выдаёт grants → ORG.create → ORG.get/search → INVENTORY.receive/correct → SALES.confirm → reserve → fulfill/cancel | Идемпотентная нулевая SKU-позиция в INVENTORY, eligibility ACTIVE WAREHOUSE, edit/status/CAS, guard остатка/резервов |
+| Сотрудник склада / WAREHOUSE | IAM выдаёт grants → ORG.create → ORG.get/search → INVENTORY.receive/correct → SALES.confirm → reserve → fulfill/cancel | Первый RECEIPT теперь автоматически создаёт нулевую SKU-позицию через INVENTORY (INV-Q2); осталось edit/status/CAS и guard при закрытии |
 | Менеджер филиала / BRANCH | IAM grants → ORG.create → ORG.get/search | Редактирование, временная деактивация, повторная активация, закрытие; без локальных hardcoded IAM-ролей |
 | Сотрудник торговой точки / POINT_OF_SALE | ORG.create → ORG.get/search | Lifecycle локации; **не** приравнивать к настоящей кассе или интернет-магазину, потому что `store_front` tenant-scoped без location_id |
 
@@ -167,7 +167,7 @@
 
 | ID | Приоритет | Проверенное наблюдение | Обязательное решение |
 |---|---|---|---|
-| ORG-11 | **P0, dependency INVENTORY** | `InventoryMovementService.adjust` требует существующий `inv_stock_balance` и выдаёт «Stock position not initialized», а тесты insert stock position напрямую SQL | INVENTORY должен предоставить защищённую операцию `initializePosition` / create-zero-if-absent с tenant+item+location, idempotent contract и immutable boundary; E2E ORG не seed SQL |
+| ORG-11 | **RESOLVED for first RECEIPT by INV-Q2** | В исходном снимке 02/12 требовалась предварительная stock-row; в актуальном коде `InventoryMovementService.adjust` создаёт нулевую позицию атомарно после StockEligibility и idempotency fence | Не вводить новый `initializePosition`; добавить реальный ORG+INVENTORY service E2E без прямого stock INSERT |
 | ORG-12 | P2, separate STOREFRONT scope | `crm.store_front` связан с tenant, не location, а POS не привязан к offer | В R1 не обещать POS checkout/кассу; отдельное решение после ORGANIZATION |
 | ORG-13 | **P0, prerequisite IAM** | `PlatformTenantBootstrapService.provision` включает RBAC enforced для нового tenant, но не выдаёт функциональных прав; `TenantRoleService.assign` блокирует self-assignment | До create location провести обычное подтверждённое назначение staff нужных ORG_READ/WRITE без wildcard; не менять security ради обхода |
 | ORG-14 | **P1** | Нет типизированного location usage summary для команды close | Минимальный read-only INVENTORY blocker (onHand/reserved/active reservation), без деталей SKU и без нового ORG stock ledger |
@@ -178,15 +178,50 @@
 - **Cancel/release** — это cleanup существующего резерва, его нельзя запрещать только из-за legacy INACTIVE location, иначе возможны зависшие резервы; обязательны действующие права и корректная идемпотентность.
 - Успешно выполненная раньше операция movement с прежним requestKey может быть безопасно возвращена **без повторной записи** после CLOSED, но только после проверки актуального IAM, identity и полного payload. Новый requestKey при CLOSED отклоняется. Для реализации проверить lock order уже существующего request stripe.
 - Fulfill с ACTIVE reservation у INACTIVE/CLOSED указывает на нарушение инварианта; не делать новую negative movement. Terminal replay допускается без новых побочных эффектов.
-- Не менять `org_location.status` при попытке `deactivate`, если есть положительные остатки, забронированный товар или активный резерв. Исторические закрытые движения сохранять; не делать каскадную очистку.
+- По DEC-ORG-03-A `deactivate` разрешён с положительным **свободным** остатком, но запрещён при `reserved>0` или ACTIVE reservation; `close` требует `onHand=reserved=0` и отсутствие ACTIVE reservations. Историю сохранять без каскадной очистки.
 - `SALES` не содержит warehouse_id у заказа до confirm, поэтому «незавершённые PLACED orders на складе» сегодня не определены как связанная зависимость.
 - Новый location lock нужно вводить с учётом существующего `inv_movement_request_lock`, `sales_order FOR UPDATE`, `stock_balance FOR UPDATE` и `reservation`; слепое внедрение глобального lock первым запрещено до теста deadlock.
 - Для ORG административного `get/search` не раскрывать количество товара без `INVENTORY_STOCK_READ`. Команда close может получить ограниченный код блокировки без инвентарных сумм.
 
 ### 11.4 Изменение очереди реализации
 
-Уточнить `ORG-R1.1B`: помимо active warehouse admission, предусмотреть dependency `INVENTORY initializePosition` как **отдельную реализацию владельца INVENTORY**, а в приёмке ORGANIZATION запускать путь `создал склад → создал нулевую stock position → принял товар` без тестового прямого INSERT. Не писать таблицу `crm.inv_stock_balance` из ORGANIZATION.
+**Синхронизация с INV-Q1..Q3:** отдельно реализовывать `initializePosition` больше не нужно: первый trusted RECEIPT сам создаёт нулевой balance. Для `ORG-R1.1B` остаются переходы состояния с dependency guard, конкурентная проверка location locks и E2E «создал склад → первый RECEIVE → временно отключил с товаром». Не писать `crm.inv_stock_balance` из ORGANIZATION.
 
 **Дополнительные приёмочные сценарии:** `ORG-BJ01..ORG-BJ12` в подробном ревью 02/12, включая create/edit/close BRANCH, lifecycle POS без побочных эффектов на STOREFRONT, исторический idempotent retry, concurrent deactivate-vs-receive/confirm, onboarding с реальным IAM grant.
 
-**Граница прохода 03/12:** окончательно утвердить матрицу status transitions, strict SQL dependency checks и lock-order; для R1 оставить консервативный запрет деактивации склада с положительным stock до отдельного решения. **Домен в целом по-прежнему 1/5; runtime не менялся.**
+**Историческая граница 02/12 заменена решением прохода 03:** INACTIVE разрешён при свободном stock, close требует zero stock; SQL и lock-order описаны в новом ревью. **ORGANIZATION 1/5; runtime его lifecycle не менялся.**
+
+
+---
+
+## 12. Дополнение после прохода 03/12 — State Machine & Dependency Integrity
+
+**Развёрнутое ревью:** [RM-ORG-FUNC-R1-P03 — переходы, ограничения, SQL и блокировки](../reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS03-2026-11-22.md).
+**Source runtime:** `1cc19715e82551ec22dd451427ea34b2a8b0c86d`. **Стадия:** ANALYZED / CONTRACT SPECIFIED, **НЕ IMPLEMENTED** в ORGANIZATION.
+
+### DEC-ORG-03-A — утверждённое проектное правило R1
+
+`ACTIVE → INACTIVE` **разрешить** с `on_hand > 0` (склад физически хранит товар), если `reserved=0` на всех SKU и **нет `inv_stock_reservation.state='ACTIVE'`**. Пауза исключает **новые** receipt/correct/reserve/confirm/fulfill, но сохраняет stock, историю, безопасные read-only request-key replays и cleanup release/cancel по фактическому состоянию заказа.
+
+`INACTIVE → CLOSED` **только** при `on_hand=reserved=0` на всех SKU и без ACTIVE reservation. `CLOSED` терминален, нет физического удаления stock/ledger/order истории. `ACTIVE → CLOSED` запрещён. Same-state retry при актуальном `expectedVersion` — no-op, без дополнительного события; stale version всегда конфликт.
+
+**Особое исключение GEO:** устаревший, но уже сохранённый в `org_location.kato_code` справочный код не должен безвозвратно блокировать реактивацию склада с товаром. Повторная активация допускает **неизменённое существующее FK-значение** KATO, даже если впоследствии `is_deleted=TRUE`; любое **новое** KATO-значение при update обязано пройти `KatoLocationPolicy.requireOrganizationLocationEligible`. Не разрешать физическое перемещение склада через «исправление KATO», если склад имеет историческую inventory-активность.
+
+### Уточнение по source-level gaps
+
+- Ранее зафиксированный ORG-11 («нет возможности первой приёмки») закрыт **кодом INVENTORY INV-Q2**; в актуальном `InventoryMovementService.adjust` первый RECEIPT сам создаёт `inv_stock_balance`. `StockEligibility` уже проверяет ACTIVE WAREHOUSE и PRODUCT для новых операций, а `InventoryReservationService.reserve` подтверждает повтор старого резерва без нового side effect. Не дублировать это.
+- `StockEligibility` сейчас использует `SELECT ... FOR UPDATE` по `org_location` даже для проверок ACTIVE, последовательно блокируя операции разных SKU на одном складе. В рамках 03 это P1 PERFORMANCE QUALIFICATION GAP, **не** доказанный провал SLA. После корректностных PG tests рассмотреть `FOR SHARE` в PostgreSQL, оставив H2-совместимый fallback.
+- `InventoryReservationService.transition` должен сохранять cancel/release cleanup и terminal replay; дополнительный guard для **новой** fulfillment на legacy INACTIVE location нужен с аккуратным соблюдением `order → location → stock` lock-order.
+- Для нового ORG lifecycle реализовать небольшой типизированный `InventoryLocationUsagePort` только по tenant/location с триадой `hasOnHand / hasReservedBalance / hasActiveReservation`. Не вводить третий stock service и не выводить SKU/quantity через `ORG_READ`.
+
+### PostgreSQL acceptance
+
+**Деактивация:** `location FOR UPDATE → EXISTS(reserved>0) → EXISTS(active reservations) → JPA status/CAS → audit → COMMIT`. Под row lock все новые RECEIPT/reserve обязаны брать совместимую блокировку той же location (существующий `StockEligibility` уже берёт эксклюзивную, но нуждается в deadlock/throughput проверке).
+
+**Закрытие:** добавить `EXISTS(onHand>0)`, остальные guards те же. Все SQL учитывают tenant и location, не опрашивают всю историю/все заказы. `PLACED` sales_order не содержит `location_id` — не имитировать привязку к складу до confirm.
+
+**Тесты:** `P03-Q01…P03-Q14` в ревью (пауза с stock, с reserve, несогласованность, закрытие, deprecated KATO, optimistic conflicts, deactivate-vs-receive/confirm, cleanup/idempotent replay, PG lock wait), совместно с `InventoryQ123QualificationTest` и существующими SALES/ORG/GEO регрессиями. Не выставлять P03 тестам GREEN без запуска на точном runtime SHA.
+
+**Масштаб:** существующие типы/статусы/JPA/DDL сохраняются. Минимальная доработка — сервисные state methods, shared row lock, inventory usage read port, атомарный audit и тесты. Не создавать новые микросервисы/дополнительные состояния/саги.
+
+**Следующий проход 04/12:** точный patch-контракт name/address/KATO, неизменяемость tenant/type, CAS и оптимистические обновления с подтверждением PostgreSQL. Приоритет завершения ORGANIZATION сохраняется.
