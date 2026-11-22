@@ -32,8 +32,42 @@ public class AutoOrderService {
     /** Safe to expose only after transport-level anti-abuse checks and authentication are implemented. */
     public record CheckoutResult(OrderReceipt order){}
 
+    /**
+     * QR-03 price acknowledgement is a CHECK, never an amount override.
+     * The current store/offer/PRODUCT/QR state and authoritative unit price
+     * are compared under the existing checkout's SQL row locks.
+     */
+    public record QrPriceAcknowledgement(String publicRef,UUID offerId,
+                                         long offerRowVersion,
+                                         BigDecimal acceptedUnitPrice,String currency) {}
+
     @Transactional
-    public CheckoutResult checkout(String slug, String email, String idempotencyKey, List<Line> lines) {
+    public CheckoutResult checkout(String slug,String email,String idempotencyKey,List<Line> lines) {
+        return checkoutInternal(slug,email,idempotencyKey,lines,null);
+    }
+
+    @Transactional
+    public CheckoutResult checkoutPublishedQr(String slug,String email,String idempotencyKey,
+                                               Line line,QrPriceAcknowledgement acknowledged) {
+        if(line==null||acknowledged==null||acknowledged.offerId()==null
+                ||!acknowledged.offerId().equals(line.offerId())
+                ||acknowledged.offerRowVersion()<0
+                ||acknowledged.publicRef()==null
+                ||!acknowledged.publicRef().matches("[A-Za-z0-9_-]{32}")
+                ||acknowledged.acceptedUnitPrice()==null
+                ||acknowledged.acceptedUnitPrice().signum()<0
+                ||acknowledged.acceptedUnitPrice().scale()>4
+                ||acknowledged.acceptedUnitPrice().precision()
+                        -acknowledged.acceptedUnitPrice().scale()>15
+                ||acknowledged.currency()==null
+                ||!acknowledged.currency().matches("[A-Z]{3}"))
+            throw new IllegalArgumentException("QR_CHECKOUT_INVALID_ACKNOWLEDGEMENT");
+        return checkoutInternal(slug,email,idempotencyKey,List.of(line),acknowledged);
+    }
+
+    private CheckoutResult checkoutInternal(String slug,String email,
+                                            String idempotencyKey,List<Line> lines,
+                                            QrPriceAcknowledgement acknowledged) {
         String normalized=emailIdentities.normalize(email);
         if(slug==null||slug.isBlank()||idempotencyKey==null || !idempotencyKey.matches("[A-Za-z0-9_-]{8,100}")
                 ||lines==null||lines.isEmpty()||lines.size()>100)
@@ -54,8 +88,16 @@ public class AutoOrderService {
             SELECT tenant_id FROM crm.store_front WHERE slug=?
             """,rs->{if(!rs.next())throw new IllegalArgumentException("Store not accepting orders");
                 return rs.getObject(1,UUID.class);},slug);
+        // Legacy email-first checkout's fingerprint is unchanged. QR mode gets
+        // an operation-aware suffix, so the shared seller checkout receipt cannot
+        // be replayed across QR/non-QR modes with a misleading result.
+        String qrIntent=acknowledged==null?"":"|QR_LIST_V1|"+acknowledged.publicRef()
+                +"|"+acknowledged.offerId()+"|"+acknowledged.offerRowVersion()
+                +"|"+acknowledged.acceptedUnitPrice().stripTrailingZeros().toPlainString()
+                +"|"+acknowledged.currency();
         byte[] requestHash=digest(normalized+"|"+basket.entrySet().stream()
-                .map(e->e.getKey()+":"+e.getValue()).collect(Collectors.joining(",")));
+                .map(e->e.getKey()+":"+e.getValue()).collect(Collectors.joining(","))
+                +qrIntent);
         // All competing transactions for a seller/idempotency key serialize here.
         // Always acquire checkout stripe BEFORE the global email stripe.
         lockStripe("crm.sales_checkout_lock", tenant + ":" + idempotencyKey);
@@ -106,6 +148,29 @@ public class AutoOrderService {
         String currency=offers.getFirst().currency();
         if(offers.stream().anyMatch(o->!currency.equals(o.currency())))
             throw new IllegalArgumentException("Mixed currencies not supported");
+        if(acknowledged!=null) {
+            // The storefront/offer rows are already locked. A QR revoke or a
+            // seller price update MUST wait for this checkout, or commit before
+            // this check and cause a fail-closed rejection.
+            if(offers.size()!=1||!offers.getFirst().offerId().equals(acknowledged.offerId()))
+                throw new IllegalArgumentException("QR_CHECKOUT_SINGLE_PRODUCT_ONLY");
+            Long version=jdbc.queryForObject("""
+                    SELECT row_version FROM crm.store_offer
+                    WHERE tenant_id=? AND id=?
+                    """,Long.class,tenant,acknowledged.offerId());
+            if(version==null||version!=acknowledged.offerRowVersion()
+                    ||offers.getFirst().unitPrice().compareTo(
+                            acknowledged.acceptedUnitPrice())!=0
+                    ||!offers.getFirst().currency().equals(acknowledged.currency()))
+                throw new IllegalStateException("PRICE_RECONFIRM_REQUIRED");
+            Integer active=jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.store_offer_qr_ref
+                    WHERE tenant_id=? AND offer_id=? AND public_ref=?
+                      AND state='ACTIVE' AND active_offer_id=offer_id
+                    """,Integer.class,tenant,acknowledged.offerId(),acknowledged.publicRef());
+            if(active==null||active!=1)
+                throw new IllegalStateException("QR_UNAVAILABLE");
+        }
         BigDecimal total=offers.stream().map(o->o.unitPrice().multiply(BigDecimal.valueOf(o.quantity())))
                 .reduce(BigDecimal.ZERO,BigDecimal::add);
         // IAM alone owns global email deduplication and pending account provisioning.
