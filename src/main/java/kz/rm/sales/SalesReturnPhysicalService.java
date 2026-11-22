@@ -31,10 +31,13 @@ public class SalesReturnPhysicalService {
     private final TenantAuthorization auth;
     private final WarehouseStaffScopeService scopes;
     private final ReturnInventoryPostingPort inventory;
+    private final SalesReturnReceptionProofService proofs;
 
     public SalesReturnPhysicalService(JdbcTemplate jdbc,TenantAuthorization auth,
-                       WarehouseStaffScopeService scopes,ReturnInventoryPostingPort inventory) {
+                       WarehouseStaffScopeService scopes,ReturnInventoryPostingPort inventory,
+                       SalesReturnReceptionProofService proofs) {
         this.jdbc=jdbc;this.auth=auth;this.scopes=scopes;this.inventory=inventory;
+        this.proofs=proofs;
     }
 
     @Transactional
@@ -44,6 +47,8 @@ public class SalesReturnPhysicalService {
                 DomainPermission.SALES_RETURN_RECEIVE);
         Claim c=lock(tenant,returnId);
         scopes.requireAssigned(employee,tenant,warehouse);
+        String proofDigest=SalesReturnReceptionProofService.digest(
+                tenant,warehouse,returnId,evidence);
         Receipt prior=jdbc.query("""
                 SELECT receipt_id,actor_user_id,warehouse_id,request_key,evidence_ref
                 FROM crm.sales_return_reception WHERE tenant_id=? AND return_id=?
@@ -52,7 +57,7 @@ public class SalesReturnPhysicalService {
                     rs.getString(4),rs.getString(5)):null,tenant,returnId);
         if(prior!=null){
             if(!prior.actor().equals(employee)||!prior.warehouse().equals(warehouse)
-               ||!prior.key().equals(key)||!prior.evidence().equals(evidence)
+               ||!prior.key().equals(key)||!prior.evidence().equals(proofDigest)
                ||version!=2)
                 throw new IllegalStateException("RETURN_RECEPTION_REPLAY_CONFLICT");
             return new Result(returnId,"RECEIVED",4,prior.id());
@@ -60,6 +65,7 @@ public class SalesReturnPhysicalService {
         if(c.version()!=version)throw new IllegalStateException("RETURN_VERSION_CONFLICT");
         if(!SalesReturnState.APPROVED.name().equals(c.state()))
             throw new IllegalStateException("RETURN_NOT_APPROVED");
+        proofs.consume(tenant,warehouse,returnId,evidence);
         // Physical receipt is not stock admission. Both intermediate state
         // transitions are durable and atomic with the immutable receipt.
         update(tenant,returnId,"APPROVED","AWAITING_RECEIPT",version);
@@ -73,7 +79,7 @@ public class SalesReturnPhysicalService {
                   (tenant_id,return_id,receipt_id,warehouse_id,actor_user_id,
                    evidence_ref,request_key,happened_at)
                 VALUES(?,?,?,?,?,?,?,?)
-                """,tenant,returnId,receiptId,warehouse,employee,evidence,key,
+                """,tenant,returnId,receiptId,warehouse,employee,proofDigest,key,
                 Timestamp.from(Instant.now()));
         return new Result(returnId,"RECEIVED",version+2,receiptId);
     }
