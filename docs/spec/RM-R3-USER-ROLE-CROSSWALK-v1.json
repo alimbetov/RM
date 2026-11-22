@@ -1264,8 +1264,12 @@
       ],
       "permissionMappingStatus": "REVIEW_REQUIRED",
       "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
-      "canonicalProof": null,
-      "proofStatus": "MISSING_PROOF",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryReservationQualificationTest",
+        "test": "reservationReleaseAndIdempotentReplay"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [
         "UR-R32-SALES-COMMAND"
       ],
@@ -1650,8 +1654,12 @@
       ],
       "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
       "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
-      "canonicalProof": null,
-      "proofStatus": "MISSING_PROOF",
+      "canonicalProof": {
+        "artifact": "rustfs-real-infra-e2e-surefire",
+        "suite": "RustFsRealClamAvE2ETest",
+        "test": "realClamdRespondsCleanInfectedAndFailClosedForUnavailableEndpoint"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [],
       "userRoleCaseStatus": "NOT_RUN",
       "negativeDimensions": [
@@ -1834,8 +1842,12 @@
       ],
       "permissionMappingStatus": "REVIEW_REQUIRED",
       "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
-      "canonicalProof": null,
-      "proofStatus": "MISSING_PROOF",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "OrganizationLocationQueryQualificationTest",
+        "test": "paginationAndFiltersUseTenantBoundary"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [],
       "userRoleCaseStatus": "NOT_RUN",
       "negativeDimensions": [
@@ -1972,8 +1984,12 @@
       "requiredPermissionsAllOf": [],
       "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
       "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
-      "canonicalProof": null,
-      "proofStatus": "MISSING_PROOF",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KmsPersistedRoundTripTest",
+        "test": "persistedEnvelopeRestoresUsingFreshCryptoInstance"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [],
       "userRoleCaseStatus": "NOT_RUN",
       "negativeDimensions": [
@@ -2032,8 +2048,12 @@
       "requiredPermissionsAllOf": [],
       "permissionMappingStatus": "NON_TENANT_PERMISSION_REVIEW",
       "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
-      "canonicalProof": null,
-      "proofStatus": "MISSING_PROOF",
+      "canonicalProof": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KmsDeploymentGuardTest",
+        "test": "urR34DeploymentConfigurationAcceptsOnlySafeImmutableKeyModes"
+      },
+      "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [],
       "userRoleCaseStatus": "NOT_RUN",
       "negativeDimensions": [
