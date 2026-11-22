@@ -213,6 +213,46 @@ class StorefrontManagementQualificationTest {
                 .isEqualTo(StorefrontOfferService.State.DRAFT);
     }
 
+    @Test void pass09RevocationIsEffectiveAcrossBothOfferEntryPoints() {
+        var t=fixture();
+        var owner=verified(t.owner());
+        var seller=verified(t.staff());
+        var role=roles.createRole(owner,t.tenant(),
+                "SEC_"+UUID.randomUUID().toString().replace("-","").substring(0,14).toUpperCase(),
+                "PASS09 revocable storefront role");
+        roles.grant(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.grant(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        roles.assign(owner,t.tenant(),t.staff(),role.id());
+        roles.enable(owner,t.tenant());
+        var draftStore=storefronts.createDraft(seller,t.tenant(),"shop-"+UUID.randomUUID());
+        storefronts.publish(seller,t.tenant(),draftStore.id(),0);
+        UUID sku=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,t.tenant(),sku,"SEC-"+UUID.randomUUID());
+        var offer=offers.createDraft(seller,t.tenant(),sku,"Protected",
+                java.math.BigDecimal.TEN,"KZT");
+        var published=offers.publish(seller,t.tenant(),offer.id(),0);
+        var paused=offers.pause(seller,t.tenant(),offer.id(),published.rowVersion());
+        roles.revoke(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        assertThatThrownBy(()->offers.publish(seller,t.tenant(),offer.id(),paused.rowVersion()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->storefronts.pause(seller,t.tenant(),draftStore.id(),1))
+                .isInstanceOf(SecurityException.class);
+        assertThat(offers.get(seller,t.tenant(),offer.id()).state())
+                .isEqualTo(StorefrontOfferService.State.PAUSED);
+        roles.revoke(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        assertThatThrownBy(()->offers.get(seller,t.tenant(),offer.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->offers.updatePrice(seller,t.tenant(),offer.id(),
+                "Protected",new java.math.BigDecimal("20"),"KZT",paused.rowVersion()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),offer.id())).isEqualTo(paused.rowVersion());
+    }
+
     @Test void managementAndPublicationPermissionsAreIndependent() {
         var t = fixture();
         grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE);
