@@ -12,6 +12,8 @@ import zipfile
 from io import BytesIO
 import xml.etree.ElementTree as ET
 
+from rm_r3_functional_coverage import assess
+
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path("rm-exact-sha-manifest.json")
 REQUIRED = {
@@ -24,7 +26,15 @@ REQUIRED = {
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
     "RM Domain Security and PostgreSQL Qualification":
-        ("CommercialCoreE2EQualificationTest", "AutoOrderR1QualificationTest"),
+        ("CommercialCoreE2EQualificationTest", "AutoOrderR1QualificationTest",
+         "TenantRbacQualificationTest", "TenantRbacRevocationQualificationTest",
+         "CrmR1aQualificationTest", "CrmInteractionQualificationTest",
+         "CatalogQualificationTest", "SellerOfferQualificationTest",
+         "StorefrontManagementQualificationTest", "InventoryMovementQualificationTest",
+         "InventoryTransferStocktakeQualificationTest", "FilesR10bQualificationTest",
+         "OrganizationLocationLifecycleQualificationTest", "KatoTerritoryQualificationTest",
+         "KmsFencedJobQualificationTest", "AuditRetentionQualificationTest",
+         "SalesOrderQueryQualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification":
         ("InventoryMovementQualificationTest",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification":
@@ -93,6 +103,7 @@ def verify():
         "algorithm": "sha256:path-and-content",
         "sha256": digest.hexdigest(), "fileCount": len(migrations)}
     total = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+    passed_cases = {}  # strictly validated PostgreSQL artifact cases
     for gate in gates:
         name = gate.get("name")
         if gate.get("sha") != sha or gate.get("status") != "completed" or gate.get("conclusion") != "success":
@@ -160,6 +171,9 @@ def verify():
                     problems.append(f"{name}: {artifact_name} empty/failing tests")
                 if counts["skipped"] > counts["tests"]:
                     problems.append(f"{name}: {artifact_name} invalid skip count")
+                if not missing_cases and counts["tests"] > 0 and not (
+                        counts["failures"] or counts["errors"]) and counts["skipped"] <= counts["tests"]:
+                    passed_cases[artifact_name] = executed_cases
                 gate["verifiedArtifacts"].append({
                     "name": artifact_name, "id": artifact["id"], "sha256": hashlib.sha256(data).hexdigest(),
                     "surefire": counts, "skippedTests": skipped_cases,
@@ -174,6 +188,17 @@ def verify():
                 problems.append(f"{name}: mandatory suite {suite} missing or entirely skipped")
         gate["suites"] = sorted(discovered_suites)
     manifest["testCounts"] = total
+    try:
+        result = assess(ROOT, passed_cases, sha, admission_pass=not problems)
+        manifest["functionalCoverage"] = {
+            "json": "rm-r3-functional-coverage.json",
+            "markdown": "rm-r3-functional-coverage.md",
+            "catalogueSha256": result["catalogueSha256"],
+            "summary": result["summary"],
+        }
+    except (ValueError, KeyError, OSError, TypeError) as exc:
+        problems.append(f"RM-R3 catalogue/evidence qualification failed: {type(exc).__name__}: {exc}")
+        manifest["functionalCoverage"] = {"status": "FAILED"}
     manifest["evidenceErrors"] = problems
     manifest["qa01bGate"] = "PASS" if not problems else "FAIL"
     # A passing QA evidence gate is still NOT public security/production admission.

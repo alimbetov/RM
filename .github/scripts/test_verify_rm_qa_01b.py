@@ -50,6 +50,8 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                 else:
                     for suite in gate.SUITES.get(workflow, ()):
                         suite_cases[suite] = ["qualified"]
+                for suite in gate.SUITES.get(workflow, ()):
+                    suite_cases.setdefault(suite, ["qualified"])
                 self.artifact_bytes[artifact_id] = self.make_zip(suite_cases)
                 group["artifacts"].append({"name": artifact, "id": artifact_id})
                 artifact_id += 1
@@ -61,6 +63,8 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         self.patches = [
             mock.patch.object(gate, "ROOT", self.root),
             mock.patch.object(gate, "MANIFEST", self.manifest_path),
+            mock.patch.object(gate, "assess", return_value={
+                "catalogueSha256": "self-test", "summary": {"domains": 16}}),
             mock.patch.object(gate, "api", side_effect=self.fake_api),
             mock.patch.dict(os.environ, {
                 "GITHUB_SHA": "f" * 40, "GITHUB_REPOSITORY": "alimbetov/RM",

@@ -18,6 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Checkout exact SHA before generating evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - name: Aggregate mandatory results for the current base_dev SHA
         id: qualify
         uses: actions/github-script@v7
@@ -116,23 +120,21 @@ jobs:
               core.setFailed('RM-QA-01B: missing/failed required jobs or artifacts at exact SHA');
             else
               core.info('Exact-SHA workflow gate PASS; full qualification remains HOLD pending Surefire counts and migration fingerprints');
-      - name: Checkout exact SHA for the evidence verifier
-        if: always()
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
       - name: Self-test fail-closed qualification verifier
         if: steps.qualify.outcome == 'success'
-        run: python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_qa_01b.py' -v
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
       - name: Verify Surefire XML, artifact provenance and Liquibase fingerprint
         if: steps.qualify.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/verify_rm_qa_01b.py
-      - name: Publish immutable manifest evidence
+      - name: Publish immutable manifest and per-domain coverage evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rm-exact-sha-qualification-manifest
-          path: rm-exact-sha-manifest.json
-          if-no-files-found: warn
+          path: |
+            rm-exact-sha-manifest.json
+            rm-r3-functional-coverage.json
+            rm-r3-functional-coverage.md
+          if-no-files-found: error

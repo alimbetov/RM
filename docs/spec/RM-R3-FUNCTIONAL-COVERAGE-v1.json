@@ -1,0 +1,793 @@
+{
+  "schema": "RM-R3-FUNCTIONAL-COVERAGE/v1",
+  "strategy": "RM-STRATEGY-R3",
+  "scope": "Curated first-wave R3 requirements, not exhaustive product specification",
+  "evidencePolicy": "Verified only when exact-SHA PostgreSQL Surefire case passed and global RM-QA-01B admission succeeded",
+  "domains": [
+    {
+      "id": "IAM_RBAC",
+      "name": "IAM / RBAC",
+      "requirements": [
+        {
+          "id": "IAM-01",
+          "title": "Tenant roles and explicit permissions",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "TenantRbacQualificationTest",
+            "test": "functionalRoleIsIsolatedAndActivatedOnlyAfterApproval"
+          }
+        },
+        {
+          "id": "IAM-02",
+          "title": "Immediate permission revocation with command fencing",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/iam/TenantAuthorization.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "TenantRbacRevocationQualificationTest",
+            "test": "commandCannotProceedUntilEarlierRevocationCommits"
+          }
+        },
+        {
+          "id": "IAM-03",
+          "title": "Email registration and single-use proof",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/iam/EmailIdentityService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "IamInitialEmailRegistrationQualificationTest",
+            "test": "firstRegistrationCreatesUnverifiedEncryptedEmailAndQueuesOneChallenge"
+          }
+        },
+        {
+          "id": "IAM-04",
+          "title": "Safe change of email after independent verification",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/iam/EmailIdentityService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "IamEmailChangeQualificationTest",
+            "test": "oldEmailRemainsCurrentUntilFreshNewProofAndOriginalIdentityIsImmutable"
+          }
+        },
+        {
+          "id": "IAM-05",
+          "title": "Synthetic populated PII migration and seal checks",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/iam/IamPiiMigrationQualificationService.java",
+          "proof": {
+            "artifact": "iam-pii-populated-pg-surefire",
+            "suite": "IamPiiPopulatedDatabaseQualificationTest",
+            "test": "twoHundredPopulatedAccountsMigrateInCommittedBatchesWithoutPlaintext"
+          }
+        },
+        {
+          "id": "IAM-06",
+          "title": "Real issuer/JWKS session onboarding and external email delivery",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "CRM_CORE",
+      "name": "CRM Core",
+      "requirements": [
+        {
+          "id": "CRM-01",
+          "title": "Tenant-safe customer and contact access",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/AuthenticatedCrmQueries.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmR1aQualificationTest",
+            "test": "tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped"
+          }
+        },
+        {
+          "id": "CRM-02",
+          "title": "Encrypted customer/person PII",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/CrmCustomerService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmR1aQualificationTest",
+            "test": "personAndContactSecretsStayEncryptedAndReloadAcrossInstance"
+          }
+        },
+        {
+          "id": "CRM-03",
+          "title": "Consent opt-in and revocation",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/CrmCustomerService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmR1aQualificationTest",
+            "test": "consentIsOptInAndRevocationWins"
+          }
+        },
+        {
+          "id": "CRM-04",
+          "title": "Contract revision and customer archive guards",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/CrmContractService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmR1aQualificationTest",
+            "test": "crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+          }
+        },
+        {
+          "id": "CRM-05",
+          "title": "Bounded customer search and privacy",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/CrmSearchService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmR1aQualificationTest",
+            "test": "customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized"
+          }
+        },
+        {
+          "id": "CRM-06",
+          "title": "Qualified staff-facing complete CRM funnel",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "CRM_INTERACTION",
+      "name": "CRM Interaction",
+      "requirements": [
+        {
+          "id": "INT-01",
+          "title": "Interaction lifecycle, assignee and next action",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmInteractionQualificationTest",
+            "test": "interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+          }
+        },
+        {
+          "id": "INT-02",
+          "title": "Immutable interaction events with tenant-qualified ownership",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CrmInteractionQualificationTest",
+            "test": "postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified"
+          }
+        },
+        {
+          "id": "INT-03",
+          "title": "Purpose-scoped encrypted NOTE body and communication outcome",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "INT-04",
+          "title": "Task creation and completion through TASKS ownership",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "CATALOG",
+      "name": "CATALOG",
+      "requirements": [
+        {
+          "id": "CAT-01",
+          "title": "Tenant SKU, product draft and publication",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CatalogQualificationTest",
+            "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+          }
+        },
+        {
+          "id": "CAT-02",
+          "title": "Price revision immutable audit",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CatalogQualificationTest",
+            "test": "postgresCatalogPriceAndAuditAreAppendOnly"
+          }
+        },
+        {
+          "id": "CAT-03",
+          "title": "Archive guards against stock/offer commitments",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "publishedOfferAndOpenStocktakePreventUnsafeArchive"
+          }
+        },
+        {
+          "id": "CAT-04",
+          "title": "Bulk catalog migration with reconciliation report",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "STOREFRONT",
+      "name": "STOREFRONT",
+      "requirements": [
+        {
+          "id": "STO-01",
+          "title": "Tenant storefront draft/publication/pause CAS",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+          }
+        },
+        {
+          "id": "STO-02",
+          "title": "Published SKU offer price and state lifecycle",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "proof": {
+            "artifact": "sales-084-populated-postgresql",
+            "suite": "SellerOfferQualificationTest",
+            "test": "draftPublicationPauseResumeAndCas"
+          }
+        },
+        {
+          "id": "STO-03",
+          "title": "Canonical price audit and no-op CAS",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/storefront/SellerOfferService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "SellerOfferQualificationTest",
+            "test": "r10PriceHistoryIsImmutableAndNoOpOrStaleCasCannotAppend"
+          }
+        },
+        {
+          "id": "STO-04",
+          "title": "Cross-service permission and suspension fences",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "SellerOfferQualificationTest",
+            "test": "postgresW1SuspensionAndCheckoutSerialize"
+          }
+        },
+        {
+          "id": "STO-05",
+          "title": "Ready-to-use seller storefront management UI",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "SALES_AUTOORDER",
+      "name": "SALES / AutoOrder",
+      "requirements": [
+        {
+          "id": "SAL-01",
+          "title": "Idempotent checkout and proof boundaries",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "AutoOrderR1QualificationTest",
+            "test": "retryIsIdempotentAndChangesAreRejected"
+          }
+        },
+        {
+          "id": "SAL-02",
+          "title": "Immutable accepted SKU and price snapshot",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "AutoOrderR1QualificationTest",
+            "test": "sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice"
+          }
+        },
+        {
+          "id": "SAL-03",
+          "title": "Order confirm / inventory reserve / fulfillment",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+          }
+        },
+        {
+          "id": "SAL-04",
+          "title": "Tenant-scoped seller detail and order history",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/sales/SalesOrderQueryService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "SalesOrderQueryQualificationTest",
+            "test": "r10SellerDetailAndStatusHistoryAreTenantBoundAndLimited"
+          }
+        },
+        {
+          "id": "SAL-05",
+          "title": "Buyer identity safe order reads",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/autoorder/AuthenticatedBuyerOrders.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "AutoOrderR1QualificationTest",
+            "test": "tcrud04BuyerOrdersCannotBeReadBySupplyingAnotherUsersUuid"
+          }
+        },
+        {
+          "id": "SAL-06",
+          "title": "Full real OIDC buyer/seller browser E2E",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "SAL-07",
+          "title": "Invoice/payment/settlement order integration",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "INVENTORY",
+      "name": "INVENTORY",
+      "requirements": [
+        {
+          "id": "INV-01",
+          "title": "Idempotent receiving and movement ledger",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "InventoryMovementQualificationTest",
+            "test": "adjustmentIsAtomicAndIdempotent"
+          }
+        },
+        {
+          "id": "INV-02",
+          "title": "Stock reservations and release invariants",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+          "proof": null
+        },
+        {
+          "id": "INV-03",
+          "title": "Conserving transfers with safe replay",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "InventoryTransferStocktakeQualificationTest",
+            "test": "transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances"
+          }
+        },
+        {
+          "id": "INV-04",
+          "title": "Stocktake with guard against reserved overdraw",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "InventoryTransferStocktakeQualificationTest",
+            "test": "stocktakePostsOnlyMeasuredDeltaAndRejectsStaleOrBelowReserved"
+          }
+        },
+        {
+          "id": "INV-05",
+          "title": "Durable reconciliation concurrent advance fencing",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliationRuns.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "InventoryTransferStocktakeQualificationTest",
+            "test": "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings"
+          }
+        },
+        {
+          "id": "INV-06",
+          "title": "Posting sequence ordered under position lock",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/inventory/InventoryPostingVersion.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "InventoryMovementQualificationTest",
+            "test": "postgresConcurrentDifferentKeysHaveStrictlyIncreasingPostingVersions"
+          }
+        },
+        {
+          "id": "INV-07",
+          "title": "Certified tenant-wide as-of reconciliation across pages",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "FILES",
+      "name": "FILES",
+      "requirements": [
+        {
+          "id": "FIL-01",
+          "title": "Idempotent tenant-file metadata staging",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/files/FileMetadataService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "FilesR10aQualificationTest",
+            "test": "verifiedMetadataBeginIsIdempotentAndTenantScoped"
+          }
+        },
+        {
+          "id": "FIL-02",
+          "title": "Malware and invalid stream fail-closed policy",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/files/FileUploadCompletionService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "FilesR10bQualificationTest",
+            "test": "scannerInfectedAndTimeoutFailClosedWithoutStoragePromotion"
+          }
+        },
+        {
+          "id": "FIL-03",
+          "title": "CRM owner and PII binary read boundary",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/files/AuthenticatedFilesBinaryReads.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "FilesR10bQualificationTest",
+            "test": "crmDocumentAccessRequiresPiiAndFileReadNotOnlyTenantMembership"
+          }
+        },
+        {
+          "id": "FIL-04",
+          "title": "Recovery of interrupted storage promotion",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/files/FileRecoveryService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "FilesR10bQualificationTest",
+            "test": "crashAfterPromoteBeforeSqlCommitIsReconciledAndRetrySucceeds"
+          }
+        },
+        {
+          "id": "FIL-05",
+          "title": "Real RustFS and scanner infrastructure validation",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/files/RustFsFileStorage.java",
+          "proof": null
+        },
+        {
+          "id": "FIL-06",
+          "title": "Typed attachment owner ACL for catalog and sales",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "ORGANIZATION",
+      "name": "ORGANIZATION",
+      "requirements": [
+        {
+          "id": "ORG-01",
+          "title": "Location CRUD, version and auditable changes",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "OrganizationLocationLifecycleQualificationTest",
+            "test": "typedCreateUpdateNoOpStaleAndUnicodeAreAuditedAtomically"
+          }
+        },
+        {
+          "id": "ORG-02",
+          "title": "Protect reserved stock from warehouse close",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "OrganizationLocationLifecycleQualificationTest",
+            "test": "reservationsAndOpenStocktakeBlockDeactivation"
+          }
+        },
+        {
+          "id": "ORG-03",
+          "title": "Concurrency between warehouse status and receiving",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+            "test": "postgresDeactivationWinsThenReceiptCannotInitializeOrPost"
+          }
+        },
+        {
+          "id": "ORG-04",
+          "title": "Tenant-scoped location search and read",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/organization/OrganizationLocationQueryService.java",
+          "proof": null
+        },
+        {
+          "id": "ORG-05",
+          "title": "Complete first-tenant self-service onboarding",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "GEO",
+      "name": "GEO",
+      "requirements": [
+        {
+          "id": "GEO-01",
+          "title": "Reference KATO snapshots and deleted rows",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/geo/KatoTerritoryDirectory.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "KatoTerritoryQualificationTest",
+            "test": "sourceSnapshotPreservesActiveAndDeletedRows"
+          }
+        },
+        {
+          "id": "GEO-02",
+          "title": "Reject invalid geographic territory references",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/geo/KatoLocationPolicy.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "KatoTerritoryQualificationTest",
+            "test": "databaseRejectsUnknownTerritoryCode"
+          }
+        },
+        {
+          "id": "GEO-03",
+          "title": "Verified full Kazakhstan directory update lifecycle",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "KMS",
+      "name": "KMS",
+      "requirements": [
+        {
+          "id": "KMS-01",
+          "title": "Tenant envelope encryption and wrapping",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/security/kms/KeyWrappingService.java",
+          "proof": null
+        },
+        {
+          "id": "KMS-02",
+          "title": "Fenced key processing lease",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/security/kms/KmsFencedJobService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "KmsFencedJobQualificationTest",
+            "test": "expiredOldWorkerCannotCommitAfterSuccessorAcquiresLease"
+          }
+        },
+        {
+          "id": "KMS-03",
+          "title": "Encryption configuration deployment fail closed",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/security/kms/KmsDeploymentGuard.java",
+          "proof": null
+        },
+        {
+          "id": "KMS-04",
+          "title": "Operational tenant-key rotation and recovery",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "AUDIT",
+      "name": "AUDIT",
+      "requirements": [
+        {
+          "id": "AUD-01",
+          "title": "Retention policy and legal hold enforcement",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/audit/AuditRetentionService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "AuditRetentionQualificationTest",
+            "test": "threeAndFiveYearPoliciesAndLegalHoldsAreEnforced"
+          }
+        },
+        {
+          "id": "AUD-02",
+          "title": "Protected modification of retention governance",
+          "delivery": "IMPLEMENTED",
+          "source": "src/main/java/kz/rm/audit/AuditRetentionService.java",
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "AuditRetentionQualificationTest",
+            "test": "governanceLockTriggersProtectHoldAndPolicyWrites"
+          }
+        },
+        {
+          "id": "AUD-03",
+          "title": "Tenant-safe cross-domain sanitized audit query",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "AUD-04",
+          "title": "Auditor UI and bounded compliant export",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "TASKS",
+      "name": "TASKS",
+      "requirements": [
+        {
+          "id": "TSK-01",
+          "title": "Tenant-owned task commands and transitions",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "TSK-02",
+          "title": "CRM interaction-to-task typed link",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "TSK-03",
+          "title": "Assigned task lists, reminders and deadlines",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "TSK-04",
+          "title": "Tasks browser acceptance and permission gates",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "FINANCE",
+      "name": "FINANCE",
+      "requirements": [
+        {
+          "id": "FIN-01",
+          "title": "Tenant-owned invoice issue and lifecycle",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "FIN-02",
+          "title": "Payments and allocations with idempotency",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "FIN-03",
+          "title": "Reconciliation and immutable financial events",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "FIN-04",
+          "title": "Order-linked finance view and audit",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "MARKETING",
+      "name": "MARKETING",
+      "requirements": [
+        {
+          "id": "MKT-01",
+          "title": "Purpose-bound customer consent targeting",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "MKT-02",
+          "title": "Campaign lifecycle and consent-gated dispatch",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "MKT-03",
+          "title": "Campaign delivery status and suppression proof",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "SUBSCRIPTION",
+      "name": "SUBSCRIPTION",
+      "requirements": [
+        {
+          "id": "SUB-01",
+          "title": "Tenant plan entitlement evaluation",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "SUB-02",
+          "title": "Usage metering and quota enforcement",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        },
+        {
+          "id": "SUB-03",
+          "title": "Subscription billing lifecycle and renewal proof",
+          "delivery": "PLANNED",
+          "source": null,
+          "proof": null
+        }
+      ]
+    }
+  ]
+}
