@@ -13,6 +13,7 @@ from io import BytesIO
 import xml.etree.ElementTree as ET
 
 from rm_r3_functional_coverage import assess
+from rm_user_role_qualification import assess_role_cases
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path("rm-exact-sha-manifest.json")
@@ -204,6 +205,22 @@ def verify():
     except (ValueError, KeyError, OSError, TypeError) as exc:
         problems.append(f"RM-R3 catalogue/evidence qualification failed: {type(exc).__name__}: {exc}")
         manifest["functionalCoverage"] = {"status": "FAILED"}
+    try:
+        role_result = assess_role_cases(ROOT, passed_cases, sha,
+                                        admission_pass=not problems)
+        manifest["userRoleQualification"] = {
+            "json": "rm-user-role-scenario-results.json",
+            "gate": role_result["gate"],
+            "mandatory": role_result["mandatory"],
+            "executedPostgresql": role_result["executedPostgresql"],
+            "verifiedInternal": role_result["verifiedInternal"],
+            "catalogueSha256": role_result["catalogueSha256"]
+        }
+        if role_result["gate"] != "USER_ROLE_SERVICE_QUALIFIED":
+            problems.append("UR-R3.1 mandatory service role matrix incomplete or not admitted")
+    except (ValueError, KeyError, OSError, TypeError) as exc:
+        problems.append(f"UR-R3.1 role evidence failed: {type(exc).__name__}: {exc}")
+        manifest["userRoleQualification"] = {"gate": "HOLD"}
     manifest["evidenceErrors"] = problems
     manifest["qa01bGate"] = "PASS" if not problems else "FAIL"
     # A passing QA evidence gate is still NOT public security/production admission.
