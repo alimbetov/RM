@@ -474,4 +474,48 @@ class CrmInteractionQualificationTest {
                 .extracting(CrmInteractionService.Event::action).containsExactly("CREATED");
     }
 
+    /**
+     * CRM-R2-A03/A07: archived parent denies new work and rescheduling,
+     * while an already committed identical request remains replayable.
+     * Failed commands must preserve row version and immutable event count.
+     */
+    @Test void crmR2ArchivedCustomerFencesNewAndChangedInteractionsButKeepsReplay() {
+        var t=tenant();
+        var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"R2 Parent Archive",null);
+        Instant at=Instant.parse("2026-11-21T11:00:00Z");
+        Instant followup=at.plusSeconds(86400);
+        String key="r2-parent-"+UUID.randomUUID();
+        var created=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),at,followup,key);
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),created.id());
+
+        customers.archiveCustomer(actor,t.tenantId(),customer.id(),0);
+        assertThat(interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),at,followup,key).id())
+                .isEqualTo(created.id());
+        assertThatThrownBy(()->interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),at,followup,
+                "r2-new-"+UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->interactions.assignResponsible(actor,t.tenantId(),
+                created.id(),t.actorId(),0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->interactions.setNextAction(actor,t.tenantId(),
+                created.id(),followup.plusSeconds(3600),0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        var persisted=interactions.get(actor,t.tenantId(),created.id());
+        assertThat(persisted.rowVersion()).isZero();
+        assertThat(persisted.status()).isEqualTo(CrmInteractionService.Status.OPEN);
+        assertThat(persisted.nextActionAt()).isEqualTo(followup);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),created.id())).isEqualTo(before);
+    }
+
 }
