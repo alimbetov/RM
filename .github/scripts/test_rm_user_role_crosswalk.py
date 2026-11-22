@@ -36,18 +36,27 @@ class UserRoleCrosswalkQualificationTest(unittest.TestCase):
         return validate_documents(self.catalogue, crosswalk, self.permissions,
                                   self.role_cases)
 
-    def test_all_16_domains_75_requirements_and_5_proof_gaps_are_registered(self):
+    def test_all_16_domains_75_requirements_and_5_reviewed_proofs_are_registered(self):
         report = validate(ROOT)
         self.assertEqual(report["domains"], 16)
         self.assertEqual(report["total"], 75)
         self.assertEqual(report["implemented"], 46)
         self.assertEqual(report["planned"], 29)
-        self.assertEqual(report["declaredCanonicalProof"], 41)
+        self.assertEqual(report["declaredCanonicalProof"], 46)
         self.assertEqual(report["roleCasesPassed"], 0)
         self.assertEqual(report["registeredRoleCases"], 19)
         self.assertEqual(report["gate"], "MAPPING_VALID_NOT_SERVICE_QUALIFIED")
-        self.assertEqual(report["missingCanonicalProof"],
-                         ["FIL-05", "INV-02", "KMS-01", "KMS-03", "ORG-04"])
+        self.assertEqual(report["missingCanonicalProof"], [])
+
+    def test_ur_r34_reviewed_proof_cannot_be_silently_replaced(self):
+        catalog = copy.deepcopy(self.catalogue)
+        for domain in catalog["domains"]:
+            for requirement in domain["requirements"]:
+                if requirement["id"] == "FIL-05":
+                    requirement["proof"] = None
+        with self.assertRaisesRegex(ValueError, "Source/delivery/proof mismatch"):
+            validate_documents(catalog, self.crosswalk, self.permissions,
+                               self.role_cases)
 
     def test_missing_requirement_fails_instead_of_improving_coverage(self):
         with self.assertRaisesRegex(ValueError, "Missing R3 requirements"):
