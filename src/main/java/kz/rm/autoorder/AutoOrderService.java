@@ -69,9 +69,16 @@ public class AutoOrderService {
                 return new OrderReceipt(rs.getObject(1,UUID.class),rs.getString(3));
             },tenant,idempotencyKey);
         if(!existing.isEmpty()) return new CheckoutResult(existing.get(0));
-        // Required lock order for seller CAS commands and checkout:
-        // checkout stripe -> storefront -> offer -> catalogue.
-        // An exact idempotent retry must still resolve when the shop is paused.
+        // New checkout must be serialized with IAM tenant suspension.
+        // Lock order: checkout stripe -> IAM workspace -> storefront -> offer -> catalogue.
+        // Exact idempotent replay above remains available for previously accepted orders.
+        // Unlike seller commands, buyers never need membership of the seller tenant.
+        String workspaceStatus=jdbc.query("""
+            SELECT status FROM public.iam_workspace
+            WHERE id=? AND kind='ORGANIZATION' FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null,tenant);
+        if(!"ACTIVE".equals(workspaceStatus))
+            throw new IllegalArgumentException("Store not accepting orders");
         String storefrontState=jdbc.query("""
             SELECT state FROM crm.store_front WHERE tenant_id=? AND slug=? FOR UPDATE
             """,rs->rs.next()?rs.getString(1):null,tenant,slug);
