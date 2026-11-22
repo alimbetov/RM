@@ -336,11 +336,16 @@ class AutoOrderR1QualificationTest {
     @Test void sale08RejectsUnmappedAndArchivedOffersBeforeEmailOrOrderSideEffects() {
         Store store=store();
         String email="unmapped-"+UUID.randomUUID()+"@example.kz";
+        // Legacy unmapped offer is a separate historical row: published SKU
+        // bindings cannot be erased after SALES PASS 08.4.
+        UUID unmapped=UUID.randomUUID();
         jdbc.update("""
-                UPDATE crm.store_offer SET catalog_item_id=NULL WHERE tenant_id=? AND id=?
-                """,store.tenantId(),store.offerId());
+                INSERT INTO crm.store_offer
+                  (tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+                VALUES (?,?,'Legacy unmapped',100,'KZT','PUBLISHED',NULL)
+                """,store.tenantId(),unmapped);
         assertThatThrownBy(()->orders.checkout(store.slug(),email,"sale08-unmapped-001",
-                List.of(new AutoOrderService.Line(store.offerId(),1))))
+                List.of(new AutoOrderService.Line(unmapped,1))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Offer unavailable");
         assertThat(jdbc.queryForObject("""
@@ -350,9 +355,6 @@ class AutoOrderR1QualificationTest {
                 SELECT count(*) FROM public.iam_email_identity WHERE lookup_hmac=?
                 """,Integer.class,crypto.lookup(email))).isZero();
 
-        jdbc.update("""
-                UPDATE crm.store_offer SET catalog_item_id=? WHERE tenant_id=? AND id=?
-                """,store.itemId(),store.tenantId(),store.offerId());
         jdbc.update("""
                 UPDATE crm.cat_item SET state='ARCHIVED'
                 WHERE tenant_id=? AND id=?
