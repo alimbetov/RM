@@ -209,4 +209,42 @@ class InventoryReservationQualificationTest {
             DELETE FROM crm.inv_reservation_event WHERE tenant_id=? AND reservation_id=?
             """,a.tenant(),r.id())).isInstanceOf(Exception.class);
     }
+
+    @Test void q123ReservationRejectsInactiveWarehouseServiceAndArchiveButHonorsOldCommit() {
+        Store s=store(10);
+        OrderLine one=order(s,2,true);
+        jdbc.update("""
+                UPDATE public.org_location SET status='INACTIVE'
+                WHERE workspace_id=? AND id=?
+                """,s.tenant(),s.location());
+        assertThatThrownBy(()->reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2)))
+                .isInstanceOf(IllegalArgumentException.class);
+        jdbc.update("""
+                UPDATE public.org_location SET status='ACTIVE'
+                WHERE workspace_id=? AND id=?
+                """,s.tenant(),s.location());
+        jdbc.update("UPDATE crm.cat_item SET kind='SERVICE' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item());
+        assertThatThrownBy(()->reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2)))
+                .isInstanceOf(IllegalArgumentException.class);
+        jdbc.update("UPDATE crm.cat_item SET kind='PRODUCT' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item());
+        var active=reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2));
+        jdbc.update("UPDATE crm.cat_item SET state='ARCHIVED' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item());
+        assertThat(reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2)).id()).isEqualTo(active.id());
+        assertThat(reservations.fulfill(s.tenant(),active.id()).state())
+                .isEqualTo(InventoryReservationService.State.FULFILLED);
+        assertThat(stock(s,"on_hand")).isEqualByComparingTo("8");
+        assertThat(stock(s,"reserved")).isEqualByComparingTo("0");
+        OrderLine two=order(s,1,true);
+        assertThatThrownBy(()->reservations.reserve(s.tenant(),two.order(),two.line(),
+                s.location(),s.item(),BigDecimal.ONE))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
 }
