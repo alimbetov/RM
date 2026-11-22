@@ -233,6 +233,9 @@ class InventoryReservationQualificationTest {
                 s.tenant(),s.item());
         var active=reservations.reserve(s.tenant(),one.order(),one.line(),
                 s.location(),s.item(),BigDecimal.valueOf(2));
+        // The second order must be PLACED before SKU archival. A new checkout
+        // after archival correctly fails in SALES PASS 08.
+        OrderLine two=order(s,1,true);
         jdbc.update("UPDATE crm.cat_item SET state='ARCHIVED' WHERE tenant_id=? AND id=?",
                 s.tenant(),s.item());
         assertThat(reservations.reserve(s.tenant(),one.order(),one.line(),
@@ -241,7 +244,6 @@ class InventoryReservationQualificationTest {
                 .isEqualTo(InventoryReservationService.State.FULFILLED);
         assertThat(stock(s,"on_hand")).isEqualByComparingTo("8");
         assertThat(stock(s,"reserved")).isEqualByComparingTo("0");
-        OrderLine two=order(s,1,true);
         assertThatThrownBy(()->reservations.reserve(s.tenant(),two.order(),two.line(),
                 s.location(),s.item(),BigDecimal.ONE))
                 .isInstanceOf(IllegalArgumentException.class);
