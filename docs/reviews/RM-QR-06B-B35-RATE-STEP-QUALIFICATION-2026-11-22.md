@@ -2,7 +2,7 @@
 
 **Branch:** `base_dev`; exact-SHA candidate `87485db0a58f73e91b84c0715955ab366683fd86`.  
 **CI:** https://github.com/alimbetov/RM/actions/runs/45040418773  
-**Status:** B3.5 smoke qualification **pending**; **sustainable throughput ceiling NOT ESTABLISHED**, production HOLD.
+**Status:** B3.5 entry rate-step PostgreSQL PASS on candidate SHA; **sustainable throughput ceiling NOT ESTABLISHED**, production HOLD.
 
 ## Implemented first stage
 
@@ -31,3 +31,25 @@
 After the B3.5 capacity and operational correctness gates have evidence, implement **QR-07 returns first**, then **QR-08 packaging/delivery/add-on services** on the service layer, as specified by `docs/spec/RM-QR-07-08-RETURNS-AND-SERVICES-SERVICE-FIRST-R1.md`. Do not reinterpret returns as `cancel(COMPLETED)`; do not mutate original handover receipt/stock history. These new modules require their own PostgreSQL and IAM concurrency gates.
 
 **Production admission remains HOLD.**
+
+## Executed B3.5 entry rate-step evidence
+
+**Exact SHA:** `87485db0a58f73e91b84c0715955ab366683fd86`  
+**Job:** `qr06b-b35-rate-steps` in https://github.com/alimbetov/RM/actions/runs/45040418773 — **SUCCESS**, Maven 1 JUnit test, 0 failures/errors/skips, BUILD SUCCESS.
+
+| Phase | Tenant A completed | Tenant B completed | Tenant A p95/p99 (ms) | Tenant B p95/p99 (ms) |
+|---|---:|---:|---:|---:|
+| LOW | 5 | 5 | 144 / 144 | 119 / 119 |
+| RAMP | 10 | 10 | 32 / 32 | 32 / 32 |
+| STRESS | 20 | 20 | 26 / 28 | 25 / 27 |
+| RECOVERY | 5 | 5 | 19 / 19 | 17 / 17 |
+
+Each worker observed phase completion-span rates (completed count / time from first arrival to last completion):
+- LOW 0.312, RAMP 0.555, STRESS 1.052, RECOVERY 0.312 completions/s for both tenant JVMs;
+- combined STRESS approximately 2.104 successful completions/s, **not measured sustainable maximum capacity**.
+- JVM A and B: **peak Hikari active=1; peak waiting=0; peak connections=10** each; 0 technical failures, 0 business denials.
+- Parent: 80/80 durable handovers, 10 completions in RECOVERY, zero observed new PG deadlocks; exact per-tenant stock and receipt invariants hold.
+
+**Important result:** The monotonically increasing offered rate **did not** produce pool saturation or latency degradation: p95 improved as the JVM warmed. B3.5 cannot be closed from these results, even though the synthetic workload is functionally correct. The prior B3.4 burst demonstrated transient queueing, but a burst cannot substitute for a sustained rate knee.
+
+**Separate CI admission:** all parallel B1/B2, B3.1/B3.2/B3.3/B3.4 regressions must succeed at this same code SHA; report those results independently after final workflow completion. Any later documentation-only commit is not itself a new test proof.
