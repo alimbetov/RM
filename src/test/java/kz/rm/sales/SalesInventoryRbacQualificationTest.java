@@ -354,6 +354,81 @@ class SalesInventoryRbacQualificationTest {
             "receive-002",BigDecimal.ONE)).isInstanceOf(SecurityException.class);
     }
 
+    @Test void urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory() {
+        Context a=context(8),b=context(8);
+        UUID orderId=order(a,2);
+        assertThat(status(a,orderId)).isEqualTo("PLACED");
+        int events=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,a.tenant(),orderId);
+        int reservations=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,a.tenant(),orderId);
+        assertThatThrownBy(()->authenticatedCommands.confirm(
+                verified(a.staff()),a.tenant(),orderId,a.location()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->authenticatedCommands.confirm(
+                verified(b.staff()),a.tenant(),orderId,a.location()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(status(a,orderId)).isEqualTo("PLACED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,a.tenant(),orderId)).isEqualTo(events);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,a.tenant(),orderId)).isEqualTo(reservations);
+        assertThat(scalar(a,"reserved")).isEqualByComparingTo("0");
+        assertThat(scalar(a,"on_hand")).isEqualByComparingTo("8");
+        allow(a,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        assertThat(authenticatedCommands.confirm(
+                verified(a.staff()),a.tenant(),orderId,a.location()).affectedLines())
+                .isEqualTo(1);
+        assertThat(status(a,orderId)).isEqualTo("CONFIRMED");
+        assertThat(scalar(a,"reserved")).isEqualByComparingTo("2");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,a.tenant(),orderId)).isEqualTo(1);
+    }
+
+    @Test void urR32InventoryGrantRevokeAndForeignActorPreserveLedger() {
+        Context a=context(3),b=context(3);
+        allow(a,DomainPermission.INVENTORY_RECEIVE);
+        var allowed=warehouse.receive(verified(a.staff()),a.tenant(),
+                a.location(),a.item(),"ur-r32-receive-"+UUID.randomUUID(),BigDecimal.TWO);
+        assertThat(allowed.after()).isEqualByComparingTo("5");
+        int movements=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,Integer.class,a.tenant(),a.location(),a.item());
+        assertThat(movements).isEqualTo(1);
+        assertThatThrownBy(()->warehouse.correct(verified(a.staff()),a.tenant(),
+                a.location(),a.item(),"ur-r32-correct-"+UUID.randomUUID(),
+                BigDecimal.ONE)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->warehouse.receive(verified(b.staff()),a.tenant(),
+                a.location(),a.item(),"ur-r32-foreign-"+UUID.randomUUID(),
+                BigDecimal.ONE)).isInstanceOf(SecurityException.class);
+        UUID role=jdbc.queryForObject("""
+                SELECT id FROM public.iam_tenant_role
+                WHERE tenant_id=? AND role_code LIKE 'OPS_%'
+                """,UUID.class,a.tenant());
+        roles.revoke(verified(a.owner()),a.tenant(),role,DomainPermission.INVENTORY_RECEIVE);
+        assertThatThrownBy(()->warehouse.receive(verified(a.staff()),a.tenant(),
+                a.location(),a.item(),"ur-r32-revoked-"+UUID.randomUUID(),
+                BigDecimal.ONE)).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,Integer.class,a.tenant(),a.location(),a.item())).isEqualTo(movements);
+        assertThat(scalar(a,"on_hand")).isEqualByComparingTo("5");
+        assertThat(scalar(a,"reserved")).isEqualByComparingTo("0");
+        assertThat(scalar(b,"on_hand")).isEqualByComparingTo("3");
+    }
+
     @Test void postgresSalesConfirmationFencesConcurrentPermissionRevocation() throws Exception {
         try (var connection=dataSource.getConnection()) {
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
