@@ -2054,9 +2054,44 @@ class QrWarehouseHandoverQualificationTest {
                     throw new AssertionError("B34 worker startup barrier timeout");
                 Thread.sleep(25);
             }
-            java.nio.file.Files.writeString(gate,"GO");
-            int exitFirst=waitQr06bProcess(first,dir.resolve("a.log"),duration+120);
-            int exitSecond=waitQr06bProcess(second,dir.resolve("b.log"),duration+120);
+            var sampleRunning=new java.util.concurrent.atomic.AtomicBoolean(true);
+            var lockWaitTotal=new java.util.concurrent.atomic.AtomicLong();
+            var maxLockWaiters=new java.util.concurrent.atomic.AtomicInteger();
+            var lockSamples=new java.util.concurrent.atomic.AtomicLong();
+            var monitorFailures=new java.util.concurrent.atomic.AtomicInteger();
+            Thread monitor=Thread.ofVirtual().start(()->{
+                while(sampleRunning.get()){
+                    try {
+                        int waiting=jdbc.queryForObject("""
+                                SELECT count(*) FROM pg_stat_activity
+                                WHERE datname=current_database()
+                                  AND wait_event_type='Lock'
+                                  AND pid<>pg_backend_pid()
+                                """,Integer.class);
+                        lockSamples.incrementAndGet();
+                        lockWaitTotal.addAndGet(waiting);
+                        maxLockWaiters.accumulateAndGet(waiting,Math::max);
+                    } catch(RuntimeException unexpected) {
+                        monitorFailures.incrementAndGet();
+                    }
+                    java.util.concurrent.locks.LockSupport.parkNanos(
+                            TimeUnit.MILLISECONDS.toNanos(100));
+                }
+            });
+            int exitFirst,exitSecond;
+            try {
+                java.nio.file.Files.writeString(gate,"GO");
+                exitFirst=waitQr06bProcess(first,dir.resolve("a.log"),duration+120);
+                exitSecond=waitQr06bProcess(second,dir.resolve("b.log"),duration+120);
+            }finally {
+                sampleRunning.set(false);
+                monitor.join(5000);
+            }
+            assertThat(monitorFailures.get()).isZero();
+            assertThat(lockSamples.get()).isGreaterThan(0);
+            System.out.printf(java.util.Locale.ROOT,
+                    "QR06B_B34_DB samples=%d lock_waiter_sample_sum=%d max_lock_waiters=%d%n",
+                    lockSamples.get(),lockWaitTotal.get(),maxLockWaiters.get());
             assertThat(exitFirst).isZero();
             assertThat(exitSecond).isZero();
             for(String logName:List.of("a.log","b.log")) {
