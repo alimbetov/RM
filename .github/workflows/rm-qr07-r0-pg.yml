@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/main/java/kz/rm/sales/SalesReturn*.java'
       - 'src/main/java/kz/rm/inventory/ReturnInventoryPostingPort.java'
+      - 'src/test/java/kz/rm/sales/QrReturnProcessWorker.java'
       - 'src/main/java/kz/rm/iam/DomainPermission.java'
       - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
@@ -55,6 +56,8 @@ jobs:
         run: |
           mkdir -p target/qr07-r0-evidence
           set -o pipefail
+          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr07-classpath.txt
+          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr07-classpath.txt)"
           mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr07R*' test 2>&1 | tee target/qr07-r0-evidence/console.log
           printf '%s\n' "${GITHUB_SHA}" > target/qr07-r0-evidence/exact-sha.txt
       - name: Preserve migration and service test evidence
