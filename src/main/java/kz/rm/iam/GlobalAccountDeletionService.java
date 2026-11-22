@@ -20,10 +20,12 @@ import java.util.UUID;
 @Service
 public class GlobalAccountDeletionService {
     private final JdbcTemplate jdbc;
+    private final EmailIdentityCrypto crypto;
     private final SecureRandom random=new SecureRandom();
 
-    public GlobalAccountDeletionService(JdbcTemplate jdbc) {
+    public GlobalAccountDeletionService(JdbcTemplate jdbc,EmailIdentityCrypto crypto) {
         this.jdbc=jdbc;
+        this.crypto=crypto;
     }
 
     @Transactional
@@ -133,9 +135,9 @@ public class GlobalAccountDeletionService {
         if(externalSubject!=null && !externalSubject.isBlank()) {
             jdbc.update("""
                     INSERT INTO public.iam_deletion_oidc_revocation_outbox
-                    (deletion_event_id,target_user_id,provider_subject,state,created_at)
+                    (deletion_event_id,target_user_id,provider_subject_envelope,state,created_at)
                     VALUES (?,?,?,'PENDING',?)
-                    """,deletionId,targetId,externalSubject,now);
+                    """,deletionId,targetId,crypto.encrypt(externalSubject),now);
         }
     }
 
