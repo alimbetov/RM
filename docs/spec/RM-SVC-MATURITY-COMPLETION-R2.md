@@ -203,3 +203,23 @@
 - Перед слиянием в `main`: отдельный reviewed PR, exact-HEAD CI, проверка всех общих бизнес-инвариантов. **Этот обзор не разрешает merge или production.**
 
 **Итог:** backlog **архитектурно согласован как поэтапное ТЗ** с указанными ограничениями. Это не утверждение открытых предметных решений и не свидетельство прохождения новых тестов. Начинать с `RM-QA-01` и `RM-STORE-01/02` после targeted security/source audit; параллельно закрывать оставшиеся `RM-INV-13/14/15` и `RM-CAT-01`, затем `RM-SALE-084` и `RM-SALE-09`.
+
+
+## 13. Implementation increment STORE-R1.1A — tenant storefront lifecycle (2026-11-22)
+
+**Scope / evidence:** Code added to `base_dev`:
+- `src/main/java/kz/rm/storefront/StorefrontManagementService.java` — commit `2b839a0b92dcc148fc33f0e48849e04139284f45`.
+- `src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java` — commit `e59e39c84b7779c292d5504123fb53f8b78c0f18`.
+
+**Implemented:** internal service commands `createDraft/publish/pause/get` with `VerifiedActor`, selected tenant, already registered `STOREFRONT_OFFER_MANAGE` and `STOREFRONT_OFFER_PUBLISH` permissions, `TenantAuthorization.requireForCommand` fencing, locked `crm.store_front` tenant row and expected-state compare-and-set, legal DRAFT→PUBLISHED→PAUSED→PUBLISHED transition, no-op without duplicate audit, `crm.audit_event` evidence. No controllers, migration or `store_offer` writer were added.
+
+**Test source:** synthetic OIDC-resolved `VerifiedActor`; creation, publish/pause/reopen, stale-state rejection, per-tenant visibility, deny missing publication permission and durable audit count. Tests are code only until actual H2/PostgreSQL completion on the **same exact SHA**. At time of writing, GitHub commit combined statuses and pull-request workflow lookup returned no CI status for `e59e39c`; **NOT QUALIFIED**.
+
+**Caveats / not yet admitted:**
+1. Current `store_front` table lacks an exposed `row_version` in checked service paths. Expected-state CAS detects concurrent conflicting transitions but **not ABA** (PUBLISHED→PAUSED→PUBLISHED). Before calling STORE-R1.1 fully CAS-qualified, inspect schema and add additive `row_version` + strict expectedVersion for future commands, with populated migration and tests if absent; do not assume state-only CAS equals monotonic version CAS.
+2. Existing `store_offer` checkout is scoped by tenant and offer UUID, not an independently verified `storefront_id` association. Before implementing offer management and claiming multi-storefront isolation, audit DDL/cardinality and determine whether storefronts are one-per-tenant or offer→storefront association is required. **Do not** add a synthetic foreign-key mapping or infer ownership without decision.
+3. New `createDraft` relies on DB slug uniqueness. Validate real duplicate-slug constraints and errors; add negative/parallel insert tests.
+4. Add PostgreSQL two-transaction pause×checkout and grant-revoke×publish tests, read/query tests and current-head CI; existing checkout already locks storefront before offer.
+5. Service-only progress does not mean live public endpoint, real SMTP, or production-ready storefront.
+
+**Revised ticket statuses:** `RM-STORE-01 = CODE PRESENT / NOT QUALIFIED (partial: create/publish/pause/get)`; `RM-STORE-02/03 = OPEN`; `RM-SALE-084 = OPEN`; `RM-COM-E2E = HOLD`. Next safe step: exact-HEAD H2/PG CI and schema/cardinality check, then additive version CAS and seller-offer lifecycle, never silently broadening the product policy.
