@@ -44,7 +44,7 @@ class CrmR1aQualificationTest {
     @Autowired AuthenticatedCrmCommands secureCommands;
     @Autowired AuthenticatedCrmQueries secureQueries;
     @Autowired PlatformTransactionManager transactions;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
     @Autowired DataSource dataSource;
     @Autowired JdbcTemplate jdbc;
 
@@ -406,11 +406,11 @@ class CrmR1aQualificationTest {
         }
         var t=newTenant();
         UUID person=crm.createPerson(t.actorId(),t.tenantId(),"Private Person",null).id();
-        var role=roles.createRole(t.actorId(),t.tenantId(),
+        var role=roles.createRole(verified(t.actorId()),t.tenantId(),
                 "CRM_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "CRM reader");
-        roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_READ);
-        roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_PII_READ);
+        roles.grant(verified(t.actorId()),t.tenantId(),role.id(),DomainPermission.CRM_READ);
+        roles.grant(verified(t.actorId()),t.tenantId(),role.id(),DomainPermission.CRM_PII_READ);
 
         UUID orgId=jdbc.queryForObject(
                 "SELECT organization_id FROM public.iam_workspace WHERE id=?",
@@ -419,8 +419,8 @@ class CrmR1aQualificationTest {
                 "crm-reader-"+UUID.randomUUID(),"CRM reader"));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
                 orgId,staff.getId(),OrganizationMembershipEntity.Role.MEMBER));
-        roles.assign(t.actorId(),t.tenantId(),staff.getId(),role.id());
-        roles.enable(t.actorId(),t.tenantId());
+        roles.assign(verified(t.actorId()),t.tenantId(),staff.getId(),role.id());
+        roles.enable(verified(t.actorId()),t.tenantId());
         var admitted=new CountDownLatch(1);
         var release=new CountDownLatch(1);
         var tx=new TransactionTemplate(transactions);
@@ -440,7 +440,7 @@ class CrmR1aQualificationTest {
             }));
             assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
             var revoke=pool.submit(()->{
-                roles.revoke(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_PII_READ);
+                roles.revoke(verified(t.actorId()),t.tenantId(),role.id(),DomainPermission.CRM_PII_READ);
                 return true;
             });
             try {
@@ -1210,10 +1210,10 @@ class CrmR1aQualificationTest {
     @Test void tcrud02WriteOnlyRoleCanMutateButCannotReceiveOrReadPii() {
         var t=newTenant();
         var owner=verified(t.actorId());
-        var role=roles.createRole(t.actorId(),t.tenantId(),
+        var role=roles.createRole(verified(t.actorId()),t.tenantId(),
                 "PII_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "CRM write only");
-        roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_WRITE);
+        roles.grant(verified(t.actorId()),t.tenantId(),role.id(),DomainPermission.CRM_WRITE);
         UUID organization=jdbc.queryForObject("""
             SELECT organization_id FROM public.iam_workspace WHERE id=?
             """,UUID.class,t.tenantId());
@@ -1221,8 +1221,8 @@ class CrmR1aQualificationTest {
                 "tcrud02-writer-"+UUID.randomUUID(),"CRM limited writer"));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
                 organization,writer.getId(),OrganizationMembershipEntity.Role.MEMBER));
-        roles.assign(t.actorId(),t.tenantId(),writer.getId(),role.id());
-        roles.enable(t.actorId(),t.tenantId());
+        roles.assign(verified(t.actorId()),t.tenantId(),writer.getId(),role.id());
+        roles.enable(verified(t.actorId()),t.tenantId());
         var actor=verified(writer.getId());
 
         var person=secureCommands.createPerson(actor,t.tenantId(),"Private create person",null);
@@ -1294,18 +1294,18 @@ class CrmR1aQualificationTest {
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
                 staff,OrganizationMembershipEntity.Role.MEMBER));
 
-        var roleA=roles.createRole(a.actorId(),a.tenantId(),
+        var roleA=roles.createRole(verified(a.actorId()),a.tenantId(),
                 "STAFF_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A CRM");
-        roles.grant(a.actorId(),a.tenantId(),roleA.id(),DomainPermission.CRM_READ);
-        roles.grant(a.actorId(),a.tenantId(),roleA.id(),DomainPermission.CRM_PII_READ);
-        roles.grant(a.actorId(),a.tenantId(),roleA.id(),DomainPermission.CRM_WRITE);
-        roles.assign(a.actorId(),a.tenantId(),staff,roleA.id());
-        roles.enable(a.actorId(),a.tenantId());
-        var roleB=roles.createRole(b.actorId(),b.tenantId(),
+        roles.grant(verified(a.actorId()),a.tenantId(),roleA.id(),DomainPermission.CRM_READ);
+        roles.grant(verified(a.actorId()),a.tenantId(),roleA.id(),DomainPermission.CRM_PII_READ);
+        roles.grant(verified(a.actorId()),a.tenantId(),roleA.id(),DomainPermission.CRM_WRITE);
+        roles.assign(verified(a.actorId()),a.tenantId(),staff,roleA.id());
+        roles.enable(verified(a.actorId()),a.tenantId());
+        var roleB=roles.createRole(verified(b.actorId()),b.tenantId(),
                 "STAFF_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B metadata");
-        roles.grant(b.actorId(),b.tenantId(),roleB.id(),DomainPermission.CRM_READ);
-        roles.assign(b.actorId(),b.tenantId(),staff,roleB.id());
-        roles.enable(b.actorId(),b.tenantId());
+        roles.grant(verified(b.actorId()),b.tenantId(),roleB.id(),DomainPermission.CRM_READ);
+        roles.assign(verified(b.actorId()),b.tenantId(),staff,roleB.id());
+        roles.enable(verified(b.actorId()),b.tenantId());
 
         var mixed=verified(staff);
         assertThat(secureQueries.getContact(mixed,a.tenantId(),contactA.id()).email())
