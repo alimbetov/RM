@@ -64,6 +64,9 @@ public class SalesInventoryCommandService {
         if(!"PLACED".equals(status))throw new IllegalStateException("Order not confirmable");
         List<Line> lines=lines(tenantId,orderId);
         if(lines.isEmpty())throw new IllegalStateException("Order has no lines");
+        // Historical lines cannot reconstruct a buyer-accepted SKU from a live offer.
+        if(lines.stream().anyMatch(line->line.itemId()==null))
+            throw new IllegalStateException("UNMAPPED_LEGACY_ORDER: immutable SKU missing");
 
         // State change remains invisible to other transactions until commit.
         updateOrder(tenantId,orderId,"PLACED","CONFIRMED");
@@ -150,11 +153,10 @@ public class SalesInventoryCommandService {
 
     private List<Line> lines(UUID tenant,UUID order) {
         return jdbc.query("""
-            SELECT l.id,s.catalog_item_id,l.quantity
-            FROM crm.sales_order_line l JOIN crm.store_offer s
-              ON s.tenant_id=l.tenant_id AND s.id=l.offer_id
+            SELECT l.id,l.catalog_item_id_snapshot,l.quantity
+            FROM crm.sales_order_line l
             WHERE l.tenant_id=? AND l.order_id=?
-            ORDER BY s.catalog_item_id,l.id
+            ORDER BY l.catalog_item_id_snapshot,l.id
             """,(rs,n)->new Line(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                     BigDecimal.valueOf(rs.getLong(3))),tenant,order);
     }
