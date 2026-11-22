@@ -153,12 +153,13 @@ public class InventoryReservationService {
                 INSERT INTO crm.inv_stock_movement
                   (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                    balance_before,balance_after,occurred_at,recorded_at,
-                   movement_kind,reason_code,reservation_id,actor_user_id,source_type,source_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,'FULFILLMENT','ORDER_FULFILLMENT',?,?,?,?)
+                   movement_kind,reason_code,reservation_id,actor_user_id,source_type,source_id,posting_version)
+                VALUES (?,?,?,?,?,?,?,?,?,?,'FULFILLMENT','ORDER_FULFILLMENT',?,?,?,?,?)
                 """,tenantId,UUID.randomUUID(),current.locationId(),current.itemId(),
                     "fulfill-"+reservationId,current.quantity().negate(),
                     stock.onHand(),afterOnHand,now,now,reservationId,
-                    actorId,"SALES_ORDER",current.orderId());
+                    actorId,"SALES_ORDER",current.orderId(),
+                    InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,current.locationId(),current.itemId()));
         }
         return new Reservation(current.id(),tenantId,current.orderId(),current.lineId(),
                 current.locationId(),current.itemId(),current.quantity(),target);
