@@ -23,6 +23,7 @@ class CrmBuyerLinkQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired TenantKeyService keys;
     @Autowired JdbcTemplate jdbc;
+    @Autowired GlobalAccountStatusService accounts;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     record Seller(UUID tenant, UUID owner) {}
@@ -38,6 +39,26 @@ class CrmBuyerLinkQualificationTest {
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         keys.provision(workspace.getId());
         return new Seller(workspace.getId(),user.getId());
+    }
+    UUID independentReviewer(Seller seller) {
+        UUID org=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,seller.tenant());
+        UUID reviewer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "crm-reviewer-"+UUID.randomUUID(),"Independent CRM reviewer")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),org,reviewer,OrganizationMembershipEntity.Role.OWNER));
+        return reviewer;
+    }
+    UUID platformAdmin() {
+        UUID admin=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "crm-admin-"+UUID.randomUUID(),"Platform admin")).getId();
+        jdbc.update("""
+                INSERT INTO public.iam_global_role_assignment
+                (id,user_id,role,granted_at)
+                VALUES (?,?,'PLATFORM_ADMIN',?)
+                """,UUID.randomUUID(),admin,java.sql.Timestamp.from(Instant.now()));
+        return admin;
     }
     UUID buyer() {
         return users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
@@ -302,14 +323,22 @@ class CrmBuyerLinkQualificationTest {
         assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
         assertThatThrownBy(()->links.releaseBySeller(owner,s.tenant(),link.id(),2))
                 .isInstanceOf(IllegalStateException.class);
-        var closed=links.closeDispute(owner,s.tenant(),link.id(),2);
+        assertThatThrownBy(()->links.closeDispute(owner,s.tenant(),link.id(),2))
+                .isInstanceOf(SecurityException.class);
+        var reviewer=verified(independentReviewer(s));
+        var closed=links.adjudicateDispute(reviewer,s.tenant(),link.id(),2,
+                CrmBuyerLinkService.DisputeReason.IDENTITY_MISMATCH);
         assertThat(closed.state()).isEqualTo(CrmBuyerLinkService.State.REVOKED);
         assertThat(links.linkForCustomer(owner,s.tenant(),customer.id())).isNull();
         assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
                 .extracting(CrmBuyerLinkService.LinkEvent::action)
                 .containsExactly("PROPOSED","CONFIRMED","DISPUTED","DISPUTE_CLOSED");
-        assertThatThrownBy(()->links.closeDispute(owner,s.tenant(),link.id(),3))
+        assertThatThrownBy(()->links.closeDispute(reviewer,s.tenant(),link.id(),3))
                 .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT reason_code FROM crm.customer_buyer_dispute_decision
+                WHERE tenant_id=? AND link_id=?
+                """,String.class,s.tenant(),link.id())).isEqualTo("IDENTITY_MISMATCH");
     }
 
     @Test void sellerReleaseCannotForgeNewBuyerConsentAndHistoryStaysImmutable() {
@@ -345,7 +374,7 @@ class CrmBuyerLinkQualificationTest {
                 b.tenant(),link.id(),0)).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->links.revokeByBuyer(verified(buyer),
                 a.tenant(),link.id(),-1)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(()->links.closeDispute(sellerA,
+        assertThatThrownBy(()->links.closeDispute(verified(independentReviewer(a)),
                 a.tenant(),link.id(),0)).isInstanceOf(IllegalStateException.class);
         assertThat(links.linkForCustomer(sellerA,a.tenant(),customer.id()).rowVersion()).isZero();
         assertThat(links.linkHistory(sellerA,a.tenant(),customer.id()))
