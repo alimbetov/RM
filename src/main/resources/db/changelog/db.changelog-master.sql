@@ -3093,3 +3093,68 @@ CREATE INDEX idx_qr07_event_return_history
 --rollback ALTER TABLE crm.sales_return_event DROP COLUMN from_state;
 --rollback ALTER TABLE crm.sales_return_event DROP COLUMN request_fingerprint;
 --rollback ALTER TABLE crm.sales_return_event DROP COLUMN request_key;
+
+
+--changeset rm:0098-qr07-r2-physical-receipt-inspection-post
+-- R2 physical evidence and disposition never mutate original pickup proof.
+CREATE TABLE crm.sales_return_reception (
+ tenant_id UUID NOT NULL, return_id UUID NOT NULL, receipt_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL, actor_user_id UUID NOT NULL,
+ evidence_ref VARCHAR(120) NOT NULL, request_key VARCHAR(100) NOT NULL,
+ happened_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_qr07_reception PRIMARY KEY(tenant_id,return_id),
+ CONSTRAINT uq_qr07_reception_id UNIQUE(tenant_id,receipt_id),
+ CONSTRAINT uq_qr07_reception_key UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_qr07_reception_return FOREIGN KEY(tenant_id,return_id)
+   REFERENCES crm.sales_return_request(tenant_id,id),
+ CONSTRAINT fk_qr07_reception_warehouse FOREIGN KEY(tenant_id,warehouse_id)
+   REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_qr07_reception_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id)
+);
+CREATE TABLE crm.sales_return_inspection (
+ tenant_id UUID NOT NULL, return_id UUID NOT NULL, inspection_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL, disposition VARCHAR(20) NOT NULL,
+ evidence_ref VARCHAR(120) NOT NULL, request_key VARCHAR(100) NOT NULL,
+ happened_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_qr07_inspection PRIMARY KEY(tenant_id,return_id),
+ CONSTRAINT uq_qr07_inspection_key UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_qr07_inspection_return FOREIGN KEY(tenant_id,return_id)
+   REFERENCES crm.sales_return_request(tenant_id,id),
+ CONSTRAINT ck_qr07_disposition CHECK(disposition IN('RESTOCK','WRITE_OFF','QUARANTINE'))
+);
+CREATE TABLE crm.sales_return_posting (
+ tenant_id UUID NOT NULL, return_id UUID NOT NULL, posting_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL, warehouse_id UUID NOT NULL,
+ item_id UUID NOT NULL, quantity NUMERIC(19,4) NOT NULL,
+ disposition VARCHAR(20) NOT NULL, movement_id UUID,
+ request_key VARCHAR(100) NOT NULL, happened_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_qr07_posting PRIMARY KEY(tenant_id,return_id),
+ CONSTRAINT uq_qr07_posting_key UNIQUE(tenant_id,request_key),
+ CONSTRAINT uq_qr07_posting_movement UNIQUE(tenant_id,movement_id),
+ CONSTRAINT fk_qr07_posting_return FOREIGN KEY(tenant_id,return_id)
+   REFERENCES crm.sales_return_request(tenant_id,id),
+ CONSTRAINT fk_qr07_posting_stock FOREIGN KEY(tenant_id,movement_id)
+   REFERENCES crm.inv_stock_movement(tenant_id,id),
+ CONSTRAINT ck_qr07_posting_qty CHECK(quantity>0),
+ CONSTRAINT ck_qr07_posting_disposition CHECK(
+   (disposition='RESTOCK' AND movement_id IS NOT NULL)
+   OR (disposition='WRITE_OFF' AND movement_id IS NULL))
+);
+--rollback DROP TABLE crm.sales_return_posting;
+--rollback DROP TABLE crm.sales_return_inspection;
+--rollback DROP TABLE crm.sales_return_reception;
+
+--changeset rm:0099-qr07-r2-physical-evidence-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_qr07_reception_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_return_reception
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+CREATE TRIGGER trg_qr07_inspection_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_return_inspection
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+CREATE TRIGGER trg_qr07_posting_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_return_posting
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+--rollback DROP TRIGGER trg_qr07_posting_immutable ON crm.sales_return_posting;
+--rollback DROP TRIGGER trg_qr07_inspection_immutable ON crm.sales_return_inspection;
+--rollback DROP TRIGGER trg_qr07_reception_immutable ON crm.sales_return_reception;
