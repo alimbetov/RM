@@ -2259,7 +2259,7 @@ class QrWarehouseHandoverQualificationTest {
                 assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM crm.sales_pickup_credential
                         WHERE tenant_id=? AND state='CONSUMED'
-                        """,Integer.class,c.tenant())).isEqualTo(40);
+                        """,Integer.class,c.tenant())).isEqualTo(tenantOrders);
             }
             long deadlocksAfter=jdbc.queryForObject("""
                     SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
