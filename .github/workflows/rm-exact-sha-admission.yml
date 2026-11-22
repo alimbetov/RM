@@ -114,6 +114,16 @@ jobs:
               core.setFailed('RM-QA-01B: missing/failed required jobs or artifacts at exact SHA');
             else
               core.info('Exact-SHA workflow gate PASS; full qualification remains HOLD pending Surefire counts and migration fingerprints');
+      - name: Checkout exact SHA for the evidence verifier
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify Surefire XML, artifact provenance and Liquibase fingerprint
+        if: steps.qualify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/verify_rm_qa_01b.py
       - name: Publish immutable manifest evidence
         if: always()
         uses: actions/upload-artifact@v4
