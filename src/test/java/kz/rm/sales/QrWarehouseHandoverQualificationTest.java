@@ -43,6 +43,7 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired SalesReturnRequestService returns;
     @Autowired SalesReturnReviewService returnReview;
     @Autowired SalesReturnPhysicalService returnPhysical;
+    @Autowired SalesReturnReceptionProofService returnProof;
     @Autowired SalesInventoryCommandService sales;
     @Autowired SalesOrderQrReferenceService orderRefs;
     @Autowired WarehouseStaffScopeService scopes;
@@ -2597,6 +2598,10 @@ class QrWarehouseHandoverQualificationTest {
         return claim;
     }
 
+    private String qr07PhysicalProof(Context c, UUID requestId) {
+        return returnProof.issue(c.buyer(),c.tenant(),requestId,key()).rawProof();
+    }
+
     @Test void qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection() throws Exception {
         requirePostgres();
         var c=context();var o=ready(c,false);
@@ -2607,7 +2612,7 @@ class QrWarehouseHandoverQualificationTest {
                 """,UUID.class,c.tenant(),claim.orderLineId());
         BigDecimal start=stock(c,item,"on_hand");
         var received=returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
-                claim.requestId(),2,"SCAN_001",key());
+                claim.requestId(),2,qr07PhysicalProof(c,claim.requestId()),key());
         assertThat(received.state()).isEqualTo("RECEIVED");
         assertThat(received.version()).isEqualTo(4);
         assertThat(stock(c,item,"on_hand")).isEqualByComparingTo(start);
@@ -2645,7 +2650,7 @@ class QrWarehouseHandoverQualificationTest {
         var claim=qr07R2Approved(c,first,1);
         BigDecimal a=stock(c,c.itemOne(),"on_hand"),b=stock(c,c.itemTwo(),"on_hand");
         returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
-                2,"SCAN_002",key());
+                2,qr07PhysicalProof(c,claim.requestId()),key());
         returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
                 4,SalesReturnPhysicalService.Disposition.WRITE_OFF,"INSPECT_002",key());
         var posted=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
@@ -2663,7 +2668,7 @@ class QrWarehouseHandoverQualificationTest {
         var otherOrder=ready(c,false);
         var other=qr07R2Approved(c,otherOrder,1);
         returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),other.requestId(),
-                2,"SCAN_003",key());
+                2,qr07PhysicalProof(c,other.requestId()),key());
         returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),other.requestId(),
                 4,SalesReturnPhysicalService.Disposition.QUARANTINE,"INSPECT_003",key());
         BigDecimal stockBefore=stock(c,c.itemOne(),"on_hand");
@@ -2707,6 +2712,7 @@ class QrWarehouseHandoverQualificationTest {
         requirePostgres();
         var c=context();var o=ready(c,false);
         var claim=qr07R2Approved(c,o,2);
+        String physicalProof=qr07PhysicalProof(c,claim.requestId());
         var barrier=new CountDownLatch(2);
         var start=new CountDownLatch(1);
         int pass=0,reject=0;
@@ -2720,7 +2726,7 @@ class QrWarehouseHandoverQualificationTest {
                         throw new IllegalStateException("RECEPTION_START_TIMEOUT");
                     try {
                         returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
-                                claim.requestId(),2,"SCAN_RACE",requestKey);
+                                claim.requestId(),2,physicalProof,requestKey);
                         return true;
                     }catch(IllegalStateException e){
                         if(!e.getMessage().contains("RETURN_RECEPTION_REPLAY_CONFLICT"))
@@ -2749,7 +2755,7 @@ class QrWarehouseHandoverQualificationTest {
     private SalesReturnRequestService.Created qr07R2ReadyToPost(Context c,Order o){
         var claim=qr07R2Approved(c,o,2);
         returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
-                2,"SCAN_FOR_POST",key());
+                2,qr07PhysicalProof(c,claim.requestId()),key());
         returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
                 4,SalesReturnPhysicalService.Disposition.RESTOCK,
                 "INSPECT_FOR_POST",key());
