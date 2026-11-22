@@ -53,9 +53,9 @@ public class SalesReturnPhysicalService {
         if(prior!=null){
             if(!prior.actor().equals(employee)||!prior.warehouse().equals(warehouse)
                ||!prior.key().equals(key)||!prior.evidence().equals(evidence)
-               ||version!=0 && version!=1)
+               ||version!=2)
                 throw new IllegalStateException("RETURN_RECEPTION_REPLAY_CONFLICT");
-            return new Result(returnId,"RECEIVED",2,prior.id());
+            return new Result(returnId,"RECEIVED",4,prior.id());
         }
         if(c.version()!=version)throw new IllegalStateException("RETURN_VERSION_CONFLICT");
         if(!SalesReturnState.APPROVED.name().equals(c.state()))
@@ -94,7 +94,7 @@ public class SalesReturnPhysicalService {
             if(!prior.actor().equals(employee)||prior.decision()!=disposition
                     ||!prior.evidence().equals(evidence)||!prior.key().equals(key))
                 throw new IllegalStateException("RETURN_INSPECTION_REPLAY_CONFLICT");
-            return new Result(returnId,"INSPECTED",3,prior.id());
+            return new Result(returnId,"INSPECTED",5,prior.id());
         }
         if(c.version()!=version)throw new IllegalStateException("RETURN_VERSION_CONFLICT");
         if(!"RECEIVED".equals(c.state()))throw new IllegalStateException("RETURN_NOT_RECEIVED");
@@ -132,7 +132,7 @@ public class SalesReturnPhysicalService {
             if(!prior.actor().equals(employee)||!prior.key().equals(key))
                 throw new IllegalStateException("RETURN_POST_REPLAY_CONFLICT");
             return new Result(returnId,"RESTOCK".equals(prior.decision())
-                    ?"RESTOCKED":"DISPOSED",4,prior.id());
+                    ?"RESTOCKED":"DISPOSED",6,prior.id());
         }
         if(c.version()!=version)throw new IllegalStateException("RETURN_VERSION_CONFLICT");
         if(!"INSPECTED".equals(c.state()))throw new IllegalStateException("RETURN_NOT_INSPECTED");
