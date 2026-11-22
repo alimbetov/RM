@@ -3,7 +3,7 @@
 **Branch:** `base_dev`  
 **Candidate code SHA with hard test timeout:** `eafa61cffae55b9c227ac7dde123afcf62993ea5`  
 **CI:** https://github.com/alimbetov/RM/actions/runs/45037705438 (B3.3 sustained job SUCCESS, one JUnit test, zero failures/errors/skips)  
-**Status:** 60-second two-JVM B3.3 subgate PASS on exact SHA; full sustained capacity and production admission HOLD.
+**Status:** All four exact-SHA QR-06B PostgreSQL jobs PASS. B3.3 60-second two-JVM subgate PASS; full capacity and production admission HOLD.
 
 ## Implemented service-level load harness
 
@@ -50,3 +50,16 @@ The test asserts **exactly one receipt, COMPLETED transition, and movement linka
 **Interpretation:** The B3.3 60-second low-rate candidate is qualified. A 300-second repeat, stress-level offered rate, connection pool saturation, per-tenant fairness under asymmetric arrivals and multiple scenario repetitions are not qualified. In particular, 1.356 orders/s is not a system-wide capacity ceiling.
 
 **Remaining admission:** 300-second/long-run repeatability and stress, actual network response loss, external OIDC/JWKS, HTTPS, physical devices, commercial policy and production SLO signoff. Overall production HOLD.
+
+## Same-SHA regression evidence
+
+At `eafa61cffae55b9c227ac7dde123afcf62993ea5`, **all four jobs completed SUCCESS** in https://github.com/alimbetov/RM/actions/runs/45037705438:
+
+- `qr06b-b33-sustained`: dedicated B3.3 60s test PASS, 1/1.
+- `qr06b-b32-success-throughput`: PASS.
+- `qr06b-b31-mixed-load`: PASS.
+- `qr06b-postgresql`: **42 tests; 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** (`QrWarehouseHandoverQualificationTest` 31 and `TenantRbacRevocationQualificationTest` 11).
+
+The 42 regression tests include B3.3, and the one dedicated B3.3 test is therefore *not* an additional unique test. The slow first candidate without a bounded JUnit timeout must not be used as qualification evidence. The accepted source SHA above includes `@Timeout(240 seconds)` on the sustained test.
+
+**Closure:** 60s B3.3 synthetic workload PASS on exact SHA. The 300-second reproducibility, saturation knee, physical fault recovery and external production readiness remain HOLD.
