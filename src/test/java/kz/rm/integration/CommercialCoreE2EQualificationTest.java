@@ -140,6 +140,46 @@ class CommercialCoreE2EQualificationTest {
                 draft.rowVersion());
     }
 
+    @Test void suspendedSellerCannotAcceptNewCheckoutButPriorExactReplayRemainsStable() {
+        var c = setup();
+        var item = product(c);
+        var store = publishedStorefront(c);
+        var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
+                "Suspend-safe offer", new BigDecimal("75.0000"), "KZT");
+        var offer = offers.publish(c.staff(), c.tenant(), draft.id(),
+                draft.rowVersion());
+        var basket = List.of(new AutoOrderService.Line(offer.id(), 1));
+        String email = "suspend-" + UUID.randomUUID() + "@example.kz";
+        String rejectedKey = "rejected-" + UUID.randomUUID();
+
+        jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",
+                c.tenant());
+        assertThatThrownBy(() -> checkout.checkout(store.slug(), email, rejectedKey, basket))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Store not accepting orders");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class, c.tenant())).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND idempotency_key=?",
+                Integer.class, c.tenant(), rejectedKey)).isZero();
+
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",
+                c.tenant());
+        String acceptedKey = "accepted-" + UUID.randomUUID();
+        var accepted = checkout.checkout(store.slug(), email, acceptedKey, basket).order();
+        jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",
+                c.tenant());
+        var replay = checkout.checkout(store.slug(), email, acceptedKey, basket).order();
+        assertThat(replay.orderId()).isEqualTo(accepted.orderId());
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class, c.tenant())).isEqualTo(1);
+        assertThatThrownBy(() -> checkout.checkout(store.slug(), email,
+                "another-" + UUID.randomUUID(), basket))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void skuToSellerOfferToCheckoutToFulfillmentToReconciliation() {
         var c = setup();
         var item = product(c);
