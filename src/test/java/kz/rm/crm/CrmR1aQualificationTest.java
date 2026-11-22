@@ -1175,6 +1175,50 @@ class CrmR1aQualificationTest {
     }
 
 
+    @Test void urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged() {
+        var a=newTenant();
+        var b=newTenant();
+        UUID organization=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,a.tenantId());
+        UUID employee=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "ur-r32-crm-"+UUID.randomUUID(),"Limited CRM worker")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                organization,employee,OrganizationMembershipEntity.Role.MEMBER));
+        var actor=verified(employee);
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer WHERE tenant_id=?
+                """,Integer.class,a.tenantId());
+        assertThatThrownBy(()->secureCommands.createCompany(
+                actor,a.tenantId(),"Missing grant",null)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.createCompany(
+                actor,b.tenantId(),"Foreign tenant",null)).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer WHERE tenant_id=?
+                """,Integer.class,a.tenantId())).isEqualTo(before);
+        var role=roles.createRole(verified(a.actorId()),a.tenantId(),
+                "URCRM_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Qualified CRM writer");
+        roles.grant(verified(a.actorId()),a.tenantId(),role.id(),DomainPermission.CRM_WRITE);
+        roles.assign(verified(a.actorId()),a.tenantId(),employee,role.id());
+        roles.enable(verified(a.actorId()),a.tenantId());
+        assertThat(secureCommands.createCompany(actor,a.tenantId(),"Allowed company",null).id())
+                .isNotNull();
+        int admitted=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer WHERE tenant_id=?
+                """,Integer.class,a.tenantId());
+        assertThat(admitted).isEqualTo(before+1);
+        roles.revoke(verified(a.actorId()),a.tenantId(),role.id(),DomainPermission.CRM_WRITE);
+        assertThatThrownBy(()->secureCommands.createCompany(
+                actor,a.tenantId(),"Revoked writer",null)).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer WHERE tenant_id=?
+                """,Integer.class,a.tenantId())).isEqualTo(admitted);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer WHERE tenant_id=?
+                """,Integer.class,b.tenantId())).isZero();
+    }
+
     @Test void crmR14ReadOnlyRoleCannotUpdateArchiveOrRestoreContacts() {
         var t=newTenant(); var actor=verified(t.actorId());
         var customer=secureCommands.createCompany(actor,t.tenantId(),"Role bound",null);
