@@ -62,7 +62,7 @@ class IamOidcRevocationOutboxQualificationTest {
 
     @Test void realProviderIsDisabledByDefaultAndDoesNotFabricateAck() {
         var row=seed();
-        assertThat(defaultWorker.processOne(UUID.randomUUID()))
+        assertThat(defaultWorker.processOne(UUID.randomUUID(),row.deletionEventId()))
                 .isEqualTo(OidcRevocationOutboxWorker.Outcome.RETRY_SCHEDULED);
         assertThat(state(row.deletionEventId())).isEqualTo("PENDING");
         assertThat(jdbc.queryForObject("""
@@ -78,9 +78,9 @@ class IamOidcRevocationOutboxQualificationTest {
             assertThat(subject).isEqualTo(row.subject());
             calls.incrementAndGet();
         });
-        assertThat(worker.processOne(UUID.randomUUID()))
+        assertThat(worker.processOne(UUID.randomUUID(),row.deletionEventId()))
                 .isEqualTo(OidcRevocationOutboxWorker.Outcome.ACKNOWLEDGED);
-        assertThat(worker.processOne(UUID.randomUUID()))
+        assertThat(worker.processOne(UUID.randomUUID(),row.deletionEventId()))
                 .isEqualTo(OidcRevocationOutboxWorker.Outcome.NO_WORK);
         assertThat(calls).hasValue(1);
         assertThat(state(row.deletionEventId())).isEqualTo("ACKNOWLEDGED");
@@ -93,16 +93,16 @@ class IamOidcRevocationOutboxQualificationTest {
             if(calls.incrementAndGet()==1)throw new IllegalStateException("synthetic provider outage");
             assertThat(subject).isEqualTo(row.subject());
         });
-        assertThat(worker.processOne(UUID.randomUUID()))
+        assertThat(worker.processOne(UUID.randomUUID(),row.deletionEventId()))
                 .isEqualTo(OidcRevocationOutboxWorker.Outcome.RETRY_SCHEDULED);
         assertThat(state(row.deletionEventId())).isEqualTo("PENDING");
-        assertThat(worker.processOne(UUID.randomUUID()))
+        assertThat(worker.processOne(UUID.randomUUID(),row.deletionEventId()))
                 .isEqualTo(OidcRevocationOutboxWorker.Outcome.NO_WORK);
         jdbc.update("""
                 UPDATE public.iam_deletion_oidc_revocation_outbox
                 SET next_attempt_at=? WHERE deletion_event_id=?
                 """,java.sql.Timestamp.from(Instant.now().minusSeconds(1)),row.deletionEventId());
-        assertThat(worker.processOne(UUID.randomUUID()))
+        assertThat(worker.processOne(UUID.randomUUID(),row.deletionEventId()))
                 .isEqualTo(OidcRevocationOutboxWorker.Outcome.ACKNOWLEDGED);
         assertThat(calls).hasValue(2);
         assertThat(jdbc.queryForObject("""
@@ -127,7 +127,7 @@ class IamOidcRevocationOutboxQualificationTest {
         });
         var freshWorker=worker(subject->assertThat(subject).isEqualTo(row.subject()));
         try(var pool=Executors.newSingleThreadExecutor()){
-            var old=pool.submit(()->oldWorker.processOne(UUID.randomUUID()));
+            var old=pool.submit(()->oldWorker.processOne(UUID.randomUUID(),row.deletionEventId()));
             assertThat(providerEntered.await(10,TimeUnit.SECONDS)).isTrue();
             // Simulate a process crash / lease expiry while the first remote
             // call is outstanding. The fresh worker must fence its late ACK.
@@ -137,7 +137,7 @@ class IamOidcRevocationOutboxQualificationTest {
                     WHERE deletion_event_id=?
                     """,java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
                     java.sql.Timestamp.from(Instant.now().minusSeconds(1)),row.deletionEventId());
-            assertThat(freshWorker.processOne(UUID.randomUUID()))
+            assertThat(freshWorker.processOne(UUID.randomUUID(),row.deletionEventId()))
                     .isEqualTo(OidcRevocationOutboxWorker.Outcome.ACKNOWLEDGED);
             release.countDown();
             assertThat(old.get(12,TimeUnit.SECONDS))
@@ -167,9 +167,9 @@ class IamOidcRevocationOutboxQualificationTest {
             }
         });
         try(var pool=Executors.newSingleThreadExecutor()){
-            var first=pool.submit(()->worker.processOne(UUID.randomUUID()));
+            var first=pool.submit(()->worker.processOne(UUID.randomUUID(),row.deletionEventId()));
             assertThat(providerEntered.await(10,TimeUnit.SECONDS)).isTrue();
-            assertThat(worker.processOne(UUID.randomUUID()))
+            assertThat(worker.processOne(UUID.randomUUID(),row.deletionEventId()))
                     .isEqualTo(OidcRevocationOutboxWorker.Outcome.NO_WORK);
             release.countDown();
             assertThat(first.get(12,TimeUnit.SECONDS))
