@@ -33,11 +33,11 @@ jobs:
             if (branchData.commit.sha !== sha)
               return core.setFailed('Stale qualification SHA: ' + sha);
             const required = [
-              {name:'RM Domain Security and PostgreSQL Qualification',artifact:'kms-postgres-surefire'},
-              {name:'CRM R1.2 Populated PostgreSQL Upgrade Qualification',artifact:'crm-r12-populated-upgrade-surefire'},
-              {name:'INVENTORY 0081 Populated PostgreSQL Upgrade Qualification',artifact:'inventory-0081-populated-postgresql'},
-              {name:'SALES 08.4 Populated PostgreSQL Upgrade Qualification',artifact:'sales-084-populated-postgresql'},
-              {name:'RustFS Real Infrastructure E2E',artifact:'rustfs-real-infra-e2e-surefire'}
+              {name:'RM Domain Security and PostgreSQL Qualification',artifacts:['kms-h2-surefire','kms-postgres-surefire','iam-pii-populated-pg-surefire']},
+              {name:'CRM R1.2 Populated PostgreSQL Upgrade Qualification',artifacts:['crm-r12-populated-upgrade-surefire']},
+              {name:'INVENTORY 0081 Populated PostgreSQL Upgrade Qualification',artifacts:['inventory-0081-populated-postgresql']},
+              {name:'SALES 08.4 Populated PostgreSQL Upgrade Qualification',artifacts:['sales-084-populated-postgresql']},
+              {name:'RustFS Real Infrastructure E2E',artifacts:['rustfs-real-infra-e2e-surefire']}
             ];
             const manifest = {
               schema:'RM-QA-01B/v2',repository:owner+'/'+repo,branch,sha,
@@ -70,7 +70,7 @@ jobs:
                 const evidence={
                   name:gate.name,id:run.id,sha:run.head_sha,status:run.status,
                   conclusion:run.conclusion,url:run.html_url,
-                  run_attempt:run.run_attempt,jobs:[],artifact:null
+                  run_attempt:run.run_attempt,jobs:[],artifacts:[]
                 };
                 if (run.status==='completed' && run.conclusion==='success') {
                   const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRun,{
@@ -83,15 +83,17 @@ jobs:
                   }));
                   if (!jobs.length || jobs.some(j=>j.status!=='completed' ||
                       j.conclusion!=='success')) evidence.conclusion='incomplete-jobs';
-                  if (gate.artifact) {
-                    const artifacts=await github.paginate(
-                      github.rest.actions.listWorkflowRunArtifacts,
-                      {owner,repo,run_id:run.id,per_page:100}
-                    );
-                    const a=artifacts.find(a=>a.name===gate.artifact && !a.expired &&
+                  const artifacts=await github.paginate(
+                    github.rest.actions.listWorkflowRunArtifacts,
+                    {owner,repo,run_id:run.id,per_page:100}
+                  );
+                  for(const expected of gate.artifacts) {
+                    const a=artifacts.find(a=>a.name===expected && !a.expired &&
                       a.size_in_bytes>0);
-                    evidence.artifact=a ? {name:a.name,id:a.id,bytes:a.size_in_bytes} : null;
-                    if (!a) evidence.conclusion='missing-test-artifact';
+                    evidence.artifacts.push(a ?
+                      {name:a.name,id:a.id,bytes:a.size_in_bytes} :
+                      {name:expected,status:'MISSING'});
+                    if(!a) evidence.conclusion='missing-test-artifact';
                   }
                 }
                 manifest.required.push(evidence);
