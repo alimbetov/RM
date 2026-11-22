@@ -292,6 +292,131 @@ class SellerOfferQualificationTest {
             .isEqualTo("PUBLISHED");
     }
 
+    @Test void w1PublishOnlyGrantCanPauseThroughBothStorefrontFacades() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var paused=offers.changeStorefrontState(actor,c.tenant(),0,"PAUSED");
+        assertThat(paused.rowVersion()).isEqualTo(1);
+        // Fresh-version no-op: no duplicate version or audit event.
+        var repeated=offers.changeStorefrontState(actor,c.tenant(),1,"PAUSED");
+        assertThat(repeated.rowVersion()).isEqualTo(1);
+        assertThatThrownBy(()->offers.changeStorefrontState(actor,c.tenant(),0,"PAUSED"))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("OFFER_VERSION_CONFLICT");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.audit_event
+            WHERE tenant_id=? AND entity_id=? AND action_code='STOREFRONT_PAUSED'
+            """,Integer.class,c.tenant(),c.storefront())).isEqualTo(1);
+        assertThat(offers.changeStorefrontState(actor,c.tenant(),1,"PUBLISHED")
+            .rowVersion()).isEqualTo(2);
+    }
+
+    @Test void w1PriceNoOpIsIdenticalAcrossCompatibilityAndCanonicalFacades() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"No-op",
+            new BigDecimal("100.00"),"KZT");
+        int before=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.audit_event
+            WHERE tenant_id=? AND entity_id=?
+            """,Integer.class,c.tenant(),draft.id());
+        assertThat(offers.changePrice(actor,c.tenant(),draft.id(),0,
+            new BigDecimal("100.0"),"KZT").rowVersion()).isZero();
+        assertThat(canonical.updatePrice(actor,c.tenant(),draft.id(),"No-op",
+            new BigDecimal("100"),"KZT",0).rowVersion()).isZero();
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.audit_event
+            WHERE tenant_id=? AND entity_id=?
+            """,Integer.class,c.tenant(),draft.id())).isEqualTo(before);
+        offers.changePrice(actor,c.tenant(),draft.id(),0,new BigDecimal("110"),"KZT");
+        assertThatThrownBy(()->offers.changePrice(actor,c.tenant(),draft.id(),0,
+            new BigDecimal("110"),"KZT"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("OFFER_VERSION_CONFLICT");
+    }
+
+    @Test void w1InactiveSellerWorkspaceRejectsNewCheckoutButPreservesExactReplay() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,
+            DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"Active",
+            BigDecimal.TEN,"KZT");
+        offers.publish(actor,c.tenant(),draft.id(),0);
+        String email="buyer-"+UUID.randomUUID()+"@example.kz";
+        String key="checkout-"+UUID.randomUUID();
+        var placed=checkout.checkout(c.slug(),email,key,
+            List.of(new AutoOrderService.Line(draft.id(),1)));
+        jdbc.update("UPDATE iam_workspace SET status='SUSPENDED' WHERE id=?",c.tenant());
+        // Previously committed exact replay is an explicit exception to new admission.
+        assertThat(checkout.checkout(c.slug(),email,key,
+            List.of(new AutoOrderService.Line(draft.id(),1))).order().orderId())
+            .isEqualTo(placed.order().orderId());
+        assertThatThrownBy(()->checkout.checkout(c.slug(),email,
+            "checkout-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(draft.id(),1))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Store not accepting orders");
+        assertThat(jdbc.queryForObject(
+            "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+            Integer.class,c.tenant())).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+            "SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=?",
+            Integer.class,c.tenant())).isEqualTo(1);
+    }
+
+    @Test void postgresW1SuspensionAndCheckoutSerialize() throws Exception {
+        requirePostgres();
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,
+            DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var offer=offers.createDraft(actor,c.tenant(),c.sku(),"Suspension race",
+            BigDecimal.TEN,"KZT");
+        offers.publish(actor,c.tenant(),offer.id(),0);
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var buyer=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                try {
+                    return checkout.checkout(c.slug(),"race-"+UUID.randomUUID()+"@example.kz",
+                        "checkout-"+UUID.randomUUID(),
+                        List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId();
+                } catch(IllegalArgumentException denied) {
+                    return null;
+                }
+            });
+            var suspension=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                // Real committed workspace update competing for checkout's workspace row lock.
+                // The independent connection ensures DB lock fencing across threads.
+                try(var conn=dataSource.getConnection()) {
+                    conn.setAutoCommit(false);
+                    try(var ps=conn.prepareStatement(
+                        "UPDATE iam_workspace SET status='SUSPENDED' WHERE id=?")) {
+                        ps.setObject(1,c.tenant());
+                        ps.executeUpdate();
+                    }
+                    conn.commit();
+                }
+                return true;
+            });
+            start.countDown();
+            UUID accepted=buyer.get(30,TimeUnit.SECONDS);
+            assertThat(suspension.get(30,TimeUnit.SECONDS)).isTrue();
+            int orders=jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,c.tenant());
+            assertThat(orders).isEqualTo(accepted==null?0:1);
+            assertThat(jdbc.queryForObject(
+                "SELECT status FROM iam_workspace WHERE id=?",String.class,c.tenant()))
+                .isEqualTo("SUSPENDED");
+            assertThatThrownBy(()->checkout.checkout(c.slug(),
+                "later-"+UUID.randomUUID()+"@example.kz","checkout-"+UUID.randomUUID(),
+                List.of(new AutoOrderService.Line(offer.id(),1))))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
     private void requirePostgres() throws Exception {
         try (var connection=dataSource.getConnection()) {
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
