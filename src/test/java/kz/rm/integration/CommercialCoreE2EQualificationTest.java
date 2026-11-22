@@ -133,6 +133,13 @@ class CommercialCoreE2EQualificationTest {
                 priced.rowVersion());
     }
 
+    private StorefrontManagementService.Storefront publishedStorefront(Context c) {
+        var draft = storefronts.createDraft(c.staff(), c.tenant(),
+                "commercial-" + UUID.randomUUID());
+        return storefronts.publish(c.staff(), c.tenant(), draft.id(),
+                draft.rowVersion());
+    }
+
     @Test void skuToSellerOfferToCheckoutToFulfillmentToReconciliation() {
         var c = setup();
         var item = product(c);
@@ -223,7 +230,7 @@ class CommercialCoreE2EQualificationTest {
     @Test void publishedOfferAndOpenStocktakePreventUnsafeArchive() {
         var c = setup();
         var item = product(c);
-        storefronts.createDraft(c.staff(), c.tenant(), "commercial-" + UUID.randomUUID());
+        publishedStorefront(c);
         var draftOffer = offers.createDraft(c.staff(), c.tenant(), item.id(),
                 "Published device", BigDecimal.TEN, "KZT");
         var offer = offers.publish(c.staff(), c.tenant(), draftOffer.id(),
@@ -373,7 +380,7 @@ class CommercialCoreE2EQualificationTest {
         {
             var c = setup();
             var item = product(c);
-            storefronts.createDraft(c.staff(), c.tenant(), "commercial-" + UUID.randomUUID());
+            publishedStorefront(c);
             var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
                     "Archived SKU must not sell", BigDecimal.ONE, "KZT");
             var archiveReady = new java.util.concurrent.CountDownLatch(1);
@@ -419,7 +426,7 @@ class CommercialCoreE2EQualificationTest {
         {
             var c = setup();
             var item = product(c);
-            storefronts.createDraft(c.staff(), c.tenant(), "commercial-" + UUID.randomUUID());
+            publishedStorefront(c);
             var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
                     "Published offer keeps SKU active", BigDecimal.TEN, "KZT");
             var offerReady = new java.util.concurrent.CountDownLatch(1);
