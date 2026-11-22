@@ -859,4 +859,133 @@ class CrmInteractionQualificationTest {
                 """,Integer.class,t.tenantId(),employee)).isEqualTo(1);
     }
 
+    /** CRM-R2.1B: force both terminal commit orders with two real PG transactions. */
+    @Test void crmR21bPostgresBothTerminalCommitOrdersAreLinearizable() throws Exception {
+        requirePostgresR21b();
+        assertTerminalOrderR21b(true);
+        assertTerminalOrderR21b(false);
+    }
+
+    private void assertTerminalOrderR21b(boolean completeFirst) throws Exception {
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Ordered Terminal",null);
+        var item=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),
+                Instant.parse("2026-11-21T12:00:00Z"),null,
+                "ordered-terminal-"+UUID.randomUUID());
+        var firstChanged=new java.util.concurrent.CountDownLatch(1);
+        var releaseFirst=new java.util.concurrent.CountDownLatch(1);
+        var secondStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                if(completeFirst) interactions.complete(actor,t.tenantId(),item.id(),0);
+                else interactions.cancel(actor,t.tenantId(),item.id(),0);
+                firstChanged.countDown();
+                try {
+                    if(!releaseFirst.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("First terminal commit timeout");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(firstChanged.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                secondStarted.countDown();
+                try {
+                    if(completeFirst) interactions.cancel(actor,t.tenantId(),item.id(),0);
+                    else interactions.complete(actor,t.tenantId(),item.id(),0);
+                    return true;
+                } catch(IllegalStateException expected) { return false; }
+            });
+            assertThat(secondStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally { releaseFirst.countDown(); }
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS)).isFalse();
+        }
+        var persisted=interactions.get(actor,t.tenantId(),item.id());
+        assertThat(persisted.status()).isEqualTo(completeFirst
+                ?CrmInteractionService.Status.COMPLETED:CrmInteractionService.Status.CANCELLED);
+        assertThat(persisted.rowVersion()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),item.id())).isEqualTo(2);
+    }
+
+    /** CRM-R2.1B: archive-first denies new record; record-first preserves history. */
+    @Test void crmR21bPostgresBothArchiveRecordCommitOrdersPreserveHistory() throws Exception {
+        requirePostgresR21b();
+        assertArchiveOrderR21b(true);
+        assertArchiveOrderR21b(false);
+    }
+
+    private void assertArchiveOrderR21b(boolean archiveFirst) throws Exception {
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Ordered Archive",null);
+        String key="ordered-archive-"+UUID.randomUUID();
+        Instant occurred=Instant.parse("2026-11-21T10:00:00Z");
+        var firstChanged=new java.util.concurrent.CountDownLatch(1);
+        var releaseFirst=new java.util.concurrent.CountDownLatch(1);
+        var secondStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                if(archiveFirst) customers.archiveCustomer(actor,t.tenantId(),customer.id(),0);
+                else interactions.record(actor,t.tenantId(),customer.id(),null,
+                        CrmInteractionService.Kind.CALL,t.actorId(),occurred,null,key);
+                firstChanged.countDown();
+                try {
+                    if(!releaseFirst.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("First CRM commit timeout");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(firstChanged.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                secondStarted.countDown();
+                try {
+                    if(archiveFirst) interactions.record(actor,t.tenantId(),customer.id(),null,
+                            CrmInteractionService.Kind.CALL,t.actorId(),occurred,null,key);
+                    else customers.archiveCustomer(actor,t.tenantId(),customer.id(),0);
+                    return true;
+                } catch(IllegalArgumentException expected) { return false; }
+            });
+            assertThat(secondStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally { releaseFirst.countDown(); }
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(!archiveFirst);
+        }
+        assertThat(queries.customerStatus(actor,t.tenantId(),customer.id()))
+                .isEqualTo(CrmCustomerEntity.Status.ARCHIVED);
+        int rows=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction
+                WHERE tenant_id=? AND customer_id=? AND request_key=?
+                """,Integer.class,t.tenantId(),customer.id(),key);
+        assertThat(rows).isEqualTo(archiveFirst?0:1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event e
+                JOIN crm.customer_interaction i
+                  ON i.tenant_id=e.tenant_id AND i.id=e.interaction_id
+                WHERE i.tenant_id=? AND i.customer_id=?
+                """,Integer.class,t.tenantId(),customer.id())).isEqualTo(rows);
+    }
+
+    private void requirePostgresR21b() throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+    }
+
 }
