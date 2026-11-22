@@ -2203,6 +2203,13 @@ class QrWarehouseHandoverQualificationTest {
                 if(System.nanoTime()>deadline)throw new AssertionError("B35 readiness timeout");
                 Thread.sleep(20);
             }
+            // The test must not preissue any time-limited pickup credential.
+            // Each worker issues its own buyer proof at the scheduled arrival.
+            for(var c:tenants) {
+                assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.sales_pickup_credential WHERE tenant_id=?
+                        """,Integer.class,c.tenant())).isZero();
+            }
             java.nio.file.Files.writeString(release,"START");
             assertThat(waitQr06bProcess(left,folder.resolve("left.log"),150)).isZero();
             assertThat(waitQr06bProcess(right,folder.resolve("right.log"),150)).isZero();
@@ -2232,6 +2239,10 @@ class QrWarehouseHandoverQualificationTest {
                 assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
                 assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
+                        """,Integer.class,c.tenant())).isEqualTo(40);
+                assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.sales_pickup_credential
+                        WHERE tenant_id=? AND state='CONSUMED'
                         """,Integer.class,c.tenant())).isEqualTo(40);
             }
             long deadlocksAfter=jdbc.queryForObject("""
