@@ -1049,7 +1049,11 @@ class QrWarehouseHandoverQualificationTest {
     }
 
     private static int waitQr06bProcess(Process p,java.nio.file.Path output) throws Exception {
-        if(!p.waitFor(65,TimeUnit.SECONDS)) {
+        return waitQr06bProcess(p,output,65);
+    }
+
+    private static int waitQr06bProcess(Process p,java.nio.file.Path output,int seconds) throws Exception {
+        if(!p.waitFor(seconds,TimeUnit.SECONDS)) {
             p.destroyForcibly();
             throw new AssertionError("QR06B child JVM timed out; log: "+output);
         }
@@ -1987,9 +1991,13 @@ class QrWarehouseHandoverQualificationTest {
      * stages prevent business rejections from masquerading as capacity.
      * Profiles do not assert saturation unless actual pool contention occurs.
      */
-    @org.junit.jupiter.api.Timeout(value=240,unit=TimeUnit.SECONDS)
+    @org.junit.jupiter.api.Timeout(value=750,unit=TimeUnit.SECONDS)
     @Test void qr06bPgB34TwoJvmSteppedLoadRecoversAndPreservesFairness() throws Exception {
         requirePostgres();
+        int duration=Integer.getInteger("rm.qr06b.b34.durationSeconds",60);
+        if(duration!=60 && duration!=300)throw new IllegalArgumentException("B34 duration 60 or 300");
+        int ordersPerTenant=duration==300?200:40;
+        int extraStock=duration==300?1200:200;
         var contexts=List.of(context(),context());
         var orders=new ArrayList<java.util.Map.Entry<Context,Order>>();
         var dir=java.nio.file.Files.createTempDirectory("qr06b-b34-");
@@ -2004,18 +2012,20 @@ class QrWarehouseHandoverQualificationTest {
                 roles.grant(c.owner(),c.tenant(),assignedRole(c),
                         DomainPermission.INVENTORY_RECEIVE);
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
-                        c.itemOne(),key(),new BigDecimal("200"));
+                        c.itemOne(),key(),BigDecimal.valueOf(extraStock));
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
-                        c.itemTwo(),key(),new BigDecimal("200"));
+                        c.itemTwo(),key(),BigDecimal.valueOf(extraStock));
                 var lines=new ArrayList<String>();
-                for(int i=0;i<40;i++) {
+                for(int i=0;i<ordersPerTenant;i++) {
                     var o=ready(c,true);
                     var issue=pickup.issue(c.buyer(),o.publicRef(),key());
                     orders.add(java.util.Map.entry(c,o));
-                    String stage=i<10?"LOW":i<30?"PEAK":"RECOVERY";
-                    long due=i<10?i*1500L:
-                            i<30?15000L+(i-10)*500L:
-                                    35000L+(i-30)*2000L;
+                    String stage=duration==60
+                            ?(i<10?"LOW":i<30?"PEAK":"RECOVERY")
+                            :(i<50?"LOW":i<150?"PEAK":"RECOVERY");
+                    long due=duration==60
+                            ?(i<10?i*1500L:i<30?15000L:35000L+(i-30)*2000L)
+                            :(i<50?i*1500L:i<150?90000L:120000L+(i-150)*3500L);
                     lines.add(issue.rawProof()+"|"+version(c,o)+"|"+key()+"|"+due+"|"+stage);
                 }
                 var manifest=dir.resolve("tenant-"+tenantIndex+".manifest");
@@ -2044,8 +2054,8 @@ class QrWarehouseHandoverQualificationTest {
                 Thread.sleep(25);
             }
             java.nio.file.Files.writeString(gate,"GO");
-            int exitFirst=waitQr06bProcess(first,dir.resolve("a.log"));
-            int exitSecond=waitQr06bProcess(second,dir.resolve("b.log"));
+            int exitFirst=waitQr06bProcess(first,dir.resolve("a.log"),duration+120);
+            int exitSecond=waitQr06bProcess(second,dir.resolve("b.log"),duration+120);
             assertThat(exitFirst).isZero();
             assertThat(exitSecond).isZero();
             for(String logName:List.of("a.log","b.log")) {
@@ -2063,20 +2073,22 @@ class QrWarehouseHandoverQualificationTest {
             }
             for(var entry:orders)assertExactlyOneHandover(entry.getKey(),entry.getValue(),2);
             for(var c:contexts) {
-                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
-                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("100");
+                assertThat(stock(c,c.itemOne(),"on_hand"))
+                        .isEqualByComparingTo(BigDecimal.valueOf(20L+extraStock-5L*ordersPerTenant));
+                assertThat(stock(c,c.itemTwo(),"on_hand"))
+                        .isEqualByComparingTo(BigDecimal.valueOf(20L+extraStock-3L*ordersPerTenant));
                 assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
                 assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
                 assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
-                        """,Integer.class,c.tenant())).isEqualTo(40);
+                        """,Integer.class,c.tenant())).isEqualTo(ordersPerTenant);
             }
             long deadlocksAfter=jdbc.queryForObject("""
                     SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
                     """,Long.class);
             assertThat(deadlocksAfter-deadlocksBefore).isZero();
-            System.out.println("QR06B_B34_RESULT jvms=2 tenants=2 completed=80 "+
-                    "deadlocks=0 unexpected_failures=0");
+            System.out.printf("QR06B_B34_RESULT duration_profile_s=%d jvms=2 tenants=2 completed=%d deadlocks=0 unexpected_failures=0%n",
+                    duration,ordersPerTenant*2);
         }finally {
             if(first!=null&&first.isAlive())first.destroyForcibly();
             if(second!=null&&second.isAlive())second.destroyForcibly();
