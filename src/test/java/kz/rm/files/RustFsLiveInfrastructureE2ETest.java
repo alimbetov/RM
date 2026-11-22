@@ -53,7 +53,7 @@ class RustFsLiveInfrastructureE2ETest {
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
     @Autowired OrganizationMembershipRepository memberships;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
     @Autowired AuthenticatedFilesCommands commands;
     @Autowired FileUploadCompletionService complete;
     @Autowired FileMetadataService metadata;
@@ -78,6 +78,17 @@ class RustFsLiveInfrastructureE2ETest {
         }
     }
 
+    private VerifiedActor verified(UUID id) {
+        String sub=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,id);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                        .header("alg","RS256").subject(sub).issuedAt(Instant.now())
+                        .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder,users).resolve("synthetic-live-rustfs-owner");
+    }
+
     private record Tenant(UUID user,UUID tenant,VerifiedActor actor) {}
     private Tenant tenant() {
         var owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
@@ -95,13 +106,13 @@ class RustFsLiveInfrastructureE2ETest {
                 UUID.randomUUID(),organization.getId(),user.getId(),
                 OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",space.getId());
-        var role=roles.createRole(owner.getId(),space.getId(),
+        var role=roles.createRole(verified(owner.getId()),space.getId(),
                 "S3_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "E2E synthetic uploads");
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_UPLOAD);
-        roles.grant(owner.getId(),space.getId(),role.id(),DomainPermission.FILES_READ);
-        roles.assign(owner.getId(),space.getId(),user.getId(),role.id());
-        roles.enable(owner.getId(),space.getId());
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.FILES_UPLOAD);
+        roles.grant(verified(owner.getId()),space.getId(),role.id(),DomainPermission.FILES_READ);
+        roles.assign(verified(owner.getId()),space.getId(),user.getId(),role.id());
+        roles.enable(verified(owner.getId()),space.getId());
         String subject=jdbc.queryForObject(
                 "SELECT external_subject FROM public.iam_user_account WHERE id=?",
                 String.class,user.getId());
