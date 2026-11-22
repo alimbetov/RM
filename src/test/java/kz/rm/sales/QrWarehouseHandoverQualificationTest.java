@@ -1051,14 +1051,14 @@ class QrWarehouseHandoverQualificationTest {
         requirePostgres();
         var c=context();var o=ready(c,true);
         var issued=pickup.issue(c.buyer(),o.publicRef(),key());
-        long version=version(c,o),before;
+        long version=version(c,o);
         String req=key();
         java.nio.file.Path dir=java.nio.file.Files.createTempDirectory("qr06b-pre-");
         Process child=null;
         try {
             var secret=writeQr06bSecret(dir,issued.rawProof());
             child=startQr06bWorker("HALT_BEFORE_COMMIT",c,secret.toString(),version,req,
-                    dir.resolve("no-ready"),dir.resolve("no-gate"),dir.resolve("child.log"));
+                    java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),dir.resolve("child.log"));
             assertThat(waitQr06bProcess(child,dir.resolve("child.log"))).isEqualTo(86);
             assertNoHandoverEffects(c,o);
             assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
@@ -1088,7 +1088,7 @@ class QrWarehouseHandoverQualificationTest {
         try {
             var secret=writeQr06bSecret(dir,issued.rawProof());
             child=startQr06bWorker("HALT_AFTER_COMMIT",c,secret.toString(),version,req,
-                    dir.resolve("no-ready"),dir.resolve("no-gate"),dir.resolve("child.log"));
+                    java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),dir.resolve("child.log"));
             assertThat(waitQr06bProcess(child,dir.resolve("child.log"))).isEqualTo(87);
             assertExactlyOneHandover(c,o,2);
             var receipt=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
