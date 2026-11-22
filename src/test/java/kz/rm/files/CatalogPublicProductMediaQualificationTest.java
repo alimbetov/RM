@@ -234,7 +234,7 @@ class CatalogPublicProductMediaQualificationTest {
     }
 
     @Test void qr02aForeignTenantAndUnavailableOriginalFailClosed() throws Exception {
-        var a=setup(),b=setup();UUID source=upload(a,jpeg(),"image/jpeg");
+        var a=setup();var b=setup();UUID source=upload(a,jpeg(),"image/jpeg");
         assertThatThrownBy(()->media.publishSanitized(b.staff(),b.tenant(),b.item(),
                 source,0,"IMG_"+UUID.randomUUID().toString().replace("-",""),true))
                 .isInstanceOf(SecurityException.class);
