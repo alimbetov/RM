@@ -220,4 +220,126 @@ class PublishedOfferQrQualificationTest {
                 WHERE tenant_id=? AND offer_id=? AND generation=1
                 """,Integer.class,f.tenant(),f.offerId())).isEqualTo(1);
     }
+
+    @Test void qr01bExactRequestReplaySurvivesPriceUpdateAndRevocation() {
+        var f=fixture("REPLAY-PRICE","PRODUCT");
+        String key="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        var issued=qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key);
+        var updated=offers.updatePrice(f.actor(),f.tenant(),f.offerId(),
+                "Offer QR",new BigDecimal("1600.0000"),"KZT",f.offerVersion());
+        assertThat(updated.rowVersion()).isGreaterThan(f.offerVersion());
+        var retry=qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key);
+        assertThat(retry).isEqualTo(issued);
+        assertThat(qr.revoke(f.actor(),f.tenant(),f.offerId(),issued.rowVersion())
+                .state()).isEqualTo(PublishedOfferQrService.State.REVOKED);
+        assertThat(qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key))
+                .isEqualTo(issued); // command-time result; public read is now unavailable
+        assertThatThrownBy(()->cards.findPublished(issued.publicRef(),"ru"))
+                .hasMessage("QR_UNAVAILABLE");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_qr_receipt WHERE tenant_id=? AND request_key=?
+                """,Integer.class,f.tenant(),key)).isEqualTo(1);
+    }
+
+    @Test void qr01bSameKeyWithOtherOperationOrOfferIsRejectedBeforeMutation() {
+        var f=fixture("KEY-INTENT","PRODUCT");
+        var second=fixture("KEY-INTENT","PRODUCT");
+        String key="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        var reference=qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key);
+        assertThatThrownBy(()->qr.revoke(f.actor(),f.tenant(),f.offerId(),
+                reference.rowVersion(),key)).hasMessage("QR_IDEMPOTENCY_CONFLICT");
+        assertThatThrownBy(()->qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),
+                f.offerVersion()+1,key)).hasMessage("QR_IDEMPOTENCY_CONFLICT");
+        assertThat(qr.reprint(f.actor(),f.tenant(),f.offerId()).state())
+                .isEqualTo(PublishedOfferQrService.State.ACTIVE);
+        // Same key may be reused in another seller tenant without collision.
+        assertThat(qr.issueOrGet(second.actor(),second.tenant(),second.offerId(),
+                second.offerVersion(),key).publicRef()).isNotEqualTo(reference.publicRef());
+        assertThat(countActive(f)).isEqualTo(1);
+        assertThat(countActive(second)).isEqualTo(1);
+    }
+
+    @Test void qr01bRevokeReissueAndExactRetriesProduceOneGenerationEach() {
+        var f=fixture("REVOCATION-REISSUE","PRODUCT");
+        String issueKey="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        String revokeKey="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        String reissueKey="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        var first=qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),issueKey);
+        var revoked=qr.revoke(f.actor(),f.tenant(),f.offerId(),first.rowVersion(),revokeKey);
+        assertThat(qr.revoke(f.actor(),f.tenant(),f.offerId(),
+                first.rowVersion(),revokeKey)).isEqualTo(revoked);
+        var next=qr.reissue(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),reissueKey);
+        assertThat(next.generation()).isEqualTo(2);
+        assertThat(qr.reissue(f.actor(),f.tenant(),f.offerId(),
+                f.offerVersion(),reissueKey)).isEqualTo(next);
+        assertThatThrownBy(()->qr.reissue(f.actor(),f.tenant(),f.offerId(),
+                f.offerVersion(),"QR01B_"+UUID.randomUUID().toString().replace("-","")))
+                .hasMessage("QR_ALREADY_ACTIVE");
+        assertThat(countActive(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_qr_receipt
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,f.tenant(),f.offerId())).isEqualTo(3);
+    }
+
+    @Test void qr01bBadRequestKeyAndHiddenOfferNeverProduceReceipt() {
+        var f=fixture("INVALID-KEY","PRODUCT");
+        assertThatThrownBy(()->qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),
+                f.offerVersion(),"bad")).hasMessage("QR_REQUEST_KEY_INVALID");
+        var hidden=offers.hide(f.actor(),f.tenant(),f.offerId(),f.offerVersion());
+        String key="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        assertThatThrownBy(()->qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),
+                hidden.rowVersion(),key)).hasMessage("QR_OFFER_NOT_PUBLISHED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_qr_receipt WHERE tenant_id=? AND request_key=?
+                """,Integer.class,f.tenant(),key)).isZero();
+        var published=offers.publish(f.actor(),f.tenant(),f.offerId(),hidden.rowVersion());
+        assertThat(qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),
+                published.rowVersion(),key).generation()).isEqualTo(1);
+    }
+
+    @Test void qr01bConcurrentSameRequestKeySerializedInPostgres() throws Exception {
+        try (var c=dataSource.getConnection()) {
+            Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture("RACE-IDEM","PRODUCT");
+        String key="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        var start=new CountDownLatch(1);
+        try (var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var first=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key);
+            });
+            var second=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key);
+            });
+            start.countDown();
+            assertThat(first.get(30,TimeUnit.SECONDS)).isEqualTo(second.get(30,TimeUnit.SECONDS));
+        }
+        assertThat(countActive(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_qr_receipt
+                WHERE tenant_id=? AND request_key=?
+                """,Integer.class,f.tenant(),key)).isEqualTo(1);
+    }
+
+    @Test void qr01bPostgresCommandReceiptCannotBeOverwrittenOrDeleted() throws Exception {
+        try (var c=dataSource.getConnection()) {
+            Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture("IMMUTABLE-RCPT","PRODUCT");
+        String key="QR01B_"+UUID.randomUUID().toString().replace("-","");
+        qr.issueOrGet(f.actor(),f.tenant(),f.offerId(),f.offerVersion(),key);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.store_offer_qr_receipt SET action_code='REVOKE'
+                WHERE tenant_id=? AND request_key=?
+                """,f.tenant(),key)).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.store_offer_qr_receipt
+                WHERE tenant_id=? AND request_key=?
+                """,f.tenant(),key)).isInstanceOf(Exception.class);
+    }
 }

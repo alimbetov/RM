@@ -2472,3 +2472,49 @@ CREATE TABLE crm.store_offer_qr_ref (
 CREATE INDEX idx_offer_qr_offer_history
  ON crm.store_offer_qr_ref(tenant_id,offer_id,generation DESC);
 --rollback DROP TABLE crm.store_offer_qr_ref;
+
+
+--changeset rm:0085-qr-command-receipts
+-- QR-01B: immutable command effect, seller-wide request key namespace.
+-- All QR mutations serialize on crm.store_front(tenant_id) FOR UPDATE.
+-- Receipt replays preserve original outcome even when alias later changes state.
+CREATE TABLE crm.store_offer_qr_receipt (
+ tenant_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ offer_id UUID NOT NULL,
+ actor_id UUID NOT NULL,
+ action_code VARCHAR(16) NOT NULL,
+ request_sha256 CHAR(64) NOT NULL,
+ qr_ref_id UUID NOT NULL,
+ result_state VARCHAR(16) NOT NULL,
+ result_row_version BIGINT NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_store_offer_qr_receipt PRIMARY KEY (tenant_id,request_key),
+ CONSTRAINT fk_offer_qr_receipt_offer FOREIGN KEY (tenant_id,offer_id)
+    REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_offer_qr_receipt_ref FOREIGN KEY (tenant_id,qr_ref_id)
+    REFERENCES crm.store_offer_qr_ref(tenant_id,id),
+ CONSTRAINT fk_offer_qr_receipt_actor FOREIGN KEY (actor_id)
+    REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_offer_qr_receipt_action CHECK (
+    action_code IN ('ISSUE','REISSUE','REVOKE')),
+ CONSTRAINT ck_offer_qr_receipt_result CHECK (
+    result_state IN ('ACTIVE','REVOKED') AND result_row_version >= 0),
+ CONSTRAINT ck_offer_qr_receipt_hash CHECK (LENGTH(request_sha256)=64)
+);
+CREATE INDEX idx_offer_qr_receipt_offer
+ ON crm.store_offer_qr_receipt(tenant_id,offer_id,created_at);
+--rollback DROP TABLE crm.store_offer_qr_receipt;
+
+--changeset rm:0086-qr-command-receipt-immutability dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_offer_qr_receipt_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'QR command receipts are immutable';
+END;
+$$;
+CREATE TRIGGER trg_offer_qr_receipt_immutable
+ BEFORE UPDATE OR DELETE ON crm.store_offer_qr_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_offer_qr_receipt_mutation();
+--rollback DROP TRIGGER trg_offer_qr_receipt_immutable ON crm.store_offer_qr_receipt;
+--rollback DROP FUNCTION crm.reject_offer_qr_receipt_mutation();

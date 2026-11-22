@@ -8,6 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Base64;
@@ -110,6 +114,106 @@ public class PublishedOfferQrService {
                 """, Integer.class, tenant, offerId);
         if (last == null || last == 0) throw new IllegalStateException("QR_NOT_ISSUED");
         return insert(tenant, offerId, user);
+    }
+
+
+    /** Explicit durable request-key API. The legacy no-key methods remain
+     * for internal compatibility, but future adapters MUST use these variants.
+     * A successful retry returns the original command-time result snapshot even
+     * when the associated public reference has since been revoked. */
+    @Transactional
+    public Reference issueOrGet(VerifiedActor actor, UUID tenant, UUID offerId,
+                                long expectedOfferVersion, String requestKey) {
+        return executeRecorded(actor, tenant, offerId, "ISSUE",
+                expectedOfferVersion, requestKey,
+                () -> issueOrGet(actor, tenant, offerId, expectedOfferVersion));
+    }
+
+    @Transactional
+    public Reference revoke(VerifiedActor actor, UUID tenant, UUID offerId,
+                            long expectedQrVersion, String requestKey) {
+        return executeRecorded(actor, tenant, offerId, "REVOKE",
+                expectedQrVersion, requestKey,
+                () -> revoke(actor, tenant, offerId, expectedQrVersion));
+    }
+
+    @Transactional
+    public Reference reissue(VerifiedActor actor, UUID tenant, UUID offerId,
+                             long expectedOfferVersion, String requestKey) {
+        return executeRecorded(actor, tenant, offerId, "REISSUE",
+                expectedOfferVersion, requestKey,
+                () -> reissue(actor, tenant, offerId, expectedOfferVersion));
+    }
+
+    private record Recorded(String hash, UUID offerId, UUID actorId,
+                            String action, Reference reference) {}
+
+    private Reference executeRecorded(VerifiedActor actor, UUID tenant, UUID offerId,
+                                      String action, long expectedVersion,
+                                      String requestKey,
+                                      java.util.function.Supplier<Reference> execute) {
+        if (requestKey == null || !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
+            throw new IllegalArgumentException("QR_REQUEST_KEY_INVALID");
+        if (offerId == null || expectedVersion < 0)
+            throw new IllegalArgumentException("QR_REQUEST_INVALID");
+        UUID user = admit(actor, tenant);
+        // All QR mutations of this seller already serialize on this row.
+        // Lock BEFORE checking a receipt, BEFORE locking an offer, and BEFORE
+        // any alias insertion; no second lock order is introduced.
+        lockStore(tenant);
+        String fingerprint = fingerprint(tenant, user, offerId, action, expectedVersion);
+        Recorded receipt = recorded(tenant, requestKey);
+        if (receipt != null) {
+            if (!fingerprint.equals(receipt.hash())
+                    || !offerId.equals(receipt.offerId())
+                    || !user.equals(receipt.actorId())
+                    || !action.equals(receipt.action()))
+                throw new IllegalStateException("QR_IDEMPOTENCY_CONFLICT");
+            return receipt.reference();
+        }
+        Reference result = execute.get();
+        UUID refId = jdbc.queryForObject("""
+                SELECT id FROM crm.store_offer_qr_ref
+                WHERE tenant_id=? AND public_ref=?
+                """, UUID.class, tenant, result.publicRef());
+        if (refId == null) throw new IllegalStateException("QR_RECEIPT_SOURCE_MISSING");
+        jdbc.update("""
+                INSERT INTO crm.store_offer_qr_receipt
+                  (tenant_id,request_key,offer_id,actor_id,action_code,request_sha256,
+                   qr_ref_id,result_state,result_row_version,created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+                """, tenant, requestKey, offerId, user, action, fingerprint, refId,
+                result.state().name(), result.rowVersion(), Timestamp.from(Instant.now()));
+        return result;
+    }
+
+    private Recorded recorded(UUID tenant, String requestKey) {
+        List<Recorded> matches = jdbc.query("""
+                SELECT r.request_sha256,r.offer_id,r.actor_id,r.action_code,
+                       q.public_ref,q.generation,r.result_state,
+                       r.result_row_version,q.issued_at
+                FROM crm.store_offer_qr_receipt r
+                JOIN crm.store_offer_qr_ref q
+                  ON q.tenant_id=r.tenant_id AND q.id=r.qr_ref_id
+                WHERE r.tenant_id=? AND r.request_key=?
+                """, (rs,n) -> new Recorded(rs.getString(1),
+                rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
+                rs.getString(4), new Reference(rs.getObject(2, UUID.class),
+                rs.getString(5), rs.getInt(6), State.valueOf(rs.getString(7)),
+                rs.getLong(8), rs.getTimestamp(9).toInstant())), tenant, requestKey);
+        return matches.isEmpty() ? null : matches.getFirst();
+    }
+
+    private static String fingerprint(UUID tenant, UUID actor, UUID offer,
+                                      String action, long version) {
+        String canonical = "RM/PRODUCT_OFFER/QR-R1B|" + tenant + "|" + actor + "|"
+                + offer + "|" + action + "|" + version;
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 unavailable", impossible);
+        }
     }
 
     private Reference insert(UUID tenant, UUID offerId, UUID actor) {

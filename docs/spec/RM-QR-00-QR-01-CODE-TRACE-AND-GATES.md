@@ -51,3 +51,18 @@ H2 не доказывает поведение FOR UPDATE в PostgreSQL. Exact-
 6. Популяционная PostgreSQL migration, EXPLAIN/benchmark, OIDC/browser/телефон и нагрузка — отдельные доказательные рубежи.
 
 **DoD:** exact-SHA compile + H2 migration + реальный PG concurrency/security + unchanged SALES/INVENTORY/FILES regression + approved issue idempotency. Production и новый HTTP transport запрещены без независимого решения.
+
+
+## 6. QR-01B: durable idempotency and immutable receipts
+
+**Implementation candidate:** PublishedOfferQrService has explicit requestKey overloads for ISSUE, REVOKE and REISSUE, with a single tenant-wide QR command namespace and SHA-256 canonical request fingerprint bound to (tenant,actor,offer,action,expectedVersion). Exact-key replay after price changes or revocation reads the **original operation result** from persisted receipt (historical snapshot; not a claim the old QR remains active). Reuse for a different actor/offer/action/version yields QR_IDEMPOTENCY_CONFLICT with zero new side effects.
+
+**Lock ordering:** authenticated IAM actor/workspace admission -> seller crm.store_front FOR UPDATE -> check immutable receipt -> existing offer/CATALOG guards -> mutate alias and audit -> insert receipt in SAME transaction. Existing storefront owner row serializes all seller QR commands across pods; no extra QR stripe or checkout lock is required. Rollback removes receipt + alias change + audit together.
+
+**Schema:** crm.store_offer_qr_receipt, PK(tenant_id,request_key), FK tenant+offer and tenant+qr_ref, SHA-256 and actor, immutable command-time status/version. PostgreSQL-only trigger prevents UPDATE/DELETE. No raw secret or buyer PII stored; PRODUCT_OFFER public ref is NONsecret.
+
+**Compatibility:** no-key ISSUE/REVOKE/REISSUE remain for legacy internal Java callers and retain natural-key/CAS semantics; future QR adapters MUST use requestKey overloads. This is an explicit compatibility policy, not a second ledger. Reprint is read-only and naturally idempotent.
+
+**QR-01B evidence plan:** six additional methods cover changed-price replay, action/key conflict, revoke/reissue, invalid input and hidden offer rollback, PG same-key concurrency, immutable receipt trigger. These tests MUST pass on exact code SHA before QUALIFIED.
+
+**Remaining:** public ref rate limits, approved HTTPS host, QR image/scanner QA and external transport remain QR-HTTP, and are not declared complete.
