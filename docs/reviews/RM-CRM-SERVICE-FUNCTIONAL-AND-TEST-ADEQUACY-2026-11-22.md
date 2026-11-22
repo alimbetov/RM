@@ -140,3 +140,15 @@ RM уже содержит действующее ядро CRM, а не толь
 **Нормативные рамки:** `docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json`; `docs/spec/RM-UR-R3.5-MATURITY-REPORT-R1.md`; `docs/strategy/RM-STRATEGY-R4-GAP-PRIORITY-v1.json`; `docs/architecture/RM-PLATFORM-STANDARD-R2.md`.
 
 **Граница достоверности:** это ревью публичных сигнатур, состава исходников, именованных предметных JUnit-методов и GitHub workflow conclusions, **а не построчная формальная верификация всех сервисов**. Для точной атрибуции каждого пользовательского CRM-кейса требуется новый evidence registry и запуск на SHA с новыми тестами. Сценарии в таблице 4 — предметное целевое ТЗ, не утверждение о наличии соответствующих JUnit.
+
+## 10. Реализация первого пакета сценарных тестов (CRM-SVC-01/02/03)
+
+Добавлены два **непосредственно пользовательских** Java service journey JUnit-метода в `CrmInteractionQualificationTest`:
+
+- `crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads`: CRM-U02/U04/U07 — создание компании и контакта, безопасный ответ команды без PII, повторное чтение и поиск, фиксирование звонка, replay, следующее действие, completion, проверка истории, создание и активация договора, отрицательное чтение другого tenant.
+- `crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke`: CRM-U04 negative branch — сотрудник только с `CRM_READ` просматривает interaction, не может завершать; после `revoke` теряет даже доступ на чтение, число interaction events не меняется.
+
+Оба метода включены в `.github/scripts/verify_rm_qa_01b.py` как **обязательные PostgreSQL-only evidence checks**. H2 test run не заменяет их PostgreSQL execution. До успешного exact-SHA CI новый набор имеет статус **CANDIDATE**, не `SERVICE_QUALIFIED`.
+
+Это **часть** `CRM-SVC-01/02/03`, а не завершение полного CRM-SVC-05. Полный CRM-U01 (OIDC→first tenant→staff grant), CRM-U08 (CRM↔SALES), CRM-U10 (file ownership) и CRM-U11 (multi-resource archive/restore) ещё требуют собственных JUnit методов. CRM-U05/U06/U09/U12 блокируются отсутствующими сервисными функциями. Исходный реестр 75 требований и 46 verified proofs **не изменять** на основании новых сценарных тестов.
+
