@@ -1901,7 +1901,7 @@ CREATE TABLE crm.customer_change_event (
  CONSTRAINT fk_crm_customer_change_customer FOREIGN KEY(tenant_id,customer_id)
    REFERENCES crm.customer(tenant_id,id),
  CONSTRAINT fk_crm_customer_change_actor FOREIGN KEY(actor_id) REFERENCES public.iam_user_account(id),
- CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED','RESTORED'))
+ CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED'))
 );
 CREATE INDEX idx_crm_customer_changes ON crm.customer_change_event(tenant_id,customer_id,occurred_at,id);
 CREATE TABLE crm.contract_revision (
@@ -1965,3 +1965,10 @@ CREATE INDEX idx_crm_contact_change_history
 CREATE TRIGGER trg_contact_change_immutable BEFORE UPDATE OR DELETE ON crm.contact_change_event
  FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_contact_change_immutable ON crm.contact_change_event;
+
+--changeset rm:0064-crm-r14-customer-restore-audit
+ALTER TABLE crm.customer_change_event DROP CONSTRAINT ck_crm_customer_change_action;
+ALTER TABLE crm.customer_change_event ADD CONSTRAINT ck_crm_customer_change_action
+ CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED','RESTORED'));
+--rollback ALTER TABLE crm.customer_change_event DROP CONSTRAINT ck_crm_customer_change_action;
+--rollback ALTER TABLE crm.customer_change_event ADD CONSTRAINT ck_crm_customer_change_action CHECK(action_code IN ('METADATA_UPDATED','NAME_UPDATED','CATEGORY_CHANGED','ARCHIVED'));
