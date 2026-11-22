@@ -1996,8 +1996,8 @@ class QrWarehouseHandoverQualificationTest {
         requirePostgres();
         int duration=Integer.getInteger("rm.qr06b.b34.durationSeconds",60);
         if(duration!=60 && duration!=300)throw new IllegalArgumentException("B34 duration 60 or 300");
-        int ordersPerTenant=duration==300?200:40;
-        int extraStock=duration==300?1200:200;
+        int totalOrders=duration==300?400:80;
+        int extraStock=duration==300?1200:300;
         var contexts=List.of(context(),context());
         var orders=new ArrayList<java.util.Map.Entry<Context,Order>>();
         var dir=java.nio.file.Files.createTempDirectory("qr06b-b34-");
@@ -2015,17 +2015,18 @@ class QrWarehouseHandoverQualificationTest {
                         c.itemOne(),key(),BigDecimal.valueOf(extraStock));
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
                         c.itemTwo(),key(),BigDecimal.valueOf(extraStock));
+                int tenantOrders=duration==300
+                        ?(tenantIndex==0?240:160):(tenantIndex==0?50:30);
+                int low=tenantOrders/4,peak=tenantOrders/2;
                 var lines=new ArrayList<String>();
-                for(int i=0;i<ordersPerTenant;i++) {
+                for(int i=0;i<tenantOrders;i++) {
                     var o=ready(c,true);
                     var issue=pickup.issue(c.buyer(),o.publicRef(),key());
                     orders.add(java.util.Map.entry(c,o));
-                    String stage=duration==60
-                            ?(i<10?"LOW":i<30?"PEAK":"RECOVERY")
-                            :(i<50?"LOW":i<150?"PEAK":"RECOVERY");
+                    String stage=i<low?"LOW":i<low+peak?"PEAK":"RECOVERY";
                     long due=duration==60
-                            ?(i<10?i*1500L:i<30?15000L:35000L+(i-30)*2000L)
-                            :(i<50?i*1500L:i<150?90000L:120000L+(i-150)*3500L);
+                            ?(i<low?i*1200L:i<low+peak?15000L:35000L+(i-low-peak)*1500L)
+                            :(i<low?i*1400L:i<low+peak?90000L:120000L+(i-low-peak)*2800L);
                     lines.add(issue.rawProof()+"|"+version(c,o)+"|"+key()+"|"+due+"|"+stage);
                 }
                 var manifest=dir.resolve("tenant-"+tenantIndex+".manifest");
@@ -2073,22 +2074,25 @@ class QrWarehouseHandoverQualificationTest {
             }
             for(var entry:orders)assertExactlyOneHandover(entry.getKey(),entry.getValue(),2);
             for(var c:contexts) {
+                int tenantIndex=contexts.indexOf(c);
+                int tenantOrders=duration==300
+                        ?(tenantIndex==0?240:160):(tenantIndex==0?50:30);
                 assertThat(stock(c,c.itemOne(),"on_hand"))
-                        .isEqualByComparingTo(BigDecimal.valueOf(20L+extraStock-5L*ordersPerTenant));
+                        .isEqualByComparingTo(BigDecimal.valueOf(20L+extraStock-5L*tenantOrders));
                 assertThat(stock(c,c.itemTwo(),"on_hand"))
-                        .isEqualByComparingTo(BigDecimal.valueOf(20L+extraStock-3L*ordersPerTenant));
+                        .isEqualByComparingTo(BigDecimal.valueOf(20L+extraStock-3L*tenantOrders));
                 assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
                 assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
                 assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
-                        """,Integer.class,c.tenant())).isEqualTo(ordersPerTenant);
+                        """,Integer.class,c.tenant())).isEqualTo(tenantOrders);
             }
             long deadlocksAfter=jdbc.queryForObject("""
                     SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
                     """,Long.class);
             assertThat(deadlocksAfter-deadlocksBefore).isZero();
             System.out.printf("QR06B_B34_RESULT duration_profile_s=%d jvms=2 tenants=2 completed=%d deadlocks=0 unexpected_failures=0%n",
-                    duration,ordersPerTenant*2);
+                    duration,totalOrders);
         }finally {
             if(first!=null&&first.isAlive())first.destroyForcibly();
             if(second!=null&&second.isAlive())second.destroyForcibly();
