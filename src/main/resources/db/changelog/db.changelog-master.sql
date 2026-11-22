@@ -2054,3 +2054,37 @@ CREATE TRIGGER trg_crm_interaction_history_immutable
  BEFORE UPDATE OR DELETE ON crm.customer_interaction_event
  FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_crm_interaction_history_immutable ON crm.customer_interaction_event;
+
+--changeset rm:0068-catalog-r1
+-- Existing SKU, translations and prices are the only catalog source of truth.
+-- Model code is optional for imported legacy/draft items, distinct from SKU.
+ALTER TABLE crm.cat_item ADD COLUMN model_code VARCHAR(80);
+CREATE INDEX idx_cat_item_tenant_model ON crm.cat_item(tenant_id,kind,model_code,id);
+CREATE TABLE crm.cat_item_event (
+ tenant_id UUID NOT NULL, id UUID NOT NULL, item_id UUID NOT NULL,
+ actor_id UUID NOT NULL, action_code VARCHAR(32) NOT NULL,
+ previous_version BIGINT, new_version BIGINT NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_cat_item_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_cat_item_event_item FOREIGN KEY(tenant_id,item_id)
+   REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT fk_cat_item_event_actor FOREIGN KEY(actor_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uk_cat_item_event_revision UNIQUE(tenant_id,item_id,new_version),
+ CONSTRAINT ck_cat_item_event_action CHECK(action_code IN
+  ('CREATED','MODEL_UPDATED','TRANSLATION_UPDATED','PRICE_REVISED','PUBLISHED','ARCHIVED'))
+);
+CREATE INDEX idx_cat_item_event_history ON crm.cat_item_event(tenant_id,item_id,occurred_at DESC,id);
+--rollback DROP TABLE crm.cat_item_event;
+--rollback DROP INDEX idx_cat_item_tenant_model;
+--rollback ALTER TABLE crm.cat_item DROP COLUMN model_code;
+
+--changeset rm:0069-catalog-r1-immutable-evidence dbms:postgresql
+CREATE TRIGGER trg_catalog_item_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.cat_item_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_catalog_price_immutable
+ BEFORE UPDATE OR DELETE ON crm.cat_price
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_catalog_price_immutable ON crm.cat_price;
+--rollback DROP TRIGGER trg_catalog_item_event_immutable ON crm.cat_item_event;

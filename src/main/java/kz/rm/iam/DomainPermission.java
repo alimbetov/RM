@@ -28,7 +28,11 @@ public enum DomainPermission {
     FILES_READ(DomainModule.FILES),
     FILES_ATTACH(DomainModule.FILES),
     FILES_DETACH(DomainModule.FILES),
-    FILES_DELETE(DomainModule.FILES);
+    FILES_DELETE(DomainModule.FILES),
+    CATALOG_READ(DomainModule.CATALOG),
+    CATALOG_WRITE(DomainModule.CATALOG),
+    CATALOG_PRICE_MANAGE(DomainModule.CATALOG),
+    CATALOG_PUBLISH(DomainModule.CATALOG);
 
     private final DomainModule module;
     DomainPermission(DomainModule module) { this.module = module; }
