@@ -131,13 +131,14 @@ public class SalesReturnPhysicalService {
         if(prior!=null){
             if(!prior.actor().equals(employee)||!prior.key().equals(key))
                 throw new IllegalStateException("RETURN_POST_REPLAY_CONFLICT");
-            return new Result(returnId,"RESTOCK".equals(prior.decision())
-                    ?"RESTOCKED":"DISPOSED",6,prior.id());
+            return new Result(returnId,switch(prior.decision()){
+                    case "RESTOCK" -> "RESTOCKED";
+                    case "QUARANTINE" -> "QUARANTINED";
+                    default -> "DISPOSED";
+                },6,prior.id());
         }
         if(c.version()!=version)throw new IllegalStateException("RETURN_VERSION_CONFLICT");
         if(!"INSPECTED".equals(c.state()))throw new IllegalStateException("RETURN_NOT_INSPECTED");
-        if(inspection.decision()==Disposition.QUARANTINE)
-            throw new IllegalStateException("RETURN_QUARANTINE_NOT_POSTABLE");
         StockLine line=jdbc.query("""
                 SELECT r.item_id,rl.quantity
                 FROM crm.sales_return_line rl
@@ -149,19 +150,26 @@ public class SalesReturnPhysicalService {
                 """,rs->rs.next()?new StockLine(rs.getObject(1,UUID.class),
                         rs.getBigDecimal(2)):null,tenant,returnId,c.handover());
         if(line==null)throw new IllegalStateException("RETURN_ORIGINAL_STOCK_PROOF_REQUIRED");
-        UUID movement=null;
+        UUID movement=null, quarantineMovement=null;
         if(inspection.decision()==Disposition.RESTOCK)
             movement=inventory.restock(employee,tenant,warehouse,line.item(),returnId,
                     line.quantity()).id();
+        if(inspection.decision()==Disposition.QUARANTINE)
+            quarantineMovement=inventory.quarantine(employee,tenant,warehouse,line.item(),
+                    returnId,line.quantity());
         UUID id=UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO crm.sales_return_posting
                  (tenant_id,return_id,posting_id,actor_user_id,warehouse_id,item_id,
-                  quantity,disposition,movement_id,request_key,happened_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                  quantity,disposition,movement_id,quarantine_movement_id,request_key,happened_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 """,tenant,returnId,id,employee,warehouse,line.item(),line.quantity(),
-                inspection.decision().name(),movement,key,Timestamp.from(Instant.now()));
-        String target=inspection.decision()==Disposition.RESTOCK?"RESTOCKED":"DISPOSED";
+                inspection.decision().name(),movement,quarantineMovement,key,Timestamp.from(Instant.now()));
+        String target=switch(inspection.decision()) {
+            case RESTOCK -> "RESTOCKED";
+            case QUARANTINE -> "QUARANTINED";
+            case WRITE_OFF -> "DISPOSED";
+        };
         update(tenant,returnId,"INSPECTED",target,version);
         event(tenant,returnId,employee,"INSPECTED",target,version,key,"UAT_1");
         return new Result(returnId,target,version+1,id);
