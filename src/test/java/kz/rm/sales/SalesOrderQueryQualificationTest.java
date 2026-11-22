@@ -99,9 +99,9 @@ class SalesOrderQueryQualificationTest {
         assertThat(events.getFirst().eventType()).isEqualTo("PLACED");
         assertThat(trustedQueries.history(actor,owned.tenant(),accepted,1,1)).isEmpty();
         assertThatThrownBy(()->trustedQueries.detail(actor,owned.tenant(),other))
-                .isInstanceOf(IllegalArgumentException.class);
+                .hasMessageContaining("Order not found in tenant");
         assertThatThrownBy(()->trustedQueries.history(actor,owned.tenant(),other,0,10))
-                .isInstanceOf(IllegalArgumentException.class);
+                .hasMessageContaining("Order not found in tenant");
         assertThatThrownBy(()->trustedQueries.detail(actor,foreign.tenant(),other))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->trustedQueries.history(actor,owned.tenant(),accepted,0,101))
