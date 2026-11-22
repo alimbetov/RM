@@ -52,6 +52,8 @@ class CommercialCoreE2EQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired UserAccountRepository users;
     @Autowired JdbcTemplate jdbc;
+    @Autowired javax.sql.DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
     private record Context(UUID tenant, UUID warehouse, VerifiedActor staff) {}
 
@@ -236,4 +238,113 @@ class CommercialCoreE2EQualificationTest {
                 offer.rowVersion() + 1))
                 .isInstanceOf(IllegalStateException.class);
     }
+    private void postgresOnly() throws Exception {
+        try (var connection = dataSource.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName()
+                            .toLowerCase(java.util.Locale.ROOT).contains("postgresql"),
+                    "PostgreSQL isolation/row locks required");
+        }
+    }
+
+    @Test void postgresArchiveWinsThenConcurrentReceiptCannotStrandStock() throws Exception {
+        postgresOnly();
+        var c = setup();
+        var item = product(c);
+        var archiveReady = new java.util.concurrent.CountDownLatch(1);
+        var receiptAttempt = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var archive = pool.submit(() -> tx.execute(status -> {
+                var result = catalog.archive(c.staff(), c.tenant(), item.id(),
+                        item.rowVersion());
+                archiveReady.countDown();
+                try {
+                    if (!release.await(15, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Archive test barrier expired");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            var receipt = pool.submit(() -> {
+                if (!archiveReady.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Archive not admitted");
+                receiptAttempt.countDown();
+                return stock.receive(c.staff(), c.tenant(), c.warehouse(), item.id(),
+                        "archive-race-" + UUID.randomUUID(), BigDecimal.ONE);
+            });
+            assertThat(receiptAttempt.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    .isTrue();
+            release.countDown();
+            assertThat(archive.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                    .isEqualTo(CatalogItem.State.ARCHIVED);
+            assertThatThrownBy(() -> receipt.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        } finally {
+            release.countDown();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND item_id=? AND on_hand<>0
+                """, Integer.class, c.tenant(), item.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND item_id=?
+                """, Integer.class, c.tenant(), item.id())).isZero();
+    }
+
+    @Test void postgresReceiptWinsThenArchiveDetectsCommittedStock() throws Exception {
+        postgresOnly();
+        var c = setup();
+        var item = product(c);
+        var receiptReady = new java.util.concurrent.CountDownLatch(1);
+        var archiveAttempt = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var receipt = pool.submit(() -> tx.execute(status -> {
+                var result = stock.receive(c.staff(), c.tenant(), c.warehouse(), item.id(),
+                        "stock-first-" + UUID.randomUUID(), new BigDecimal("2"));
+                receiptReady.countDown();
+                try {
+                    if (!release.await(15, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Receipt test barrier expired");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            var archive = pool.submit(() -> {
+                if (!receiptReady.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Receipt not admitted");
+                archiveAttempt.countDown();
+                return catalog.archive(c.staff(), c.tenant(), item.id(), item.rowVersion());
+            });
+            assertThat(archiveAttempt.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    .isTrue();
+            release.countDown();
+            assertThat(receipt.get(20, java.util.concurrent.TimeUnit.SECONDS).after())
+                    .isEqualByComparingTo("2");
+            assertThatThrownBy(() -> archive.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("CATALOG_ARCHIVE_BLOCKED_BY_INVENTORY");
+        } finally {
+            release.countDown();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.cat_item WHERE tenant_id=? AND id=?
+                """, String.class, c.tenant(), item.id())).isEqualTo("PUBLISHED");
+        assertThat(jdbc.queryForObject("""
+                SELECT on_hand FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """, BigDecimal.class, c.tenant(), c.warehouse(), item.id()))
+                .isEqualByComparingTo("2");
+    }
+
 }
