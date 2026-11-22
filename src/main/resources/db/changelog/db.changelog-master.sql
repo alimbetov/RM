@@ -2270,8 +2270,7 @@ ALTER TABLE crm.sales_order_line ADD CONSTRAINT fk_sales_line_catalog_snapshot
  FOREIGN KEY (tenant_id,catalog_item_id_snapshot)
  REFERENCES crm.cat_item(tenant_id,id);
 CREATE INDEX idx_sales_line_catalog_snapshot
- ON crm.sales_order_line(tenant_id,catalog_item_id_snapshot)
- WHERE catalog_item_id_snapshot IS NOT NULL;
+ ON crm.sales_order_line(tenant_id,catalog_item_id_snapshot);
 --rollback DROP INDEX idx_sales_line_catalog_snapshot;
 --rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT fk_sales_line_catalog_snapshot;
 --rollback ALTER TABLE crm.sales_order_line DROP COLUMN catalog_item_id_snapshot;
