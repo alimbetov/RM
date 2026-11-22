@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -674,6 +675,249 @@ class QrWarehouseHandoverQualificationTest {
         assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
         assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
         assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+    }
+
+
+    private UUID assignedRole(Context c) {
+        return jdbc.queryForObject("""
+                SELECT role_id FROM public.iam_tenant_user_role
+                WHERE tenant_id=? AND user_id=? ORDER BY role_id LIMIT 1
+                """,UUID.class,c.tenant(),c.staff().userId());
+    }
+
+    /** QR06B-01: distinct, genuinely authorized employees rather than
+     * concurrent requests from a single actor. */
+    @Test void qr06bPgFiveDistinctEmployeesCompeteForSingleHandover() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        UUID role=assignedRole(c);
+        List<VerifiedActor> employees=new ArrayList<>();
+        employees.add(c.staff());
+        UUID organization=jdbc.queryForObject("""
+                SELECT organization_id FROM public.iam_workspace WHERE id=?
+                """,UUID.class,c.tenant());
+        for(int i=1;i<5;i++) {
+            UUID id=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                    "qr06b-worker-"+UUID.randomUUID(),"Staff "+i)).getId();
+            memberships.saveAndFlush(new OrganizationMembershipEntity(
+                    UUID.randomUUID(),organization,id,OrganizationMembershipEntity.Role.MEMBER));
+            roles.assign(c.owner(),c.tenant(),id,role);
+            var actor=verified(id);
+            scopes.assign(c.owner(),c.tenant(),c.warehouse(),actor.userId());
+            employees.add(actor);
+        }
+        var readyToRace=new CountDownLatch(employees.size());
+        var begin=new CountDownLatch(1);
+        int success=0;
+        try(var pool=Executors.newFixedThreadPool(employees.size())) {
+            var futures=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(VerifiedActor actor:employees) futures.add(pool.submit(()->{
+                readyToRace.countDown();
+                if(!begin.await(15,TimeUnit.SECONDS))
+                    throw new IllegalStateException("SCANNER_BARRIER_TIMEOUT");
+                try {
+                    pickup.complete(actor,c.tenant(),c.warehouse(),
+                            issued.rawProof(),true,initialVersion,key());
+                    return true;
+                } catch(IllegalStateException | SecurityException rejected) {
+                    return false;
+                }
+            }));
+            assertThat(readyToRace.await(15,TimeUnit.SECONDS)).isTrue();
+            begin.countDown();
+            for(var f:futures) if(f.get(30,TimeUnit.SECONDS)) success++;
+        } finally {
+            begin.countDown();
+        }
+        assertThat(success).isEqualTo(1);
+        assertExactlyOneHandover(c,o,2);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+    }
+
+    /** B1: if an actual handover has been authorized, a role removal must wait
+     * until the handover's outer PostgreSQL transaction commits. */
+    @Test void qr06bPgHandoverCommitsBeforeRolePermissionRevocation() throws Exception {
+        requirePostgres(); var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long v=version(c,o); UUID role=assignedRole(c);
+        var admitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var revokeEntered=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var handover=pool.submit(()->tx.execute(status->{
+                var done=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                        issued.rawProof(),true,v,key());
+                admitted.countDown();
+                awaitQr06b(release);
+                return done;
+            }));
+            assertThat(admitted.await(15,TimeUnit.SECONDS)).isTrue();
+            var revoked=pool.submit(()->{
+                revokeEntered.countDown();
+                roles.revoke(c.owner(),c.tenant(),role,DomainPermission.INVENTORY_FULFILL);
+                return true;
+            });
+            assertThat(revokeEntered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->revoked.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(handover.get(25,TimeUnit.SECONDS).status()).isEqualTo("COMPLETED");
+            assertThat(revoked.get(25,TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
+        assertExactlyOneHandover(c,o,2);
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,v,key())).isInstanceOf(SecurityException.class);
+        assertExactlyOneHandover(c,o,2);
+    }
+
+    /** B1: commit an IAM role revocation before releasing the actual handover.
+     * The handover must deny and leave every business effect untouched. */
+    @Test void qr06bPgRolePermissionRevocationCommitsBeforeHandover() throws Exception {
+        requirePostgres();var c=context();var o=ready(c,false);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long v=version(c,o);UUID role=assignedRole(c);
+        var revokedInTransaction=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var entered=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var revoke=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                        SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE
+                        """,UUID.class,c.tenant());
+                roles.revoke(c.owner(),c.tenant(),role,DomainPermission.INVENTORY_FULFILL);
+                revokedInTransaction.countDown();
+                awaitQr06b(release);
+                return true;
+            }));
+            assertThat(revokedInTransaction.await(15,TimeUnit.SECONDS)).isTrue();
+            var attempt=pool.submit(()->{
+                entered.countDown();
+                try {
+                    pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                            issued.rawProof(),true,v,key());
+                    return false;
+                } catch(SecurityException expected) {
+                    return true;
+                }
+            });
+            assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->attempt.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(revoke.get(25,TimeUnit.SECONDS)).isTrue();
+            assertThat(attempt.get(25,TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
+        assertNoHandoverEffects(c,o);
+    }
+
+    /** Actual handover vs global user suspension, command-first ordering. */
+    @Test void qr06bPgHandoverCommitsBeforeGlobalAccountSuspension() throws Exception {
+        requirePostgres();var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long v=version(c,o);
+        var admitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var entered=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                var done=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                        issued.rawProof(),true,v,key());
+                admitted.countDown();
+                awaitQr06b(release);
+                return done;
+            }));
+            assertThat(admitted.await(15,TimeUnit.SECONDS)).isTrue();
+            var suspension=pool.submit(()->tx.execute(status->{
+                entered.countDown();
+                jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",
+                        c.staff().userId());
+                return true;
+            }));
+            assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->suspension.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(command.get(25,TimeUnit.SECONDS).status()).isEqualTo("COMPLETED");
+            assertThat(suspension.get(25,TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
+        assertExactlyOneHandover(c,o,2);
+        assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,v,key())).isInstanceOf(SecurityException.class);
+        assertExactlyOneHandover(c,o,2);
+    }
+
+    /** Actual handover vs global user suspension, revocation-first ordering. */
+    @Test void qr06bPgGlobalAccountSuspensionCommitsBeforeHandover() throws Exception {
+        requirePostgres();var c=context();var o=ready(c,false);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long v=version(c,o);
+        var suspendedUncommitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var entered=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var suspension=pool.submit(()->tx.execute(status->{
+                jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",
+                        c.staff().userId());
+                suspendedUncommitted.countDown();
+                awaitQr06b(release);
+                return true;
+            }));
+            assertThat(suspendedUncommitted.await(15,TimeUnit.SECONDS)).isTrue();
+            var command=pool.submit(()->{
+                entered.countDown();
+                try {
+                    pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                            issued.rawProof(),true,v,key());
+                    return false;
+                } catch(SecurityException denied) {
+                    return true;
+                }
+            });
+            assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->command.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(suspension.get(25,TimeUnit.SECONDS)).isTrue();
+            assertThat(command.get(25,TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
+        assertNoHandoverEffects(c,o);
+    }
+
+    private static void awaitQr06b(CountDownLatch latch) {
+        try {
+            if(!latch.await(15,TimeUnit.SECONDS))
+                throw new IllegalStateException("QR06B_TRANSACTION_BARRIER_TIMEOUT");
+        } catch(InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
 }
