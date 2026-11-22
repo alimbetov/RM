@@ -22,6 +22,18 @@ public class CommercialReadErrorHandler {
                 .body(Map.of("code","ACCESS_DENIED"));
     }
 
+    @ExceptionHandler(org.springframework.dao.InvalidDataAccessApiUsageException.class)
+    ResponseEntity<Map<String,String>> translatedNotFound(
+            org.springframework.dao.InvalidDataAccessApiUsageException error) {
+        // Spring's @Repository exception translator may wrap the same
+        // tenant-scoped not-found signal; preserve non-disclosure at HTTP edge.
+        boolean missing=error.getMessage()!=null &&
+                error.getMessage().contains("Order not found in tenant");
+        return ResponseEntity.status(missing?HttpStatus.NOT_FOUND:
+                HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("code",
+                missing?"RESOURCE_NOT_FOUND":"INTERNAL_ERROR"));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Map<String,String>> invalidInput(IllegalArgumentException error) {
         boolean missing=error.getMessage()!=null &&
