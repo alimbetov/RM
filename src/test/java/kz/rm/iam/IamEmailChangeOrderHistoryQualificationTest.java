@@ -71,6 +71,37 @@ class IamEmailChangeOrderHistoryQualificationTest {
                 return new Proof(rs.getObject(1,UUID.class),crypto.decrypt(rs.getBytes(2)));
             },crypto.lookup(crypto.normalize(address)),purpose);
     }
+    @Test void r10BuyerHistoryIsPaginatedAndIsolatedByVerifiedPrincipal() {
+        UUID buyer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "buyer-history-"+UUID.randomUUID(),"Buyer")).getId();
+        String address=email();
+        emails.requestInitialVerification(actor(buyer),address);
+        var registration=proof(address,"REGISTRATION");
+        emails.verifyRegistration(registration.id(),registration.token());
+        Store shop=store();
+        UUID first=orders.checkout(shop.slug(),address,"buyer-page-001",
+                List.of(new AutoOrderService.Line(shop.offerId(),1))).order().orderId();
+        var checkoutProof=proof(address,"CHECKOUT");
+        orders.verifyEmail(checkoutProof.id(),checkoutProof.token());
+        UUID second=orders.checkout(shop.slug(),address,"buyer-page-002",
+                List.of(new AutoOrderService.Line(shop.offerId(),1))).order().orderId();
+        checkoutProof=proof(address,"CHECKOUT");
+        orders.verifyEmail(checkoutProof.id(),checkoutProof.token());
+        var page0=trustedBuyerOrders.history(actor(buyer),0,1);
+        var page1=trustedBuyerOrders.history(actor(buyer),1,1);
+        assertThat(page0.getTotalElements()).isEqualTo(2);
+        assertThat(page0.getContent()).hasSize(1);
+        assertThat(page1.getContent()).hasSize(1);
+        assertThat(List.of(page0.getContent().getFirst().orderId(),
+                page1.getContent().getFirst().orderId())).containsExactlyInAnyOrder(first,second);
+        assertThatThrownBy(()->trustedBuyerOrders.history(actor(buyer),0,101))
+                .isInstanceOf(IllegalArgumentException.class);
+        UUID outsider=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "unverified-history-"+UUID.randomUUID(),"Outsider")).getId();
+        assertThatThrownBy(()->trustedBuyerOrders.history(actor(outsider),0,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
     @Test void historicalBuyerOrderStaysWithOriginalUserWhenOldMailboxIsReused() {
         String oldEmail=email(),nextEmail=email();
         UUID buyer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
