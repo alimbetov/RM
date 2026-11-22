@@ -60,16 +60,19 @@ public final class QrHandoverProcessWorker {
             // B3.4: step-load arrival schedule provided by a private manifest.
             // One task per uniquely fulfillable order, stage-specific outcomes
             // and Hikari active/idle/waiting pool snapshots during workload.
-            if("B34_STEPPED".equals(mode)||"B35_RATES".equals(mode)) {
-                boolean b35="B35_RATES".equals(mode);
+            if("B34_STEPPED".equals(mode)||"B35_RATES".equals(mode)||"B35_JIT".equals(mode)) {
+                boolean jit="B35_JIT".equals(mode);
+                boolean b35="B35_RATES".equals(mode)||jit;
                 String prefix=b35?"QR06B_B35":"QR06B_B34";
-                record Case(String proof,long version,String key,long dueMs,String phase) {}
+                record Case(String proof,long version,String key,long dueMs,String phase,
+                            UUID buyerId,String publicRef) {}
                 var cases=new java.util.ArrayList<Case>();
                 for(String line:Files.readAllLines(Path.of(args[5]))) {
                     String[] fields=line.split("\\|",-1);
-                    if(fields.length!=5)throw new IllegalArgumentException("B34 manifest line");
+                    if(fields.length!=(jit?7:5))throw new IllegalArgumentException("B34/B35 manifest line");
                     cases.add(new Case(fields[0],Long.parseLong(fields[1]),fields[2],
-                            Long.parseLong(fields[3]),fields[4]));
+                            Long.parseLong(fields[3]),fields[4],
+                            jit?UUID.fromString(fields[5]):null,jit?fields[6]:null));
                 }
                 if(cases.isEmpty()||cases.size()>400)
                     throw new IllegalArgumentException("B34 workload size");
@@ -97,9 +100,24 @@ public final class QrHandoverProcessWorker {
                             java.util.concurrent.locks.LockSupport.parkNanos(
                                     Math.min(5_000_000L,Math.max(1,until-System.nanoTime())));
                         long begin=System.nanoTime();
+                        long handoverStart=begin;
                         String outcome="COMPLETED";
                         try {
-                            var done=pickup.complete(staff,tenant,warehouse,item.proof(),true,
+                            String raw=item.proof();
+                            if(jit){
+                                String buyerSubject=jdbc.queryForObject(
+                                        "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                                        String.class,item.buyerId());
+                                JwtDecoder buyerDecoder=value->Jwt.withTokenValue(value)
+                                        .header("alg","RS256").subject(buyerSubject)
+                                        .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(600)).build();
+                                var buyer=new OidcActorResolver(buyerDecoder,
+                                        context.getBean(UserAccountRepository.class))
+                                        .resolve("synthetic-qr06b-just-in-time");
+                                raw=pickup.issue(buyer,item.publicRef(),"JIT_"+item.key()).rawProof();
+                                handoverStart=System.nanoTime();
+                            }
+                            var done=pickup.complete(staff,tenant,warehouse,raw,true,
                                     item.version(),item.key());
                             if(!"COMPLETED".equals(done.status()))
                                 throw new IllegalStateException("Noncompleted B34 response");
@@ -111,6 +129,8 @@ public final class QrHandoverProcessWorker {
                         }
                         long completedAt=System.nanoTime();
                         results.add(item.phase()+","+outcome+","+
+                                java.util.concurrent.TimeUnit.NANOSECONDS.toMicros(completedAt-handoverStart));
+                        if(jit)results.add(item.phase()+",ISSUE_PLUS_COMPLETE,"+
                                 java.util.concurrent.TimeUnit.NANOSECONDS.toMicros(completedAt-begin));
                         if(b35)completionTimes.add(item.phase()+","+outcome+","+
                                 java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(begin-clock.get())+","+
@@ -176,7 +196,7 @@ public final class QrHandoverProcessWorker {
                         prefix,tenant,results.size(),failures.get(),
                         java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(wall),
                         peakActive.get(),peakWaiting.get(),peakConnections.get());
-                if(failures.get()!=0||results.size()!=cases.size())System.exit(93);
+                if(failures.get()!=0||results.size()!=(jit?cases.size()*2:cases.size()))System.exit(93);
                 System.exit(0);
             }
             // B3.3: a fixed-duration pace with independent successful orders
