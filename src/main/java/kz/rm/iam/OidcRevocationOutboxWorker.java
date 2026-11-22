@@ -62,7 +62,7 @@ public class OidcRevocationOutboxWorker {
                 FROM public.iam_deletion_oidc_revocation_outbox
                 WHERE state='PENDING' AND next_attempt_at<=?
                   AND (lease_owner IS NULL OR leased_until<=?)
-                  AND (? IS NULL OR deletion_event_id=?)
+                  AND (CAST(? AS UUID) IS NULL OR deletion_event_id=?)
                 ORDER BY next_attempt_at,deletion_event_id
                 LIMIT 1 FOR UPDATE SKIP LOCKED
                 """,rs->rs.next()?rs.getObject(1,UUID.class):null,
