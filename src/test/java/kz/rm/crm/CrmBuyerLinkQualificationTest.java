@@ -641,6 +641,8 @@ class CrmBuyerLinkQualificationTest {
                 """,byte[].class,b);
         assertThat(subjectEnvelope).isNotNull();
         assertThat(emailCrypto.decryptOidcSubject(subjectEnvelope)).startsWith("crm-link-buyer-");
+        assertThatThrownBy(()->emailCrypto.decrypt(subjectEnvelope))
+                .isInstanceOf(IllegalStateException.class);
         assertThat(new String(subjectEnvelope,java.nio.charset.StandardCharsets.UTF_8))
                 .doesNotContain("crm-link-buyer-");
 
