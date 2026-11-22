@@ -25,6 +25,8 @@ class CrmBuyerLinkQualificationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired GlobalAccountStatusService accounts;
     @Autowired GlobalAccountDeletionService deletion;
+    @Autowired EmailIdentityService emailIdentity;
+    @Autowired EmailIdentityCrypto emailCrypto;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     record Seller(UUID tenant, UUID owner) {}
@@ -629,6 +631,19 @@ class CrmBuyerLinkQualificationTest {
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM public.iam_account_deletion_event WHERE target_user_id=?
                 """,Integer.class,b)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM public.iam_deletion_oidc_revocation_outbox
+                WHERE target_user_id=?
+                """,String.class,b)).isEqualTo("PENDING");
+        byte[] subjectEnvelope=jdbc.queryForObject("""
+                SELECT provider_subject_envelope FROM public.iam_deletion_oidc_revocation_outbox
+                WHERE target_user_id=?
+                """,byte[].class,b);
+        assertThat(subjectEnvelope).isNotNull();
+        assertThat(emailCrypto.decrypt(subjectEnvelope)).startsWith("crm-link-buyer-");
+        assertThat(new String(subjectEnvelope,java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain("crm-link-buyer-");
+
         assertThatThrownBy(()->links.revokeByBuyer(buyerActor,s.tenant(),link.id(),1))
                 .isInstanceOf(SecurityException.class);
     }
@@ -730,6 +745,132 @@ class CrmBuyerLinkQualificationTest {
                 .containsExactlyElementsOf(confirmFirst
                         ?java.util.List.of("PROPOSED","CONFIRMED")
                         :java.util.List.of("PROPOSED"));
+    }
+
+
+    @Test void postgresDeletionOutboxFailureRollsBackIdentityScrubAndCanRetry() throws Exception {
+        requirePostgres();
+        var b=buyer();var admin=verified(platformAdmin());
+        String before=jdbc.queryForObject("""
+                SELECT external_subject FROM public.iam_user_account WHERE id=?
+                """,String.class,b);
+        jdbc.execute("""
+                CREATE FUNCTION public.crm_r22e_injected_outbox_failure()
+                RETURNS trigger LANGUAGE plpgsql AS $
+                BEGIN
+                  RAISE EXCEPTION 'injected deletion outbox failure';
+                END; $
+                """);
+        jdbc.execute("""
+                CREATE TRIGGER trg_crm_r22e_injected_outbox_failure
+                BEFORE INSERT ON public.iam_deletion_oidc_revocation_outbox
+                FOR EACH ROW EXECUTE FUNCTION public.crm_r22e_injected_outbox_failure()
+                """);
+        try {
+            assertThatThrownBy(()->deletion.deleteAccount(admin,b,
+                    "failure-before-commit-"+UUID.randomUUID()))
+                    .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        } finally {
+            jdbc.execute("""
+                    DROP TRIGGER trg_crm_r22e_injected_outbox_failure
+                    ON public.iam_deletion_oidc_revocation_outbox
+                    """);
+            jdbc.execute("DROP FUNCTION public.crm_r22e_injected_outbox_failure()");
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,b)).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("""
+                SELECT external_subject FROM public.iam_user_account WHERE id=?
+                """,String.class,b)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_account_deletion_event WHERE target_user_id=?
+                """,Integer.class,b)).isZero();
+        deletion.deleteAccount(admin,b,"retry-after-failure-"+UUID.randomUUID());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_deletion_oidc_revocation_outbox
+                WHERE target_user_id=? AND state='PENDING'
+                """,Integer.class,b)).isEqualTo(1);
+    }
+
+    @Test void postgresBothCommitOrdersForDeleteVersusEmailConfirmation() throws Exception {
+        requirePostgres();
+        assertEmailDeleteOrder(true);
+        assertEmailDeleteOrder(false);
+    }
+
+    private void assertEmailDeleteOrder(boolean emailFirst) throws Exception {
+        UUID target=buyer();
+        var buyerActor=verified(target);
+        // Create a valid verified CURRENT identity through the existing IAM schema.
+        var tenant=seller();
+        seedSalesOrder(tenant.tenant(),target);
+        String address="new-"+UUID.randomUUID()+"@example.kz";
+        emailIdentity.requestEmailChange(buyerActor,address);
+        var proof=jdbc.query("""
+                SELECT c.id,c.token_envelope
+                FROM public.iam_email_verification_challenge c
+                JOIN public.iam_email_identity i ON i.id=c.email_identity_id
+                WHERE i.pending_owner_id=? AND c.purpose='CHANGE_EMAIL'
+                ORDER BY c.created_at DESC LIMIT 1
+                """,rs->{
+                    if(!rs.next())throw new IllegalStateException("Missing email change proof");
+                    return new java.util.AbstractMap.SimpleEntry<>(
+                            rs.getObject(1,UUID.class),emailCrypto.decrypt(rs.getBytes(2)));
+                },target);
+        var admin=verified(platformAdmin());
+        String request="email-delete-"+UUID.randomUUID();
+        var firstEntered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var secondStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                if(emailFirst) emailIdentity.confirmEmailChange(
+                        buyerActor,proof.getKey(),proof.getValue());
+                else deletion.deleteAccount(admin,target,request);
+                firstEntered.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Email/delete barrier timed out");
+                }catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(firstEntered.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                secondStarted.countDown();
+                try {
+                    if(emailFirst) deletion.deleteAccount(admin,target,request);
+                    else emailIdentity.confirmEmailChange(
+                            buyerActor,proof.getKey(),proof.getValue());
+                    return true;
+                }catch(SecurityException expected) {return false;}
+            });
+            assertThat(secondStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(emailFirst);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,target)).isEqualTo("DELETED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_identity
+                WHERE user_id=? AND (active_lookup_hmac IS NOT NULL
+                                    OR current_owner_id IS NOT NULL
+                                    OR pending_owner_id IS NOT NULL)
+                """,Integer.class,target)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_deletion_oidc_revocation_outbox
+                WHERE target_user_id=? AND state='PENDING'
+                """,Integer.class,target)).isEqualTo(1);
     }
 
     private void requirePostgres() throws Exception {
