@@ -437,6 +437,143 @@ class CrmBuyerLinkQualificationTest {
                 .isEqualTo(!confirmFirst);
     }
 
+
+    @Test void suspendedBuyerHidesSellerHistoryAndPreservesLinkEvidence() {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Suspended buyer history",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "suspend-hist-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        links.confirm(verified(b),s.tenant(),link.id(),0);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).hasSize(1);
+        accounts.suspendAccount(verified(platformAdmin()),b);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThatThrownBy(()->links.disputeByBuyer(verified(b),s.tenant(),link.id(),1))
+                .isInstanceOf(SecurityException.class);
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).state())
+                .isEqualTo(CrmBuyerLinkService.State.CONFIRMED);
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED","CONFIRMED");
+    }
+
+    @Test void deletedAccountFailClosedWithoutDeletingLinkedHistory() {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Deleted buyer history",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "delete-fixture-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        links.confirm(verified(b),s.tenant(),link.id(),0);
+        // Synthetic DELETED fixture: IAM has no trusted account-deletion service
+        // yet. Do not simulate a successful administrative deletion command.
+        jdbc.update("""
+                UPDATE public.iam_user_account SET status='DELETED',row_version=row_version+1
+                WHERE id=? AND status='ACTIVE'
+                """,b);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThatThrownBy(()->links.confirm(verified(b),s.tenant(),link.id(),1))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->jdbc.update(
+                "DELETE FROM public.iam_user_account WHERE id=?",b))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED","CONFIRMED");
+    }
+
+    @Test void postgresAdjudicationEvidenceIsImmutableAndNotSelfReviewed() throws Exception {
+        requirePostgres();
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Independent adjudication",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "adjudication-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        links.confirm(verified(b),s.tenant(),link.id(),0);
+        links.disputeByBuyer(verified(b),s.tenant(),link.id(),1);
+        assertThatThrownBy(()->links.adjudicateDispute(owner,s.tenant(),link.id(),2,
+                CrmBuyerLinkService.DisputeReason.BUYER_DENIED))
+                .isInstanceOf(SecurityException.class);
+        var reviewer=verified(independentReviewer(s));
+        var resolved=links.adjudicateDispute(reviewer,s.tenant(),link.id(),2,
+                CrmBuyerLinkService.DisputeReason.BUYER_DENIED);
+        assertThat(resolved.state()).isEqualTo(CrmBuyerLinkService.State.REVOKED);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.customer_buyer_dispute_decision SET reason_code='IDENTITY_MISMATCH'
+                WHERE tenant_id=? AND link_id=?
+                """,s.tenant(),link.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.customer_buyer_dispute_decision
+                WHERE tenant_id=? AND link_id=?
+                """,s.tenant(),link.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT reason_code FROM crm.customer_buyer_dispute_decision
+                WHERE tenant_id=? AND link_id=?
+                """,String.class,s.tenant(),link.id())).isEqualTo("BUYER_DENIED");
+    }
+
+    @Test void postgresBothCommitOrdersForBuyerSuspensionAndConfirmation() throws Exception {
+        requirePostgres();
+        assertSuspensionConfirmationOrder(true);
+        assertSuspensionConfirmationOrder(false);
+    }
+
+    private void assertSuspensionConfirmationOrder(boolean confirmFirst) throws Exception {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Suspend versus confirm",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "susp-race-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        var buyerActor=verified(b);
+        var administrator=verified(platformAdmin());
+        var admitted=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var started=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var first=pool.submit(()->tx.execute(status->{
+                if(confirmFirst) links.confirm(buyerActor,s.tenant(),link.id(),0);
+                else accounts.suspendAccount(administrator,b);
+                admitted.countDown();
+                try{
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Suspension race timeout");
+                }catch(InterruptedException interrupted){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(admitted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                started.countDown();
+                try{
+                    if(confirmFirst) accounts.suspendAccount(administrator,b);
+                    else links.confirm(buyerActor,s.tenant(),link.id(),0);
+                    return true;
+                }catch(SecurityException denied){return false;}
+            });
+            assertThat(started.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try{
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally{release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(confirmFirst);
+        }
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).state())
+                .isEqualTo(confirmFirst?CrmBuyerLinkService.State.CONFIRMED:
+                        CrmBuyerLinkService.State.PENDING);
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactlyElementsOf(confirmFirst
+                        ?java.util.List.of("PROPOSED","CONFIRMED")
+                        :java.util.List.of("PROPOSED"));
+    }
+
     private void requirePostgres() throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
             org.junit.jupiter.api.Assumptions.assumeTrue(
