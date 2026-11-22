@@ -4,6 +4,8 @@
 
 **Связанные документы:** RM-PLATFORM-STANDARD-R2, RM-COMMERCE-INVENTORY-COMPLETION-R1, RM-INVENTORY-FUNCTIONAL-COMPLETION-R1, RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE, RM-STRATEGY-R4.
 
+**Согласованный перечень QR-сценариев, state machines, Java service/DTO и PostgreSQL тестов:** [RM-QR-R1 — Business Process Alignment](RM-QR-R1-ALIGNMENT-BUSINESS-FLOWS-STATE-MACHINES-DTO-QA.md). Документ SPEC ONLY; внедрение и qualified tests ещё не выполнены.
+
 ## 1. Цель
 
 Создать комплексный сценарий: поиск опубликованного товара по региону → PLACED с QR поиска заказа → CONFIRMED с резервом на конкретном складе и immutable GPS-origin snapshot → PREPARING/READY_FOR_PICKUP → проверка одноразового QR получения → фактическая выдача с единственным складским списанием → при необходимости отдельный RMA/возврат с осмотром и учётом качества.
