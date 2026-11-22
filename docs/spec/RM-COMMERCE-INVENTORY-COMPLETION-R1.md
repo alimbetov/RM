@@ -24,7 +24,7 @@ R1 — physical goods only. `FULFILLED/COMPLETED` обозначает пере�
 
 ## 3. Факт и состояние
 
-INVENTORY Q1–Q9 Quantity R1 PostgreSQL QUALIFIED на `534aa18008bc54f77a4b1f0277d0f041bfa12bae` (301 PG tests, 0 failures/errors, 18 skipped в указанном CI), это не production approval. R1.2–R1.5 warehouse lifecycle / race / reconciliation требуют проверки именно текущего HEAD; этот документ не утверждает их GREEN. SALES PASS 08/12 — SOURCE REVIEWED / SPEC PROPOSED на `e66a82fbda82ae0d1272d64ec09c593cf961a411`; код SKU snapshot по этому отчёту не внедрён. При изменении HEAD повторить discovery до реализации.
+INVENTORY Q1–Q9 Quantity R1 PostgreSQL QUALIFIED на `534aa18008bc54f77a4b1f0277d0f041bfa12bae` (301 PG tests, 0 failures/errors, 18 skipped в указанном CI), это не production approval. R1.2–R1.5 warehouse lifecycle / race / reconciliation требуют проверки именно текущего HEAD; этот документ не утверждает их GREEN. SALES PASS 08.1–08.3 — **IMMUTABLE SKU SNAPSHOT IMPLEMENTED / POSTGRESQL QUALIFIED** на `cb490556e56d74770ee86f839a849a354702673f` (326 PostgreSQL тестов, 0 failures/errors, 18 skipped; профильные SALE/INVENTORY suites без пропусков). PASS 08.4 storefront offer management и PASS 09–12 остаются SPEC / HOLD. Доказательства: `docs/reviews/RM-SALES-AUTOORDER-CROSS-DOMAIN-PASS-08-2026-11-22.md` и четыре точных CI runs 44989823109, 44989827422, 44989823098, 44989823157. При изменении HEAD повторить discovery до реализации.
 
 ## 4. Функциональные требования
 
