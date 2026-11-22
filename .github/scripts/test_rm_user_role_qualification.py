@@ -22,12 +22,19 @@ class RoleEvidenceContractTest(unittest.TestCase):
         cases = {"kms-postgres-surefire": {
             ("UserRoleMatrixR31QualificationTest", x) for x in methods
         }}
+        cases["kms-postgres-surefire"].update({
+            ("SalesInventoryRbacQualificationTest", "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"),
+            ("SalesInventoryRbacQualificationTest", "urR32InventoryGrantRevokeAndForeignActorPreserveLedger"),
+            ("CrmR1aQualificationTest", "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"),
+            ("FilesR10bQualificationTest", "urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes"),
+            ("OrganizationLocationLifecycleQualificationTest", "urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects"),
+        })
         result=assess_role_cases(ROOT,cases,"a"*40,True,write=False)
-        self.assertEqual(result["mandatory"],6)
-        self.assertEqual(result["verifiedInternal"],6)
+        self.assertEqual(result["mandatory"],11)
+        self.assertEqual(result["verifiedInternal"],11)
         self.assertEqual(result["gate"],"USER_ROLE_SERVICE_QUALIFIED")
         held=assess_role_cases(ROOT,cases,"a"*40,False,write=False)
-        self.assertEqual(held["executedPostgresql"],6)
+        self.assertEqual(held["executedPostgresql"],11)
         self.assertEqual(held["verifiedInternal"],0)
         self.assertEqual(held["gate"],"HOLD")
 
