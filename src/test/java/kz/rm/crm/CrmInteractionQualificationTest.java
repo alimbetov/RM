@@ -361,6 +361,47 @@ class CrmInteractionQualificationTest {
                 .isEqualTo(customer.id());
     }
 
+    /**
+     * CRM-99 P0 consent safety: a previously consented contact or parent
+     * cannot remain eligible for communications after archival.
+     */
+    @Test void crm99ArchivedContactAndParentNeverRemainCommunicationEligible() {
+        var t=tenant();
+        var owner=verified(t.actorId());
+        var customer=customers.createCompany(owner,t.tenantId(),
+                "Archive Consent Safety",null);
+        var contact=customers.addContact(owner,t.tenantId(),customer.id(),
+                "Consent Subject",null,null);
+        UUID grant=customers.recordEmailConsentOnce(owner,t.tenantId(),contact.id(),
+                true,"transactional","v1","CUSTOMER_FORM",
+                "c99-grant-"+UUID.randomUUID());
+        assertThat(grant).isNotNull();
+        assertThat(queries.hasEmailConsent(owner,t.tenantId(),
+                contact.id(),"transactional")).isTrue();
+        customers.archiveContact(owner,t.tenantId(),contact.id(),0);
+        assertThat(queries.hasEmailConsent(owner,t.tenantId(),
+                contact.id(),"transactional")).isFalse();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event
+                WHERE tenant_id=? AND contact_id=?
+                """,Integer.class,t.tenantId(),contact.id())).isEqualTo(1);
+
+        var second=customers.addContact(owner,t.tenantId(),customer.id(),
+                "Second Subject",null,null);
+        customers.recordEmailConsentOnce(owner,t.tenantId(),second.id(),true,
+                "transactional","v1","CUSTOMER_FORM",
+                "c99-parent-"+UUID.randomUUID());
+        assertThat(queries.hasEmailConsent(owner,t.tenantId(),
+                second.id(),"transactional")).isTrue();
+        customers.archiveCustomer(owner,t.tenantId(),customer.id(),0);
+        assertThat(queries.hasEmailConsent(owner,t.tenantId(),
+                second.id(),"transactional")).isFalse();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.email_consent_event
+                WHERE tenant_id=? AND contact_id=?
+                """,Integer.class,t.tenantId(),second.id())).isEqualTo(1);
+    }
+
     @Test void postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified()
             throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
