@@ -3,6 +3,10 @@ package kz.rm.inventory;
 import kz.rm.iam.*;
 import kz.rm.inventory.dto.StockSearch;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -30,8 +35,11 @@ class InventoryQ123QualificationTest {
     @Autowired WorkspaceRepository workspaces;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+    @Autowired PlatformTransactionManager transactionManager;
+    @Autowired DataSource source;
 
-    private record Tenant(UUID tenant,UUID staff,UUID location,UUID item) {}
+    private record Tenant(UUID tenant,UUID staff,UUID location,UUID item,
+                          UUID owner,UUID roleId) {}
 
     private UUID user(String prefix) {
         return users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
@@ -77,7 +85,7 @@ class InventoryQ123QualificationTest {
         for(var permission:permits)roles.grant(ownerActor,t,role.id(),permission);
         roles.assign(ownerActor,t,staff,role.id());
         roles.enable(ownerActor,t);
-        return new Tenant(t,staff,location,item);
+        return new Tenant(t,staff,location,item,owner,role.id());
     }
     private long balanceCount(Tenant t) {
         return jdbc.queryForObject("""
@@ -178,6 +186,51 @@ class InventoryQ123QualificationTest {
         assertThatThrownBy(()->commands.receive(actor,t.tenant(),t.location(),t.item(),
                 "branchReceipt001",BigDecimal.ONE)).isInstanceOf(IllegalArgumentException.class);
         assertThat(balanceCount(t)).isZero();
+    }
+
+    @Test void postgresSettingsReadFencesConcurrentRoleRevocation() throws Exception {
+        try(var con=source.getConnection()){
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        UUID staff=user("inv-read-fence");
+        Tenant t=tenant(staff,DomainPermission.INVENTORY_SETTINGS_MANAGE);
+        VerifiedActor staffActor=verified(staff);
+        VerifiedActor ownerActor=verified(t.owner());
+        settings.initialize(staffActor,t.tenant());
+        var admission=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)){
+            var read=pool.submit(()->new TransactionTemplate(transactionManager).execute(tx->{
+                var result=settings.get(staffActor,t.tenant());
+                admission.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Read fence was never released");
+                }catch(InterruptedException ex){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+                return result;
+            }));
+            assertThat(admission.await(15,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                roles.revoke(ownerActor,t.tenant(),t.roleId(),
+                        DomainPermission.INVENTORY_SETTINGS_MANAGE);
+                return true;
+            });
+            try{
+                assertThatThrownBy(()->revoke.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            }finally{
+                release.countDown();
+            }
+            assertThat(read.get(20,TimeUnit.SECONDS).reservationMode())
+                    .isEqualTo(AuthenticatedInventorySettings.ReservationMode.MANDATORY_ON_CONFIRM);
+            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThatThrownBy(()->settings.get(staffActor,t.tenant()))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void concurrentFirstReceiptsDoNotDoubleCreateOrLoseQuantity() throws Exception {
