@@ -127,8 +127,22 @@ For each PG-ID implement a named Java test with real PostgreSQL. For mutations a
 ## Evidence admission
 Maintain per case: code path, named test method, fixture/source SHA, PostgreSQL version, CI workflow URL/run id, test count and skip/failure count, independent SQL assertions, negative/race result. Advance from **NOT RUN** to **PASS** only after actual execution on exact SHA. A simple registry validator proves only schema/count/uniqueness, never product behavior. Overall “99/99 passed” requires all 99 executable service tests passing; release admission additionally requires genuine OIDC, security, migration and external integration gates.
 
+## Service-test implementation trace (increment CRM-R2.1A)
+
+The following tests have been added to `src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java`. All are **AUTHORED / NOT YET EXECUTION VERIFIED**; a test may cover a subset of the business scenario, not automatically the entire journey.
+
+| Scenario IDs | JUnit test | Assertion scope | Remaining evidence |
+|---|---|---|---|
+| A03, A07 | `crmR2ArchivedCustomerFencesNewAndChangedInteractionsButKeepsReplay` | archival denies new work and follow-up edits; identical old request replay; event count/revision unchanged | PostgreSQL exact-SHA run; archive × record race |
+| D02 | `crmR2ChangedReplayPayloadKeepsSingleInteractionAndEvent` | conflicting idempotency key rejected; one row and event | concurrent duplicate request on PG |
+| D04, D05 | `crmR2TerminalTransitionRejectsOppositeAndDuplicateWithoutSideEffects` | cancel terminal; reject complete/re-cancel; no extra event | two-thread complete × cancel on PG |
+| D06, D07 | `crmR2InvalidAndStaleMutationPreservesFollowupAndAudit` | negative version and stale follow-up rejected; deadline and event count stay constant | two-thread reassignment × deadline race |
+
+**Repository source changes:** `84818bdf33dd417ea4e5614c46db33ae0ef2a6f1`, `db7e236bd5247f1d93b3a14134e265384f8642a5`. Do not label these as PostgreSQL PASS without workflow evidence for the final SHA.
+
 ## Current deliverable status
 - 99 scenario designs: **AUTHORED** (9 groups × 11; unique IDs and situation titles within this document).
-- New service tests for this second pass: **1 Java/JUnit test authored, 0 PostgreSQL executions verified**: `crmR2ArchivedCustomerFencesNewAndChangedInteractionsButKeepsReplay` in `CrmInteractionQualificationTest`. It covers selected A03/A07 invariants only; not 99 completed tests. The last reviewed code commit is `84818bdf33dd417ea4e5614c46db33ae0ef2a6f1`; final documentation commit must still receive exact-SHA CI qualification.
+- Four new Java service tests for this second pass: **AUTHORED; no verified exact-SHA PostgreSQL results yet**.
+- Existing tested CRM core scope does not prove missing TASKS, buyer-link or protected NOTE functionality.
 - Source-confirmed: interaction idempotency, tenant-scoped rows, rowVersion transitions, active member checks; CRM PII boundary and existing interaction JUnit class.
-- Does not infer exact latest HEAD, 99-case PostgreSQL PASS, production-ready, or zero gaps from this document.
+- Do not infer 99-case PostgreSQL PASS, production-ready, or zero gaps from this document.
