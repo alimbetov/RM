@@ -119,11 +119,14 @@ class OrganizationLocationLifecycleQualificationTest {
         assertThat(changed.addressLine()).isNull();
         assertThat(changed.rowVersion()).isEqualTo(1);
         assertThat(audit(t,created.id())).isEqualTo(2);
+        // PostgreSQL stores timestamp microseconds; compare persisted values, not
+        // the unflushed in-memory nanosecond precision of Instant.now().
+        var persistedTimestamp=locations.get(who,t.id(),created.id()).updatedAt();
 
         var same=locations.update(who,t.id(),created.id(),
                 new LocationUpdateRequest(" Café depot ",code,null,1));
         assertThat(same.rowVersion()).isEqualTo(1);
-        assertThat(same.updatedAt()).isEqualTo(changed.updatedAt());
+        assertThat(same.updatedAt()).isEqualTo(persistedTimestamp);
         assertThat(audit(t,created.id())).isEqualTo(2);
 
         assertThatThrownBy(()->locations.update(who,t.id(),created.id(),
