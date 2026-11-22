@@ -1264,4 +1264,79 @@ class CrmR1aQualificationTest {
             """,Integer.class,t.tenantId(),contact.id())).isEqualTo(2);
     }
 
+
+    /** Same global actor, deliberately asymmetric grants in two tenant workspaces. */
+    @Test void tcrud03MixedMembershipNeverCarriesCrmPiiOrWriteAcrossTenants() {
+        var a=newTenant(); var b=newTenant();
+        var ownerA=verified(a.actorId()); var ownerB=verified(b.actorId());
+        var customerA=secureCommands.createCompany(ownerA,a.tenantId(),"Shared company",null);
+        var customerB=secureCommands.createCompany(ownerB,b.tenantId(),"Shared company",null);
+        var contactA=secureCommands.addContact(ownerA,a.tenantId(),customerA.id(),
+                "Alpha","alpha@example.kz",null);
+        var contactB=secureCommands.addContact(ownerB,b.tenantId(),customerB.id(),
+                "Beta","beta@example.kz",null);
+        var categoryA=categoryService.create(ownerA,a.tenantId(),"SHARED_CAT","A");
+        var categoryB=categoryService.create(ownerB,b.tenantId(),"SHARED_CAT","B");
+        var asOf=java.time.LocalDate.of(2026,11,22);
+        var contractA=contractService.create(ownerA,a.tenantId(),customerA.id(),"SAME-01",
+                asOf,asOf.plusDays(30),asOf);
+        var contractB=contractService.create(ownerB,b.tenantId(),customerB.id(),"SAME-01",
+                asOf,asOf.plusDays(30),asOf);
+
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud03-staff-"+UUID.randomUUID(),"Multi tenant staff")).getId();
+        UUID orgA=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,a.tenantId());
+        UUID orgB=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,b.tenantId());
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgA,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+
+        var roleA=roles.createRole(a.actorId(),a.tenantId(),
+                "STAFF_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A CRM");
+        roles.grant(a.actorId(),a.tenantId(),roleA.id(),DomainPermission.CRM_READ);
+        roles.grant(a.actorId(),a.tenantId(),roleA.id(),DomainPermission.CRM_PII_READ);
+        roles.grant(a.actorId(),a.tenantId(),roleA.id(),DomainPermission.CRM_WRITE);
+        roles.assign(a.actorId(),a.tenantId(),staff,roleA.id());
+        roles.enable(a.actorId(),a.tenantId());
+        var roleB=roles.createRole(b.actorId(),b.tenantId(),
+                "STAFF_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B metadata");
+        roles.grant(b.actorId(),b.tenantId(),roleB.id(),DomainPermission.CRM_READ);
+        roles.assign(b.actorId(),b.tenantId(),staff,roleB.id());
+        roles.enable(b.actorId(),b.tenantId());
+
+        var mixed=verified(staff);
+        assertThat(secureQueries.getContact(mixed,a.tenantId(),contactA.id()).email())
+                .isEqualTo("alpha@example.kz");
+        var filter=new CustomerSearch("COMPANY","ACTIVE",null,"Shared company");
+        assertThat(secureQueries.customers(mixed,a.tenantId(),filter,0,20).getContent())
+                .extracting(CustomerSummary::id).contains(customerA.id()).doesNotContain(customerB.id());
+        assertThat(secureQueries.customers(mixed,b.tenantId(),filter,0,20).getContent())
+                .extracting(CustomerSummary::id).contains(customerB.id()).doesNotContain(customerA.id());
+        assertThat(categoryService.get(mixed,a.tenantId(),categoryA.id()).id()).isEqualTo(categoryA.id());
+        assertThat(categoryService.get(mixed,b.tenantId(),categoryB.id()).id()).isEqualTo(categoryB.id());
+        assertThat(contractService.get(mixed,a.tenantId(),contractA.id(),asOf,30).id())
+                .isEqualTo(contractA.id());
+        assertThat(contractService.get(mixed,b.tenantId(),contractB.id(),asOf,30).id())
+                .isEqualTo(contractB.id());
+        assertThatThrownBy(()->secureQueries.getContact(mixed,b.tenantId(),contactB.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contacts(mixed,b.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.updateCompany(mixed,b.tenantId(),customerB.id(),
+                "Forbidden",null,0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->categoryService.assignPrimary(mixed,b.tenantId(),
+                customerB.id(),categoryB.id())).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->contractService.changeDates(mixed,b.tenantId(),contractB.id(),
+                asOf,asOf.plusDays(60),contractB.rowVersion(),asOf))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.archiveContact(mixed,a.tenantId(),contactB.id(),0))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(crmHistory.contactHistory(mixed,a.tenantId(),contactB.id(),10)).isEmpty();
+        assertThatThrownBy(()->secureQueries.contactStatus(mixed,a.tenantId(),contactB.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
 }
