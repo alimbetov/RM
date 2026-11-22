@@ -1,0 +1,194 @@
+{
+  "schema": "RM-UR-R3.3-JUNIT-CASES/v1",
+  "scope": "PostgreSQL-only deterministic interleavings, rollback and replay; Java services only",
+  "cases": [
+    {
+      "caseId": "UR-R33-REVOKE-COMMAND-FIRST",
+      "junitSuite": "TenantRbacRevocationQualificationTest",
+      "junitMethod": "activeCommandCompletesBeforeConcurrentRevocationCommits",
+      "requirementIds": [
+        "IAM-01",
+        "IAM-02"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "COMMAND_FIRST",
+        "ROW_LOCK_BARRIER"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-REVOKE-FIRST",
+      "junitSuite": "TenantRbacRevocationQualificationTest",
+      "junitMethod": "commandCannotProceedUntilEarlierRevocationCommits",
+      "requirementIds": [
+        "IAM-01",
+        "IAM-02"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "REVOKE_FIRST",
+        "ROW_LOCK_BARRIER"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-CHECKOUT-SUSPEND-FIRST",
+      "junitSuite": "CommercialCoreE2EQualificationTest",
+      "junitMethod": "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects",
+      "requirementIds": [
+        "SAL-01",
+        "SAL-02",
+        "IAM-02"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "SUSPEND_FIRST",
+        "ZERO_ORDER_DELTA"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-CHECKOUT-FIRST",
+      "junitSuite": "CommercialCoreE2EQualificationTest",
+      "junitMethod": "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot",
+      "requirementIds": [
+        "SAL-01",
+        "SAL-02",
+        "IAM-02"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "CHECKOUT_FIRST",
+        "IMMUTABLE_SNAPSHOT"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-TRANSFER-FIRST",
+      "junitSuite": "InventoryTransferStocktakeQualificationTest",
+      "junitMethod": "urR33PostgresTransferCommitsBeforeReconciliationSnapshot",
+      "requirementIds": [
+        "INV-03",
+        "INV-05",
+        "INV-06"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "TRANSFER_FIRST",
+        "CONSERVE_STOCK"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-RECONCILIATION-FIRST",
+      "junitSuite": "InventoryTransferStocktakeQualificationTest",
+      "junitMethod": "urR33PostgresReconciliationSnapshotCommitsBeforeTransferVisibility",
+      "requirementIds": [
+        "INV-03",
+        "INV-05",
+        "INV-06"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "SNAPSHOT_FIRST",
+        "REPEATABLE_READ"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-ROLLBACK",
+      "junitSuite": "InventoryTransferStocktakeQualificationTest",
+      "junitMethod": "durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings",
+      "requirementIds": [
+        "INV-05"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "ROLLBACK",
+        "ZERO_CHECKPOINT_DELTA",
+        "RETRY"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R33-RETRY",
+      "junitSuite": "InventoryTransferStocktakeQualificationTest",
+      "junitMethod": "transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances",
+      "requirementIds": [
+        "INV-03",
+        "INV-06"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "IDEMPOTENT_REPLAY",
+        "NO_DUPLICATE_LEDGER"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    }
+  ]
+}
