@@ -3,6 +3,8 @@ package kz.rm.catalog;
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
+import kz.rm.inventory.CatalogInventoryUsagePort;
+import kz.rm.storefront.CatalogPublishedOfferUsagePort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,9 +26,15 @@ public class CatalogItemService {
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization auth;
+    private final CatalogInventoryUsagePort inventoryUsage;
+    private final CatalogPublishedOfferUsagePort offerUsage;
 
-    public CatalogItemService(JdbcTemplate jdbc,TenantAuthorization auth) {
-        this.jdbc=jdbc;this.auth=auth;
+    public CatalogItemService(JdbcTemplate jdbc, TenantAuthorization auth,
+            CatalogInventoryUsagePort inventoryUsage, CatalogPublishedOfferUsagePort offerUsage) {
+        this.jdbc=jdbc;
+        this.auth=auth;
+        this.inventoryUsage=inventoryUsage;
+        this.offerUsage=offerUsage;
     }
 
     private UUID admit(VerifiedActor actor, UUID tenant, DomainPermission permission) {
@@ -142,6 +150,15 @@ public class CatalogItemService {
         Item item=locked(tenant,itemId,expectedVersion);
         if(item.state()==CatalogItem.State.ARCHIVED)
             throw new IllegalStateException("Item already archived");
+        // Stock writers admit location -> item -> stock; they already hold an
+        // item SHARE lock. This transaction holds item UPDATE, then performs
+        // only NON-LOCKING reads of owner-specific usage. Never take stock or
+        // storefront/offer FOR UPDATE after the item lock (deadlock risk).
+        var inventoryBlockers=inventoryUsage.blockers(tenant,item.id());
+        if(inventoryBlockers.any())
+            throw new IllegalStateException("CATALOG_ARCHIVE_BLOCKED_BY_INVENTORY");
+        if(offerUsage.hasPublishedOffer(tenant,item.id()))
+            throw new IllegalStateException("CATALOG_ARCHIVE_BLOCKED_BY_PUBLISHED_OFFER");
         update(tenant,item.id(),expectedVersion,"state",CatalogItem.State.ARCHIVED.name());
         event(tenant,item.id(),who,"ARCHIVED",expectedVersion,expectedVersion+1);
         return fetch(tenant,item.id(),false);
