@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/main/java/kz/rm/crm/CrmBuyerLinkService.java'
       - 'src/main/java/kz/rm/iam/GlobalAccountDeletionService.java'
+      - 'src/main/java/kz/rm/iam/EmailIdentityService.java'
       - 'src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - '.github/workflows/crm-r22-buyer-link-pg.yml'
@@ -52,7 +53,7 @@ jobs:
           cache: maven
       - name: Qualify buyer link and CRM regressions on PostgreSQL
         run: mvn -B -ntp -Dtest=CrmBuyerLinkQualificationTest,CrmInteractionQualificationTest,CrmR1aQualificationTest test
-      - name: Require all twenty CRM buyer and IAM deletion tests with no errors or skips
+      - name: Require all twenty-two CRM buyer deletion security tests with no errors or skips
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET,pathlib,json
@@ -76,7 +77,9 @@ jobs:
                     'accountDeletionRetainsSalesAndCrmHistoryButScrubsLiveIamIdentity',
                     'accountDeletionRejectsUnprivilegedActorAndOwnerWithoutSideEffects',
                     'postgresDeletedAccountAuditCannotBeTamperedWith',
-                    'postgresBothCommitOrdersForDeleteVersusConfirm'}
+                    'postgresBothCommitOrdersForDeleteVersusConfirm',
+                    'postgresDeletionOutboxFailureRollsBackIdentityScrubAndCanRetry',
+                    'postgresBothCommitOrdersForDeleteVersusEmailConfirmation'}
           assert files,'No CRM Surefire reports'
           cases=[c for f in files for c in ET.parse(f).getroot().iter('testcase')]
           names={c.get('name') for c in cases}
