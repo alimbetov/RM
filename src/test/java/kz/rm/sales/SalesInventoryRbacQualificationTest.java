@@ -769,4 +769,108 @@ class SalesInventoryRbacQualificationTest {
                 .getTotalElements()).isEqualTo(2);
     }
 
+
+    @Test void sale08RemappedOfferCannotSubstituteSkuDuringOrderConfirmation() {
+        Context c=context(10);
+        UUID oldOrder=order(c,3);
+        UUID replacement=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,c.tenant(),replacement,"sale08-remap-"+UUID.randomUUID());
+        jdbc.update("""
+            INSERT INTO crm.inv_stock_balance
+                (tenant_id,location_id,item_id,on_hand,reserved)
+            VALUES (?,?,?,10,0)
+            """,c.tenant(),c.location(),replacement);
+        jdbc.update("""
+            UPDATE crm.store_offer
+            SET catalog_item_id=?,title='Replacement',unit_price=999
+            WHERE tenant_id=? AND id=?
+            """,replacement,c.tenant(),c.offer());
+        UUID fixed=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,c.tenant(),oldOrder);
+        assertThat(fixed).isEqualTo(c.item());
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        assertThat(commands.confirm(c.staff(),c.tenant(),oldOrder,c.location()).affectedLines())
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT item_id FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,UUID.class,c.tenant(),oldOrder)).isEqualTo(c.item());
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,BigDecimal.class,c.tenant(),oldOrder)).isEqualByComparingTo("100");
+        assertThat(jdbc.queryForObject("""
+                SELECT reserved FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.location(),replacement))
+                .isEqualByComparingTo("0");
+        assertThat(commands.fulfill(c.staff(),c.tenant(),oldOrder).affectedLines())
+                .isEqualTo(1);
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("7");
+    }
+
+    @Test void sale08HistoricalNullSkuMustNotResolveFromLiveOffer() {
+        Context c=context(10);
+        UUID current=order(c,1);
+        UUID historical=UUID.randomUUID(),lineId=UUID.randomUUID();
+        // Simulate a pre-migration order without ever reconstructing an
+        // accepted SKU from today's potentially changed store_offer mapping.
+        jdbc.update("""
+                INSERT INTO crm.sales_order
+                  (tenant_id,id,pending_email_identity_id,buyer_user_id,status,
+                   total_amount,currency,created_at)
+                SELECT tenant_id,?,pending_email_identity_id,NULL,'PLACED',
+                       total_amount,currency,CURRENT_TIMESTAMP
+                FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,historical,c.tenant(),current);
+        jdbc.update("""
+                INSERT INTO crm.sales_order_line
+                  (tenant_id,id,order_id,offer_id,title_snapshot,quantity,
+                   unit_price_snapshot,currency)
+                VALUES (?,?,?,?,'Legacy accepted SKU',1,100,'KZT')
+                """,c.tenant(),lineId,historical,c.offer());
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        assertThatThrownBy(()->commands.confirm(c.staff(),c.tenant(),historical,c.location()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("UNMAPPED_LEGACY_ORDER");
+        assertThat(status(c,historical)).isEqualTo("PLACED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,c.tenant(),historical)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),lineId)).isNull();
+    }
+
+    @Test void sale08PostgresRejectsModificationOfAcceptedOrderLine() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase(java.util.Locale.ROOT).contains("postgresql"));
+        }
+        Context c=context(10);
+        UUID order=order(c,1);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.sales_order_line SET catalog_item_id_snapshot=NULL
+                WHERE tenant_id=? AND order_id=?
+                """,c.tenant(),order))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.sales_order_line SET unit_price_snapshot=999
+                WHERE tenant_id=? AND order_id=?
+                """,c.tenant(),order))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,c.tenant(),order)).isEqualTo(c.item());
+    }
+
 }
