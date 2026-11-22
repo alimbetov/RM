@@ -1,7 +1,7 @@
 
 # RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12, 03/12, 04/12, 05/12 и 06/12. **Новый этапный рубеж:** 07/12, затем переход к иному домену с backlog 08–12. **Ветка:** base_dev.
+**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12…07/12 — SPECIFIED; **новый этапный рубеж пройден на уровне ТЗ**. Handoff следующему домену разрешён; 08–12 — DEFERRED/NOT DONE, не production admission. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
 **Статус:** ТЗ СФОРМИРОВАНО; lifecycle ORGANIZATION НЕ РЕАЛИЗОВАН, смежные INVENTORY INV-Q1..Q3 уже реализованы/квалифицированы отдельно. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
@@ -55,7 +55,7 @@
 | 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | SPECIFIED |
 | 05 | INVENTORY | Receive/correct/writeOff/transfer/reserve/stocktake, blocker матрица, deadlock Q7 | SPECIFIED |
 | 06 | SALES | Confirm/cancel/fulfill, per-line reserve evidence, warehouse state × order races | SPECIFIED |
-| 07 | IAM и RBAC | VerifiedActor, A/B/AB, чужие UUID, revoke race | OPEN |
+| 07 | IAM и RBAC | VerifiedActor, tenant role/permission, A/B/AB, revoke races, onboarding | SPECIFIED |
 | 08 | Поиск и пагинация | Буквальный LIKE, фильтры, предсказуемые страницы | DEFERRED after 07 |
 | 09 | PostgreSQL и audit | Заполненная БД, атомарный журнал действий, DDL | DEFERRED after 07 |
 | 10 | Конкурентность и recovery | deactivate-vs-reserve, edit-vs-edit, rollback | DEFERRED after 07 |
@@ -348,3 +348,38 @@ P05-01 «transfer locks first location → SKU → second location» относ�
 После следующего прохода **07/12** (IAM/RBAC/tenant, VerifiedActor, A/B/AB, revoke race) подготовить промежуточный closure summary с актуальным code/QA evidence, unresolved risk list и конкретными задачами на внедрение. Пользователь разрешил затем перейти к новому домену **до** проработки 08–12. **08–12 → DEFERRED / NOT DONE**, а не VERIFIED или GREEN. ORG maturity остается **1/5**, пока runtime lifecycle отсутствует, независимо от числа написанных ТЗ.
 
 **Следующий проход:** 07/12 IAM + tenant-scoped RBAC boundary; только после его фиксации сменить предметный домен по новой очередности. Ни контроллеров, ни production admission до отдельных release gates.
+
+
+---
+
+## 16. Дополнение после прохода 07/12 — IAM, Tenant RBAC & Security Boundary и промежуточное закрытие
+
+**Детальное IAM/source ревью:** [RM-ORG-FUNC-R1-P07](../reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS07-2026-11-22.md). **Промежуточное заключение с deferred backlog:** [RM-ORG-INTERIM-R1-07](../reviews/RM-ORG-INTERIM-CLOSURE-07-2026-11-22.md). **Source HEAD:** `1f24bba79b228dff7a8b4df75f0f80fd700766e0` (`base_dev`, 22.11.2026). **Вывод:** 07/12 SPECIFIED; новая функциональность и новые P07 PostgreSQL E2E не реализованы.
+
+### 16.1 Проверенная доверенная цепочка
+
+`OIDC JWT` проверяется через `OidcJwtConfiguration` с HTTPS JWKS/issuer/audience и `OidcActorResolver` с ACTIVE-linked user; `VerifiedActor` package-private constructor и expiry check. Конфигурация OIDC conditional, не означает готового HTTP ingress или реального deployment IdP.
+
+`AuthenticatedOrganizationLocations` передаёт только `VerifiedActor.userId()`. `OrganizationLocationService.create` выполняет `@Transactional`, IAM `requireForCommand(...ORGANIZATION_LOCATION_WRITE)` **до** обращения к GEO/DB. `OrganizationLocationQueryService.get/search` отдельно требуют `ORGANIZATION_LOCATION_READ`. При реализации `update/deactivate/reactivate/close` использовать **эту же границу** без публичного actor UUID и без новых hardcoded доменных ролей.
+
+`TenantAuthorization.requireForCommand` удерживает PostgreSQL `iam_user_account FOR SHARE → iam_workspace FOR SHARE`, затем перечитывает JDBC active membership и проверяет exact permission при `rbac_config.enforced=TRUE`. `TenantRoleService` mutates OWNER-only с workspace `FOR UPDATE` и append-only `iam_tenant_rbac_event`. Так коммит разрешённой команды должен предшествовать коммиту параллельного revoke, а revoke-first запрещает новую команду. `OrderInventoryPort` требует парные transaction-bound `SALES_*/INVENTORY_*` decisions одного actor/tenant.
+
+**Existing evidence:** `TenantRbacQualificationTest`, `TenantRbacRevocationQualificationTest` (включая обе последовательности revoke-vs-admitted command), `OrganizationLocationQueryQualificationTest.postgresLocationCreationFencesConcurrentPermissionRevocation` и `tcrud03SameGlobalMemberDifferentLocationGrantsAndForeignIdDenied`, `IamUserOnboardingProcessQualificationTest`, `SalesInventoryRbacQualificationTest`, `OidcJwtCryptoQualificationTest`. **Присутствие этих тестов ≠ запуск новых P07 cases на текущем HEAD.**
+
+### 16.2 Решения/открытые продуктовые границы
+
+- **DEC-ORG-07-A:** tenant membership & `ORG_READ/WRITE` авторизуют только свою выбранную организацию. Один global user с A WRITE и B READ не может редактировать B и не видит чужих UUID/stock counts в A.
+- **New tenant:** `PlatformTenantBootstrapService.provision` включает `RBAC enforced=TRUE` **без функциональных прав**. Путь OWNER create role → grant → invite employee → employee accept → OWNER assign → employee commands работает (сервисное существующее evidence). Публичное назначение роли себе запрещено: `TenantRoleService.assign` отвергает `userId.equals(actorId)`.
+- **P07-F01 / proposed product decision, НЕ утверждённое внедрение:** solo-owner микробизнес не может прямо создать свой первый склад в enforced tenant без staff/другого утверждённого процесса. Рекомендован только **явный аудируемый OWNER self-assignment заранее существующей функциональной роли**, без `TENANT_RBAC_MANAGE` delegation и wildcard. Для этого потребуется additive audit CHECK event; не обходить текущие запреты несанкционированным grant.
+- **P07-F02 / legacy transition:** `TenantAuthorization.require` имеет membership-role fallback для `enforced=FALSE` в старых tenant. Современные provisioned tenants `TRUE`; inventory+backfill и controlled enable старых tenant надо квалифицировать на populated DB, не объявлять universal exact RBAC без проверки.
+- **P07-F03 / API hardening:** `TenantAuthorization.requireOrganizationWriter` public helper использует `require` без транзакционного fence; текущий CREATE его **не вызывает**. Не использовать helper в новых mutations; deprecate после проверки реальных внутренних callers.
+- **Global admin:** `PLATFORM_ADMIN` не даёт tenant ORG/INVENTORY/SALES business grants; восстановление owner/tenant отдельно регулируется IAM, не переводить эти права в локальные функциональные роли.
+- **Closed/INACTIVE:** `ORG_READ` не равен `INVENTORY_STOCK_READ`; cancel/release cleanup защищены действующими SALES+INVENTORY permissions, новый confirm/fulfill — active warehouse admission, без обхода IAM из-за старого заказа.
+
+### 16.3 Приёмка и изменение календаря
+
+**План:** `ORG-P07-Q01…Q24`: signed/forged/expired JWT, stale minted principal, invite/accept/role, A/B/AB, foreign UUID, platform admin non-bypass, account/member/tenant suspend, owner self-grant, role revoke first/command first for ORG/INV/SALES, inactive location cleanup/replay permissions, forced legacy `enforced=FALSE` cutover, immutable RBAC evidence. **NOT RUN** (новые PG tests; существующие тесты перечислены отдельно).
+
+**Промежуточный closure:** все 07 проходов исходного анализа/ТЗ `SPECIFIED`; жизненный цикл ORGANIZATION `NOT IMPLEMENTED`, зрелость по прежней шкале **1/5**, production HOLD. **08–12** сознательно `DEFERRED / NOT DONE` и возвращаются в release backlog. Handoff к следующему предметному сервису допустим **только как переключение аудита**, не как знак зрелости ORGANIZATION. Предпочтительная кандидатура следующего обследования — CATALOG: PRODUCT state, catalog identity/offer SKU, publisher permission непосредственно влияют на INVENTORY/Sales.
+
+**Реализация по итогам семи проходов:** `ORG-IMP-01..05`, `ORG-QA-ALL`, `IAM-DEC-01`, `IAM-QUAL-02`, `INV-IMP-01`, `SALE-IMP-01` определены в промежуточном заключении. Перед merge или production required functional CRUD lifecycle E2E, initialized/current permissions, populated PG upgrade, tests 08–12/release evidence.
