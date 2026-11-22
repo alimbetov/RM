@@ -3,7 +3,7 @@
 **Date:** 2026-11-22. **Branch:** `base_dev`. **Scope:** quantity inventory only, authenticated service layer; production **HOLD**.
 **Baseline exact SHA:** `2ede6576b2907e7a419dd85d05364c8d4f0300c0`.
 **PostgreSQL shared-owner-lock optimization + first-position race fix SHA:** `534aa18008bc54f77a4b1f0277d0f041bfa12bae` (later code/test updates must be reviewed at their own SHA).
-**States:** Baseline Q1–Q9 `POSTGRESQL QUALIFIED` in proven scope; optimization `IMPLEMENTED / CI PENDING` until all exact-head gates pass. Neither means production admission or full economic costing.
+**States:** Q1–Q9 **POSTGRESQL QUALIFIED (quantity service-only R1)** on both baseline and optimized exact SHA; 12-pass functional review **CLOSED FOR QUANTITY R1**. Production admission, cost valuation and full HTTP/UI workflow remain **HOLD**.
 
 ## 1. Exact baseline evidence, not assumptions
 
@@ -36,7 +36,7 @@ Baseline `INVENTORY_PG_SYNTHETIC_LOCK_PROBE`: **8 concurrent workers, 24 receipt
 
 **Minimal optimization implemented (CI PENDING):** `StockEligibility` selects PostgreSQL owner rows `FOR SHARE` to allow concurrent admission for independent stock rows while still blocking warehouse status UPDATE and SKU archival/publish UPDATE. H2 keeps `FOR UPDATE`. `requireTransferWarehouses` still reads locations in deterministic order. With compatible shared owner locks, initial empty position creation is made conflict-safe by PostgreSQL `INSERT ... ON CONFLICT (tenant_id,location_id,item_id) DO NOTHING` in `StockEligibility.ensureZeroPosition`; H2 uses previous conditional insertion under exclusive owner lock. Both `InventoryMovementService` first receipts and transfer destination initialization now call the shared helper. No database schema or controller added.
 
-**Mandatory NEW evidence:** `InventoryQ123QualificationTest.postgresSharedOwnerAdmissionAllowsParallelChecksAndStillFencesClosure` proves two simultaneous owner admissions do **not** block each other, but an owner status UPDATE cannot commit until both release; `postgresSyntheticFanoutAdmissionProbeAcrossEightSkus` records **8 workers, 24 receipts, 8 SKU, 1 tenant warehouse** with p95/p99 and all 24 ledger rows; existing `concurrentFirstReceiptsDoNotDoubleCreateOrLoseQuantity` + transfer/stocktake suites must remain GREEN.
+**NEW evidence — VERIFIED:** `InventoryQ123QualificationTest.postgresSharedOwnerAdmissionAllowsParallelChecksAndStillFencesClosure` proves two simultaneous owner admissions do **not** block each other, but an owner status UPDATE cannot commit until both release; `postgresSyntheticFanoutAdmissionProbeAcrossEightSkus` records **8 workers, 24 receipts, 8 SKU, 1 tenant warehouse** with p95/p99 and all 24 ledger rows; existing `concurrentFirstReceiptsDoNotDoubleCreateOrLoseQuantity` + transfer/stocktake suites must remain GREEN.
 
 **Do not infer:** 8-SKU p95 improvement from the one-SKU baseline; to compare same SKU across versions run same CI scenario under identical hosts and repetitions. Lack of H2 PostgreSQL shared locking tests is compensated by PostgreSQL-only owner compatibility test, not a claim of identical lock modes.
 
@@ -69,3 +69,35 @@ Baseline `INVENTORY_PG_SYNTHETIC_LOCK_PROBE`: **8 concurrent workers, 24 receipt
 ## 5. Handoff to SALES / AutoOrder
 
 The separate [SALES 12-pass spec](../spec/RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md) already covers source-review passes 01–07. Do not create a competing duplicated TЗ. After optimized INVENTORY exact-SHA PostgreSQL qualification, reuse the same cross-domain Q9 contracts to resume SALES-specific pass 08 (provider/consumer and immutable SKU/price snapshot), then 09–12 security, throughput and release gates. This document does not assert completion of SALES.
+
+
+## 6. Optimized code — completed exact-SHA qualification
+
+**Qualified SHA:** [534aa18008bc54f77a4b1f0277d0f041bfa12bae](https://github.com/alimbetov/RM/commit/534aa18008bc54f77a4b1f0277d0f041bfa12bae), including `FOR SHARE` owner admission, PostgreSQL `INSERT ... ON CONFLICT DO NOTHING` for first stock position and transfer destination, H2 fallback, and both new performance tests.
+
+| Exact-SHA Actions | Status | Evidence |
+|---|---|---|
+| [44987925832](https://github.com/alimbetov/RM/actions/runs/44987925832) — H2, PostgreSQL integration, populated IAM/PII | **SUCCESS** | PostgreSQL: `301 tests / 0 failures / 0 errors / 18 skipped` |
+| [44987931306](https://github.com/alimbetov/RM/actions/runs/44987931306) — additional Domain Security/PostgreSQL | **SUCCESS** | Additional independent workflow on same source SHA |
+| [44987925857](https://github.com/alimbetov/RM/actions/runs/44987925857) — populated CRM upgrade | **SUCCESS** | Applied migration compatibility and CRM regression |
+| [44987925840](https://github.com/alimbetov/RM/actions/runs/44987925840) — real RustFS E2E | **SUCCESS** | Infrastructure regression, not inventory performance qualification |
+
+**All named PostgreSQL domain test sets executed (no skips):** `InventoryQ123QualificationTest` **9/9**, `InventoryTransferStocktakeQualificationTest` **7/7**, `SalesInventoryRbacQualificationTest` **16/16**. New shared owner admission test demonstrates concurrent `FOR SHARE` and a blocked status UPDATE until admission releases. First-receipt and opposite transfer races remain GREEN.
+
+**Critical intermediate defect and remediation:** source `77e22d56d76e5cdcb29c5ffe818aa511c2b6b209` switched owner locks to `FOR SHARE` *before* the first-receipt initializer was made conflict-safe. PostgreSQL [run 44987833158](https://github.com/alimbetov/RM/actions/runs/44987833158) detected `DuplicateKeyException` in `concurrentFirstReceiptsDoNotDoubleCreateOrLoseQuantity`. This was a real concurrency regression. The subsequent `ensureZeroPosition` uses PostgreSQL `INSERT ... ON CONFLICT DO NOTHING`; the corrected exact-SHA PG suites above prove the race is closed. Never treat intermediate failed SHA as qualified.
+
+### Measurements, matched workload descriptions
+
+| CI sample | Workers | Operations | Unique SKU / warehouse | p95 | p99 | Meaning |
+|---|---:|---:|---|---:|---:|---|
+| Baseline `2ede657` | 8 | 24 | 1 SKU / 1 warehouse | **46 ms** | **53 ms** | Per-operation latency, exclusive owner locks |
+| Optimized `534aa18` | 8 | 24 | 1 SKU / 1 warehouse | **65 ms** | **71 ms** | Still row-serialized on same SKU; not evidence of a same-SKU speedup |
+| Optimized `534aa18` | 8 | 24 | 8 SKUs / 1 warehouse | **22 ms** | **22 ms** | Independent stock positions admit concurrently |
+
+One short GitHub runner sample per workload. **Do not** infer repeatable percent improvement or reliable capacity from these figures; both workload and runner conditions differ. Measured behavior supports the lock-compatibility design and correctness, not a throughput SLA.
+
+### Final disposition
+
+**INVENTORY quantity R1 review and Q1–Q9 implementation:** **CLOSED / POSTGRESQL QUALIFIED** on exact SHA `534aa18`. **Estimated functional maturity: 3/5**; the previous 2/5 referred to pre-implementation service depth. No controller, new branch, main merge or production admission was performed. Continue separately with FIN valuation methodology and transport when project gates permit.
+
+**Remaining targeted performance checks (not release claims):** repeated controlled 1-vs-8 SKU tests with >=1000 operations, at least 2 warehouses and users, `EXPLAIN (ANALYZE, BUFFERS)` on large ledger, `pg_locks` wait/timeout statistics, global 64-stripe request-key contention, connection pool pressure, and confirm/fulfill concurrency under mixed tenant loads. Do not change the lock strategy again without a measured failure or requirement.
