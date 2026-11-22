@@ -1,6 +1,7 @@
 package kz.rm.inventory;
 
 import kz.rm.iam.VerifiedActor;
+import kz.rm.inventory.dto.StockTransferDto;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -26,5 +27,10 @@ public class AuthenticatedInventoryCommands {
             InventoryMovementService.WriteOffCause cause) {
         if(actor==null)throw new SecurityException("Verified actor required");
         return commands.writeOff(actor.userId(),tenant,location,item,key,qty,cause);
+    }    public StockTransferDto transfer(VerifiedActor actor,UUID tenant,
+             UUID sourceLocation,UUID targetLocation,UUID item,BigDecimal qty,String requestKey) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return commands.transfer(actor.userId(),tenant,sourceLocation,targetLocation,
+                item,qty,requestKey);
     }
 }
