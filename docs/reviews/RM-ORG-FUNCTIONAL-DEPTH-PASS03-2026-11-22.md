@@ -151,3 +151,12 @@ SELECT
 **Проход 03/12:** **ANALYZED / CONTRACT SPECIFIED / NOT IMPLEMENTED**. Зрелость ORGANIZATION по общей шкале остаётся **1/5**. Нет изменений runtime и нет новых выполненных P03 tests.
 
 **Следующий проход 04/12:** input validation, profile patch/KATO, type immutability, CAS/update specifics, retention/audit action contracts; синхронизировать с 03 state semantics. Не переключаться на другой домен до завершения 12/12.
+
+
+---
+
+## Актуализация после прохода 05/12
+
+Проход 03 изучал состояние до появления `INV-Q8`; в текущем коде есть реальный `crm.inv_stocktake.status='OPEN'`. Поэтому DEC-ORG-03-A о временной деактивации с **свободным** `onHand>0` сохраняется, но дополнен **DEC-ORG-05-B**: `ACTIVE→INACTIVE` и `INACTIVE→CLOSED` требуют также отсутствие OPEN stocktake. Не перекладывать на ORGANIZATION автоматическое завершение, списание или удаление инвентаризации. Открытую операцию сначала законно POST/CANCEL в INVENTORY. `POSTED/CANCELLED` истории не блокируют.
+
+**Актуальный cross-domain lock hazard:** в `InventoryTransferService.transfer` текущая последовательность `location A → PRODUCT X → location B` потенциально deadlock'ится с `receive(location B, PRODUCT X)`. До одновременной реализации ORG deactivate/close требуется исправление P05-01: получить все location locks до PRODUCT; см. [проход 05/12](RM-ORG-FUNCTIONAL-DEPTH-PASS05-2026-11-22.md). Этот раздел фиксирует более позднее решение, не переписывая исходный source snapshot/не выдавая запланированные race tests за GREEN.
