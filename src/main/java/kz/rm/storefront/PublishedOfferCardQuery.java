@@ -1,6 +1,7 @@
 package kz.rm.storefront;
 
 import kz.rm.files.CatalogPublicProductMedia;
+import kz.rm.inventory.RegionalPublicAvailabilityPort;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -26,11 +27,14 @@ public class PublishedOfferCardQuery {
 
     private final JdbcTemplate jdbc;
     private final CatalogPublicProductMedia publicMedia;
+    private final RegionalPublicAvailabilityPort regional;
 
     public PublishedOfferCardQuery(JdbcTemplate jdbc,
-                                   CatalogPublicProductMedia publicMedia) {
+                                   CatalogPublicProductMedia publicMedia,
+                                   RegionalPublicAvailabilityPort regional) {
         this.jdbc = jdbc;
         this.publicMedia = publicMedia;
+        this.regional = regional;
     }
 
     @Transactional(readOnly = true)
@@ -79,4 +83,18 @@ public class PublishedOfferCardQuery {
                 card.unitPrice(),card.currency(),card.offerRowVersion(),
                 card.availabilityBand(),images);
     }
+
+    /** QR-02B: exact KATO and requested integer quantity. This is an
+     * advisory LIVE stock band, NEVER a reservation or checkout guarantee. */
+    @Transactional(readOnly=true)
+    public PublicCard findPublished(String publicRef,String locale,
+                                    String exactKato,int requestedQuantity) {
+        PublicCard card=findPublished(publicRef,locale);
+        var snapshot=regional.summary(publicRef,exactKato,requestedQuantity);
+        return new PublicCard(card.publicRef(),card.storeSlug(),card.sku(),
+                card.title(),card.description(),card.locale(),card.sourceLocale(),
+                card.unitPrice(),card.currency(),card.offerRowVersion(),
+                snapshot.band().name(),card.images());
+    }
+
 }
