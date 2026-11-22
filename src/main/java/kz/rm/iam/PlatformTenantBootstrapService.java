@@ -17,9 +17,11 @@ import java.util.UUID;
 @Service
 public class PlatformTenantBootstrapService {
     private final JdbcTemplate jdbc;
+    private final PlatformAdminGovernanceService admins;
 
-    public PlatformTenantBootstrapService(JdbcTemplate jdbc) {
+    public PlatformTenantBootstrapService(JdbcTemplate jdbc, PlatformAdminGovernanceService admins) {
         this.jdbc = jdbc;
+        this.admins = admins;
     }
 
     public record OrganizationAccess(UUID tenantId, UUID organizationId, UUID ownerUserId) {}
@@ -35,17 +37,9 @@ public class PlatformTenantBootstrapService {
                 || countryCode == null || !countryCode.matches("[A-Z]{2}"))
             throw new IllegalArgumentException("Valid organization details required");
 
-        UUID adminId = platformAdmin.userId();
-        // Serialize a single admin's bootstrap retries, then lock owner account.
-        String adminStatus = jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
-                """,rs -> rs.next() ? rs.getString(1) : null, adminId);
-        if (!"ACTIVE".equals(adminStatus)) throw new SecurityException("Administrator inactive");
-        boolean platformAuthority = jdbc.query("""
-                SELECT 1 FROM public.iam_global_role_assignment
-                WHERE user_id=? AND role='PLATFORM_ADMIN' AND revoked_at IS NULL FOR UPDATE
-                """,(org.springframework.jdbc.core.ResultSetExtractor<Boolean>)rs -> rs.next(),adminId);
-        if (!platformAuthority) throw new SecurityException("Active platform administrator required");
+        // Share the global admin account + guard fence with grant/revoke
+        // and emergency recovery. Revoke cannot race past provisioning admission.
+        UUID adminId = admins.activeAdministrator(platformAdmin);
 
         // No tenant creation for an unverified/inactive account.
         String ownerStatus = jdbc.query("""
