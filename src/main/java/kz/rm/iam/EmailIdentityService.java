@@ -517,7 +517,7 @@ public class EmailIdentityService {
 
     private void assertNotDisabled(UUID userId) {
         String status=jdbc.queryForObject(
-            "SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE",
+            "SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE",
             String.class,userId);
         if(!"ACTIVE".equals(status)&&!"PENDING".equals(status))
             throw new SecurityException("Account unavailable");
