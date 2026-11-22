@@ -83,6 +83,31 @@ class SalesOrderQueryQualificationTest {
                 .order().orderId();
     }
 
+    @Test void r10SellerDetailAndStatusHistoryAreTenantBoundAndLimited() {
+        Shop owned=shop(),foreign=shop();
+        UUID accepted=order(owned),other=order(foreign);
+        var actor=verified(owned.actor());
+        var detail=trustedQueries.detail(actor,owned.tenant(),accepted);
+        assertThat(detail.order().id()).isEqualTo(accepted);
+        assertThat(detail.lines()).hasSize(1);
+        assertThat(detail.lines().getFirst().unitPriceSnapshot())
+                .isEqualByComparingTo("100");
+        assertThat(detail.toString()).doesNotContain("buyer_user_id",
+                "pending_email_identity_id","@example.kz");
+        var events=trustedQueries.history(actor,owned.tenant(),accepted,0,10);
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst().eventType()).isEqualTo("PLACED");
+        assertThat(trustedQueries.history(actor,owned.tenant(),accepted,1,1)).isEmpty();
+        assertThatThrownBy(()->trustedQueries.detail(actor,owned.tenant(),other))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->trustedQueries.history(actor,owned.tenant(),other,0,10))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->trustedQueries.detail(actor,foreign.tenant(),other))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedQueries.history(actor,owned.tenant(),accepted,0,101))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void verifiedReadFacadeEnforcesActorTenantAndPagination() {
         Shop owned=shop(), other=shop();
         UUID ownOrder=order(owned);
