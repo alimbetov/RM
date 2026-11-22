@@ -2,7 +2,7 @@ package kz.rm.geo;
 
 import kz.rm.iam.*;
 import kz.rm.organization.OrganizationLocationEntity;
-import kz.rm.organization.OrganizationLocationRepository;
+import kz.rm.organization.dto.LocationSearch;
 import kz.rm.organization.AuthenticatedOrganizationLocations;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,6 @@ import static org.assertj.core.api.Assertions.*;
 class KatoTerritoryQualificationTest {
     @Autowired KatoTerritoryRepository kato;
     @Autowired KatoTerritoryDirectory directory;
-    @Autowired OrganizationLocationRepository locations;
     @Autowired AuthenticatedOrganizationLocations service;
     @Autowired OrganizationRepository orgs;
     @Autowired WorkspaceRepository workspaces;
@@ -74,8 +73,13 @@ class KatoTerritoryQualificationTest {
                 "Stock 1",activeCode,"Industrial zone");
         var pos=service.create(verified(actor.getId()),workspace.getId(),OrganizationLocationEntity.Type.POINT_OF_SALE,
                 "Retail 1",activeCode,"Street 10");
-        assertThat(locations.findByWorkspaceId(workspace.getId())).hasSize(3);
-        assertThat(locations.findByIdAndWorkspaceId(branch.id(),UUID.randomUUID())).isEmpty();
+        // Cross-module tests use the verified-actor application boundary, not raw JPA.
+        var ownerPrincipal=verified(actor.getId());
+        assertThat(service.search(ownerPrincipal,workspace.getId(),
+                new LocationSearch(null,null,null),0,10).getTotalElements()).isEqualTo(3);
+        assertThat(service.get(ownerPrincipal,workspace.getId(),branch.id()).id()).isEqualTo(branch.id());
+        assertThatThrownBy(() -> service.get(ownerPrincipal,workspace.getId(),UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThat(branch.katoCode()).isEqualTo(activeCode);
         assertThat(warehouse.katoCode()).isEqualTo(activeCode);
         assertThat(pos.katoCode()).isEqualTo(activeCode);
