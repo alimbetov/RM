@@ -227,6 +227,59 @@ class CommercialCoreE2EQualificationTest {
                 .hasMessageContaining("CATALOG_ARCHIVE_BLOCKED_BY_INVENTORY");
     }
 
+    @Test void postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger()
+            throws Exception {
+        postgresOnly();
+        var c=setup();
+        var item=product(c);
+        var store=publishedStorefront(c);
+        var draft=offers.createDraft(c.staff(),c.tenant(),item.id(),
+                "W2 reserve race",new BigDecimal("20"),"KZT");
+        var offer=offers.publish(c.staff(),c.tenant(),draft.id(),draft.rowVersion());
+        stock.receive(c.staff(),c.tenant(),c.warehouse(),item.id(),
+                "w2-receipt-"+UUID.randomUUID(),new BigDecimal("20"));
+        UUID order=checkout.checkout(store.slug(),
+                "w2-buyer-"+UUID.randomUUID()+"@example.kz",
+                "w2-checkout-"+UUID.randomUUID(),
+                List.of(new AutoOrderService.Line(offer.id(),4))).order().orderId();
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var writer=pool.submit(()->{
+                start.await(10,java.util.concurrent.TimeUnit.SECONDS);
+                sales.confirm(c.staff(),c.tenant(),order,c.warehouse());
+                sales.fulfill(c.staff(),c.tenant(),order);
+                return true;
+            });
+            var reader=pool.submit(()->{
+                start.await(10,java.util.concurrent.TimeUnit.SECONDS);
+                for(int i=0;i<6;i++) {
+                    var observed=reconciliation.inspect(c.staff(),c.tenant(),
+                            c.warehouse(),item.id());
+                    if(observed.finding()!=AuthenticatedInventoryReconciliation.Finding.CONSISTENT)
+                        throw new AssertionError("A committed quantity snapshot was reported corrupt");
+                }
+                return true;
+            });
+            start.countDown();
+            assertThat(writer.get(60,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(reader.get(60,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        }
+        var finalPosition=reconciliation.inspect(c.staff(),c.tenant(),
+                c.warehouse(),item.id());
+        assertThat(finalPosition.finding())
+                .isEqualTo(AuthenticatedInventoryReconciliation.Finding.CONSISTENT);
+        assertThat(finalPosition.onHand()).isEqualByComparingTo("16");
+        assertThat(finalPosition.reserved()).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                  AND posting_version IS NULL
+                """,Integer.class,c.tenant(),c.warehouse(),item.id())).isZero();
+        var run=reconciliationRuns.start(c.staff(),c.tenant());
+        var completed=reconciliationRuns.advance(c.staff(),c.tenant(),run.id(),20);
+        assertThat(completed.newFindings()).isEmpty();
+    }
+
     @Test void publishedOfferAndOpenStocktakePreventUnsafeArchive() {
         var c = setup();
         var item = product(c);
