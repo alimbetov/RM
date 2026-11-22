@@ -40,7 +40,8 @@ class OrderPackagingQualificationTest {
  @Autowired JdbcTemplate jdbc;
  @Autowired DataSource dataSource;
 
- record Fixture(UUID tenant,UUID order,String ref,VerifiedActor seller,VerifiedActor buyer) {}
+ record Fixture(UUID tenant,UUID order,String ref,VerifiedActor seller,VerifiedActor buyer,
+                VerifiedActor owner,UUID roleId) {}
  private static String key(){return "PKG_"+UUID.randomUUID().toString().replace("-","");}
  private VerifiedActor verified(UUID id){
   String sub=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",String.class,id);
@@ -103,7 +104,7 @@ class OrderPackagingQualificationTest {
     """,String.class,tenant,order);
   catalog.publish(seller,tenant,"GIFT_WRAP","Gift wrap",new BigDecimal("500"),
     "KZT",new BigDecimal("0.1200"),"UAT_1",0);
-  return new Fixture(tenant,order,ref,seller,buyerActor);
+  return new Fixture(tenant,order,ref,seller,buyerActor,admin,role.id());
  }
  private OrderPackagingService.Result offer(Fixture f,String key){
   return service.offer(f.seller(),f.tenant(),f.order(),"GIFT_WRAP",key);
@@ -333,6 +334,55 @@ class OrderPackagingQualificationTest {
   return jdbc.queryForObject("""
    SELECT count(*) FROM crm.sales_order_service_line WHERE tenant_id=? AND order_id=?
    """,Integer.class,f.tenant(),f.order());
+ }
+
+ @Test void sellerAccountSuspensionDeniesPackagingOfferWithoutWrites(){
+  var f=setup();
+  jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",
+   f.seller().userId());
+  assertThatThrownBy(()->offer(f,key())).isInstanceOf(SecurityException.class);
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void sellerRoleRevocationDeniesPackagingOfferWithoutWrites(){
+  var f=setup();
+  roles.revoke(f.owner(),f.tenant(),f.roleId(),DomainPermission.SALES_PACKAGING_MANAGE);
+  assertThatThrownBy(()->offer(f,key())).isInstanceOf(SecurityException.class);
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void duplicateOfferAfterPostCommitRetryIsNotDuplicated(){
+  var f=setup();String idempotencyKey=key();var a=offer(f,idempotencyKey);
+  var b=offer(f,idempotencyKey);
+  assertThat(b).isEqualTo(a);
+  assertThat(lineCount(f)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("""
+   SELECT count(*) FROM crm.sales_order_service_receipt
+   WHERE tenant_id=? AND request_key=?
+   """,Integer.class,f.tenant(),idempotencyKey)).isEqualTo(1);
+ }
+ @Test void receiptWriteFaultRollsBackEntireOfferAndCanBeRetriedOnPostgres() throws Exception{
+  try(var c=dataSource.getConnection()){
+   Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+  }
+  var f=setup();
+  String suffix=UUID.randomUUID().toString().replace("-","");
+  String function="crm.qr08_test_receipt_fault_"+suffix;
+  String trigger="qr08_receipt_fault_"+suffix;
+  String requestKey=key();
+  jdbc.execute("CREATE FUNCTION "+function+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'QR08_RECEIPT_FAULT'; END $$");
+  jdbc.execute("CREATE TRIGGER "+trigger+" BEFORE INSERT ON crm.sales_order_service_receipt FOR EACH ROW EXECUTE FUNCTION "+function+"()");
+  try {
+   assertThatThrownBy(()->offer(f,requestKey)).hasMessageContaining("QR08_RECEIPT_FAULT");
+   assertThat(lineCount(f)).isZero();
+   assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.sales_order_service_receipt
+    WHERE tenant_id=? AND request_key=?
+    """,Integer.class,f.tenant(),requestKey)).isZero();
+  }finally{
+   jdbc.execute("DROP TRIGGER IF EXISTS "+trigger+" ON crm.sales_order_service_receipt");
+   jdbc.execute("DROP FUNCTION IF EXISTS "+function+"()");
+  }
+  assertThat(offer(f,requestKey).state()).isEqualTo("OFFERED");
+  assertThat(lineCount(f)).isEqualTo(1);
  }
 
 }
