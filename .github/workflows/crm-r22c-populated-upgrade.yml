@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/crm-r22c-populated-upgrade.yml'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
+      - 'src/main/java/kz/rm/crm/CrmBuyerLinkService.java'
+      - 'src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java'
   workflow_dispatch:
 permissions:
   contents: read
