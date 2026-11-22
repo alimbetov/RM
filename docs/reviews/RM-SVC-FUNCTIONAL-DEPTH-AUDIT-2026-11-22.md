@@ -136,3 +136,18 @@
 - **Приёмка:** ORG-Q01..Q12 из подробного ТЗ; сначала R1.1A–D, затем 02/12…12/12 с фиксацией результатов. Текущие тесты покрывают создание/чтение/tenant и отдельную гонку revocation, но не закрытие склада и полномасштабные lifecycle flows.
 
 **Обновление матрицы §2:** оценка ORGANIZATION остаётся **1/5**, пока не появится подтверждённое сквозное управление локациями. После документационного этапа нельзя менять её на 3/5 только из-за написанного ТЗ.
+
+
+### SALES / AutoOrder: итерация 01/12 (предметный и перекрёстный source audit)
+
+- **Отдельное подробное ТЗ:** [RM-SALES-AUTO-FUNC-R1 — 12 проходов и спецификация](../spec/RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md).
+- **Исходный source HEAD ревью:** `169e4e2a0d641463984837ad76cea8aa70d9f265`. **Статус:** PASS 01/12 SOURCE REVIEWED / SPEC PROPOSED. Не объявлять 02–12 закрытыми, пока не представлены отдельные доказательства; этот документ **не** изменяет Java runtime.
+- **Реальная бизнес-цепочка:** `AutoOrderService.checkout` фиксирует заказ, цену/title snapshot, receipt и status event; IAM email proof связывает покупателя; `AuthenticatedSalesCommands.confirm/cancel/fulfill` вызывает транзакционные INVENTORY reserve/release/fulfill при двойном permission; seller `AuthenticatedSalesQueries.search` выдаёт tenant-scoped страницу и count. Это не пустые методы — транзакционный ядро работает в пределах тестов.
+- **Главный P0 cross-domain gap:** seller confirm и `InventoryReservationService.reserve` читают `catalog_item_id` из текущего `crm.store_offer`, а заказная строка сохраняет только title, quantity и unit price. Неизменяемый SKU snapshot отсутствует, поэтому необходимо зафиксировать исходный предмет исполнения на checkout и сохранить корректность старых заказов через populated migration.
+- **Другие P0:** checkout может принять оффер, который позднее нельзя зарезервировать по SKU; confirm не использует ORGANIZATION `ACTIVE WAREHOUSE` guard; `auto_reserve_on_confirm` в INVENTORY на поведение SALES не влияет. Рекомендовано **always reserve** в R1 и запрет ложного изменяемого toggle, без параллельной state machine.
+- **P1 functional:** нет seller `get/lines/history`, buyer read не пагинируется; отсутствует полноценный tenant-owned storefront offer lifecycle, CATALOG `publish` не синхронизирован с storefront; статусы доставки и `REJECTED` объявлены в схеме, но не имеют полноценных бизнес-команд. `COMPLETED` пока только складское исполнение, не оплата/доставка.
+- **Аутентификация:** email proof не является OIDC; seller commands уже требуют VerifiedActor и две операции admission, но реальная доставка email/transport anti-abuse остаётся отдельной зависимостью, не должна открываться ради «закрытия CRUD».
+- **Границы:** CRM Customer не создаётся автоматически по checkout-email, CATALOG владеет SKU/ценой, STOREFRONT оффером, SALES заказом, INVENTORY резервом, ORG статусом склада, IAM глобальной идентичностью. Payment/Finance, logistics, multiwarehouse, offer bargaining — не часть текущего R1.
+- **Приёмка:** SALE-Q01..Q16 в ТЗ, slices SALE-R1.A–E после согласования D-01..D-08 и повторного code-to-test trace. **Maturity остаётся 2/5**, текущий gate — source review, не реализация и не PostgreSQL qualification новых функций.
+
+**Следующее действие внутри этого же сервиса:** проход **02/12 — полный method → SQL/JDBC → permission → state → consumer → test trace**, затем 03/12 по aggregate/schema и populated migration. К другому домену не переходить по факту написания ТЗ.
