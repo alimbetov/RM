@@ -1,6 +1,6 @@
 # RM QR-07/R2.5 — Physical Return Hardening
 
-**Date:** 2026-11-22. **Branch:** `base_dev`. **Admission:** CANDIDATE pending PostgreSQL and full regression. Production HOLD.
+**Date:** 2026-11-22. **Branch:** `base_dev`. **Latest code candidate:** `f40c8e1e6df8485e44f68b972ffc1fc1ead6e452`. **Admission:** HOLD pending exact-SHA PostgreSQL and full regression. Production HOLD.
 
 ## Added physical return controls
 
@@ -11,7 +11,7 @@
 
 ## Qualification plans
 
-**Exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45047657023; two jobs, `qr07-r0-postgresql` and `qr07-full-postgresql-regression`. Both required for full R2.5 technical closure.
+**Current exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45048262597; two jobs, `qr07-r0-postgresql` and `qr07-full-postgresql-regression`. Both required for full R2.5 technical closure.
 
 Tests: immutable RESTOCK and WRITE_OFF baseline, QUARANTINE exact quantity and zero sellable-stock delta, multiple returns aggregated by SKU, foreign staff/scope, revoke `SALES_RETURN_POST` and `INVENTORY_RECEIVE`, invalid/rotated/replayed physical proof, 2 JVM race, hard process crash before/after COMMIT.
 
@@ -20,3 +20,15 @@ Tests: immutable RESTOCK and WRITE_OFF baseline, QUARANTINE exact quantity and z
 ## QR-08 sequencing
 
 Only after R2.5 evidence and remaining correctness defects are closed: QR-08/R0 service catalog and immutable order-service snapshot, then QR-08/R1 packaging consumables/reservation/precise single stock debit. Controllers remain out of scope. Production admission HOLD.
+
+## Iterative qualification evidence (do not conflate SHAs)
+
+The initial R2.5 candidate dedicated PostgreSQL job completed 20 tests, with two test data failures (wrong forged-token shape and `Set.of` duplicate when two fixtures choose the same SKU). A second candidate completed 20 tests with one intermittent failure because an otherwise valid 43-character Base64URL token may begin `-` or `_`, which the general evidence validator rejected. This was a **real production validation defect** and is now fixed by applying a token-specific `[A-Za-z0-9_-]{43}` format and explicit null guard.
+
+Latest code candidate also includes the **concurrent scope revocation × return stock posting** PostgreSQL test; it requires fully consistent outcome and no extra movement under either possible winning transaction.
+
+All subsequent source changes require a **new exact-SHA** result. The old failed/unfinished runs do not qualify the current candidate. Dedicated QR07 and full PG jobs are separate and must be reported separately.
+
+## Out of R2.5 admission
+
+Quarantine *intake* and segregated balances are implemented. Releasing stock back out of quarantine to sellable inventory, permanent disposal from the quarantine position and dedicated quarantine reconciliation have **not** been implemented and will be a subsequent qualification. A one-time buyer QR is synthetic in service tests and is **not real scanner, external OIDC, or HTTPS proof**. QR-08 packaging work is specified in `docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md`, but not yet implemented.
