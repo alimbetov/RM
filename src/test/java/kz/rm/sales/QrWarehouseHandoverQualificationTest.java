@@ -1571,6 +1571,8 @@ class QrWarehouseHandoverQualificationTest {
         var a=context();var b=context();
         var contexts=List.of(a,b);
         for(Context c:contexts) {
+            roles.grant(c.owner(),c.tenant(),assignedRole(c),
+                    DomainPermission.INVENTORY_RECEIVE);
             inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
                     c.itemOne(),key(),new BigDecimal("200"));
             inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
@@ -1617,6 +1619,17 @@ class QrWarehouseHandoverQualificationTest {
             totalMeasuredNanos+=System.nanoTime()-began;
         }
         assertThat(observations).hasSize(48).allMatch(B32Operation::success);
+        // Classify a separate set of expected idempotency/business conflicts.
+        // A denied attempt is never counted as a completed order.
+        for(int i=0;i<12;i++) {
+            var e=all.get(i);
+            long start=System.nanoTime();
+            assertThatThrownBy(()->pickup.complete(e.getKey().staff(),e.getKey().tenant(),
+                    e.getKey().warehouse(),e.getValue().proof().rawProof(),true,
+                    e.getValue().version(),key())).isInstanceOf(IllegalStateException.class);
+            observations.add(new B32Operation("BUSINESS_REJECTED",true,
+                    System.nanoTime()-start));
+        }
         b32Print("48_independent_2tenant_2waves",observations,totalMeasuredNanos);
         for(var e:all)
             assertExactlyOneHandover(e.getKey(),e.getValue().order(),2);
