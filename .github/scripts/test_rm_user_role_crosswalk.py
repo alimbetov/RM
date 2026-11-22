@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from verify_rm_user_role_crosswalk import (
-    CATALOG, CROSSWALK, PERMISSION_ENUM,
+    CATALOG, CROSSWALK, ROLE_CASES, PERMISSION_ENUM,
     permission_names, validate, validate_documents,
 )
 import json
@@ -20,6 +20,7 @@ class UserRoleCrosswalkQualificationTest(unittest.TestCase):
     def setUpClass(cls):
         cls.catalogue = json.loads((ROOT / CATALOG).read_text(encoding="utf-8"))
         cls.crosswalk = json.loads((ROOT / CROSSWALK).read_text(encoding="utf-8"))
+        cls.role_cases = json.loads((ROOT / ROLE_CASES).read_text(encoding="utf-8"))
         cls.permissions = permission_names(
             (ROOT / PERMISSION_ENUM).read_text(encoding="utf-8")
         )
@@ -28,7 +29,8 @@ class UserRoleCrosswalkQualificationTest(unittest.TestCase):
         crosswalk = copy.deepcopy(self.crosswalk)
         if mutate:
             mutate(crosswalk)
-        return validate_documents(self.catalogue, crosswalk, self.permissions)
+        return validate_documents(self.catalogue, crosswalk, self.permissions,
+                                  self.role_cases)
 
     def test_all_16_domains_75_requirements_and_5_proof_gaps_are_registered(self):
         report = validate(ROOT)
@@ -38,6 +40,7 @@ class UserRoleCrosswalkQualificationTest(unittest.TestCase):
         self.assertEqual(report["planned"], 29)
         self.assertEqual(report["declaredCanonicalProof"], 41)
         self.assertEqual(report["roleCasesPassed"], 0)
+        self.assertEqual(report["registeredRoleCases"], 5)
         self.assertEqual(report["gate"], "MAPPING_VALID_NOT_SERVICE_QUALIFIED")
         self.assertEqual(report["missingCanonicalProof"],
                          ["FIL-05", "INV-02", "KMS-01", "KMS-03", "ORG-04"])
