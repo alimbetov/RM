@@ -3050,3 +3050,44 @@ CREATE TRIGGER trg_qr07_return_event_immutable
  BEFORE UPDATE OR DELETE ON crm.sales_return_event
  FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
 --rollback DROP TRIGGER trg_qr07_return_event_immutable ON crm.sales_return_event;
+
+
+--changeset rm:0097-qr07-review-decisions
+-- Add revision-checked, replay-resistant and audit-ready R1 transitions.
+-- Legacy REQUESTED events remain valid; null is reserved for R0 events.
+ALTER TABLE crm.sales_return_event
+ ADD COLUMN request_key VARCHAR(100),
+ ADD COLUMN request_fingerprint VARCHAR(64),
+ ADD COLUMN from_state VARCHAR(32),
+ ADD COLUMN to_state VARCHAR(32),
+ ADD COLUMN expected_row_version BIGINT,
+ ADD COLUMN policy_version VARCHAR(40);
+ALTER TABLE crm.sales_return_event
+ ADD CONSTRAINT uq_qr07_decision_request_key UNIQUE (tenant_id,request_key),
+ ADD CONSTRAINT ck_qr07_event_request_fingerprint
+   CHECK(request_fingerprint IS NULL OR LENGTH(request_fingerprint)=64),
+ ADD CONSTRAINT ck_qr07_event_revision
+   CHECK(expected_row_version IS NULL OR expected_row_version>=0),
+ ADD CONSTRAINT ck_qr07_event_decision_fields
+   CHECK (
+    (request_key IS NULL AND request_fingerprint IS NULL AND
+     from_state IS NULL AND to_state IS NULL AND expected_row_version IS NULL AND
+     policy_version IS NULL)
+    OR
+    (request_key IS NOT NULL AND request_fingerprint IS NOT NULL AND
+     from_state IS NOT NULL AND to_state IS NOT NULL AND
+     expected_row_version IS NOT NULL AND policy_version IS NOT NULL)
+   );
+CREATE INDEX idx_qr07_event_return_history
+ ON crm.sales_return_event(tenant_id,return_id,occurred_at,id);
+--rollback DROP INDEX idx_qr07_event_return_history;
+--rollback ALTER TABLE crm.sales_return_event DROP CONSTRAINT ck_qr07_event_decision_fields;
+--rollback ALTER TABLE crm.sales_return_event DROP CONSTRAINT ck_qr07_event_revision;
+--rollback ALTER TABLE crm.sales_return_event DROP CONSTRAINT ck_qr07_event_request_fingerprint;
+--rollback ALTER TABLE crm.sales_return_event DROP CONSTRAINT uq_qr07_decision_request_key;
+--rollback ALTER TABLE crm.sales_return_event DROP COLUMN policy_version;
+--rollback ALTER TABLE crm.sales_return_event DROP COLUMN expected_row_version;
+--rollback ALTER TABLE crm.sales_return_event DROP COLUMN to_state;
+--rollback ALTER TABLE crm.sales_return_event DROP COLUMN from_state;
+--rollback ALTER TABLE crm.sales_return_event DROP COLUMN request_fingerprint;
+--rollback ALTER TABLE crm.sales_return_event DROP COLUMN request_key;
