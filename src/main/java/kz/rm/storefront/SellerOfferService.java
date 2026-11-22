@@ -102,6 +102,24 @@ public class SellerOfferService {
     }
 
     @Transactional
+    public Storefront createStorefrontDraft(VerifiedActor actor, UUID tenant, String slug) {
+        admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        if (slug == null || !slug.matches("[a-z0-9][a-z0-9-]{2,99}"))
+            throw new IllegalArgumentException("Invalid storefront slug");
+        Integer existing = jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_front WHERE tenant_id=?
+                """, Integer.class, tenant);
+        if (existing != null && existing != 0)
+            throw new IllegalStateException("Tenant storefront already exists");
+        UUID storefrontId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at,row_version)
+                VALUES (?,?,?,'DRAFT',CURRENT_TIMESTAMP,0)
+                """, tenant, storefrontId, slug);
+        return storefront(tenant, false);
+    }
+
+    @Transactional
     public Offer createDraft(VerifiedActor actor, UUID tenant, UUID itemId,
                              String offerTitle, BigDecimal amount, String isoCurrency) {
         admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
