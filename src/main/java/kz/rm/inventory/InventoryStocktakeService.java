@@ -157,11 +157,12 @@ class InventoryStocktakeService {
                     INSERT INTO crm.inv_stock_movement
                       (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                        balance_before,balance_after,occurred_at,recorded_at,
-                       reason_code,actor_user_id,source_type,source_id)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       reason_code,actor_user_id,source_type,source_id,posting_version)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,tenant,UUID.randomUUID(),header.location(),item,
                     "stocktake-"+id+"-"+item,delta,book,counted,now,now,
-                    "STOCKTAKE_ADJUSTMENT",actor,"STOCKTAKE",id);
+                    "STOCKTAKE_ADJUSTMENT",actor,"STOCKTAKE",id,
+                    InventoryPostingVersion.afterBalanceUpdate(jdbc,tenant,header.location(),item));
         }
         int updated=jdbc.update("""
                 UPDATE crm.inv_stocktake
