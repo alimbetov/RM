@@ -2737,4 +2737,149 @@ class QrWarehouseHandoverQualificationTest {
         assertExactlyOneHandover(c,o,1);
     }
 
+
+    private SalesReturnRequestService.Created qr07R2ReadyToPost(Context c,Order o){
+        var claim=qr07R2Approved(c,o,2);
+        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
+                2,"SCAN_FOR_POST",key());
+        returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
+                4,SalesReturnPhysicalService.Disposition.RESTOCK,
+                "INSPECT_FOR_POST",key());
+        return claim;
+    }
+
+    private Process startQr07R2Worker(String mode,Context c,UUID returnId,long revision,
+                                     String requestKey,java.nio.file.Path ready,
+                                     java.nio.file.Path release,java.nio.file.Path log)
+                                     throws Exception{
+        String cp=System.getenv("RM_QR06B_JAVA_CLASSPATH");
+        if(cp==null||cp.isBlank())
+            throw new IllegalStateException("QR07_R2_PROCESS_CLASSPATH_REQUIRED");
+        String javaExecutable=java.nio.file.Path.of(System.getProperty("java.home"),
+                "bin","java").toString();
+        return new ProcessBuilder(javaExecutable,"-cp",cp,
+                "kz.rm.sales.QrReturnProcessWorker",mode,c.tenant().toString(),
+                c.warehouse().toString(),c.staff().userId().toString(),
+                returnId.toString(),Long.toString(revision),requestKey,
+                ready.toString(),release.toString())
+                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+    }
+
+    @Test void qr07R2JvmHardCrashBeforePostCommitRollsBackAndRetryPostsOnce()
+            throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2ReadyToPost(c,o);
+        UUID item=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal before=stock(c,item,"on_hand");
+        var dir=java.nio.file.Files.createTempDirectory("qr07-r2-pre-");
+        Process worker=null;
+        String req=key();
+        try {
+            worker=startQr07R2Worker("POST_HALT_BEFORE_COMMIT",c,claim.requestId(),
+                    5,req,dir.resolve("-"),dir.resolve("-"),dir.resolve("worker.log"));
+            assertThat(waitQr06bProcess(worker,dir.resolve("worker.log"),90))
+                    .isEqualTo(86);
+            assertThat(stock(c,item,"on_hand")).isEqualByComparingTo(before);
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.sales_return_posting
+                    WHERE tenant_id=? AND return_id=?
+                    """,Integer.class,c.tenant(),claim.requestId())).isZero();
+            assertThat(returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                    claim.requestId(),5,req).state()).isEqualTo("RESTOCKED");
+            assertThat(stock(c,item,"on_hand"))
+                    .isEqualByComparingTo(before.add(BigDecimal.valueOf(2)));
+        }finally{
+            if(worker!=null&&worker.isAlive())worker.destroyForcibly();
+            java.nio.file.Files.deleteIfExists(dir.resolve("worker.log"));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
+    @Test void qr07R2JvmHardCrashAfterPostCommitReplaysOriginalMovement()
+            throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2ReadyToPost(c,o);
+        UUID item=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal before=stock(c,item,"on_hand");
+        var dir=java.nio.file.Files.createTempDirectory("qr07-r2-post-");
+        Process worker=null;
+        String req=key();
+        try {
+            worker=startQr07R2Worker("POST_HALT_AFTER_COMMIT",c,claim.requestId(),
+                    5,req,dir.resolve("-"),dir.resolve("-"),dir.resolve("worker.log"));
+            assertThat(waitQr06bProcess(worker,dir.resolve("worker.log"),90))
+                    .isEqualTo(87);
+            assertThat(stock(c,item,"on_hand"))
+                    .isEqualByComparingTo(before.add(BigDecimal.valueOf(2)));
+            var replay=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                    claim.requestId(),5,req);
+            assertThat(replay.state()).isEqualTo("RESTOCKED");
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.sales_return_posting
+                    WHERE tenant_id=? AND return_id=?
+                    """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+            assertThat(stock(c,item,"on_hand"))
+                    .isEqualByComparingTo(before.add(BigDecimal.valueOf(2)));
+        }finally{
+            if(worker!=null&&worker.isAlive())worker.destroyForcibly();
+            java.nio.file.Files.deleteIfExists(dir.resolve("worker.log"));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
+    @Test void qr07R2TwoIndependentJvmsCannotDoubleRestockOneReturn()
+            throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2ReadyToPost(c,o);
+        var dir=java.nio.file.Files.createTempDirectory("qr07-r2-race-");
+        Process a=null,b=null;
+        var readyA=dir.resolve("ready-a");
+        var readyB=dir.resolve("ready-b");
+        var release=dir.resolve("release");
+        String req=key();
+        try{
+            a=startQr07R2Worker("POST_NORMAL",c,claim.requestId(),5,req,
+                    readyA,release,dir.resolve("a.log"));
+            b=startQr07R2Worker("POST_NORMAL",c,claim.requestId(),5,req,
+                    readyB,release,dir.resolve("b.log"));
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(60);
+            while(!java.nio.file.Files.exists(readyA)||
+                  !java.nio.file.Files.exists(readyB)){
+                assertThat(a.isAlive()&&b.isAlive()).isTrue();
+                if(System.nanoTime()>deadline)
+                    throw new AssertionError("QR07_R2_JVM_READY_TIMEOUT");
+                Thread.sleep(25);
+            }
+            java.nio.file.Files.writeString(release,"START");
+            assertThat(waitQr06bProcess(a,dir.resolve("a.log"),100)).isZero();
+            assertThat(waitQr06bProcess(b,dir.resolve("b.log"),100)).isZero();
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.sales_return_posting
+                    WHERE tenant_id=? AND return_id=?
+                    """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.inv_stock_movement m
+                    JOIN crm.sales_return_posting p
+                      ON p.tenant_id=m.tenant_id AND p.movement_id=m.id
+                    WHERE p.tenant_id=? AND p.return_id=?
+                    """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+            assertExactlyOneHandover(c,o,1);
+        }finally{
+            if(a!=null&&a.isAlive())a.destroyForcibly();
+            if(b!=null&&b.isAlive())b.destroyForcibly();
+            for(var name:List.of("ready-a","ready-b","release","a.log","b.log"))
+                java.nio.file.Files.deleteIfExists(dir.resolve(name));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
 }
