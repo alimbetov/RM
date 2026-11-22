@@ -34,6 +34,7 @@
 - [RM-MAIL-OTP-R1.1 — email OTP, KumoMTA mail outbox and localized templates (spec only)](docs/spec/RM-MAIL-OTP-R1.md)
 - [RM-FILES-R1.1 — CRM media registry, entity attachments, access control and storage lifecycle (spec only)](docs/spec/RM-FILES-R1.md)
 - [RM-TENANT-CRUD-COMPLETION-R1 — verified CRUD matrix, tenant isolation and gap-based service backlog](docs/spec/RM-TENANT-CRUD-COMPLETION-R1.md)
+- [RM-TENANT-SERVICES-COMPLETION-R1 — coordinated service development, tenant permissions, domain contracts and QA gates](docs/spec/RM-TENANT-SERVICES-COMPLETION-R1.md)
 
 **Document authority:** RM-PLATFORM-STANDARD-R2 defines approved rules; domain docs/ADRs provide detail; reviews document historical evidence; code and tests establish what is implemented. A standard approval is not production approval.
 
