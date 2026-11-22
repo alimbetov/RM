@@ -120,24 +120,24 @@ CATALOG is tenant-owned identity, lifecycle, metadata/i18n and effective price h
 
 | ID | Scenario | Required outcome |
 |---|---|---|
-| P01-Q01 | A/B same SKU code | Two independent catalog item IDs, no cross-tenant conflict |
-| P01-Q02 | Unsupported SKU/name/locale/type | Fail, zero item/event writes |
-| P01-Q03 | DRAFT PRODUCT and SERVICE | Correct immutable kind/tenant; stock forbids SERVICE |
-| P01-Q04 | DRAFT updateModelCode and upsertTranslation, stale expectedVersion | One atomic version/event, stale conflicts |
-| P01-Q05 | PRICE append/repeated validFrom/precision/currency | Deterministic effective price and controlled validation |
-| P01-Q06 | PUBLISH with no effective price or source name | Denied, state remains DRAFT |
-| P01-Q07 | PUBLISH with valid price, then ARCHIVE | Exact state/versions/events, never unarchive |
-| P01-Q08 | Archived item with positive onHand but zero reserved | New archival must be denied; previous code reproduces GAP |
-| P01-Q09 | Archive with reserved/ACTIVE reservation or OPEN stocktake | Deny without inventory mutation |
-| P01-Q10 | Archive item referenced by PUBLISHED offer | Deny until offer is hidden; no auto-delete offer |
-| P01-Q11 | Checkout linked to ARCHIVED/DRAFT/NULL catalog SKU or SERVICE | Deny new stock-backed PLACED, no orphan order/email outbox |
-| P01-Q12 | Checkout vs archive race with PG barriers | Atomic order snapshot or blocked checkout, never unfulfillable new order due TOCTOU |
-| P01-Q13 | Rebind store_offer catalog SKU between PLACED and confirm | Reservation must use immutable checkout SKU, no silent substitution |
-| P01-Q14 | Catalog price revision after checkout | Historical order price unchanged; seller offer price only via explicit owner workflow |
-| P01-Q15 | A/B mixed permissions: READ, WRITE, PRICE_MANAGE, PUBLISH distinct | No unauthorized mutation or cross-tenant leakage |
-| P01-Q16 | Revoke/suspend CATALOG permission concurrently with publish/archive | IAM admission lock semantics, no partial side effects |
-| P01-Q17 | PostgreSQL immutable `cat_price`/`cat_item_event` UPDATE and DELETE | Rejected by existing triggers; no history loss |
-| P01-Q18 | Transfer/writeOff/reserve/archive mixed 2–3 PG sessions | No deadlock, no frozen nonzero stock after archive, no confirmed wrong SKU |
+| CAT-P01-Q01 | A/B same SKU code | Two independent catalog item IDs, no cross-tenant conflict |
+| CAT-P01-Q02 | Unsupported SKU/name/locale/type | Fail, zero item/event writes |
+| CAT-P01-Q03 | DRAFT PRODUCT and SERVICE | Correct immutable kind/tenant; stock forbids SERVICE |
+| CAT-P01-Q04 | DRAFT updateModelCode and upsertTranslation, stale expectedVersion | One atomic version/event, stale conflicts |
+| CAT-P01-Q05 | PRICE append/repeated validFrom/precision/currency | Deterministic effective price and controlled validation |
+| CAT-P01-Q06 | PUBLISH with no effective price or source name | Denied, state remains DRAFT |
+| CAT-P01-Q07 | PUBLISH with valid price, then ARCHIVE | Exact state/versions/events, never unarchive |
+| CAT-P01-Q08 | Archived item with positive onHand but zero reserved | New archival must be denied; previous code reproduces GAP |
+| CAT-P01-Q09 | Archive with reserved/ACTIVE reservation or OPEN stocktake | Deny without inventory mutation |
+| CAT-P01-Q10 | Archive item referenced by PUBLISHED offer | Deny until offer is hidden; no auto-delete offer |
+| CAT-P01-Q11 | Checkout linked to ARCHIVED/DRAFT/NULL catalog SKU or SERVICE | Deny new stock-backed PLACED, no orphan order/email outbox |
+| CAT-P01-Q12 | Checkout vs archive race with PG barriers | Atomic order snapshot or blocked checkout, never unfulfillable new order due TOCTOU |
+| CAT-P01-Q13 | Rebind store_offer catalog SKU between PLACED and confirm | Reservation must use immutable checkout SKU, no silent substitution |
+| CAT-P01-Q14 | Catalog price revision after checkout | Historical order price unchanged; seller offer price only via explicit owner workflow |
+| CAT-P01-Q15 | A/B mixed permissions: READ, WRITE, PRICE_MANAGE, PUBLISH distinct | No unauthorized mutation or cross-tenant leakage |
+| CAT-P01-Q16 | Revoke/suspend CATALOG permission concurrently with publish/archive | IAM admission lock semantics, no partial side effects |
+| CAT-P01-Q17 | PostgreSQL immutable `cat_price`/`cat_item_event` UPDATE and DELETE | Rejected by existing triggers; no history loss |
+| CAT-P01-Q18 | Transfer/writeOff/reserve/archive mixed 2–3 PG sessions | No deadlock, no frozen nonzero stock after archive, no confirmed wrong SKU |
 
 **Evidence standard:** exact source SHA; ≥2 PostgreSQL sessions for races; before/after counts `cat_item`, `cat_item_i18n`, `cat_price`, `cat_item_event`, `inv_stock_balance`, `inv_stock_reservation`, `store_offer`, `sales_order_line`; per-tenant FK and permission trace; no skipped tests. Current `CatalogQualificationTest` has 3 existing test methods for two-tenant operations, CAS/translation and PG immutable evidence. No new P01 cases were executed in this documentation pass.
 
