@@ -1,6 +1,7 @@
 package kz.rm.autoorder;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import kz.rm.sales.SalesAuthenticatedCommandController;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,9 +14,16 @@ import java.util.Map;
  * existence or bearer token contents to untrusted HTTP clients.
  * Invalid/expired/missing JWTs are handled before MVC by the resource server.
  */
-@RestControllerAdvice(assignableTypes=CommercialAuthenticatedReadsController.class)
+@RestControllerAdvice(assignableTypes={CommercialAuthenticatedReadsController.class,
+        SalesAuthenticatedCommandController.class})
 @ConditionalOnProperty(name="rm.security.oidc.enabled",havingValue="true")
 public class CommercialReadErrorHandler {
+    @ExceptionHandler(IllegalStateException.class)
+    ResponseEntity<Map<String,String>> businessConflict(IllegalStateException ignored) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code","COMMAND_CONFLICT"));
+    }
+
     @ExceptionHandler(SecurityException.class)
     ResponseEntity<Map<String,String>> accessDenied(SecurityException ignored) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
