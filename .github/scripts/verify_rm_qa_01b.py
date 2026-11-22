@@ -129,7 +129,7 @@ def verify():
     manifest["qa01bGate"] = "PASS" if not problems else "FAIL"
     # A passing QA evidence gate is still NOT public security/production admission.
     manifest["admission"] = "HOLD"
-    MANIFEST.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    MANIFEST.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({"qa01bGate": manifest["qa01bGate"],
                       "tests": total, "errors": problems}, indent=2))
     return 0 if not problems else 1
