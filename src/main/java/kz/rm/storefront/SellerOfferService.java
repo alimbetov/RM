@@ -86,11 +86,12 @@ public class SellerOfferService {
 
     private void sellableSku(UUID tenant, UUID itemId) {
         if (itemId == null) throw new IllegalStateException("OFFER_SKU_NOT_SELLABLE");
-        Integer count = jdbc.queryForObject("""
-                SELECT count(*) FROM crm.cat_item
+        List<UUID> items = jdbc.query("""
+                SELECT id FROM crm.cat_item
                 WHERE tenant_id=? AND id=? AND state='PUBLISHED' AND kind='PRODUCT'
-                """, Integer.class, tenant, itemId);
-        if (count == null || count != 1)
+                FOR UPDATE
+                """, (rs, n) -> rs.getObject(1, UUID.class), tenant, itemId);
+        if (items.size() != 1)
             throw new IllegalStateException("OFFER_SKU_NOT_SELLABLE");
     }
 
