@@ -1,7 +1,7 @@
 
 # RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12, 03/12, 04/12 и 05/12. **Ветка:** base_dev.
+**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12, 03/12, 04/12, 05/12 и 06/12. **Новый этапный рубеж:** 07/12, затем переход к иному домену с backlog 08–12. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
 **Статус:** ТЗ СФОРМИРОВАНО; lifecycle ORGANIZATION НЕ РЕАЛИЗОВАН, смежные INVENTORY INV-Q1..Q3 уже реализованы/квалифицированы отдельно. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
@@ -45,7 +45,7 @@
 
 ## 3. Методика 12 последовательных проходов
 
-После каждого прохода фиксируем: точный SHA, бизнес-сценарии, реальные методы и таблицы, права, отрицательные случаи, связи с доменами, дефекты, изменения ТЗ, доказательства тестами. Статус ТЗ не означает runtime GREEN. На следующий домен переходим только после 12-го прохода и подписанной оценки остаточных рисков.
+После каждого прохода фиксируем: точный SHA, бизнес-сценарии, реальные методы и таблицы, права, отрицательные случаи, связи с доменами, дефекты, изменения ТЗ, доказательства тестами. Статус ТЗ не означает runtime GREEN. **Изменение последовательности 22.11.2026:** после прохода 07/12 готовится промежуточный итог ORGANIZATION с реестром остаточных рисков, и допускается переход к следующему домену по новому требованию пользователя. Проходы 08–12 останутся DEFERRED/NOT DONE, а не станут закрытыми автоматически; итоговую зрелость не повышать без runtime qualification.
 
 | Проход | Тема | Результат | Сейчас |
 |---|---|---|---|
@@ -54,13 +54,13 @@
 | 03 | State machine | Политика складских зависимостей, переходы, ограничения | SPECIFIED |
 | 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | SPECIFIED |
 | 05 | INVENTORY | Receive/correct/writeOff/transfer/reserve/stocktake, blocker матрица, deadlock Q7 | SPECIFIED |
-| 06 | SALES | Подтверждение, повторы, отмена, отгрузка, порядок блокировок | OPEN |
+| 06 | SALES | Confirm/cancel/fulfill, per-line reserve evidence, warehouse state × order races | SPECIFIED |
 | 07 | IAM и RBAC | VerifiedActor, A/B/AB, чужие UUID, revoke race | OPEN |
-| 08 | Поиск и пагинация | Буквальный LIKE, фильтры, предсказуемые страницы | OPEN |
-| 09 | PostgreSQL и audit | Заполненная БД, атомарный журнал действий, DDL | OPEN |
-| 10 | Конкурентность и recovery | deactivate-vs-reserve, edit-vs-edit, rollback | OPEN |
-| 11 | Нагрузочная и регрессионная квалификация | Exact tests, EXPLAIN, профиль нагрузки | OPEN |
-| 12 | Закрытие сервиса | Матрица доказательств, уровень зрелости, готовность следующего домена | OPEN |
+| 08 | Поиск и пагинация | Буквальный LIKE, фильтры, предсказуемые страницы | DEFERRED after 07 |
+| 09 | PostgreSQL и audit | Заполненная БД, атомарный журнал действий, DDL | DEFERRED after 07 |
+| 10 | Конкурентность и recovery | deactivate-vs-reserve, edit-vs-edit, rollback | DEFERRED after 07 |
+| 11 | Нагрузочная и регрессионная квалификация | Exact tests, EXPLAIN, профиль нагрузки | DEFERRED after 07 |
+| 12 | Закрытие сервиса | Полная release-матрица доказательств и квалификация после возврата | DEFERRED after 07 |
 
 ## 4. Требования к операциям ORG-R1.1
 
@@ -97,7 +97,7 @@
 
 1. ORGANIZATION при переходе состояния блокирует именно свою строку org_location выбранного tenant; для использования вызывает **типизированный read-only порт INVENTORY** (hasOnHand/hasReservedBalance/hasActiveReservation/hasOpenStocktake). SALES adapter добавляется только если имеется достоверная привязка открытого заказа к локации.
 2. INVENTORY receive/correct/reserve и SALES confirm уже используют внутренний `StockEligibility` INVENTORY для проверки ACTIVE WAREHOUSE/PRODUCT, блокируя `org_location` в той же транзакции (`FOR UPDATE` на текущем HEAD). Не создавать параллельный проверяющий фасад в ORG: согласовать существующий admission с будущим deactivate/close; `FOR SHARE` рассматривать только после PG race/throughput tests.
-3. Учитывать реальные lock order: standalone INVENTORY = IAM → request-key stripe → location eligibility → catalog product → stock balance; SALES confirm/reserve = IAM paired decisions → sales order → location eligibility → catalog product → stock balance → reservation; **Q7 transfer требует исправления P05-01**: stripe → ВСЕ location row locks по UUID → PRODUCT ONCE → stock rows в том же порядке. Текущие sequential `requireReceivable(first,item); requireReceivable(second,item)` берут PRODUCT между location locks и создают потенциальный deadlock с параллельным receive. ORG deactivate/close = IAM → location FOR UPDATE → только не-блокирующие dependency EXISTS (включая OPEN stocktake) → JPA state/audit; не приобретать обратным порядком sales order / request stripe / stock balance locks.
+3. Учитывать реальные lock order: standalone INVENTORY = IAM → request-key stripe → location eligibility → catalog product → stock balance; SALES confirm/reserve = IAM paired decisions → sales order → location eligibility → catalog product → stock balance → reservation; **Q7 transfer P05-01 уже исправлен кодом текущего HEAD**: stripe → оба location row locks по UUID через `StockEligibility.requireTransferWarehouses` → PRODUCT ONCE → stock rows по UUID. В тестах существует `receiptAtTransferDestinationDoesNotCycleWithWarehouseOwnerLocks`; не считать это proof будущих ORG lifecycle гонок. ORG deactivate/close = IAM → location FOR UPDATE → только не-блокирующие dependency EXISTS (включая OPEN stocktake) → JPA state/audit; не приобретать обратным порядком sales order / request stripe / stock balance locks.
 4. Текущий PLACED заказ до confirm не сохраняет выбранный locationId: нельзя изображать существование SQL связи «все открытые заказы этого склада». Правильная защита — запрет confirm на неактивной локации. Исторические движения и FULFILLED/RELEASED резервы сохраняются по старым FK.
 5. Простого SELECT status недостаточно; конкурентные close-vs-confirm/receive должны быть синхронизированы транзакционной блокировкой, с доказательством PostgreSQL.
 
@@ -136,7 +136,7 @@
 | Этап | Объём | Gate |
 |---|---|---|
 | ORG-R1.1A | JPA update, validation, state methods, facade, CAS, audit | Q01–Q04, Q06 |
-| ORG-R1.1B | Typed INVENTORY usage flags (вкл. OPEN stocktake), ORG lifecycle admission; минимальное исправление INV-Q7 P05-01 и P05-02 fulfill | Q05, Q07–Q09 + P05-Q01..Q20 |
+| ORG-R1.1B | Typed INVENTORY usage flags (вкл. OPEN stocktake), ORG lifecycle admission; INV-Q7 P05-01 уже исправлен кодом; P05-02 fulfill guard остаётся | Q05, Q07–Q09 + P05-Q01..Q20 |
 | ORG-R1.1C | Scoped search, literal LIKE, page safety | Q02, Q10–Q11 и EXPLAIN |
 | ORG-R1.1D | Populated PostgreSQL, поимённый TCRUD, exact-head CI | Q01–Q12 + ревью |
 
@@ -146,7 +146,7 @@
 
 ## 10. Следующий пакет: проход 02/12
 
-Разобрать реальные пути сотрудника склада, менеджера филиала/POS и подтверждающего заказ продавца. Уточнить семантику временной остановки склада с остатком, все ошибочные переходы, SQL usage-count и lock ordering до изменения runtime-кода. Следующий домен — только после 12/12.
+Разобрать реальные пути сотрудника склада, менеджера филиала/POS и подтверждающего заказ продавца. Уточнить семантику временной остановки склада с остатком, все ошибочные переходы, SQL usage-count и lock ordering до изменения runtime-кода. **Историческое правило «только после 12/12» заменено milestone 07/12** (см. §15).
 
 
 ---
@@ -307,3 +307,44 @@ public record LocationUsageBlockers(
 Запланированные, **НЕ запускались**: `ORG-P05-Q01…Q20` в подробном ревью — INACTIVE negative cases для 5 команд; transfer source/target, rollback; mixed transfer×receive lock cycle и inverse/three-location transfers; positive stock pause; open stocktake blockers; revoke/foreign tenant; cancel/release/replay/fulfill; concurrent ORG/INVENTORY. H2 smoke недостаточен, нужны 2–3 независимые PostgreSQL sessions и exact code SHA.
 
 **Не менять архитектуру:** никакой отдельной системы блокировок, микросервисного Warehouse, нового enum статуса или собственных ORG-инвентарных таблиц. Домен ORGANIZATION остаётся **1/5**; полноценный сервисный lifecycle ещё **NOT IMPLEMENTED**. **Следующий проход 06/12 — SALES orchestration и состояния заказов в связи с warehouse status.**
+
+
+---
+
+## 15. Дополнение после прохода 06/12 — SALES Integration & Order Lifecycle
+
+**Полное source-reviewed ревью:** [RM-ORG-FUNC-R1-P06](../reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS06-2026-11-22.md). **Runtime source SHA:** `cf0ae73c22d881d703f072afcacd7c5de8f5deff` (base_dev). **Статус:** 06/12 SPECIFIED; runtime ORG lifecycle **NOT IMPLEMENTED**, новые PostgreSQL P06 tests **NOT RUN**.
+
+### DEC-ORG-06-A: статус склада не перезаписывает историю SALES
+
+- Новый `confirm(PLACED,warehouse)` должен вызывать `OrderInventoryPort.reserve` для всех order lines внутри **одной** транзакции и только при ACTIVE WAREHOUSE+PUBLISHED PRODUCT; ошибку на любом SKU откатывать вместе с статусом, резервами, событием. Не дублировать `StockEligibility` вторым ORG/Sales admission port.
+- `PLACED` ещё **не связан со складом**, у `crm.sales_order` отсутствует `location_id`; пока order не CONFIRMED, не утверждать наличие «заказов, ожидающих склад L». Checkout/PLACED не должен создавать статусную зависимость от warehouse.
+- `ACTIVE→INACTIVE` с `onHand>0` допускается только когда `reserved=0`, нет ACTIVE reservations и OPEN stocktake; подтверждённый заказ с живыми резервами блокирует паузу. `CLOSED` только после нулевых остатков/резервов, без deletion заказа и immutable ledger.
+- `cancel/release` — разрешённый по IAM cleanup исторического ACTIVE reservation даже в legacy INACTIVE/CLOSED; не автоматическая отмена при выключении склада. `NEW fulfill` с ACTIVE reservation на INACTIVE/CLOSED — deny. `COMPLETED/CANCELLED` exact terminal replays не изменяют stock.
+- `CONFIRMED` replay допускается на INACTIVE/CLOSED только как **read-only** verified committed result; ни одного нового reserve/movement. Ограничиться проверкой aggregate count недостаточно.
+
+### DEC-ORG-06-B: доказательство каждой позиции заказа
+
+`SalesInventoryCommandService.confirm/fulfill` сегодня сверяют ACTIVE/FULFILLED reserve counts, `confirm` дополнительно только location mismatch. `lines()` получает SKU из **изменяемого** `store_offer.catalog_item_id`; `sales_order_line` не имеет защищённого immutable SKU snapshot на изученном HEAD. Согласовать ранее предложенную **SALES pass 03** additive migration `catalog_item_id_snapshot`, не делать второй snapshot в ORGANIZATION. Для каждого подтверждения, повтора и отгрузки требуется equality по `tenant/order/line/SKU_snapshot/location/quantity/state`; для COMPLETED сверять `FULFILLMENT movement`. Legacy NULL snapshot нельзя угадывать по live offer при новом confirm; историю читать с честным marker UNKNOWN.
+
+### DEC-ORG-06-C: узкий guard существующей отгрузки
+
+Текущий `InventoryReservationService.transition` делает `order FOR UPDATE → stock FOR UPDATE → reservation FOR UPDATE`; новая `fulfill` не проверяет ACTIVE WAREHOUSE, и terminal replay поздно выявляет terminal state (после stock lock). Для **NEW** `fulfill`: after order row lock, verify terminal replay without mutation, затем `requireExistingActiveWarehouse(tenant, location)` через tenant-scoped `org_location FOR UPDATE` (без повторного PRODUCT PUBLISHED check), затем stock/reservation row lock и атомарная запись. `release` не добавлять ACTIVE warehouse condition: cleanup обязателен даже для legacy anomaly. Не менять tenant grants или OrderInventoryPort paired IAM boundary.
+
+**P1 least-privilege:** `cancel(PLACED)` сегодня требует `INVENTORY_RELEASE` до проверки order state. После доказательного zero-reservation при locked PLACED целевой contract — только `SALES_ORDER_CANCEL`; `CONFIRMED/PREPARING` c ACTIVE reserves требуют paired `INVENTORY_RELEASE`. Доказывать IAM lock ordering и revocation на PG; не убирать INVENTORY_RELEASE из всех cancel.
+
+### Concurrency and rollback: обязательный инвариант
+
+`confirm×deactivate`: confirm committed → reserved blocker запрещает деактивацию; deactivate committed → confirm откатывает PLACED; никогда CONFIRMED без full reserve. `cancel×deactivate`: cancel first releases then pause may succeed, otherwise ACTIVE reservation blocks pause. `fulfill×deactivate`: fulfill first frees reserved and may permit pause, otherwise live reservation blocks pause; manual legacy INACTIVE + ACTIVE reservation cannot be newly fulfilled. `cancel×fulfill`: one order-row winner, no both RELEASED/FULFILLED. ORG location `FOR UPDATE` then **only nonlocking EXISTS** to stock/reservations/stocktake avoids adding reverse order→location→order cycles.
+
+**Приёмка:** `ORG-P06-Q01..Q20` в подробном документе: new confirm on paused/closed, historical replay, cancel cleanup/least privilege, new fulfill legacy anomaly, line-by-line snapshot, race ×deactivate, rollback second SKU, user A/B/AB and revoke. Это **planned tests**, не новая runtime functionality.
+
+### Обновление source status по P05-01
+
+P05-01 «transfer locks first location → SKU → second location» относился к исходному SHA P05. На `cf0ae73...` `StockEligibility.requireTransferWarehouses` последовательно берёт оба location locks **до SKU** и `InventoryTransferService` его вызывает; дополнительно присутствует `InventoryTransferStocktakeQualificationTest.receiptAtTransferDestinationDoesNotCycleWithWarehouseOwnerLocks`. **Считать адресную кодовую правку реализованной**, а PG-qualifying совместного `transfer×ORG.deactivate` — открытым. Не выдавать старое замечание P05 за действующую ошибку на текущем HEAD.
+
+### Изменение очередности пользователя: переход после 07/12
+
+После следующего прохода **07/12** (IAM/RBAC/tenant, VerifiedActor, A/B/AB, revoke race) подготовить промежуточный closure summary с актуальным code/QA evidence, unresolved risk list и конкретными задачами на внедрение. Пользователь разрешил затем перейти к новому домену **до** проработки 08–12. **08–12 → DEFERRED / NOT DONE**, а не VERIFIED или GREEN. ORG maturity остается **1/5**, пока runtime lifecycle отсутствует, независимо от числа написанных ТЗ.
+
+**Следующий проход:** 07/12 IAM + tenant-scoped RBAC boundary; только после его фиксации сменить предметный домен по новой очередности. Ни контроллеров, ни production admission до отдельных release gates.
