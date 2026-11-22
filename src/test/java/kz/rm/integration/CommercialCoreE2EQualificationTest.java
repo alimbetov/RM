@@ -190,6 +190,10 @@ class CommercialCoreE2EQualificationTest {
                 "suspension barrier", BigDecimal.ONE, "KZT");
         var offer = offers.publish(c.staff(), c.tenant(), draft.id(),
                 draft.rowVersion());
+        int priorEmailOutbox = jdbc.queryForObject(
+                "SELECT count(*) FROM iam_email_delivery_outbox", Integer.class);
+        int priorEmailIdentities = jdbc.queryForObject(
+                "SELECT count(*) FROM iam_email_identity", Integer.class);
         var sellerSuspended = new java.util.concurrent.CountDownLatch(1);
         var checkoutAttempt = new java.util.concurrent.CountDownLatch(1);
         var release = new java.util.concurrent.CountDownLatch(1);
@@ -234,6 +238,15 @@ class CommercialCoreE2EQualificationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND idempotency_key=?",
                 Integer.class, c.tenant(), key)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=?",
+                Integer.class, c.tenant())).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM iam_email_delivery_outbox", Integer.class))
+                .isEqualTo(priorEmailOutbox);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM iam_email_identity", Integer.class))
+                .isEqualTo(priorEmailIdentities);
     }
 
     @Test void postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot()
