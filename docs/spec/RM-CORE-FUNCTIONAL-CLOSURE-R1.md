@@ -275,6 +275,14 @@ Failure policy: a required CI failure, absent artifact, unexpected skip, unappro
 - Для миграций не править применённые changesets; новые forward-only изменения + clean/populated DB доказательства, особенно PostgreSQL partial indices и тестовая H2 совместимость.
 - Повторная квалификация не должна переписывать исторические `DONE-QUALIFIED@OLD-SHA`: они сохраняются как historical evidence до fresh release SHA.
 
+## 10.7 Product Foundation R1 — двухпродуктовая композиция без новых bounded contexts
+
+**Product implementation reference:** [RM-DUAL-PRODUCT-FOUNDATION-R1](../architecture/RM-DUAL-PRODUCT-FOUNDATION-R1.md) and [RM-DUAL-PRODUCT-CAPABILITIES-R1.json](../strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json). Два рыночных продукта **RM Business** и **RM QR Commerce** — различные service journey поверх одного IAM/ORG/CRM/CATALOG/STOREFRONT/SALES/INVENTORY, а не две базы заказов и остатков.
+
+Манифест содержит **19 capabilities**, из них два специально помечены как `DEFERRED` (TASKS) и `OPTIONAL_P1` (Packaging). Все **54 CORE-P0 scenario IDs** этого ТЗ распределены между capability anchor без повторов; ссылки на Java source и test source проверены по Git tree `base_dev` при создании. Этот реестр НЕ является утверждением `54 PASS`, не меняет нормативные доменные границы и не заменяет CI evidence. Текущий технический приоритет остаётся FC-00 → решения DEC-FUL-01/DEC-SAL-02/DEC-LOC-03 → FC-10/20/30/40/50/60.
+
+**TASKS остаётся частью долгосрочной RM Business vision** и имеет только будущие типизированные связи с CRM/Sales. `TaskService`, контроллеры/UI и новый domain workflow runtime сейчас не создавать. Публикация этой схемы не означает завершение P0 функциональности и не открывает production admission.
+
 ## 11. R1.2 — Deep Technical Contract Alignment / Implementation Blueprint (2026-11-23)
 
 **Аудит-источник:** [RM-DEEP-TECH-AUDIT-R1](../reviews/RM-DEEP-TECH-AUDIT-R1-2026-11-23.md). **Точное source state:** `3485e36f9c3f3ad279b16dfd1337aa9b7d28828e`. Заключение получено из Java source, SQL миграций, названий/содержимого квалификационных тестов и GitHub CI; **новые Java-тесты в рамках ревью не запускались**. Поэтому `R1.2 ALIGNED` означает согласованный и проверяемый контракт, но не `CODE/CI PASS`.
