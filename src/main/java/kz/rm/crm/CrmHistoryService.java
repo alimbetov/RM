@@ -71,6 +71,31 @@ public class CrmHistoryService {
              rs.getDate(6).toLocalDate(),rs.getDate(7)==null?null:rs.getDate(7).toLocalDate(),
              rs.getString(8),rs.getTimestamp(9).toInstant()),tenant,contract,limit);
     }
+
+    public record ContactChange(UUID id, UUID contactId, UUID customerId, UUID actorId,
+                                String action, Long previousVersion, long newVersion, Instant occurredAt) {}
+
+    void contact(UUID tenant, UUID id, UUID customer, UUID actor, String action, long before, long after) {
+        jdbc.update("""
+          INSERT INTO crm.contact_change_event(tenant_id,id,contact_id,customer_id,actor_id,
+              action_code,previous_version,new_version,occurred_at)
+          VALUES (?,?,?,?,?,?,?,?,?)
+          """,tenant,UUID.randomUUID(),id,customer,actor,action,before,after,Timestamp.from(Instant.now()));
+    }
+
+    @Transactional
+    public List<ContactChange> contactHistory(VerifiedActor actor, UUID tenant, UUID id, int limit) {
+        read(actor,tenant); checkLimit(limit);
+        return jdbc.query("""
+            SELECT id,contact_id,customer_id,actor_id,action_code,previous_version,
+                   new_version,occurred_at FROM crm.contact_change_event
+            WHERE tenant_id=? AND contact_id=?
+            ORDER BY occurred_at DESC,id DESC LIMIT ?
+            """,(rs,n)->new ContactChange(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+                rs.getObject(3,UUID.class),rs.getObject(4,UUID.class),rs.getString(5),
+                (Long)rs.getObject(6),rs.getLong(7),rs.getTimestamp(8).toInstant()),tenant,id,limit);
+    }
+
     private static void checkLimit(int limit) {
         if(limit<1||limit>100) throw new IllegalArgumentException("History limit must be 1..100");
     }
