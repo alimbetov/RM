@@ -1206,4 +1206,62 @@ class CrmR1aQualificationTest {
                 .extracting(CrmHistoryService.ContactChange::action).containsExactly("ARCHIVED","CREATED");
     }
 
+
+    @Test void tcrud02WriteOnlyRoleCanMutateButCannotReceiveOrReadPii() {
+        var t=newTenant();
+        var owner=verified(t.actorId());
+        var role=roles.createRole(t.actorId(),t.tenantId(),
+                "PII_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "CRM write only");
+        roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_WRITE);
+        UUID organization=jdbc.queryForObject("""
+            SELECT organization_id FROM public.iam_workspace WHERE id=?
+            """,UUID.class,t.tenantId());
+        var writer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud02-writer-"+UUID.randomUUID(),"CRM limited writer"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                organization,writer.getId(),OrganizationMembershipEntity.Role.MEMBER));
+        roles.assign(t.actorId(),t.tenantId(),writer.getId(),role.id());
+        roles.enable(t.actorId(),t.tenantId());
+        var actor=verified(writer.getId());
+
+        var person=secureCommands.createPerson(actor,t.tenantId(),"Private create person",null);
+        assertThat(person.name()).isNull();
+        assertThat(person.id()).isNotNull();
+        var revised=secureCommands.updatePerson(actor,t.tenantId(),person.id(),
+                "Private revised person",null,0);
+        assertThat(revised.name()).isNull();
+
+        var company=secureCommands.createCompany(actor,t.tenantId(),"Public company",null);
+        // COMPANY organization_label is not personal name data.
+        assertThat(company.name()).isEqualTo("Public company");
+        var contact=secureCommands.addContact(actor,t.tenantId(),company.id(),
+                "Secret contact","secret-write@example.kz","+77001112233");
+        assertThat(contact.id()).isNotNull();
+        assertThat(contact.name()).isNull();
+        assertThat(contact.email()).isNull();
+        assertThat(contact.phone()).isNull();
+        var changed=secureCommands.updateContact(actor,t.tenantId(),contact.id(),
+                "Changed secret","changed-write@example.kz",null,0);
+        assertThat(changed.name()).isNull();
+        assertThat(changed.email()).isNull();
+        assertThat(changed.phone()).isNull();
+
+        assertThatThrownBy(()->secureQueries.getCustomer(actor,t.tenantId(),person.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.getContact(actor,t.tenantId(),contact.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contacts(actor,t.tenantId(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        byte[] stored=jdbc.queryForObject("""
+            SELECT name_envelope FROM crm_pii.contact_secret WHERE tenant_id=? AND contact_id=?
+            """,byte[].class,t.tenantId(),contact.id());
+        assertThat(new String(stored,java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain("Changed secret");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.contact_change_event
+            WHERE tenant_id=? AND contact_id=?
+            """,Integer.class,t.tenantId(),contact.id())).isEqualTo(2);
+    }
+
 }
