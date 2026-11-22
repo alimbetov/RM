@@ -271,3 +271,22 @@ INVENTORY quantity-R1 может получить статус **FUNCTIONALLY MA
 6. Cost/lot/FEFO, production transport и финансовые проводки могут оставаться отдельно маркированными HOLD.
 
 **После согласования и реализации INVENTORY:** использовать тот же 12-проходный протокол на следующем одном домене; по логике междоменных зависимостей разумный кандидат — **SALES**, но переключение только после явного завершения текущего INVENTORY цикла. Не объявлять следующий домен изученным настоящим документом.
+
+
+## 15. Реализация INV-Q1–Q3 (2026-11-22)
+
+**Рабочие бизнес-решения, принятые для текущей quantity-R1 вертикали:**
+- DEC-INV-01 = `MANDATORY_ON_CONFIRM`: подтверждение SALES всегда делает полный резерв заказа в транзакции. Устаревшее значение `auto_reserve_on_confirm=false` остаётся физически в БД, **не** выключает reserve. Пользовательский VerifiedActor-фасад не позволяет переключить резервирование.
+- DEC-INV-02 = только активный `org_location(location_type=WAREHOUSE,status=ACTIVE)` для новых приходов и резервов; BRANCH/POINT_OF_SALE запрещены до собственного бизнес-контракта. Ветку данных со старым stock не переписывать автоматически.
+- DEC-INV-03 = `cat_item(kind=PRODUCT,state=DRAFT|PUBLISHED)` может принять приход; новая резервация требует `PUBLISHED PRODUCT`; `ARCHIVED` и `SERVICE` не принимают новых приходов или резервов. Существующие reserve/fulfill/release, исторические movements и exact-payload replay сохраняются даже после archive.
+
+**Реализовано в `base_dev` (только Q1–Q3):**
+1. `AuthenticatedInventorySettings` — три подтверждённых действия: `initialize/get/approveCostPolicy(VerifiedActor,...)`; operational DTO сообщает `MANDATORY_ON_CONFIRM`, `NOT_IMPLEMENTED` для физического picking, `POLICY_ONLY` для утверждённого cost policy (без фиктивного COGS). `InventoryTenantSettingsService` — internal/package-private; getter теперь использует IAM `requireForCommand` в write-capable транзакции.
+2. `StockEligibility` — внутренний tenant-qualified admission владельцев: liveness склада, тип WAREHOUSE, PRODUCT, PUBLISHED при новом reserve. Locks owner rows while command runs, preventing concurrent owner mutation during check. Физические статусы проверяются *дополнительно* к составным FK.
+3. `InventoryMovementService.adjust` — для `RECEIPT` после идемпотентного tenant-wide request stripe и owner admission создаёт нулевую `inv_stock_balance` только если отсутствует; затем существующая атомарная проводка. `CORRECTION` и прочие ручные изменения не создают missing stock.
+4. `InventoryReservationService.reserve` — новая резервация проверяет ACTIVE склад и published PRODUCT, но committed idempotent replay проверяет существующую запись прежде повторной проверки owner state. Cancel/fulfill сохраняют действующий контракт SALES.
+5. Архитектурный TCRUD-04 тест для settings и отдельные регрессии `InventoryQ123QualificationTest`, `InventoryReservationQualificationTest.q123ReservationRejectsInactiveWarehouseServiceAndArchiveButHonorsOldCommit`, `SalesInventoryRbacQualificationTest.q123LegacyAutoReserveFalseCannotDisableRequiredSalesConfirmationReserve`.
+
+**Не менялось:** прежние Liquibase changesets, SALES order status contract, valuation policy journal, transport/controllers, other domains. No migrations required for Q1–Q3; прежние исторические настройки остаются в схеме, но не обещаются как действующие. Этапы Q4–Q9, INV-VAL, per-location ACL и полный TCRUD-03 остаются OPEN.
+
+**Admission:** до точной GitHub CI evidence и особенно PostgreSQL concurrency нельзя выставлять Q1–Q3 статус QUALIFIED. Нужны H2, PostgreSQL integration, populated migration, RustFS regression и проверка двух конкурентных первых поступлений. Из-за row-lock owner metadata проверить p95/p99 под нагрузкой до production; не выводить производительность из synthetic single-row test.
