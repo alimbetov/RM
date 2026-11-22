@@ -1,6 +1,6 @@
 # RM-QR-R1 — согласование QR-бизнес-процессов, state machines, DTO и тестов
 
-**Статус:** DRAFT R1.1 / расширенное техническое задание, не реализация. **Дата:** 2026-11-22. **Ветка:** base_dev. **Source-review SHA:** 98b2607e231e6c84a04eea0a104f49ab60f36320 (source audit for R1.1). **Production:** HOLD.
+**Статус:** DRAFT R1.2 / детализированное техническое задание с qualification, не реализация. **Дата:** 2026-11-22. **Ветка:** base_dev. **Source-review SHA:** 98b2607e231e6c84a04eea0a104f49ab60f36320 (source audit for R1.1). **Production:** HOLD.
 **Неподвижные рамки:** Java 21 / Spring Boot modular monolith / PostgreSQL; только service-first, никаких новых REST-контроллеров, публичных API, отдельных QR-микросервисов, новых веток и merge в main на этом этапе. Реализация в последующих этапах должна пройти собственный exact-SHA PostgreSQL gate.
 
 **Нормативные источники:** docs/architecture/RM-PLATFORM-STANDARD-R2.md, docs/spec/RM-STOREFRONT-AUTOORDER-R1.md, docs/spec/RM-COMMERCE-INVENTORY-COMPLETION-R1.md, docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md, docs/spec/RM-FILES-R1.md, docs/spec/RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md, docs/spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md, docs/strategy/RM-STRATEGY-R4-FUNCTIONAL-GAP-PRIORITIZATION.md. При конфликте действующий стандарт R2 и исходный код имеют приоритет над описанием предполагаемого поведения.
@@ -486,3 +486,210 @@ SERVICE QR карточка не даёт права вызвать PRODUCT inve
 
 **Fail invariant:** при отказе остаются неизменными business order/status events, balances, reservation records/events, movements, consumed quote, handover receipt и credential state (кроме разрешённого отдельного security-attempt audit). Никакого частично списанного заказа, невалидного quote consumed и «COMPLETED без записи в ledger».
 
+
+
+## 19. Ошибки, таймауты и результат команды
+
+Для service-first используются typed domain errors/results; HTTP status mapping появится **только после отдельного transport gate**. Нельзя утекать в exception внешнему пользователю SQL, tenant UUID, storage keys, raw QR secrets, buyer email или признаки чужого заказа.
+
+| Error code | Владение | Условие | Постусловие |
+|---|---|---|---|
+| QR_UNAVAILABLE | STOREFRONT | Неизвестный, отозванный, скрытый или чужой публичный QR | Public generic unavailable, без деталей |
+| OFFER_NOT_PUBLISHED | STOREFRONT | Offer или store не PUBLISHED | Никакого order/proposal |
+| PRODUCT_NOT_ELIGIBLE | CATALOG | SKU не опубликованный PRODUCT | Никаких stock operations |
+| PUBLIC_IMAGE_NOT_ALLOWED | FILES | Файл не clean/approved/owner unavailable | Ноль выданных private bytes |
+| REGION_NOT_VERIFIED | GEO | Код/иерархия не подтверждены | Нет выдуманного потомка |
+| AVAILABILITY_UNKNOWN | INVENTORY | Достоверное чтение остатка недоступно | Не показывать guaranteed IN_STOCK |
+| QUANTITY_INVALID | SALES | Qty вне integer 1..1000 или сумма duplicate >1000 | Нет покупательского identity/SALES side effect |
+| PRICE_RECONFIRM_REQUIRED | SALES | Публичная цена изменилась с последнего buyer acceptance | Не создавать order до нового подтверждения |
+| PRICE_AMOUNT_INVALID | SALES | Неверный BigDecimal precision, overflow, currency | Нет quote/order |
+| PROPOSAL_UNAUTHORIZED | SALES/IAM | Buyer не доказан или seller без permission | Нет предложения и утечки |
+| PROPOSAL_VERSION_CONFLICT | SALES | Counter/accept от устаревшей revision | Никакого нового event |
+| PROPOSAL_EXPIRED | SALES | Серверное время >= expiresAt | Нет AGREED |
+| QUOTE_NOT_ELIGIBLE | SALES | Не тот buyer, offer hidden, seller suspended, expiry | Нет заказа и consumed quote |
+| QUOTE_ALREADY_USED | SALES | Quote уже привязан к orderId | Только same-key retry отдаёт уже созданный заказ |
+| IDEMPOTENCY_CONFLICT | SALES | Тот же requestKey, но иной canonical payload | Нет новых side effects |
+| ORDER_NOT_ACCESSIBLE | SALES | Нет buyer ownership или seller grant | Не раскрывать наличие чужого заказа |
+| INSUFFICIENT_AVAILABLE_STOCK | INVENTORY | Подтверждение хотя бы одной строки не проходит | Весь confirm rollback |
+| WAREHOUSE_INELIGIBLE | ORGANIZATION/INVENTORY | Не ACTIVE WAREHOUSE текущего tenant | Ноль резервов/списаний |
+| PICKUP_NOT_READY | SALES | Отсутствует READY или полный ACTIVE reserve | Не выпускать pickup proof |
+| PICKUP_PROOF_INVALID | SALES | Wrong purpose, expired, revoked, consumed, fake | Ни order details, ни stock debit |
+| PICKUP_WAREHOUSE_MISMATCH | SALES | Склад оператора не совпадает с origin | Без складских эффектов |
+| PICKUP_ALREADY_COMPLETED | SALES | Уже есть successful handover | После авторизации вернуть существующий receipt, не новый debit |
+| IAM_ADMISSION_DENIED | IAM | Revoke/suspension/membership/permission denied | Все business rows неизменны |
+| RETURN_NOT_ELIGIBLE | SALES | Нет fulfilled quantity, превышен предел | Нет RETURN_RECEIPT |
+| RETURN_NOT_SELLABLE | SALES/INVENTORY | Damage/quarantine/uninspected | Нет увеличения available |
+
+**Режим отказа:** неудачный scan не создаёт receipt, даже если audit попытки намеренно фиксируется отдельно. Timeouts и connection loss после возможного commit разрешаются через повтор с тем же requestKey и чтение authoritative receipt, не путём бесконтрольного повторного списания. Любые SQL deadlock/serialization failures перезапускают **всю** транзакцию в bounded retry strategy, а не отдельный INSERT; retry count и time budget конфигурируемы.
+
+## 20. Дополнительная предметная QA-матрица к обязательным кейсам §9
+
+Существующие **37** сценариев QR-P01…QR-PERF01 из §9 остаются основным реестром. Ниже **36 новых** углублённых edge-cases QR-X01…QR-X36. Это плановые требования, не количество выполненных тестов. Ни одна пара методов с одинаковыми именами или один имитационный unit test не засчитываются как два PostgreSQL proof.
+
+| ID | Этап | Edge case | Ожидаемый факт в PostgreSQL |
+|---|---|---|---|
+| QR-X01 | QR-01 | Reprint стабильного alias после изменения цены | Тот же public_ref, другой current price, историческая line неизменна |
+| QR-X02 | QR-01 | 100 параллельных issue одной offer | Только одна ACTIVE alias generation |
+| QR-X03 | QR-01 | Два tenants с одинаковым SKU | QR находит строго одну seller offer |
+| QR-X04 | QR-01 | QR после pause/hide/resume | Скрытые поля и checkout запрещены при pause; активность восстановлена только при published |
+| QR-X05 | QR-01 | Центральный круг/галочка на печатном QR | Смартфоны сканируют разрешённые варианты макета в утверждённой матрице |
+| QR-X06 | QR-02 | CRM_CUSTOMER file пытаются показать как CATALOG_ITEM фото | Denied и 0 private bytes |
+| QR-X07 | QR-02 | AV ERROR, detached, private file, broken medium thumbnail | Safe placeholder/denial, нет обхождения |
+| QR-X08 | QR-02 | Два tenants с одинаковыми file UUID | Не происходит cross-tenant attachment/read |
+| QR-X09 | QR-02 | Неизвестный потомок KATO | Нет guessed hierarchy и false region match |
+| QR-X10 | QR-02 | Один SKU, несколько складов, часть inactive | Available суммируется только по разрешённым active warehouse |
+| QR-X11 | QR-03 | Цена изменилась между карточкой и checkout | PRICE_RECONFIRM_REQUIRED, без order |
+| QR-X12 | QR-03 | Дубли в корзине и суммарное qty >1000 | Отказ до побочных IAM/SALES операций |
+| QR-X13 | QR-04 | Торг по нулевой/отрицательной предложенной цене | Typed invalid amount, no proposal |
+| QR-X14 | QR-04 | Два встречных предложения на одну revision | Один CAS winner и одно immutable event |
+| QR-X15 | QR-04 | Два checkout на одну AGREED quote | Одно consumed_order_id и один PLACED |
+| QR-X16 | QR-04 | Другой buyer пытается использовать quote | Denied, не раскрывать private proposal |
+| QR-X17 | QR-04 | Смена валюты при раунде торга | Отказ, нет implicit FX |
+| QR-X18 | QR-04 | Expiry во время seller accept | Нет AGREED после expiry, server clock authoritative |
+| QR-X19 | QR-05 | GPS склада изменился после CONFIRMED | Заказ хранит прежние координаты |
+| QR-X20 | QR-05 | GPS update одновременно с location/stock lock | Один consistent location revision, без deadlock |
+| QR-X21 | QR-06 | Две одновременные reissue pickup proof | Не больше одного действующего token поколения |
+| QR-X22 | QR-06 | Expiry между preview и confirm | Handover denied, stock untouched |
+| QR-X23 | QR-06 | Кладовщик tenant A сканирует proof склада B | Denied, no cross-tenant side effects |
+| QR-X24 | QR-06 | Роль отозвана между preview и confirm | Confirm denied after revoke, movement absent |
+| QR-X25 | QR-06 | На 8-й позиции fulfillment падает | Полный rollback всех 8 lines + token + receipt |
+| QR-X26 | QR-06 | Два scanners нажали «Выдать» одновременно | Один успешный receipt, один debit каждой строки |
+| QR-X27 | QR-06 | Same requestKey, different payload/warehouse | IDEMPOTENCY_CONFLICT, no extra debit |
+| QR-X28 | QR-06 | Legacy confirmed order без origin snapshot | Explicit UNKNOWN_LEGACY or guarded rejection, no fake GPS |
+| QR-X29 | QR-06 | RETURN_REFERENCE используют как PICKUP_CREDENTIAL | Denied purpose mismatch, no stock |
+| QR-X30 | QR-07 | Частично возвращается одна из нескольких строк | Другие строки заказа и движения не меняются |
+| QR-X31 | QR-07 | Повреждённый или неосмотренный товар | Sellable available не увеличивается |
+| QR-X32 | QR-07 | Два оператора одновременно принимают RMA line | Один typed RETURN_RECEIPT |
+| QR-X33 | QR-07 | После RESTOCKED повторно открывают original order | Он остаётся COMPLETED, история сохранена |
+| QR-X34 | QR-08 | SERVICE offer через PRODUCT reserve port | Fail closed; без SERVICE stock |
+| QR-X35 | QR-PERF | Микс 100 scans/s, 20 checkouts/s, stock changes | Нет исчерпания пула/новых deadlock, p95/p99 сохранены |
+| QR-X36 | QR-PERF | Crash/restart во время scanner+revoke | Нет повторного debit, no plaintext token leak |
+
+### 20.1 Матрица тестовых данных и SQL oracle
+
+Минимальный fixture для обязательных PostgreSQL сценариев: tenants A и B, seller A и seller B, по 2 users с разными grants, отдельный buyer без seller membership, минимум 2 WAREHOUSE разного KATO у seller A, 1 warehouse seller B, одинаковый текст SKU между sellers (разные item IDs), разные offer price/currency, 8-line order, по одному отсутствующему SKU и одному складу INACTIVE. Состояния account/workspace/grant меняются в конкурентных тестах, а не подменяются моками.
+
+**Independent oracle:** после каждой успешной или отклонённой команды независимо читать SQL:
+- crm.sales_order.status, row_version, sales_order_line.price_source/unit_price_snapshot, status_event count;
+- inv_stock_balance on_hand/reserved и inv_stock_reservation state, inv_reservation_event, inv_stock_movement count/delta/request keys;
+- unique handover receipt по tenant/order, pickup credential state и число активных поколений;
+- accepted quote state/order link, proposal revision/event count;
+- org_location нынешнюю координатную пару и order immutable snapshot;
+- file_attachment owner, public media authorization and leaked bytes;
+- отсутствующие foreign tenant rows и side effects.
+
+Пример R1 сквозного инварианта: stock до reserve = on_hand 20, reserved 0; confirm qty 5 → on_hand 20, reserved 5, available 15; READY не меняет эти числа; после единственного handover → on_hand 15, reserved 0, available 15. Дублирующее сканирование должно сохранить 15/0, иметь один fulfillment movement и один receipt. При rollback всех стадий данные совпадают с pre-transaction snapshot. Не использовать SQL из реализации как единственный эталон теста.
+
+### 20.2 Тестовая таксономия и метод-level evidence
+
+- **Unit:** deterministic price math, QR purpose, validated state tables, locale fallback, trusted input boundary.
+- **H2:** compile/smoke и синтаксическая совместимость миграций, без претензии на PG row locking.
+- **Real PostgreSQL:** composite tenant FK, unique constraints, status transitions, CAS, lock-order, two independent connections/latches, revocation commit ordering, crash-before-commit/retry, populated migration.
+- **FILES infrastructure:** реальные LOCAL/RustFS+ClamAV профили в рамках обязательных existing workflows; нельзя выдавать FakeScanner за production authorization.
+- **Privacy/security:** foreign buyer/seller/warehouse, role revoke, raw token absent in logs/DB, no PII in public card, no enumeration.
+- **Scanner:** реальная мобильная камера и напечатанный QR только после transport/UI gate; внутренние QR unit tests не доказывают физическую читаемость.
+- **Performance:** populated PG SQL explain and latency regression against fixed workload; отдельно от correctness.
+
+Включение в CI после реализации: .github/workflows/rm-exact-sha-admission.yml, соответствующие mandatory H2/PG workflows и .github/scripts/verify_rm_qa_01b.py. Для каждого реализованного требования нужен **точный test class + method, workflow run, exact commit SHA, Surefire count, PostgreSQL evidence**, а не только запись «тесты есть». Новая QA-матрица QR не должна искусственно повышать процент готовности старой R3-v1 матрицы 75 требований: эти измерения независимы до утверждённого crosswalk.
+
+## 21. Производительность, доступность и UX-качество
+
+### 21.1 Предварительные цели квалификационного стенда — не факт достижения
+
+| Показатель | Проектная цель | Условие квалификации |
+|---|---:|---|
+| Public QR→card server-side p95 | ≤300 ms | Прогретая PG, фиксированная карточка/локаль/регион |
+| Public card p99 | ≤800 ms | Bounded public gallery и stock bands |
+| Staff QR preview p95 | ≤250 ms | Реальный IAM actor, локальная PG |
+| Pickup handover commit p95 | ≤800 ms | R1 one warehouse, 1–8 lines |
+| Quote checkout p95 | ≤800 ms | Сравнение с текущим обычным checkout |
+| Потерянные/двойные stock movements | 0 | Обязательный correctness hard gate |
+| Unauthorized cross-tenant reads/writes | 0 | Обязательный security hard gate |
+| Хранение raw pickup proof в DB/logs | 0 | Статический поиск + runtime assertions |
+
+SLO значения становятся обязательными только после фиксации одинаковых CPU, диска, PostgreSQL, Hikari connection budget, concurrency и набора данных. Не вводить Redis/ClickHouse/Rust по предположению о высокой нагрузке, пока SQL-plan и A/B benchmark не доказали проблему.
+
+Публичная карточка: индексированный resolve stable public_ref; не делать N+1 на каждую фотографию или склад. Список изображений ограничен; lazily rendered safe thumbnail. Индекс под region search создавать только после EXPLAIN(ANALYZE, BUFFERS) на populated DB и учёта write amplification. Не раскрывать raw tenant/order/ref в метриках высокой кардинальности Prometheus.
+
+### 21.2 UX-правила будущего адаптера, без его реализации сейчас
+
+- Открытие QR должно работать как обычная HTTPS-ссылка со смартфона, без установки приложения. Непубликуемый offer показывает нейтральный статус и не даёт оформить заказ.
+- Карточка различает: «опубликовано», «предварительно есть в регионе», «доступно к заказу», «индивидуальная цена обсуждается». Нельзя использовать одну зелёную галочку для всех этих состояний.
+- Товар: галерея, название, характеристики, цена/валюта, единица количества, остаток статусом, регион, две отдельные операции «Заказать» и «Предложить цену».
+- При торге: видеть исходную цену, собственную цену, количество, валюту, список версий предложений, текущую сторону ответа и срок, возможность отмены. Каждое согласование требует явного подтверждения условий покупателем.
+- Заказ: только buyer-owned история после identity proof, сам QR заказа не раскрывает приватные поля.
+- Склад: scanner → preview → сверка количества → отдельная кнопка «Выдать» → защищённый неизменяемый receipt. При истечении token — повторный выпуск после buyer proof, не manual DB update.
+- Центр QR: круглая галочка с белым защитным полем, не перекрывать finder/timing/alignment patterns; Error Correction H как кандидат, размеры проверяются реальными устройствами, не только теоретическими 12–18%.
+- Ошибки/плохая сеть: ясно различать «не удалось проверить» и «успешно выдано»; recovery через authoritative receipt. Офлайн stock commit запрещён.
+- Доступность: статус не только цветом, текст для screen reader, достаточный контраст, масштабирование, четыре утверждённые локали.
+
+## 22. Миграции, совместимость и управляемое внедрение
+
+| Шаг | База и функциональность | Что необходимо сохранить |
+|---|---|---|
+| DDL-Q0 | STOREFRONT стабильный alias и public card port | Existing store publication, no anonymous private media |
+| DDL-Q1 | FILES CATALOG_ITEM owner access и safe image variants | CRM_CUSTOMER ACL, RustFS/ClamAV gates |
+| DDL-Q2 | SALES proposal/event/accepted quote, nullable price_source | Existing checkout/immutable price histories |
+| DDL-Q3 | SALES order_reference + pickup credentials/receipt | Legacy orders без QR, никаких старых QR secrets |
+| DDL-Q4 | ORG nullable WGS84 + SALES nullable origin snapshot | Legacy CONFIRMED остаётся UNKNOWN_LEGACY |
+| DDL-Q5 | PREPARING/READY typed services без новых HTTP routes | Старые статусы и inventory order locks |
+| DDL-Q6 | Return RMA + typed INVENTORY RETURN_RECEIPT | Ledger on_hand/reserved, no implicit FINANCE refund |
+
+Сначала populated migration dry run на реальных по форме, но синтетических данных: определить допустимые NULL, unique duplicates, actual FK, индексы, срок изменения схемы, блокировки и rollback/forward strategy. Старые Liquibase changesets **не менять**; несовместимый тип status требует нового additive changeset, но существующие PREPARING/READY уже есть в CHECK. До появления заполненного trusted origin snapshot нельзя включать глобальный DB CHECK «каждый CONFIRMED содержит origin».
+
+Flags включать per-stage после тестов, но flag не должен создавать bypass IAM или неопределённое состояние. Если новая обработка QR временно выключена, действующие checkout/confirm/fulfill остаются корректными. После фиксации handover receipt нельзя делать destructive rollback с DROP таблиц, теряя исторические доказательства.
+
+**Runbook:** потеря/компрометация pickup token; продавец сменил цену после публикации QR; неявка и закрытие склада; разные результаты двойного сканирования; staff с отозванной ролью; discrepancy по складу; file scanner недоступен; отозванная публикация изображения; восстановление после crash между SQL операциями. Каждая процедура — через доменные команды и аудит, не ручное UPDATE stock в production.
+
+## 23. Этапы, traceability и definition of done
+
+| Gate | First deliverable | Source of truth | Proof IDs | Сейчас |
+|---|---|---|---|---|
+| QR-00 | Инвентаризация writer/readers, lock graph и утверждение decisions | Existing source code + DB | Source matrix, existing regression baseline | Проектное описание |
+| QR-01 | Постоянный product QR и безопасная публичная карточка | STOREFRONT/CATALOG | QR-P01..P03, QR-X01..X05 | Не реализовано |
+| QR-02 | Фотографии FILES и наличие по KATO | FILES/INVENTORY/ORG/GEO | QR-P04/P05, QR-X06..X10 | Не реализовано |
+| QR-03 | Покупка по текущей цене + справочный QR заказа | SALES current checkout | QR-P06..P08, O01/O02, X11/X12 | Не реализовано |
+| QR-04 | Торг + accepted quote + one-time checkout | SALES proposal/quote | QR-N01..N09, X13..X18 | Не реализовано |
+| QR-05 | GPS, warehouse origin + PREPARING/READY | ORGANIZATION/SALES | QR-G01/G02, H01, X19/X20 | Не реализовано |
+| QR-06 | One-time pickup proof + подтверждённый handover | SALES + INVENTORY | QR-H02..H09, X21..X29 | Не реализовано |
+| QR-07 | RMA, quality inspection, typed stock return | SALES + INVENTORY | QR-R01..R04, X30..X33 | Не реализовано |
+| QR-08 | SERVICE/DELIVERY/PACKAGE/STOCKTAKE QR | New approved domain flows | QR-S01, X34 + R2 suites | Отложено |
+| QR-PERF | Performance/recovery | PostgreSQL + metrics | QR-PERF01, X35/X36 | Не начато |
+| QR-HTTP | Браузер и реальные сканеры | External OIDC/transport | Real phone/E2E UAT | HOLD |
+
+Для каждого gate требуется: (1) точный business owner, IAM/tenant/object policy; (2) immutable state transitions и типизированные DTO; (3) additive Liquibase + populated PostgreSQL upgrade; (4) независимый SQL oracle, negative/race tests; (5) exact-SHA current test manifest PASS, без skipped mandatory cases; (6) no controller, no new branch, no main merge; (7) отсутствие regressions в current SALES/INVENTORY/IAM/FILES suites; (8) security/operational/metric evidence по области.
+
+**Порядок:** QR-00 → QR-01 → QR-02 → QR-03, затем QR-04 (торг) и QR-05/06 (склад). QR-07/08 не мешают признать полноценной первую узкую коммерческую вертикаль, но не считаются реализованными.
+
+## 24. Decision register — продуктовые политики, требующие отдельного подтверждения
+
+| Decision | Рекомендуемый вариант R1 | Статус |
+|---|---|---|
+| D-01 | QR постоянно привязан к конкретной seller offer, а не просто к SKU | Proposed |
+| D-02 | Стабильный alias до explicit revoke, не зависит от изменения slug | Proposed |
+| D-03 | Торг по одной PRODUCT offer, фиксированное integer количество | Proposed |
+| D-04 | Максимум 3 раунда и TTL 48 часов как стартовая гипотеза | DECISION REQUIRED |
+| D-05 | Цена предложения >0, min/max ratio по seller policy | DECISION REQUIRED |
+| D-06 | Для торга требуется verified buyer, без фиктивной seller membership | Proposed |
+| D-07 | Buyer явно подтверждает окончательную цену перед checkout | Proposed |
+| D-08 | Полный заказ, один склад, один продавец на R1 | Совместимо с текущим кодом |
+| D-09 | Pickup proof TTL ~3 минуты как UX-гипотеза, переиздание после buyer proof | DECISION REQUIRED |
+| D-10 | Scan preview не списывает, выдача только по отдельному действию | Proposed |
+| D-11 | Warehouse staff assignment, не общий tenant grant для любого склада | DECISION REQUIRED перед multi-warehouse production |
+| D-12 | No-show не отменяет резерв автоматически, срок хранения отдельный | DECISION REQUIRED |
+| D-13 | Возврат по RMA и inspection, original order остаётся COMPLETED | Proposed |
+| D-14 | Непроверенный/повреждённый возврат не sellable | Proposed; модель quarantine отдельно |
+| D-15 | Курьерская передача и самовывоз имеют разные QR proofs | Proposed R2 |
+| D-16 | SERVICE QR сначала read-only, service booking после отдельного ADR | Proposed |
+| D-17 | Дробное количество/UOM не включать неявно в checkout R1 | Соответствует коду |
+| D-18 | Public photo только через FILES CATALOG_ITEM owner | Required security gate |
+| D-19 | KATO exact match до подтверждения полной иерархии | Required data-quality gate |
+| D-20 | Центральный круг с галочкой — декоративный, подтверждается scanner QA | Proposed |
+| D-21 | Оплата, возврат денег, налоговый чек отдельно от склада | Required FINANCE/legal gate |
+| D-22 | Retention pickup digest vs immutable receipt хранить раздельно | DECISION REQUIRED |
+| D-23 | Выполнение складской команды online-only | Proposed |
+| D-24 | Public QR raw stable ref хранить, pickup secret только digest | Security design approved subject to review |
+
+Ни одно DECISION REQUIRED не может быть молча зашито в Java enum или SQL DEFAULT как якобы утверждённая политика. Подтверждение решения не равно праву открыть production.
+
+**Итог R1.1:** это максимально детализированный проектный baseline service-first разработки QR. Сами новые Java-сервисы, SQL-таблицы, JUnit PG тесты и реальные controllers не созданы. Production admission остаётся HOLD.
