@@ -52,6 +52,12 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         suite_cases[suite] = ["qualified"]
                 for suite in gate.SUITES.get(workflow, ()):
                     suite_cases.setdefault(suite, ["qualified"])
+                # Positive fixtures must include every named mandatory case.
+                # Negative tests below can deliberately skip one to prove HOLD.
+                for required_suite, required_method in gate.REQUIRED_CASES.get(artifact, set()):
+                    suite_cases.setdefault(required_suite, [])
+                    if required_method not in suite_cases[required_suite]:
+                        suite_cases[required_suite].append(required_method)
                 self.artifact_bytes[artifact_id] = self.make_zip(suite_cases)
                 group["artifacts"].append({"name": artifact, "id": artifact_id})
                 artifact_id += 1
@@ -65,6 +71,12 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             mock.patch.object(gate, "MANIFEST", self.manifest_path),
             mock.patch.object(gate, "assess", return_value={
                 "catalogueSha256": "self-test", "summary": {"domains": 16}}),
+            mock.patch.object(gate, "assess_role_cases", return_value={
+                "catalogueSha256": "synthetic-role-proof",
+                "gate": "USER_ROLE_SERVICE_QUALIFIED",
+                "mandatory": 6,
+                "executedPostgresql": 6,
+                "verifiedInternal": 6}),
             mock.patch.object(gate, "api", side_effect=self.fake_api),
             mock.patch.dict(os.environ, {
                 "GITHUB_SHA": "f" * 40, "GITHUB_REPOSITORY": "alimbetov/RM",
