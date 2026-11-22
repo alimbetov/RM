@@ -224,6 +224,65 @@ class InventoryTransferStocktakeQualificationTest {
         }
     }
 
+    @Test void postgresW2ConcurrentReceiveTransferAndReconciliationAcrossTwoPositions()
+            throws Exception {
+        try(var con=source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        receive(f,f.source(),"w2-seed-source01",100);
+        receive(f,f.destination(),"w2-seed-target01",100);
+        var who=actor(f.actor());
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var writer=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                for(int i=0;i<8;i++) {
+                    commands.transfer(who,f.tenant(),f.source(),f.destination(),f.item(),
+                            BigDecimal.ONE,"w2-transfer-out-"+i);
+                    commands.transfer(who,f.tenant(),f.destination(),f.source(),f.item(),
+                            BigDecimal.ONE,"w2-transfer-back-"+i);
+                    commands.receive(who,f.tenant(),f.source(),f.item(),
+                            "w2-receive-"+i,BigDecimal.ONE);
+                }
+                return true;
+            });
+            var reader=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                for(int i=0;i<8;i++) {
+                    var a=reconciliation.inspect(who,f.tenant(),f.source(),f.item());
+                    var b=reconciliation.inspect(who,f.tenant(),f.destination(),f.item());
+                    if(a.finding()!=AuthenticatedInventoryReconciliation.Finding.CONSISTENT
+                            ||b.finding()!=AuthenticatedInventoryReconciliation.Finding.CONSISTENT)
+                        throw new AssertionError("Legal concurrent stock mutation generated a false finding");
+                }
+                return true;
+            });
+            start.countDown();
+            assertThat(writer.get(60,TimeUnit.SECONDS)).isTrue();
+            assertThat(reader.get(60,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(stock(f,f.source())).isEqualByComparingTo("108");
+        assertThat(stock(f,f.destination())).isEqualByComparingTo("100");
+        var run=reconciliationRuns.start(who,f.tenant());
+        var step=reconciliationRuns.advance(who,f.tenant(),run.id(),20);
+        assertThat(step.run().status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(step.newFindings()).isEmpty();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND posting_version IS NULL
+                """,Integer.class,f.tenant())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM (
+                    SELECT location_id,item_id,posting_version
+                    FROM crm.inv_stock_movement WHERE tenant_id=?
+                    GROUP BY location_id,item_id,posting_version HAVING count(*) > 1
+                ) duplicates
+                """,Integer.class,f.tenant())).isZero();
+    }
+
     @Test void reconciliationDetectsReservedDriftWithoutChangingStockOrLedger() {
         var f=fixture();
         receive(f,f.source(),"reconcileReceipt01",10);
