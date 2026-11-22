@@ -150,6 +150,26 @@ class IamOidcRevocationOutboxQualificationTest {
         } finally {release.countDown();}
     }
 
+    @Test void unscopedSchedulerWorkerClaimsOnlyDueRows() {
+        var row=seed();
+        // Production scheduler calls processOne(workerId) without an event ID;
+        // isolate pre-existing pending fixtures to prove nullable UUID admission.
+        jdbc.update("""
+                UPDATE public.iam_deletion_oidc_revocation_outbox
+                SET next_attempt_at=?
+                WHERE deletion_event_id<>? AND state='PENDING'
+                """,java.sql.Timestamp.from(Instant.now().plusSeconds(3600)),row.deletionEventId());
+        AtomicInteger calls=new AtomicInteger();
+        var worker=worker(subject->{
+            assertThat(subject).isEqualTo(row.subject());
+            calls.incrementAndGet();
+        });
+        assertThat(worker.processOne(UUID.randomUUID()))
+                .isEqualTo(OidcRevocationOutboxWorker.Outcome.ACKNOWLEDGED);
+        assertThat(calls).hasValue(1);
+        assertThat(state(row.deletionEventId())).isEqualTo("ACKNOWLEDGED");
+    }
+
     @Test void multipleWorkersCannotClaimSamePendingOutboxRow() throws Exception {
         var row=seed();
         AtomicInteger calls=new AtomicInteger();
