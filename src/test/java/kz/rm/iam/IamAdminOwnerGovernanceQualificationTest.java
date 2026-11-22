@@ -386,4 +386,37 @@ class IamAdminOwnerGovernanceQualificationTest {
         authorization.require(replacement,f.tenant(),DomainPermission.TENANT_RBAC_MANAGE);
     }
 
+
+    @Test void tcrud04RevokedPlatformAdministratorCannotProvisionTenantOrRecoverOwner() {
+        UUID revokedAdmin=admin(),activeAdmin=admin(),eligibleOwner=user();
+        UUID blockedTenant=UUID.randomUUID();
+        governance.revokeAdmin(actor(activeAdmin),revokedAdmin);
+        assertThatThrownBy(()->provisioning.provision(actor(revokedAdmin),blockedTenant,
+                eligibleOwner,"Blocked LLP","Blocked","KZ"))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM public.iam_workspace WHERE id=?",
+                Integer.class,blockedTenant)).isZero();
+        assertThatThrownBy(()->provisioning.provision(null,blockedTenant,
+                eligibleOwner,"Blocked LLP","Blocked","KZ"))
+                .isInstanceOf(SecurityException.class);
+
+        UUID tenant=UUID.randomUUID(),owner=user(),staff=user();
+        provisioning.provision(actor(activeAdmin),tenant,owner,"Owned LLP","Owned","KZ");
+        enrollment.invite(actor(owner),tenant,staff);
+        enrollment.accept(actor(staff),tenant);
+        assertThatThrownBy(()->recovery.recoverOwner(actor(revokedAdmin),tenant,staff,
+                "INCIDENT_2026_RM"))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_org_membership m
+                JOIN public.iam_workspace w ON w.organization_id=m.organization_id
+                WHERE w.id=? AND m.user_id=? AND m.role='OWNER'
+                """,Integer.class,tenant,owner)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND action_code='OWNER_RECOVERED'
+                """,Integer.class,tenant)).isZero();
+    }
+
 }
