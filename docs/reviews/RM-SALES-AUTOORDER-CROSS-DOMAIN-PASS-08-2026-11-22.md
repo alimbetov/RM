@@ -60,3 +60,24 @@ Do *not* add new REST controllers during feature freeze, split orders across mul
 ## 5. Review disposition
 
 **PASS 08/12 = SOURCE REVIEWED / SPEC PROPOSED.** No new SALES implementation is claimed by this review; release qualification stays closed. Continue PASS 09/12 tenant/permission/PII/anonymous boundary and PASS 10/12 concurrency/throughput only after source snapshot contract has an accepted design. Keep single Sales 12-pass spec as authoritative follow-up.
+
+
+## 6. Реализация SALES-08.1–08.3 — точная фиксация SKU (2026-11-22)
+
+**Статус:** `IMPLEMENTED / POSTGRESQL CI PENDING` до зелёного результата *на актуальном кодовом SHA*. Этот раздел новее исторического исходного source review выше. Не объявлять PASS 08 целиком квалифицированным, пока не завершены все выбранные тесты и отдельный seller offer lifecycle 08.4.
+
+**Контракт зафиксирован:**
+- `crm.sales_order_line.catalog_item_id_snapshot UUID NULL`, tenant FK `(tenant_id,catalog_item_id_snapshot)->crm.cat_item(tenant_id,id)`. NULL старых строк остаётся неизвестной историей, никакого автозаполнения.
+- `AutoOrderService.checkout` после идемпотентного запроса выбирает **PUBLISHED store offer + PUBLISHED PRODUCT** с блокировкой строк `FOR UPDATE`, одним серверным снимком фиксирует `offer_id,title_snapshot,unit_price_snapshot,currency,quantity,catalog_item_id_snapshot`. Если предложение без маппинга, SERVICE или архивный SKU — отказ **до** `EmailIdentityService.findOrProvision` и создания order/email-outbox.
+- `SalesInventoryCommandService.lines` получает `catalog_item_id_snapshot` **из строки заказа**, а не `store_offer`. Новый PLACED с историческим NULL отклоняет `UNMAPPED_LEGACY_ORDER` до смены статуса; pre-existing CONFIRMED retry / fulfillment по зарегистрированным резервам не заставляет backfill SKU.
+- `InventoryReservationService.reserve` независимо сверяет `order_line.catalog_item_id_snapshot` с запрошенным SKU, не повторяя JOIN к изменяемому офферу. Все прежние SALES + INVENTORY permissions и одна транзакция сохранены.
+- Migration `0076` — только additive nullable поле + tenant FK + обычный индекс, совместимый с H2/PostgreSQL; `0077` — PostgreSQL BEFORE UPDATE/DELETE immutable accepted line (повторное применение или редактирование не изменяет бизнес-снимок). Старые changeset checksum не меняются.
+- PRICE ownership: checkout продолжает доверять серверной `store_offer.unit_price`, `cat_price` не зеркалируется автоматически и не перезаписывает историческую сумму.
+
+**Тестовые контракты:** `AutoOrderR1QualificationTest.sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice`, `sale08RejectsUnmappedAndArchivedOffersBeforeEmailOrOrderSideEffects`, `sale08ServiceSkuCannotEnterPhysicalStockCheckout`, `sale08CrossTenantSkuMappingIsRejectedByCompositeForeignKey`, `sale08PostgresConcurrentOfferPauseFencesCheckoutBeforeAnyIdentityCreation`; `SalesInventoryRbacQualificationTest.sale08RemappedOfferCannotSubstituteSkuDuringOrderConfirmation`, `sale08HistoricalNullSkuMustNotResolveFromLiveOffer`, `sale08PostgresRejectsModificationOfAcceptedOrderLine`; существующие SALES/INVENTORY/CRM email lifecycle and migration regressions.
+
+**Предметные решения:** PRODUCT-only stock-backed offer в R1; SERVICE продажи **не** считаются успешно поддержанными до отдельного service fulfillment. Для старых `NULL` — отказ в новом confirm, корректирующий административный workflow остаётся отдельным будущим ТЗ. Remap оффера после checkout не меняет резервируемый SKU. Изменение цены после checkout не меняет принятую сумму/валюту/строку.
+
+**История устранённых дефектов в процессе:** первая версия `0076` использовала PostgreSQL partial index `WHERE ... IS NOT NULL`, из-за чего H2 failed at migration; заменён обычным индексом до release. Старые fixtures, создававшие заказ без каталога или новый заказ после архивации SKU, обновлены, так как новый контракт запрещает эти операции. Итоговый CI рассматривается только на последнем кодовом SHA после всех исправлений.
+
+**Остаётся за рамками этого изменения:** seller-authorized owner CRUD и state machine для `store_offer` (08.4), реальные SERVICE orders, PII/transport/anti-abuse, delivery/invoice/COGS, full 09–12 and production admission. **Production HOLD**.
