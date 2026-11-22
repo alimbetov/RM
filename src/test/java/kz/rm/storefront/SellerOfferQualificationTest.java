@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class SellerOfferQualificationTest {
     @Autowired SellerOfferService offers;
+    @Autowired StorefrontOfferService canonical;
     @Autowired AutoOrderService checkout;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
@@ -87,6 +88,35 @@ class SellerOfferQualificationTest {
         for(var permission:permissions) roles.grant(verified(c.owner()),c.tenant(),r.id(),permission);
         roles.assign(verified(c.owner()),c.tenant(),c.seller(),r.id());
         roles.enable(verified(c.owner()),c.tenant());
+    }
+
+    @Test void pass09TwoOfferFacadesShareOneVersionAndOneAuditHistory() {
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"Shared",
+                new BigDecimal("100"),"KZT");
+        assertThat(draft.rowVersion()).isZero();
+        assertThat(canonical.get(actor,c.tenant(),draft.id()).rowVersion()).isZero();
+        var published=canonical.publish(actor,c.tenant(),draft.id(),0);
+        assertThat(published.rowVersion()).isEqualTo(1);
+        assertThat(offers.changePrice(actor,c.tenant(),draft.id(),1,
+                new BigDecimal("120"),"KZT").rowVersion()).isEqualTo(2);
+        assertThat(canonical.get(actor,c.tenant(),draft.id()).unitPrice())
+            .isEqualByComparingTo("120");
+        assertThatThrownBy(()->canonical.pause(actor,c.tenant(),draft.id(),1))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(offers.pause(actor,c.tenant(),draft.id(),2).rowVersion())
+            .isEqualTo(3);
+        assertThat(canonical.publish(actor,c.tenant(),draft.id(),3).rowVersion())
+            .isEqualTo(4);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.audit_event
+            WHERE tenant_id=? AND entity_id=? AND action_code LIKE 'STOREFRONT_OFFER_%'
+            """,Integer.class,c.tenant(),draft.id())).isEqualTo(5);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.store_offer WHERE tenant_id=? AND id=?
+            """,Integer.class,c.tenant(),draft.id())).isEqualTo(1);
     }
 
     @Test void permissionsAreTenantLocalEvenForDualTenantMember() {
