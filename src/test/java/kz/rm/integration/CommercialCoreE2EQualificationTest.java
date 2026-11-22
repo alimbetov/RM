@@ -180,6 +180,19 @@ class CommercialCoreE2EQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    private void awaitPostgresLockWait(int backendPid) throws Exception {
+        long deadline = System.nanoTime() +
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            String wait = jdbc.query("""
+                    SELECT wait_event_type FROM pg_stat_activity WHERE pid=?
+                    """, rs -> rs.next() ? rs.getString(1) : null, backendPid);
+            if ("Lock".equals(wait)) return;
+            Thread.sleep(25);
+        }
+        throw new AssertionError("Expected a real PostgreSQL lock wait, pid=" + backendPid);
+    }
+
     @Test void postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects()
             throws Exception {
         postgresOnly();
@@ -197,6 +210,7 @@ class CommercialCoreE2EQualificationTest {
         var sellerSuspended = new java.util.concurrent.CountDownLatch(1);
         var checkoutAttempt = new java.util.concurrent.CountDownLatch(1);
         var release = new java.util.concurrent.CountDownLatch(1);
+        var buyerBackend = new java.util.concurrent.atomic.AtomicInteger();
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
         String key = "suspend-before-" + UUID.randomUUID();
         try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
@@ -216,14 +230,19 @@ class CommercialCoreE2EQualificationTest {
             var buyer = pool.submit(() -> {
                 if (!sellerSuspended.await(10, java.util.concurrent.TimeUnit.SECONDS))
                     throw new IllegalStateException("Suspension did not lock workspace");
-                checkoutAttempt.countDown();
-                return checkout.checkout(store.slug(),
-                        "suspend-barrier-" + UUID.randomUUID() + "@example.kz",
-                        key, List.of(new AutoOrderService.Line(offer.id(), 1)));
+                return tx.execute(status -> {
+                    buyerBackend.set(jdbc.queryForObject(
+                            "SELECT pg_backend_pid()", Integer.class));
+                    checkoutAttempt.countDown();
+                    return checkout.checkout(store.slug(),
+                            "suspend-barrier-" + UUID.randomUUID() + "@example.kz",
+                            key, List.of(new AutoOrderService.Line(offer.id(), 1)));
+                });
             });
             try {
                 assertThat(checkoutAttempt.await(10, java.util.concurrent.TimeUnit.SECONDS))
                         .isTrue();
+                awaitPostgresLockWait(buyerBackend.get());
             } finally {
                 release.countDown();
             }
@@ -262,6 +281,7 @@ class CommercialCoreE2EQualificationTest {
         var checkoutAccepted = new java.util.concurrent.CountDownLatch(1);
         var suspendAttempt = new java.util.concurrent.CountDownLatch(1);
         var release = new java.util.concurrent.CountDownLatch(1);
+        var suspendBackend = new java.util.concurrent.atomic.AtomicInteger();
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
         String key = "checkout-before-" + UUID.randomUUID();
         String buyerEmail = "buyer-first-" + UUID.randomUUID() + "@example.kz";
@@ -284,14 +304,19 @@ class CommercialCoreE2EQualificationTest {
             var suspension = pool.submit(() -> {
                 if (!checkoutAccepted.await(10, java.util.concurrent.TimeUnit.SECONDS))
                     throw new IllegalStateException("Checkout did not reach commit barrier");
-                suspendAttempt.countDown();
-                return tx.execute(status -> jdbc.update(
-                        "UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",
-                        c.tenant()));
+                return tx.execute(status -> {
+                    suspendBackend.set(jdbc.queryForObject(
+                            "SELECT pg_backend_pid()", Integer.class));
+                    suspendAttempt.countDown();
+                    return jdbc.update(
+                            "UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",
+                            c.tenant());
+                });
             });
             try {
                 assertThat(suspendAttempt.await(10, java.util.concurrent.TimeUnit.SECONDS))
                         .isTrue();
+                awaitPostgresLockWait(suspendBackend.get());
             } finally {
                 release.countDown();
             }
