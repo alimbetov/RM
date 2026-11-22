@@ -2610,3 +2610,184 @@ CREATE TABLE crm.sales_order_qr_reference (
 CREATE INDEX idx_sales_order_qr_history
  ON crm.sales_order_qr_reference(tenant_id,order_id,generation DESC);
 --rollback DROP TABLE crm.sales_order_qr_reference;
+
+
+--changeset rm:0089-sales-qr-price-proposals
+-- QR-04A: private buyer/seller negotiation, no public price mutation.
+-- UAT policy: maximum 3 COUNTER events; expiry is 48 hours from submit.
+CREATE TABLE crm.sales_price_proposal (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ catalog_item_id UUID NOT NULL,
+ buyer_user_id UUID NOT NULL,
+ quantity INTEGER NOT NULL,
+ list_price_at_submit NUMERIC(19,4) NOT NULL,
+ current_unit_price NUMERIC(19,4) NOT NULL,
+ currency CHAR(3) NOT NULL,
+ state VARCHAR(24) NOT NULL,
+ revision BIGINT NOT NULL,
+ next_actor VARCHAR(12) NOT NULL,
+ round_count INTEGER NOT NULL,
+ expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_sales_price_proposal PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_price_proposal_offer FOREIGN KEY(tenant_id,offer_id)
+  REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_price_proposal_item FOREIGN KEY(tenant_id,catalog_item_id)
+  REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT fk_price_proposal_buyer FOREIGN KEY(buyer_user_id)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_price_proposal_qty CHECK(quantity BETWEEN 1 AND 1000),
+ CONSTRAINT ck_price_proposal_amount CHECK(list_price_at_submit>=0 AND current_unit_price>0),
+ CONSTRAINT ck_price_proposal_rev CHECK(revision>=1 AND row_version>=0 AND round_count BETWEEN 0 AND 3),
+ CONSTRAINT ck_price_proposal_state CHECK(
+  (state='AWAITING_SELLER' AND next_actor='SELLER') OR
+  (state='AWAITING_BUYER' AND next_actor='BUYER') OR
+  (state IN ('AGREED','REJECTED','WITHDRAWN','EXPIRED') AND next_actor='NONE')),
+ CONSTRAINT ck_price_proposal_expiry CHECK(expires_at>created_at)
+);
+CREATE INDEX idx_price_proposal_buyer
+ ON crm.sales_price_proposal(buyer_user_id,created_at,id);
+CREATE INDEX idx_price_proposal_offer
+ ON crm.sales_price_proposal(tenant_id,offer_id,state);
+
+CREATE TABLE crm.sales_price_proposal_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ proposal_id UUID NOT NULL,
+ revision BIGINT NOT NULL,
+ event_type VARCHAR(16) NOT NULL,
+ actor_role VARCHAR(12) NOT NULL,
+ actor_user_id UUID,
+ unit_price NUMERIC(19,4) NOT NULL,
+ quantity INTEGER NOT NULL,
+ currency CHAR(3) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_price_proposal_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_price_proposal_event FOREIGN KEY(tenant_id,proposal_id)
+  REFERENCES crm.sales_price_proposal(tenant_id,id),
+ CONSTRAINT fk_price_event_actor FOREIGN KEY(actor_user_id)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT uq_price_proposal_revision UNIQUE(tenant_id,proposal_id,revision),
+ CONSTRAINT ck_price_proposal_event_kind CHECK(event_type IN
+  ('SUBMITTED','COUNTERED','ACCEPTED','REJECTED','WITHDRAWN','EXPIRED')),
+ CONSTRAINT ck_price_proposal_event_role CHECK(
+  (actor_role IN ('BUYER','SELLER') AND actor_user_id IS NOT NULL) OR
+  (actor_role='SYSTEM' AND actor_user_id IS NULL)),
+ CONSTRAINT ck_price_proposal_event_amount CHECK(unit_price>0 AND quantity BETWEEN 1 AND 1000)
+);
+
+CREATE TABLE crm.sales_accepted_quote (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ proposal_id UUID NOT NULL,
+ agreed_revision BIGINT NOT NULL,
+ offer_id UUID NOT NULL,
+ buyer_user_id UUID NOT NULL,
+ quantity INTEGER NOT NULL,
+ agreed_unit_price NUMERIC(19,4) NOT NULL,
+ currency CHAR(3) NOT NULL,
+ state VARCHAR(16) NOT NULL,
+ expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ consumed_order_id UUID,
+ consumed_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT pk_sales_accepted_quote PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_accepted_quote_proposal FOREIGN KEY(tenant_id,proposal_id)
+  REFERENCES crm.sales_price_proposal(tenant_id,id),
+ CONSTRAINT fk_accepted_quote_offer FOREIGN KEY(tenant_id,offer_id)
+  REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_accepted_quote_buyer FOREIGN KEY(buyer_user_id)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_accepted_quote_order FOREIGN KEY(tenant_id,consumed_order_id)
+  REFERENCES crm.sales_order(tenant_id,id),
+ CONSTRAINT uq_accepted_quote_proposal UNIQUE(tenant_id,proposal_id),
+ CONSTRAINT uq_accepted_quote_order UNIQUE(tenant_id,consumed_order_id),
+ CONSTRAINT ck_accepted_quote_qty CHECK(quantity BETWEEN 1 AND 1000 AND agreed_unit_price>0),
+ CONSTRAINT ck_accepted_quote_state CHECK(
+  (state='CONSUMED' AND consumed_order_id IS NOT NULL AND consumed_at IS NOT NULL)
+  OR
+  (state IN ('AVAILABLE','EXPIRED','INVALIDATED')
+   AND consumed_order_id IS NULL AND consumed_at IS NULL))
+);
+CREATE INDEX idx_accepted_quote_buyer
+ ON crm.sales_accepted_quote(buyer_user_id,state,expires_at);
+
+CREATE TABLE crm.sales_proposal_command_receipt (
+ tenant_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ actor_user_id UUID NOT NULL,
+ action_code VARCHAR(16) NOT NULL,
+ request_sha256 CHAR(64) NOT NULL,
+ proposal_id UUID NOT NULL,
+ result_revision BIGINT NOT NULL,
+ result_state VARCHAR(24) NOT NULL,
+ result_next_actor VARCHAR(12) NOT NULL,
+ result_round_count INTEGER NOT NULL,
+ result_unit_price NUMERIC(19,4) NOT NULL,
+ result_quantity INTEGER NOT NULL,
+ result_currency CHAR(3) NOT NULL,
+ result_expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ result_quote_id UUID,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sales_proposal_receipt PRIMARY KEY(tenant_id,request_key),
+ CONSTRAINT fk_sales_proposal_receipt_proposal FOREIGN KEY(tenant_id,proposal_id)
+  REFERENCES crm.sales_price_proposal(tenant_id,id),
+ CONSTRAINT fk_sales_proposal_receipt_actor FOREIGN KEY(actor_user_id)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_sales_proposal_receipt_quote FOREIGN KEY(tenant_id,result_quote_id)
+  REFERENCES crm.sales_accepted_quote(tenant_id,id),
+ CONSTRAINT ck_sales_proposal_receipt_hash CHECK(LENGTH(request_sha256)=64),
+ CONSTRAINT ck_sales_proposal_receipt_result CHECK(
+  result_revision>=1 AND result_round_count BETWEEN 0 AND 3
+  AND result_unit_price>0 AND result_quantity BETWEEN 1 AND 1000)
+);
+CREATE INDEX idx_proposal_receipt_proposal
+ ON crm.sales_proposal_command_receipt(tenant_id,proposal_id);
+
+--rollback DROP TABLE crm.sales_proposal_command_receipt;
+--rollback DROP TABLE crm.sales_accepted_quote;
+--rollback DROP TABLE crm.sales_price_proposal_event;
+--rollback DROP TABLE crm.sales_price_proposal;
+
+--changeset rm:0090-sales-quote-order-snapshot
+-- Legacy lines keep NULL price_source; never infer negotiated history.
+ALTER TABLE crm.sales_order_line
+ ADD COLUMN price_source VARCHAR(16);
+ALTER TABLE crm.sales_order_line
+ ADD COLUMN accepted_quote_id UUID;
+ALTER TABLE crm.sales_order_line
+ ADD CONSTRAINT fk_sales_line_quote FOREIGN KEY(tenant_id,accepted_quote_id)
+ REFERENCES crm.sales_accepted_quote(tenant_id,id);
+ALTER TABLE crm.sales_order_line
+ ADD CONSTRAINT ck_sales_line_price_source CHECK(
+  (price_source IS NULL AND accepted_quote_id IS NULL) OR
+  (price_source='LIST' AND accepted_quote_id IS NULL) OR
+  (price_source='NEGOTIATED' AND accepted_quote_id IS NOT NULL));
+CREATE UNIQUE INDEX uq_sales_line_accepted_quote
+ ON crm.sales_order_line(tenant_id,accepted_quote_id);
+--rollback DROP INDEX crm.uq_sales_line_accepted_quote;
+--rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT ck_sales_line_price_source;
+--rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT fk_sales_line_quote;
+--rollback ALTER TABLE crm.sales_order_line DROP COLUMN accepted_quote_id;
+--rollback ALTER TABLE crm.sales_order_line DROP COLUMN price_source;
+
+--changeset rm:0091-sales-proposal-event-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_price_proposal_event_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'Price proposal events and command receipts are immutable';
+END;
+$$;
+CREATE TRIGGER trg_price_proposal_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_price_proposal_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_price_proposal_event_mutation();
+CREATE TRIGGER trg_price_proposal_receipt_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_proposal_command_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_price_proposal_event_mutation();
+--rollback DROP TRIGGER trg_price_proposal_receipt_immutable ON crm.sales_proposal_command_receipt;
+--rollback DROP TRIGGER trg_price_proposal_event_immutable ON crm.sales_price_proposal_event;
+--rollback DROP FUNCTION crm.reject_price_proposal_event_mutation();

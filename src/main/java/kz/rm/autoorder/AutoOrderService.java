@@ -2,6 +2,10 @@ package kz.rm.autoorder;
 
 import kz.rm.iam.EmailIdentityService;
 import kz.rm.sales.SalesOrderQrReferenceService;
+import kz.rm.iam.VerifiedActor;
+import org.springframework.jdbc.core.ConnectionCallback;
+import jakarta.annotation.PostConstruct;
+import java.math.RoundingMode;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,7 @@ public class AutoOrderService {
     private final JdbcTemplate jdbc;
     private final EmailIdentityService emailIdentities;
     private final SalesOrderQrReferenceService orderQrReferences;
+    private String verifiedBuyerLockSql;
 
     public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
                             SalesOrderQrReferenceService orderQrReferences) {
@@ -209,6 +214,193 @@ public class AutoOrderService {
         // order, immutable lines, status event, checkout receipt and IAM
         // verification outbox share ONE transaction. It is deliberately NOT
         // returned in this unverified email-first checkout response.
+        orderQrReferences.issueAtPlaced(tenant,orderId);
+        return new CheckoutResult(new OrderReceipt(orderId,"PLACED"));
+    }
+
+
+
+    /**
+     * QR-04B: agreed personalized price enters the SAME SALES checkout ledger,
+     * checkout stripe, order line snapshot, email identity and QR issuer.
+     * Never uses a typed customer email or creates a second order engine.
+     *
+     * Lock DAG: checkout stripe -> buyer account -> seller workspace ->
+     * storefront -> offer -> catalog -> accepted quote -> order writes.
+     * Proposal mutations lock buyer/seller before workspace/offer/proposal.
+     * No operation ever locks proposal after the quote in this method.
+     */
+    public record AcceptedQuoteAck(long agreedRevision,int quantity,
+                                   BigDecimal agreedUnitPrice,String currency) {}
+    private record Quote(UUID id,UUID proposalId,UUID offerId,UUID buyerId,
+                         long agreedRevision,int quantity,BigDecimal price,
+                         String currency,String state,Instant expiresAt) {}
+    private record CurrentOffer(String title,BigDecimal listPrice,String currency,
+                                UUID catalogItemId,String state) {}
+
+    @PostConstruct
+    void configureQuoteLocks() {
+        String db=jdbc.execute((ConnectionCallback<String>) c->
+                c.getMetaData().getDatabaseProductName());
+        verifiedBuyerLockSql="SELECT status FROM public.iam_user_account WHERE id=? "
+                +(db!=null&&db.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
+                ?"FOR SHARE":"FOR UPDATE");
+    }
+
+    @Transactional
+    public CheckoutResult checkoutAcceptedQuote(VerifiedActor buyer,UUID tenant,
+                                                UUID quoteId,AcceptedQuoteAck accepted,
+                                                String idempotencyKey) {
+        if(buyer==null||tenant==null||quoteId==null||accepted==null
+                ||accepted.agreedRevision()<1||accepted.quantity()<1
+                ||accepted.quantity()>1000||accepted.agreedUnitPrice()==null
+                ||accepted.agreedUnitPrice().signum()<=0
+                ||accepted.agreedUnitPrice().scale()>4
+                ||accepted.agreedUnitPrice().precision()
+                        -accepted.agreedUnitPrice().scale()>15
+                ||accepted.currency()==null||!accepted.currency().matches("[A-Z]{3}")
+                ||idempotencyKey==null
+                ||!idempotencyKey.matches("[A-Za-z0-9_-]{8,100}"))
+            throw new IllegalArgumentException("QUOTE_CHECKOUT_INVALID");
+        UUID user=buyer.userId(); // VERIFIED OIDC subject, never client UUID
+        BigDecimal acceptedPrice=accepted.agreedUnitPrice()
+                .setScale(4,RoundingMode.UNNECESSARY);
+        byte[] requestHash=digest("RM/QR-04B/V1|"+tenant+"|"+user+"|"
+                +quoteId+"|"+accepted.agreedRevision()+"|"+accepted.quantity()
+                +"|"+acceptedPrice.stripTrailingZeros().toPlainString()
+                +"|"+accepted.currency());
+        // Shared seller-wide checkout namespace from QR-03A and normal lists.
+        lockStripe("crm.sales_checkout_lock",tenant+":"+idempotencyKey);
+        String accountStatus=jdbc.query(verifiedBuyerLockSql,
+                rs->rs.next()?rs.getString(1):null,user);
+        if(!"ACTIVE".equals(accountStatus))
+            throw new SecurityException("VERIFIED_BUYER_REQUIRED");
+        List<UUID> emailIdentities=jdbc.query("""
+                SELECT id FROM public.iam_email_identity
+                WHERE user_id=? AND lifecycle_state='CURRENT'
+                  AND verified_at IS NOT NULL
+                """,(rs,n)->rs.getObject(1,UUID.class),user);
+        if(emailIdentities.size()!=1)
+            throw new SecurityException("VERIFIED_EMAIL_REQUIRED");
+
+        List<OrderReceipt> replays=jdbc.query("""
+                SELECT r.order_id,r.request_sha256,o.status
+                FROM crm.sales_checkout_receipt r
+                JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
+                WHERE r.tenant_id=? AND r.idempotency_key=?
+                """,(rs,n)->{
+                    if(!MessageDigest.isEqual(requestHash,rs.getBytes(2)))
+                        throw new IllegalArgumentException(
+                                "Idempotency key reused with different request");
+                    return new OrderReceipt(rs.getObject(1,UUID.class),
+                            rs.getString(3));
+                },tenant,idempotencyKey);
+        if(!replays.isEmpty())return new CheckoutResult(replays.getFirst());
+
+        String workspace=jdbc.query("""
+                SELECT status FROM public.iam_workspace
+                WHERE id=? AND kind='ORGANIZATION' FOR UPDATE
+                """,rs->rs.next()?rs.getString(1):null,tenant);
+        if(!"ACTIVE".equals(workspace))
+            throw new IllegalStateException("SELLER_INACTIVE");
+        String storefront=jdbc.query("""
+                SELECT state FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                """,rs->rs.next()?rs.getString(1):null,tenant);
+        if(!"PUBLISHED".equals(storefront))
+            throw new IllegalStateException("SELLER_STOREFRONT_PAUSED");
+
+        // Preliminary lookup supplies lock target only, never sale terms.
+        UUID offerId=jdbc.query("""
+                SELECT offer_id FROM crm.sales_accepted_quote
+                WHERE tenant_id=? AND id=?
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant,quoteId);
+        if(offerId==null)throw new SecurityException("QUOTE_NOT_ACCESSIBLE");
+        CurrentOffer offer=jdbc.query("""
+                SELECT title,unit_price,currency,catalog_item_id,state
+                FROM crm.store_offer
+                WHERE tenant_id=? AND id=? FOR UPDATE
+                """,rs->rs.next()?new CurrentOffer(rs.getString(1),
+                rs.getBigDecimal(2),rs.getString(3),
+                rs.getObject(4,UUID.class),rs.getString(5)):null,
+                tenant,offerId);
+        if(offer==null||!"PUBLISHED".equals(offer.state())
+                ||offer.catalogItemId()==null)
+            throw new IllegalStateException("QUOTE_OFFER_UNAVAILABLE");
+        String product=jdbc.query("""
+                SELECT kind || ':' || state FROM crm.cat_item
+                WHERE tenant_id=? AND id=? FOR UPDATE
+                """,rs->rs.next()?rs.getString(1):null,tenant,offer.catalogItemId());
+        if(!"PRODUCT:PUBLISHED".equals(product))
+            throw new IllegalStateException("QUOTE_PRODUCT_UNAVAILABLE");
+        Quote quote=jdbc.query("""
+                SELECT id,proposal_id,offer_id,buyer_user_id,agreed_revision,
+                       quantity,agreed_unit_price,currency,state,expires_at
+                FROM crm.sales_accepted_quote
+                WHERE tenant_id=? AND id=? FOR UPDATE
+                """,rs->rs.next()?new Quote(rs.getObject(1,UUID.class),
+                rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
+                rs.getObject(4,UUID.class),rs.getLong(5),rs.getInt(6),
+                rs.getBigDecimal(7),rs.getString(8),rs.getString(9),
+                rs.getTimestamp(10).toInstant()):null,tenant,quoteId);
+        if(quote==null||!quote.buyerId().equals(user)||!quote.offerId().equals(offerId))
+            throw new SecurityException("QUOTE_NOT_ACCESSIBLE");
+        if(!"AVAILABLE".equals(quote.state()))
+            throw new IllegalStateException("QUOTE_ALREADY_CONSUMED_OR_INVALID");
+        if(!Instant.now().isBefore(quote.expiresAt()))
+            throw new IllegalStateException("QUOTE_EXPIRED");
+        if(quote.agreedRevision()!=accepted.agreedRevision()
+                ||quote.quantity()!=accepted.quantity()
+                ||quote.price().compareTo(acceptedPrice)!=0
+                ||!quote.currency().equals(accepted.currency()))
+            throw new IllegalStateException("QUOTE_RECONFIRM_REQUIRED");
+        // The public STOREFRONT list price may change AFTER acceptance.
+        // A negotiated price is immutable in this quote, never a client override.
+        if(!quote.currency().equals(offer.currency()))
+            throw new IllegalStateException("QUOTE_CURRENCY_CHANGED");
+        Integer agreed=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_price_proposal
+                WHERE tenant_id=? AND id=? AND state='AGREED' AND offer_id=?
+                  AND buyer_user_id=? AND quantity=?
+                """,Integer.class,tenant,quote.proposalId(),offerId,user,quote.quantity());
+        if(agreed==null||agreed!=1)
+            throw new IllegalStateException("QUOTE_PROPOSAL_INCONSISTENT");
+
+        UUID orderId=UUID.randomUUID();
+        Timestamp now=Timestamp.from(Instant.now());
+        BigDecimal total=quote.price().multiply(BigDecimal.valueOf(quote.quantity()));
+        jdbc.update("""
+                INSERT INTO crm.sales_order
+                  (tenant_id,id,pending_email_identity_id,buyer_user_id,status,
+                   total_amount,currency,created_at)
+                VALUES (?,?,?,?,'PLACED',?,?,?)
+                """,tenant,orderId,emailIdentities.getFirst(),user,total,
+                quote.currency(),now);
+        jdbc.update("""
+                INSERT INTO crm.sales_order_line
+                  (tenant_id,id,order_id,offer_id,title_snapshot,quantity,
+                   unit_price_snapshot,currency,catalog_item_id_snapshot,
+                   price_source,accepted_quote_id)
+                VALUES (?,?,?,?,?,?,?,?,?,'NEGOTIATED',?)
+                """,tenant,UUID.randomUUID(),orderId,offerId,offer.title(),
+                quote.quantity(),quote.price(),quote.currency(),
+                offer.catalogItemId(),quoteId);
+        jdbc.update("""
+                INSERT INTO crm.sales_order_status_event
+                  (tenant_id,id,order_id,event_type,occurred_at)
+                VALUES (?,?,?,'PLACED',?)
+                """,tenant,UUID.randomUUID(),orderId,now);
+        jdbc.update("""
+                INSERT INTO crm.sales_checkout_receipt
+                  (tenant_id,idempotency_key,request_sha256,order_id,created_at)
+                VALUES (?,?,?,?,?)
+                """,tenant,idempotencyKey,requestHash,orderId,now);
+        int consumed=jdbc.update("""
+                UPDATE crm.sales_accepted_quote
+                SET state='CONSUMED',consumed_order_id=?,consumed_at=?
+                WHERE tenant_id=? AND id=? AND state='AVAILABLE'
+                  AND consumed_order_id IS NULL
+                """,orderId,now,tenant,quoteId);
+        if(consumed!=1)throw new IllegalStateException("QUOTE_CONSUME_RACE");
         orderQrReferences.issueAtPlaced(tenant,orderId);
         return new CheckoutResult(new OrderReceipt(orderId,"PLACED"));
     }

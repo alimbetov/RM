@@ -12,6 +12,7 @@ public enum DomainPermission {
     ORGANIZATION_LOCATION_READ(DomainModule.ORG),
     INVENTORY_STOCK_READ(DomainModule.INVENTORY),
     SALES_ORDER_READ(DomainModule.SALES),
+    SALES_PROPOSAL_RESPOND(DomainModule.SALES),
     SALES_ORDER_CONFIRM(DomainModule.SALES),
     SALES_ORDER_CANCEL(DomainModule.SALES),
     SALES_ORDER_FULFILL(DomainModule.SALES),
