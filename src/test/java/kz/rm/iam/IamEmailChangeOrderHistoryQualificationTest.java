@@ -1,6 +1,7 @@
 package kz.rm.iam;
 
 import kz.rm.autoorder.AutoOrderService;
+import kz.rm.autoorder.AuthenticatedBuyerOrders;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class IamEmailChangeOrderHistoryQualificationTest {
     @Autowired AutoOrderService orders;
+    @Autowired AuthenticatedBuyerOrders trustedBuyerOrders;
     @Autowired EmailIdentityService emails;
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
@@ -104,9 +106,9 @@ class IamEmailChangeOrderHistoryQualificationTest {
         assertThat(jdbc.queryForObject("""
             SELECT buyer_user_id FROM crm.sales_order WHERE id=?
             """,UUID.class,freshOrder)).isEqualTo(newBuyer);
-        assertThat(orders.buyerOrders(buyer)).extracting(AutoOrderService.OrderReceipt::orderId)
+        assertThat(trustedBuyerOrders.mine(actor(buyer))).extracting(AutoOrderService.OrderReceipt::orderId)
             .contains(oldOrder).doesNotContain(freshOrder);
-        assertThat(orders.buyerOrders(newBuyer)).extracting(AutoOrderService.OrderReceipt::orderId)
+        assertThat(trustedBuyerOrders.mine(actor(newBuyer))).extracting(AutoOrderService.OrderReceipt::orderId)
             .contains(freshOrder).doesNotContain(oldOrder);
     }
 }
