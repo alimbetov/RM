@@ -17,11 +17,13 @@ import java.util.UUID;
 public class InventoryAuthorizedCommandService {
     private final TenantAuthorization authorization;
     private final InventoryMovementService movements;
+    private final InventoryTransferService transfers;
 
     public InventoryAuthorizedCommandService(TenantAuthorization authorization,
-                                             InventoryMovementService movements) {
+                        InventoryMovementService movements,InventoryTransferService transfers) {
         this.authorization=authorization;
         this.movements=movements;
+        this.transfers=transfers;
     }
 
     @Transactional
@@ -31,6 +33,7 @@ public class InventoryAuthorizedCommandService {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_RECEIVE);
         if(quantity==null || quantity.signum()<=0)
             throw new IllegalArgumentException("Receipt quantity must be positive");
+        validateStaffKey(idempotencyKey);
         // This is quantity-only receiving; accounting valuation awaits INV-VAL-R1.2.
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,quantity,
                 InventoryMovementService.Reason.RECEIPT,actorId,null);
@@ -41,6 +44,7 @@ public class InventoryAuthorizedCommandService {
                                                        UUID itemId,String idempotencyKey,
                                                        BigDecimal delta) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        validateStaffKey(idempotencyKey);
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,delta,
                 InventoryMovementService.Reason.CORRECTION,actorId,null);
     }
@@ -52,8 +56,26 @@ public class InventoryAuthorizedCommandService {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         if(quantity==null || quantity.signum()<=0 || cause==null)
             throw new IllegalArgumentException("Positive quantity and write-off cause required");
+        validateStaffKey(requestKey);
         return movements.adjust(tenantId,locationId,itemId,requestKey,quantity.negate(),
                 InventoryMovementService.Reason.WRITE_OFF,actorId,cause);
+    }
+
+    @Transactional
+    kz.rm.inventory.dto.StockTransferDto transfer(UUID actorId,UUID tenantId,
+                UUID sourceLocationId,UUID targetLocationId,UUID itemId,
+                BigDecimal quantity,String requestKey) {
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        validateStaffKey(requestKey);
+        return transfers.transfer(tenantId,sourceLocationId,targetLocationId,
+                itemId,quantity,requestKey,actorId);
+    }
+
+    private static void validateStaffKey(String key){
+        if(key==null || !key.matches("[A-Za-z0-9_-]{8,100}")
+                || key.startsWith("fulfill-")||key.startsWith("transfer-")
+                || key.startsWith("stocktake-"))
+            throw new IllegalArgumentException("Invalid or reserved inventory request key");
     }
 
     // Order-linked reservation/release/fulfillment are intentionally NOT exposed here.
