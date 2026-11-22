@@ -934,10 +934,10 @@ class QrWarehouseHandoverQualificationTest {
         String suffix=UUID.randomUUID().toString().replace("-","");
         String fn="qr06b_fail_receipt_"+suffix;
         String trigger="qr06b_trg_receipt_"+suffix;
-        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $ "+
+        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $qr06b$ "+
                 "BEGIN IF NEW.tenant_id = '"+c.tenant()+"'::uuid "+
                 "AND NEW.order_id = '"+o.id()+"'::uuid THEN "+
-                "RAISE EXCEPTION 'QR06B_RECEIPT_FAULT'; END IF; RETURN NEW; END; $");
+                "RAISE EXCEPTION 'QR06B_RECEIPT_FAULT'; END IF; RETURN NEW; END; $qr06b$");
         jdbc.execute("CREATE TRIGGER "+trigger+
                 " AFTER INSERT ON crm.sales_pickup_handover "+
                 " FOR EACH ROW EXECUTE FUNCTION crm."+fn+"()");
@@ -974,11 +974,11 @@ class QrWarehouseHandoverQualificationTest {
         String suffix=UUID.randomUUID().toString().replace("-","");
         String fn="qr06b_fail_consume_"+suffix;
         String trigger="qr06b_trg_consume_"+suffix;
-        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $ "+
+        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $qr06b$ "+
                 "BEGIN IF NEW.tenant_id = '"+c.tenant()+"'::uuid "+
                 "AND NEW.order_id = '"+o.id()+"'::uuid "+
                 "AND NEW.state='CONSUMED' THEN "+
-                "RAISE EXCEPTION 'QR06B_CONSUME_FAULT'; END IF; RETURN NEW; END; $");
+                "RAISE EXCEPTION 'QR06B_CONSUME_FAULT'; END IF; RETURN NEW; END; $qr06b$");
         jdbc.execute("CREATE TRIGGER "+trigger+
                 " AFTER UPDATE ON crm.sales_pickup_credential "+
                 " FOR EACH ROW EXECUTE FUNCTION crm."+fn+"()");
