@@ -17,7 +17,8 @@ public enum SalesReturnState {
             case AWAITING_RECEIPT -> next == RECEIVED || next == CANCELLED_BY_BUYER;
             case RECEIVED -> next == INSPECTED;
             case INSPECTED -> next == RESTOCKED || next == DISPOSED || next == QUARANTINED;
-            case REJECTED, RESTOCKED, DISPOSED, QUARANTINED, CANCELLED_BY_BUYER -> false;
+            case QUARANTINED -> next == RESTOCKED || next == DISPOSED;
+            case REJECTED, RESTOCKED, DISPOSED, CANCELLED_BY_BUYER -> false;
         };
     }
 }
