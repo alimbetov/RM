@@ -336,4 +336,48 @@ class InventoryQ123QualificationTest {
         assertThat(stock(t)).isEqualByComparingTo("10");
     }
 
+
+    @Test void postgresSyntheticParallelReceiptLockProbePreservesAllMovements() throws Exception {
+        try(var con=source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        UUID staff=user("inv-load-probe");
+        Tenant t=tenant(staff,DomainPermission.INVENTORY_RECEIVE);
+        var actor=verified(staff);
+        int parallel=8,total=24;
+        var gate=new CountDownLatch(1);
+        var duration=new java.util.ArrayList<Long>(total);
+        try(var pool=Executors.newFixedThreadPool(parallel)) {
+            var futures=new java.util.ArrayList<java.util.concurrent.Future<Long>>(total);
+            for(int i=0;i<total;i++){
+                final int item=i;
+                futures.add(pool.submit(()->{
+                    gate.await(10,TimeUnit.SECONDS);
+                    long start=System.nanoTime();
+                    commands.receive(actor,t.tenant(),t.location(),t.item(),
+                            String.format(java.util.Locale.ROOT,"loadReceipt%04d",item),
+                            BigDecimal.ONE);
+                    return System.nanoTime()-start;
+                }));
+            }
+            gate.countDown();
+            for(var future:futures)duration.add(future.get(60,TimeUnit.SECONDS));
+        }
+        assertThat(stock(t)).isEqualByComparingTo("24");
+        assertThat(balanceCount(t)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,Integer.class,t.tenant(),t.location(),t.item())).isEqualTo(total);
+        duration.sort(Long::compareTo);
+        long p95Ms=TimeUnit.NANOSECONDS.toMillis(duration.get(
+                (int)Math.ceil(total*0.95)-1));
+        long p99Ms=TimeUnit.NANOSECONDS.toMillis(duration.get(
+                (int)Math.ceil(total*0.99)-1));
+        // Diagnostic only: synthetic 24-command probe is NOT a production SLO.
+        System.out.printf("INVENTORY_PG_SYNTHETIC_LOCK_PROBE concurrent=%d operations=%d"
+                +" p95_ms=%d p99_ms=%d%n",parallel,total,p95Ms,p99Ms);
+    }
+
 }
