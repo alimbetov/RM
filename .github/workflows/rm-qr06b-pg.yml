@@ -264,7 +264,9 @@ jobs:
           set -o pipefail
           mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr06b-classpath.txt
           export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr06b-classpath.txt)"
-          mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB34*' test 2>&1 | tee target/qr06b-b34-evidence/console.log
+          mvn -B -ntp -Drm.qr06b.b34.durationSeconds=60 '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB34*' test 2>&1 | tee target/qr06b-b34-evidence/console.log
+          mvn -B -ntp -Drm.qr06b.b34.durationSeconds=60 '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB34*' test 2>&1 | tee -a target/qr06b-b34-evidence/console.log
+          mvn -B -ntp -Drm.qr06b.b34.durationSeconds=300 '-Dtest=QrWarehouseHandoverQualificationTest#qr06bPgB34*' test 2>&1 | tee -a target/qr06b-b34-evidence/console.log
           grep '^QR06B_B34_' target/qr06b-b34-evidence/console.log > target/qr06b-b34-evidence/metrics.txt
           printf '%s\n' "${GITHUB_SHA}" > target/qr06b-b34-evidence/exact-sha.txt
       - name: Preserve B3.4 test and pool evidence
