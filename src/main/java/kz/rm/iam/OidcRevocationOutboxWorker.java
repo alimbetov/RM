@@ -36,8 +36,13 @@ public class OidcRevocationOutboxWorker {
 
     /** Processes at most one due row; a separate secured invoker drives cadence. */
     public Outcome processOne(UUID workerId) {
+        return processOne(workerId,null);
+    }
+
+    /** Optional event scoping for qualified targeted retries and diagnosis. */
+    public Outcome processOne(UUID workerId,UUID deletionEventId) {
         if(workerId==null)throw new IllegalArgumentException("Worker identity required");
-        Attempt attempt=tx.execute(status->claim(workerId));
+        Attempt attempt=tx.execute(status->claim(workerId,deletionEventId));
         if(attempt==null)return Outcome.NO_WORK;
         try {
             // Never expose or log the plaintext subject.
@@ -50,16 +55,18 @@ public class OidcRevocationOutboxWorker {
         }
     }
 
-    private Attempt claim(UUID workerId) {
+    private Attempt claim(UUID workerId,UUID specificEventId) {
         Timestamp now=Timestamp.from(Instant.now());
         UUID selected=jdbc.query("""
                 SELECT deletion_event_id
                 FROM public.iam_deletion_oidc_revocation_outbox
                 WHERE state='PENDING' AND next_attempt_at<=?
                   AND (lease_owner IS NULL OR leased_until<=?)
+                  AND (? IS NULL OR deletion_event_id=?)
                 ORDER BY next_attempt_at,deletion_event_id
-                FOR UPDATE SKIP LOCKED LIMIT 1
-                """,rs->rs.next()?rs.getObject(1,UUID.class):null,now,now);
+                LIMIT 1 FOR UPDATE SKIP LOCKED
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,
+                now,now,specificEventId,specificEventId);
         if(selected==null)return null;
         int rows=jdbc.update("""
                 UPDATE public.iam_deletion_oidc_revocation_outbox
