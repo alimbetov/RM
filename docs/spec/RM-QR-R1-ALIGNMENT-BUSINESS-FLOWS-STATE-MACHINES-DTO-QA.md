@@ -1,11 +1,13 @@
 # RM-QR-R1 — согласование QR-бизнес-процессов, state machines, DTO и тестов
 
-**Статус:** DRAFT R1.3 / нормативное ТЗ с отдельным implementation blueprint, не реализация. **Дата:** 2026-11-22. **Ветка:** base_dev. **Source-review SHA:** 98b2607e231e6c84a04eea0a104f49ab60f36320 (source audit for R1.1). **Production:** HOLD.
+**Статус:** DRAFT R1.4 / см. новый канонический контракт R1.4, не реализация. **Дата:** 2026-11-22. **Ветка:** base_dev. **Source-review SHA:** 98b2607e231e6c84a04eea0a104f49ab60f36320 (source audit for R1.1). **Production:** HOLD.
 **Неподвижные рамки:** Java 21 / Spring Boot modular monolith / PostgreSQL; только service-first, никаких новых REST-контроллеров, публичных API, отдельных QR-микросервисов, новых веток и merge в main на этом этапе. Реализация в последующих этапах должна пройти собственный exact-SHA PostgreSQL gate.
 
 **Нормативные источники:** docs/architecture/RM-PLATFORM-STANDARD-R2.md, docs/spec/RM-STOREFRONT-AUTOORDER-R1.md, docs/spec/RM-COMMERCE-INVENTORY-COMPLETION-R1.md, docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md, docs/spec/RM-FILES-R1.md, docs/spec/RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md, docs/spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md, docs/strategy/RM-STRATEGY-R4-FUNCTIONAL-GAP-PRIORITIZATION.md. При конфликте действующий стандарт R2 и исходный код имеют приоритет над описанием предполагаемого поведения.
 
 **Нормативное приложение с пооперационными контрактами R1.3:** [RM-QR-R1.3 Implementation Blueprint & Evidence Contract](RM-QR-R1.3-IMPLEMENTATION-BLUEPRINT-AND-QUALIFICATION.md). Оно содержит source-to-target GAP, владельцев бизнес-операций, детальные DTO/SQL ограничения, транзакционные сценарии и stage-based qualification. **Все описанные новые функции остаются SPEC ONLY**, пока нет реализации и exact-SHA PostgreSQL evidence.
+
+**Канонический implementation contract:** [RM-QR-R1.4 — Canonical Functional & Technical Contract](RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md). Для новых реализационных QR feature slices R1.4 — сводный нормативный source-to-target contract; исторические разделы R1/R1.3 сохраняются для трассировки, а противоречия закрываются в QR-00 до кода. **Ни один из предложенных новых QR-процессов ещё не квалифицирован.**
 
 ## 1. Цель и границы
 
