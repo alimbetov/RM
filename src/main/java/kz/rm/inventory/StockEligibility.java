@@ -18,6 +18,15 @@ class StockEligibility {
         requireWarehouse(tenant,location);
         requireProduct(tenant,item,true);
     }
+    /** Acquire both location locks before the item lock. Opposite transfers and
+     * a receipt/stocktake at the second location must obey the same order. */
+    void requireTransferWarehouses(UUID tenant,UUID first,UUID second,UUID item) {
+        if(first==null||second==null||first.compareTo(second)>=0)
+            throw new IllegalArgumentException("Ascending transfer location locks required");
+        requireWarehouse(tenant,first);
+        requireWarehouse(tenant,second);
+        requireProduct(tenant,item,false);
+    }
     private void requireWarehouse(UUID tenant,UUID location) {
         if(tenant==null||location==null)throw new IllegalArgumentException("Warehouse required");
         String[] status=jdbc.query("""
