@@ -92,7 +92,7 @@ public class EmailIdentityCrypto {
             byte[] body=new byte[b.remaining()];b.get(body);
             Cipher c=Cipher.getInstance("AES/GCM/NoPadding");
             c.init(Cipher.DECRYPT_MODE,new SecretKeySpec(secret(encryptionB64),"AES"),new GCMParameterSpec(128,nonce));
-            c.updateAAD("rm:iam:email:v1".getBytes(StandardCharsets.UTF_8));
+            c.updateAAD(context.getBytes(StandardCharsets.UTF_8));
             return new String(c.doFinal(body),StandardCharsets.UTF_8);
         } catch(Exception e){throw new IllegalStateException("Identity decrypt unavailable",e);}
     }
