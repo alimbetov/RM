@@ -3,6 +3,7 @@ package kz.rm.sales;
 import kz.rm.autoorder.AutoOrderService;
 import kz.rm.iam.*;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
+import kz.rm.inventory.AuthenticatedInventorySettings;
 import kz.rm.inventory.OrderInventoryPort;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -42,6 +43,7 @@ class SalesInventoryRbacQualificationTest {
     @Autowired SalesInventoryCommandService commands;
     @Autowired AuthenticatedSalesCommands authenticatedCommands;
     @Autowired AuthenticatedInventoryCommands warehouse;
+    @Autowired AuthenticatedInventorySettings inventorySettings;
     @Autowired AutoOrderService checkout;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
@@ -165,6 +167,29 @@ class SalesInventoryRbacQualificationTest {
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=?
             """,Integer.class,c.tenant(),id)).isEqualTo(3);
+    }
+
+    @Test void q123LegacyAutoReserveFalseCannotDisableRequiredSalesConfirmationReserve() {
+        Context c=context(10);
+        allow(c,DomainPermission.INVENTORY_SETTINGS_MANAGE,
+                DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        var actor=verified(c.staff());
+        var operational=inventorySettings.initialize(actor,c.tenant());
+        assertThat(operational.reservationMode())
+                .isEqualTo(AuthenticatedInventorySettings.ReservationMode.MANDATORY_ON_CONFIRM);
+        assertThat(jdbc.queryForObject("""
+                SELECT auto_reserve_on_confirm FROM crm.inv_tenant_setting WHERE tenant_id=?
+                """,Boolean.class,c.tenant())).isFalse();
+        UUID id=order(c,3);
+        var confirmed=authenticatedCommands.confirm(actor,c.tenant(),id,c.location());
+        assertThat(confirmed.status()).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,c.tenant(),id)).isEqualTo(1);
+        assertThat(inventorySettings.get(actor,c.tenant()).pickingReadiness())
+                .isEqualTo(AuthenticatedInventorySettings.PickingReadiness.NOT_IMPLEMENTED);
     }
 
     @Test void insufficientStockRollsBackStatusAndEveryReservation() {
