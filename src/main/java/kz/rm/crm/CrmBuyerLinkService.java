@@ -53,7 +53,7 @@ public class CrmBuyerLinkService {
         if(!"ACTIVE".equals(customerStatus))
             throw new IllegalArgumentException("Active CRM customer required");
         String buyerStatus=jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=?
+                SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE
                 """,rs->rs.next()?rs.getString(1):null,buyer);
         if(!"ACTIVE".equals(buyerStatus)) throw new SecurityException("Buyer account inactive");
         List<Link> byKey=jdbc.query("""
@@ -93,15 +93,15 @@ public class CrmBuyerLinkService {
         if(buyer==null || tenant==null || linkId==null) throw new SecurityException("Buyer link required");
         if(expectedVersion<0) throw new IllegalArgumentException("Invalid version");
         UUID buyerId=buyer.userId();
+        // Lock the account before the mapping: IAM suspension/deletion uses the
+        // same account row and cannot commit across an admitted confirmation.
+        String accountStatus=lockActiveBuyer(buyerId);
         Link current=jdbc.query("""
                 SELECT id,customer_id,buyer_user_id,status,row_version
                 FROM crm.customer_buyer_link WHERE tenant_id=? AND id=? FOR UPDATE
                 """,rs->rs.next()?link(tenant,rs):null,tenant,linkId);
         if(current==null || !buyerId.equals(current.buyerUserId()))
             throw new SecurityException("Only linked buyer can confirm");
-        String accountStatus=jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE
-                """,rs->rs.next()?rs.getString(1):null,buyerId);
         if(!"ACTIVE".equals(accountStatus)) throw new SecurityException("Inactive buyer");
         String customerStatus=jdbc.query("""
                 SELECT status FROM crm.customer WHERE tenant_id=? AND id=?
@@ -138,6 +138,18 @@ public class CrmBuyerLinkService {
         authorization.requireForCommand(user,tenant,DomainPermission.SALES_ORDER_READ);
         if(customer==null || limit<1 || limit>100)
             throw new IllegalArgumentException("Customer and limit 1..100 required");
+        // Buyer account lock is held until transaction commit, fencing real
+        // IAM SUSPENDED/DELETED transitions. Never expose even historical orders
+        // while the buyer account is inactive or the mapping is disputed.
+        UUID buyerId=jdbc.query("""
+                SELECT l.buyer_user_id FROM crm.customer_buyer_link l
+                JOIN crm.customer c ON c.tenant_id=l.tenant_id AND c.id=l.customer_id
+                WHERE l.tenant_id=? AND l.customer_id=? AND l.status='CONFIRMED'
+                  AND c.status='ACTIVE'
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant,customer);
+        if(buyerId==null) return List.of();
+        String accountStatus=lockActiveBuyer(buyerId);
+        if(!"ACTIVE".equals(accountStatus)) return List.of();
         return jdbc.query("""
                 SELECT o.id,o.status,o.created_at FROM crm.sales_order o
                 JOIN crm.customer_buyer_link l
@@ -145,10 +157,11 @@ public class CrmBuyerLinkService {
                 JOIN crm.customer c
                   ON c.tenant_id=l.tenant_id AND c.id=l.customer_id
                 WHERE l.tenant_id=? AND l.customer_id=? AND l.status='CONFIRMED'
+                  AND l.buyer_user_id=?
                   AND c.status='ACTIVE'
                 ORDER BY o.created_at DESC,o.id DESC LIMIT ?
                 """,(rs,i)->new BuyerOrder(rs.getObject(1,UUID.class),
-                rs.getString(2),rs.getTimestamp(3).toInstant()),tenant,customer,limit);
+                rs.getString(2),rs.getTimestamp(3).toInstant()),tenant,customer,buyerId,limit);
     }
 
     @Transactional
@@ -173,6 +186,8 @@ public class CrmBuyerLinkService {
     public Link revokeByBuyer(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion) {
         if(buyer==null || tenant==null || linkId==null) throw new SecurityException("Buyer required");
         UUID buyerId=buyer.userId();
+        String buyerStatus=lockActiveBuyer(buyerId);
+        if(!"ACTIVE".equals(buyerStatus)) throw new SecurityException("Inactive buyer");
         Link current=lockLink(tenant,linkId);
         if(current==null || !buyerId.equals(current.buyerUserId()))
             throw new SecurityException("Only the linked buyer can revoke");
@@ -239,6 +254,12 @@ public class CrmBuyerLinkService {
         UUID id=actor.userId();
         authorization.requireForCommand(id,tenant,permission);
         return id;
+    }
+
+    private String lockActiveBuyer(UUID buyerId) {
+        return jdbc.query("""
+                SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE
+                """,rs->rs.next()?rs.getString(1):null,buyerId);
     }
 
     private Link lockLink(UUID tenant,UUID linkId) {
