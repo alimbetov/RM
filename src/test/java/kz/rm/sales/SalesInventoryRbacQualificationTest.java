@@ -680,4 +680,34 @@ class SalesInventoryRbacQualificationTest {
                 Integer.class,first.tenant(),other.tenant())).isZero();
     }
 
+
+    @Test void q4SalesReserveAndFulfillKeepStaffAttributionAndSourceOrder() {
+        Context c=context(10);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        var actor=verified(c.staff());
+        authenticatedCommands.confirm(actor,c.tenant(),id,c.location());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_reservation_event e
+                JOIN crm.inv_stock_reservation r
+                  ON r.tenant_id=e.tenant_id AND r.id=e.reservation_id
+                WHERE e.tenant_id=? AND r.order_id=? AND e.actor_user_id=?
+                """,Integer.class,c.tenant(),id,c.staff())).isEqualTo(1);
+        authenticatedCommands.fulfill(actor,c.tenant(),id);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_reservation_event e
+                JOIN crm.inv_stock_reservation r
+                  ON r.tenant_id=e.tenant_id AND r.id=e.reservation_id
+                WHERE e.tenant_id=? AND r.order_id=? AND e.actor_user_id=?
+                """,Integer.class,c.tenant(),id,c.staff())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND source_type='SALES_ORDER'
+                  AND source_id=? AND actor_user_id=? AND movement_kind='FULFILLMENT'
+                """,Integer.class,c.tenant(),id,c.staff())).isEqualTo(1);
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("7");
+    }
+
 }
