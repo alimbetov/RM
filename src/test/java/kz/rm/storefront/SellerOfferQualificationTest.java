@@ -14,6 +14,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.Assumptions;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -26,6 +32,7 @@ class SellerOfferQualificationTest {
     @Autowired SellerOfferService offers;
     @Autowired AutoOrderService checkout;
     @Autowired JdbcTemplate jdbc;
+    @Autowired DataSource dataSource;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -96,6 +103,82 @@ class SellerOfferQualificationTest {
             .hasMessageContaining("OFFER_VERSION_CONFLICT");
         assertThat(offers.changeStorefrontState(actor,c.tenant(),1,"PUBLISHED").state())
             .isEqualTo("PUBLISHED");
+    }
+
+    private void requirePostgres() throws Exception {
+        try (var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+    }
+
+    @Test void postgresConcurrentPriceCasExactlyOneWriterWins() throws Exception {
+        requirePostgres();
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"Race",BigDecimal.TEN,"KZT");
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                try {offers.changePrice(actor,c.tenant(),draft.id(),0,
+                    new BigDecimal("20"),"KZT");return true;}
+                catch(IllegalStateException e) {
+                    if(!e.getMessage().contains("OFFER_VERSION_CONFLICT"))throw e;
+                    return false;
+                }
+            });
+            var second=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                try {offers.changePrice(actor,c.tenant(),draft.id(),0,
+                    new BigDecimal("30"),"KZT");return true;}
+                catch(IllegalStateException e) {
+                    if(!e.getMessage().contains("OFFER_VERSION_CONFLICT"))throw e;
+                    return false;
+                }
+            });
+            start.countDown();
+            assertThat((first.get(30,TimeUnit.SECONDS)?1:0)
+                +(second.get(30,TimeUnit.SECONDS)?1:0)).isEqualTo(1);
+        }
+        assertThat(jdbc.queryForObject(
+            "SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?",
+            Long.class,c.tenant(),draft.id())).isEqualTo(1L);
+    }
+
+    @Test void postgresCheckoutPauseSerializesWithoutPartialOrders() throws Exception {
+        requirePostgres();
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"Race checkout",BigDecimal.TEN,"KZT");
+        offers.publish(actor,c.tenant(),draft.id(),0);
+        String email="buyer-"+UUID.randomUUID()+"@example.kz";
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var buyer=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                try {return checkout.checkout(c.slug(),email,"checkout-"+UUID.randomUUID(),
+                    List.of(new AutoOrderService.Line(draft.id(),1))).order().orderId();}
+                catch(IllegalArgumentException e) {return null;}
+            });
+            var pause=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return offers.pause(actor,c.tenant(),draft.id(),1);
+            });
+            start.countDown();
+            UUID accepted=buyer.get(30,TimeUnit.SECONDS);
+            assertThat(pause.get(30,TimeUnit.SECONDS).state()).isEqualTo("PAUSED");
+            Integer orders=jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,c.tenant());
+            assertThat(orders).isEqualTo(accepted==null?0:1);
+            Integer events=jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=?",
+                Integer.class,c.tenant());
+            assertThat(events).isEqualTo(orders);
+        }
     }
 
     @Test void draftPublicationPauseResumeAndCas() {
