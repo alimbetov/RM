@@ -165,6 +165,28 @@ class UserRoleMatrixR31QualificationTest {
     }
 
     @Test
+    void urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal() {
+        Tenant a=tenant(),b=tenant();
+        UUID shared=a.actor(OrganizationMembershipEntity.Role.MEMBER);
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),b.organization(),shared,OrganizationMembershipEntity.Role.VIEWER));
+        UUID aRole=grant(a,OrganizationMembershipEntity.Role.MEMBER,
+                DomainPermission.STOREFRONT_OFFER_MANAGE);
+        grant(b,OrganizationMembershipEntity.Role.MANAGER,
+                DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.enable(principal(a.owner()),a.tenant());
+        roles.enable(principal(b.owner()),b.tenant());
+        storefront.createDraft(principal(shared),a.tenant(),"shared-a");
+        assertDeniedWithoutBusinessWrite(b,shared,"shared-b-denied");
+        roles.revoke(principal(a.owner()),a.tenant(),aRole,
+                DomainPermission.STOREFRONT_OFFER_MANAGE);
+        assertDeniedWithoutBusinessWrite(a,shared,"shared-a-revoked");
+        assertDeniedWithoutBusinessWrite(b,shared,"shared-b-still-denied");
+        assertThat(countStorefronts(a)).isEqualTo(1);
+        assertThat(countStorefronts(b)).isZero();
+    }
+
+    @Test
     void urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant() {
         Tenant suspendedAccount=tenant();
         UUID account=suspendedAccount.actor(OrganizationMembershipEntity.Role.MEMBER);
