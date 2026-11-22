@@ -8,6 +8,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import java.time.Instant;
+import java.time.LocalDate;
+import kz.rm.crm.dto.CustomerSearch;
+import kz.rm.crm.dto.ContactSearch;
+import kz.rm.crm.dto.CustomerSummary;
+import kz.rm.crm.dto.ContactSummary;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 
@@ -17,6 +22,9 @@ import static org.assertj.core.api.Assertions.*;
 class CrmInteractionQualificationTest {
     @Autowired CrmInteractionService interactions;
     @Autowired AuthenticatedCrmCommands customers;
+    @Autowired AuthenticatedCrmQueries queries;
+    @Autowired CrmContractService contracts;
+    @Autowired CrmHistoryService history;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
     @Autowired UserAccountRepository users;
@@ -149,6 +157,116 @@ class CrmInteractionQualificationTest {
                 null,CrmInteractionService.Kind.CALL,null,
                 Instant.parse("2026-11-20T00:00:00Z"),null,"ownerDenied001"))
                 .isInstanceOf(SecurityException.class);
+    }
+
+    /**
+     * CRM-U02/U04/U07: a single CRM employee journey through persisted
+     * customer, contact, interaction, follow-up, contract and history.
+     * No simulated HTTP, and no unowned order/payment projection.
+     */
+    @Test void crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads() {
+        var a=tenant();
+        var b=tenant();
+        var owner=verified(a.actorId());
+        var outsider=verified(b.actorId());
+        var company=customers.createCompany(owner,a.tenantId(),"Journey Logistics",null);
+        var person=customers.addContact(owner,a.tenantId(),company.id(),
+                "Journey Contact","journey-"+UUID.randomUUID()+"@example.kz",null);
+        // Mutation response intentionally does not expose contact PII.
+        assertThat(person.name()).isNull();
+        assertThat(person.email()).isNull();
+        assertThat(queries.getContact(owner,a.tenantId(),person.id()).name())
+                .isEqualTo("Journey Contact");
+        assertThat(queries.customers(owner,a.tenantId(),
+                new CustomerSearch("COMPANY","ACTIVE",null,"Journey Logistics"),0,10)
+                .getContent()).extracting(CustomerSummary::id).contains(company.id());
+        assertThat(queries.contacts(owner,a.tenantId(),
+                new ContactSearch(company.id(),"ACTIVE",null),0,10)
+                .getContent()).extracting(ContactSummary::id).contains(person.id());
+
+        Instant when=Instant.parse("2026-11-21T10:00:00Z");
+        var entry=interactions.record(owner,a.tenantId(),company.id(),person.id(),
+                CrmInteractionService.Kind.CALL,a.actorId(),when,when.plusSeconds(86400),
+                "journey-"+UUID.randomUUID());
+        assertThat(interactions.record(owner,a.tenantId(),company.id(),person.id(),
+                CrmInteractionService.Kind.CALL,a.actorId(),when,when.plusSeconds(86400),
+                jdbc.queryForObject("""
+                    SELECT request_key FROM crm.customer_interaction
+                    WHERE tenant_id=? AND id=?
+                    """,String.class,a.tenantId(),entry.id())).id()).isEqualTo(entry.id());
+        assertThat(interactions.get(owner,a.tenantId(),entry.id()).status())
+                .isEqualTo(CrmInteractionService.Status.OPEN);
+        var followup=interactions.setNextAction(owner,a.tenantId(),entry.id(),
+                when.plusSeconds(172800),0);
+        var finished=interactions.complete(owner,a.tenantId(),entry.id(),followup.rowVersion());
+        assertThat(finished.status()).isEqualTo(CrmInteractionService.Status.COMPLETED);
+        assertThat(interactions.search(owner,a.tenantId(),company.id(),null,
+                CrmInteractionService.Status.COMPLETED,0,10).getContent())
+                .extracting(CrmInteractionService.Interaction::id).containsExactly(entry.id());
+        assertThat(interactions.history(owner,a.tenantId(),entry.id(),10))
+                .extracting(CrmInteractionService.Event::action)
+                .containsExactlyInAnyOrder("CREATED","NEXT_ACTION_SET","COMPLETED");
+
+        LocalDate today=LocalDate.of(2026,11,22);
+        var contract=contracts.create(owner,a.tenantId(),company.id(),"JOURNEY-"+UUID.randomUUID(),
+                today,today.plusDays(45),today);
+        var activated=contracts.changeStatus(owner,a.tenantId(),contract.id(),
+                CustomerContractEntity.Status.ACTIVE,contract.rowVersion(),today);
+        assertThat(contracts.get(owner,a.tenantId(),contract.id(),today,30).status())
+                .isEqualTo(CustomerContractEntity.Status.ACTIVE);
+        assertThat(activated.rowVersion()).isGreaterThan(contract.rowVersion());
+        assertThat(history.contractHistory(owner,a.tenantId(),contract.id(),10))
+                .isNotEmpty();
+        assertThatThrownBy(()->queries.getContact(outsider,a.tenantId(),person.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->interactions.get(owner,b.tenantId(),entry.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction WHERE tenant_id=? AND id=?
+                """,Integer.class,b.tenantId(),entry.id())).isZero();
+    }
+
+    /**
+     * CRM-U04 negative journey: a read-only employee can review an activity
+     * but cannot mutate it, and role revocation removes further read access.
+     */
+    @Test void crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke() {
+        var t=tenant();
+        var owner=verified(t.actorId());
+        var company=customers.createCompany(owner,t.tenantId(),"Read-only Journey",null);
+        var entry=interactions.record(owner,t.tenantId(),company.id(),null,
+                CrmInteractionService.Kind.MEETING,t.actorId(),
+                Instant.parse("2026-11-21T11:00:00Z"),null,"reader-"+UUID.randomUUID());
+        UUID viewer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "crm-journey-viewer-"+UUID.randomUUID(),"CRM reader")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),t.orgId(),viewer,OrganizationMembershipEntity.Role.MEMBER));
+        var r=roles.createRole(owner,t.tenantId(),
+                "CRM_JOURNEY_READER","Read only journey");
+        roles.grant(owner,t.tenantId(),r.id(),DomainPermission.CRM_READ);
+        roles.assign(owner,t.tenantId(),viewer,r.id());
+        roles.enable(owner,t.tenantId());
+        var reader=verified(viewer);
+        assertThat(interactions.get(reader,t.tenantId(),entry.id()).id()).isEqualTo(entry.id());
+        int events=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),entry.id());
+        assertThatThrownBy(()->interactions.complete(reader,t.tenantId(),entry.id(),0))
+                .isInstanceOf(SecurityException.class);
+        assertThat(interactions.get(reader,t.tenantId(),entry.id()).status())
+                .isEqualTo(CrmInteractionService.Status.OPEN);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),entry.id())).isEqualTo(events);
+        roles.revoke(owner,t.tenantId(),r.id(),DomainPermission.CRM_READ);
+        assertThatThrownBy(()->interactions.get(reader,t.tenantId(),entry.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),entry.id())).isEqualTo(events);
     }
 
     @Test void postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified()
