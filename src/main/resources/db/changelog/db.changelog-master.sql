@@ -3555,3 +3555,32 @@ CREATE TRIGGER trg_qr08_order_service_snapshot_fence
  FOR EACH ROW EXECUTE FUNCTION crm.reject_packaging_snapshot_mutation();
 --rollback DROP TRIGGER trg_qr08_order_service_snapshot_fence ON crm.sales_order_service_line;
 --rollback DROP FUNCTION crm.reject_packaging_snapshot_mutation();
+
+
+--changeset rm:0120-iam-oidc-revocation-lease-fencing
+-- At-least-once delivery: attempt sequence is a fencing token for crash recovery.
+ALTER TABLE public.iam_deletion_oidc_revocation_outbox
+ ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0,
+ ADD COLUMN next_attempt_at TIMESTAMP WITH TIME ZONE,
+ ADD COLUMN lease_owner UUID,
+ ADD COLUMN leased_until TIMESTAMP WITH TIME ZONE,
+ ADD COLUMN last_failure_code VARCHAR(32);
+UPDATE public.iam_deletion_oidc_revocation_outbox
+ SET next_attempt_at=created_at WHERE next_attempt_at IS NULL;
+ALTER TABLE public.iam_deletion_oidc_revocation_outbox
+ ALTER COLUMN next_attempt_at SET NOT NULL;
+ALTER TABLE public.iam_deletion_oidc_revocation_outbox
+ ADD CONSTRAINT ck_iam_oidc_attempt CHECK(attempt_count>=0),
+ ADD CONSTRAINT ck_iam_oidc_lease CHECK (
+   (lease_owner IS NULL AND leased_until IS NULL)
+    OR (lease_owner IS NOT NULL AND leased_until IS NOT NULL));
+CREATE INDEX idx_iam_oidc_revocation_due
+ ON public.iam_deletion_oidc_revocation_outbox(state,next_attempt_at,leased_until);
+--rollback DROP INDEX public.idx_iam_oidc_revocation_due;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP CONSTRAINT ck_iam_oidc_lease;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP CONSTRAINT ck_iam_oidc_attempt;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN last_failure_code;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN leased_until;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN lease_owner;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN next_attempt_at;
+--rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN attempt_count;
