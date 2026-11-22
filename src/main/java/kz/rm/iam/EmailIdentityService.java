@@ -417,6 +417,21 @@ public class EmailIdentityService {
         if(challengeId==null || presentedToken==null || presentedToken.length()<32 ||
                 presentedToken.length()>256)throw new SecurityException("Invalid challenge");
         byte[] hash=crypto.tokenHash(presentedToken);
+        // IAM deletion holds the user row before invalidating challenges.
+        // Resolve a non-locking identity hint, then acquire locks in identical
+        // order: account -> challenge -> identity; validate the challenge again
+        // after waiting so a deletion can never be bypassed by a stale hint.
+        UUID hintedUserId=jdbc.query("""
+            SELECT i.user_id
+            FROM public.iam_email_verification_challenge c
+            JOIN public.iam_email_identity i ON i.id=c.email_identity_id
+            WHERE c.id=?
+            """,rs->rs.next()?rs.getObject(1,UUID.class):null,challengeId);
+        if(hintedUserId==null)throw new SecurityException("Invalid challenge");
+        String status=jdbc.query("""
+            SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null,hintedUserId);
+        if(status==null)throw new SecurityException("Account unavailable");
         UUID identityId=jdbc.query("""
             SELECT email_identity_id,token_sha256,expires_at,consumed_at,purpose
             FROM public.iam_email_verification_challenge WHERE id=? FOR UPDATE
@@ -431,12 +446,7 @@ public class EmailIdentityService {
         UUID userId=jdbc.queryForObject("""
             SELECT user_id FROM public.iam_email_identity WHERE id=?
             """,UUID.class,identityId);
-        String status=jdbc.query("""
-            SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
-            """,rs->{
-                if(!rs.next())throw new SecurityException("Account unavailable");
-                return rs.getString(1);
-            },userId);
+        if(!hintedUserId.equals(userId))throw new SecurityException("Challenge ownership changed");
         if(!"ACTIVE".equals(status) && !"PENDING".equals(status))
             throw new SecurityException("Account not eligible for verification");
         String stateAndPurpose=jdbc.query("""
