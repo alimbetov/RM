@@ -211,8 +211,9 @@ public class CrmCustomerService {
             return previous.id();
         }
         Integer count=jdbc.queryForObject("""
-            SELECT count(*) FROM crm.contact
-            WHERE tenant_id=? AND id=? AND status='ACTIVE'
+            SELECT count(*) FROM crm.contact c
+            JOIN crm.customer u ON u.tenant_id=c.tenant_id AND u.id=c.customer_id
+            WHERE c.tenant_id=? AND c.id=? AND c.status='ACTIVE' AND u.status='ACTIVE'
             """,Integer.class,tenantId,contactId);
         if(count==null || count!=1) throw new IllegalArgumentException("Contact not found in tenant");
         UUID id=UUID.randomUUID();
