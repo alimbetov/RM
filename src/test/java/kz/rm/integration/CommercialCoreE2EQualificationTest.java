@@ -180,6 +180,126 @@ class CommercialCoreE2EQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test void postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects()
+            throws Exception {
+        postgresOnly();
+        var c = setup();
+        var item = product(c);
+        var store = publishedStorefront(c);
+        var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
+                "suspension barrier", BigDecimal.ONE, "KZT");
+        var offer = offers.publish(c.staff(), c.tenant(), draft.id(),
+                draft.rowVersion());
+        var sellerSuspended = new java.util.concurrent.CountDownLatch(1);
+        var checkoutAttempt = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        String key = "suspend-before-" + UUID.randomUUID();
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var suspension = pool.submit(() -> tx.execute(status -> {
+                jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",
+                        c.tenant());
+                sellerSuspended.countDown();
+                try {
+                    if (!release.await(15, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Suspension release barrier timed out");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            var buyer = pool.submit(() -> {
+                if (!sellerSuspended.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Suspension did not lock workspace");
+                checkoutAttempt.countDown();
+                return checkout.checkout(store.slug(),
+                        "suspend-barrier-" + UUID.randomUUID() + "@example.kz",
+                        key, List.of(new AutoOrderService.Line(offer.id(), 1)));
+            });
+            try {
+                assertThat(checkoutAttempt.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        .isTrue();
+            } finally {
+                release.countDown();
+            }
+            assertThat(suspension.get(20, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> buyer.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class, c.tenant())).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND idempotency_key=?",
+                Integer.class, c.tenant(), key)).isZero();
+    }
+
+    @Test void postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot()
+            throws Exception {
+        postgresOnly();
+        var c = setup();
+        var item = product(c);
+        var store = publishedStorefront(c);
+        var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
+                "accepted before suspension", new BigDecimal("19.0000"), "KZT");
+        var offer = offers.publish(c.staff(), c.tenant(), draft.id(),
+                draft.rowVersion());
+        var checkoutAccepted = new java.util.concurrent.CountDownLatch(1);
+        var suspendAttempt = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        String key = "checkout-before-" + UUID.randomUUID();
+        String buyerEmail = "buyer-first-" + UUID.randomUUID() + "@example.kz";
+        var basket = List.of(new AutoOrderService.Line(offer.id(), 2));
+        UUID acceptedId;
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var buyer = pool.submit(() -> tx.execute(status -> {
+                UUID id = checkout.checkout(store.slug(), buyerEmail, key, basket)
+                        .order().orderId();
+                checkoutAccepted.countDown();
+                try {
+                    if (!release.await(15, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Checkout release barrier timed out");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return id;
+            }));
+            var suspension = pool.submit(() -> {
+                if (!checkoutAccepted.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Checkout did not reach commit barrier");
+                suspendAttempt.countDown();
+                return tx.execute(status -> jdbc.update(
+                        "UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",
+                        c.tenant()));
+            });
+            try {
+                assertThat(suspendAttempt.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        .isTrue();
+            } finally {
+                release.countDown();
+            }
+            acceptedId = buyer.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(suspension.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(1);
+        }
+        assertThat(jdbc.queryForObject(
+                "SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?",
+                BigDecimal.class, c.tenant(), acceptedId))
+                .isEqualByComparingTo("38.0000");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class, c.tenant())).isEqualTo(1);
+        assertThat(checkout.checkout(store.slug(), buyerEmail, key, basket).order().orderId())
+                .isEqualTo(acceptedId);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class, c.tenant())).isEqualTo(1);
+    }
+
     @Test void skuToSellerOfferToCheckoutToFulfillmentToReconciliation() {
         var c = setup();
         var item = product(c);
