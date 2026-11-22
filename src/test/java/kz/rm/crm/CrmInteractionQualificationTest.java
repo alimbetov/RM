@@ -150,4 +150,36 @@ class CrmInteractionQualificationTest {
                 Instant.parse("2026-11-20T00:00:00Z"),null,"ownerDenied001"))
                 .isInstanceOf(SecurityException.class);
     }
+
+    @Test void postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified()
+            throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+        var t=tenant();var actor=verified(t.actorId());
+        var a=customers.createCompany(actor,t.tenantId(),"Client A",null);
+        var b=customers.createCompany(actor,t.tenantId(),"Client B",null);
+        var contactB=customers.addContact(actor,t.tenantId(),b.id(),
+                "Private contact","private@example.kz",null);
+        Instant at=Instant.parse("2026-11-22T12:00:00Z");
+        assertThatThrownBy(()->interactions.record(actor,t.tenantId(),a.id(),contactB.id(),
+                CrmInteractionService.Kind.CALL,null,at,null,"wrongOwner001"))
+                .isInstanceOf(IllegalArgumentException.class);
+        var interaction=interactions.record(actor,t.tenantId(),a.id(),null,
+                CrmInteractionService.Kind.CALL,null,at,null,"goodOwner001");
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.customer_interaction_event SET action_code='CANCELLED'
+                WHERE tenant_id=? AND interaction_id=?
+                """,t.tenantId(),interaction.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,t.tenantId(),interaction.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(interactions.history(actor,t.tenantId(),interaction.id(),10))
+                .extracting(CrmInteractionService.Event::action).containsExactly("CREATED");
+    }
+
 }

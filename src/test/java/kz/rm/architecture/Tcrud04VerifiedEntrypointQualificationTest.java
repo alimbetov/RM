@@ -1,6 +1,8 @@
 package kz.rm.architecture;
 
 import kz.rm.autoorder.AuthenticatedBuyerOrders;
+import kz.rm.catalog.CatalogItemService;
+import kz.rm.catalog.CatalogQueryService;
 import kz.rm.autoorder.AutoOrderService;
 import kz.rm.crm.*;
 import kz.rm.files.*;
@@ -28,6 +30,7 @@ class Tcrud04VerifiedEntrypointQualificationTest {
         var exposed=List.of(
                 AuthenticatedCrmCommands.class, AuthenticatedCrmQueries.class,
                 CrmCategoryService.class, CrmContractService.class, CrmHistoryService.class,
+                CrmInteractionService.class, CatalogItemService.class, CatalogQueryService.class,
                 AuthenticatedOrganizationLocations.class,
                 AuthenticatedSalesCommands.class, AuthenticatedSalesQueries.class,
                 AuthenticatedInventoryCommands.class, AuthenticatedInventoryQueries.class,

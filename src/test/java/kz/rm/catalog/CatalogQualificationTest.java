@@ -138,4 +138,31 @@ class CatalogQualificationTest {
         assertThatThrownBy(()->queries.search(actor,a.tenant(),null,null,null,null,0,101))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void postgresCatalogPriceAndAuditAreAppendOnly() throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+        var t=tenant();var staff=user();member(t,staff);
+        grant(t,staff,DomainPermission.CATALOG_WRITE,DomainPermission.CATALOG_PRICE_MANAGE,
+                DomainPermission.CATALOG_READ);
+        var actor=verified(staff);
+        var item=commands.createDraft(actor,t.tenant(),"EVENT-SKU",CatalogItem.Kind.PRODUCT,
+                "ru","Catalog evidence",null);
+        commands.addPriceRevision(actor,t.tenant(),item.id(),BigDecimal.ONE,"KZT",
+                Instant.parse("2026-11-01T00:00:00Z"),0);
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.cat_price SET unit_price=999
+                WHERE tenant_id=? AND item_id=?
+                """,t.tenant(),item.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.cat_item_event WHERE tenant_id=? AND item_id=?
+                """,t.tenant(),item.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(queries.priceHistory(actor,t.tenant(),item.id(),0,10)
+                .getContent().getFirst().amount()).isEqualByComparingTo("1");
+    }
+
 }
