@@ -164,3 +164,12 @@
 **Статус прохода 02/12: ANALYZED / SPECIFIED.** Закрыта предметная карта сценариев на уровне исходников; runtime реализация и новая qualification не выполнялись. Общая зрелость остаётся **ORGANIZATION 1/5**.
 
 **Следующий проход 03/12:** строгая матрица state transitions, доказательства зависимостей из `inv_stock_balance` и `inv_stock_reservation`, lock ordering на конкретных SQL и политика temporary suspension склада с stock. До выполнения — не объявлять state machine продуманной до уровня E2E.
+
+
+---
+
+## Актуализация после прохода 03/12 (исторический снимок 02/12 не переписан)
+
+Этот документ точно описывает source SHA `2b4afbb…`, **но не текущую реализацию INVENTORY**. После его публикации в `base_dev` сделаны INV-Q1..Q3: первый `RECEIPT` теперь создаёт нулевую `inv_stock_balance` **внутри `InventoryMovementService.adjust`**, `StockEligibility` охраняет новые receipt/reserve по ACTIVE WAREHOUSE / PRODUCT. Поэтому бывший ORG-11 считается **RESOLVED в текущем INVENTORY для первого прихода**, отдельный метод `initializePosition` больше не нужен. Проверенные REGRESSION-evidence указаны в `docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md` `15.
+
+Также предложение второго прохода «не деактивировать warehouse с любым положительным `onHand`» **заменено решением DEC-ORG-03-A**: при `reserved=0` и отсутствии ACTIVE reservations временный `INACTIVE` допускает свободный `onHand>0`. Только окончательный `CLOSED` требует нулевого `onHand`. Контракт, SQL, lock races и edge cases: [проход 03/12](RM-ORG-FUNCTIONAL-DEPTH-PASS03-2026-11-22.md). Это **только ТЗ**, поскольку ORGANIZATION state commands ещё не реализованы.
