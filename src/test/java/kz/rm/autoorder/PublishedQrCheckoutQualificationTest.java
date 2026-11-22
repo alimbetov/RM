@@ -484,4 +484,47 @@ class PublishedQrCheckoutQualificationTest {
                 .isEqualTo(ref);
     }
 
+
+    @Test void qr03bConcurrentRotateAndReadRespectsOrderLockWithoutDeadlock() throws Exception {
+        try(var connection=dataSource.getConnection()){
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=setup();
+        String buyerEmail=email();
+        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        UUID orderId=placed.order().orderId();
+        var original=orderQr.ownReference(buyer,f.tenant(),orderId);
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
+            var reader=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                try {
+                    return orderQr.readOwn(buyer,original.publicRef()).orderId();
+                } catch(SecurityException revoked){
+                    return null; // Rotation committed first: valid denial.
+                }
+            });
+            var rotator=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return orderQr.rotateOwned(buyer,f.tenant(),
+                        orderId,original.rowVersion());
+            });
+            start.countDown();
+            UUID observed=reader.get(30,TimeUnit.SECONDS);
+            assertThat(observed==null||observed.equals(orderId)).isTrue();
+            var replacement=rotator.get(30,TimeUnit.SECONDS);
+            assertThat(replacement.generation()).isEqualTo(2);
+            assertThat(orderQr.readOwn(buyer,replacement.publicRef()).orderId())
+                    .isEqualTo(orderId);
+        }
+        assertThatThrownBy(()->orderQr.readOwn(buyer,original.publicRef()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,f.tenant(),orderId)).isEqualTo(1);
+    }
+
 }

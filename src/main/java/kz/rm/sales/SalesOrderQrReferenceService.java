@@ -40,6 +40,7 @@ public class SalesOrderQrReferenceService {
                             Instant createdAt, List<Line> lines,
                             List<StatusEvent> events) {}
     private record Ordered(UUID tenant, UUID id, String status, UUID owner) {}
+    private record Locator(UUID tenant, UUID order) {}
     private record Locked(UUID id, UUID tenant, String status,
                           BigDecimal total, String currency, Instant createdAt) {}
 
@@ -141,19 +142,20 @@ public class SalesOrderQrReferenceService {
     @Transactional
     public OrderView readOwn(VerifiedActor buyer, String publicRef) {
         UUID actor = admitBuyer(buyer);
-        validateRef(publicRef);
+        Locator locator = locate(publicRef);
+        // Use a single consistent row-lock DAG: IAM actor -> SALES order.
+        // Do NOT join FOR UPDATE with QR, which could acquire QR before order.
         Locked locked = jdbc.query("""
-                SELECT o.id,o.tenant_id,o.status,o.total_amount,o.currency,o.created_at
-                FROM crm.sales_order_qr_reference r
-                JOIN crm.sales_order o
-                  ON o.tenant_id=r.tenant_id AND o.id=r.order_id
-                WHERE r.public_ref=? AND r.state='ACTIVE'
-                  AND r.active_order_id=r.order_id
-                  AND o.buyer_user_id=?
+                SELECT id,tenant_id,status,total_amount,currency,created_at
+                FROM crm.sales_order
+                WHERE tenant_id=? AND id=? AND buyer_user_id=?
                 FOR UPDATE
-                """, rs -> rs.next() ? mapOrder(rs) : null, publicRef, actor);
+                """, rs -> rs.next() ? mapOrder(rs) : null,
+                locator.tenant(), locator.order(), actor);
         if (locked == null)
             throw new SecurityException("ORDER_NOT_ACCESSIBLE");
+        // A rotation may have committed between alias lookup and order lock.
+        requireCurrentRef(locator, publicRef);
         return assemble(locked, publicRef);
     }
 
@@ -165,18 +167,40 @@ public class SalesOrderQrReferenceService {
             throw new SecurityException("Verified seller and tenant required");
         authorization.requireForCommand(seller.userId(), tenant,
                 DomainPermission.SALES_ORDER_READ);
-        validateRef(publicRef);
+        Locator locator = locate(publicRef);
+        if (!tenant.equals(locator.tenant()))
+            throw new SecurityException("ORDER_NOT_ACCESSIBLE");
         Locked locked = jdbc.query("""
-                SELECT o.id,o.tenant_id,o.status,o.total_amount,o.currency,o.created_at
-                FROM crm.sales_order_qr_reference r
-                JOIN crm.sales_order o
-                  ON o.tenant_id=r.tenant_id AND o.id=r.order_id
-                WHERE r.tenant_id=? AND r.public_ref=? AND r.state='ACTIVE'
-                  AND r.active_order_id=r.order_id
+                SELECT id,tenant_id,status,total_amount,currency,created_at
+                FROM crm.sales_order
+                WHERE tenant_id=? AND id=?
                 FOR UPDATE
-                """, rs -> rs.next() ? mapOrder(rs) : null, tenant, publicRef);
-        if (locked == null) throw new SecurityException("ORDER_NOT_ACCESSIBLE");
+                """, rs -> rs.next() ? mapOrder(rs) : null, tenant, locator.order());
+        if (locked == null)
+            throw new SecurityException("ORDER_NOT_ACCESSIBLE");
+        requireCurrentRef(locator, publicRef);
         return assemble(locked, publicRef);
+    }
+
+    private Locator locate(String publicRef) {
+        validateRef(publicRef);
+        Locator result = jdbc.query("""
+                SELECT tenant_id,order_id
+                FROM crm.sales_order_qr_reference
+                WHERE public_ref=? AND state='ACTIVE'
+                  AND active_order_id=order_id
+                """, rs -> rs.next() ?
+                new Locator(rs.getObject(1, UUID.class),
+                        rs.getObject(2, UUID.class)) : null, publicRef);
+        if (result == null)
+            throw new SecurityException("ORDER_NOT_ACCESSIBLE");
+        return result;
+    }
+
+    private void requireCurrentRef(Locator locator, String publicRef) {
+        Reference active = active(locator.tenant(), locator.order());
+        if (active == null || !active.publicRef().equals(publicRef))
+            throw new SecurityException("ORDER_NOT_ACCESSIBLE");
     }
 
     /** Seller may reprint an EXISTING reference; cannot mint a buyer QR by
