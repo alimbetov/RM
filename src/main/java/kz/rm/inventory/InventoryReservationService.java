@@ -26,8 +26,10 @@ import java.util.UUID;
 @Service
 public class InventoryReservationService {
     private final JdbcTemplate jdbc;
-
-    public InventoryReservationService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    private final StockEligibility stockEligibility;
+    public InventoryReservationService(JdbcTemplate jdbc,StockEligibility stockEligibility) {
+        this.jdbc=jdbc;this.stockEligibility=stockEligibility;
+    }
 
     public enum State { ACTIVE, RELEASED, FULFILLED }
     public record Reservation(UUID id, UUID tenantId, UUID orderId, UUID lineId,
@@ -56,7 +58,7 @@ public class InventoryReservationService {
         // Full-line reservation only in R1.1. Split locations belong to a later version.
         if(quantity.compareTo(BigDecimal.valueOf(line.quantity()))!=0)
             throw new IllegalArgumentException("Reservation must cover full order line");
-        Stock stock=lockStock(tenantId,locationId,itemId);
+        // Seller order FOR UPDATE already serializes an idempotent line retry.
         List<Reservation> existing=loadByLine(tenantId,orderLineId);
         if(!existing.isEmpty()) {
             Reservation old=existing.getFirst();
@@ -65,6 +67,8 @@ public class InventoryReservationService {
                     && old.state()==State.ACTIVE) return old;
             throw new IllegalStateException("Reservation already exists or has terminal state");
         }
+        stockEligibility.requireReservable(tenantId,locationId,itemId);
+        Stock stock=lockStock(tenantId,locationId,itemId);
         if(stock.onHand().subtract(stock.reserved()).compareTo(quantity)<0)
             throw new IllegalStateException("Insufficient available inventory");
         int updated=jdbc.update("""
