@@ -6,7 +6,7 @@ package kz.rm.sales;
  */
 public enum SalesReturnState {
     REQUESTED, UNDER_REVIEW, APPROVED, REJECTED, AWAITING_RECEIPT,
-    RECEIVED, INSPECTED, RESTOCKED, DISPOSED, CANCELLED_BY_BUYER;
+    RECEIVED, INSPECTED, RESTOCKED, DISPOSED, QUARANTINED, CANCELLED_BY_BUYER;
 
     public boolean mayTransitionTo(SalesReturnState next) {
         if (next == null) return false;
@@ -16,8 +16,8 @@ public enum SalesReturnState {
             case APPROVED -> next == AWAITING_RECEIPT || next == CANCELLED_BY_BUYER;
             case AWAITING_RECEIPT -> next == RECEIVED || next == CANCELLED_BY_BUYER;
             case RECEIVED -> next == INSPECTED;
-            case INSPECTED -> next == RESTOCKED || next == DISPOSED;
-            case REJECTED, RESTOCKED, DISPOSED, CANCELLED_BY_BUYER -> false;
+            case INSPECTED -> next == RESTOCKED || next == DISPOSED || next == QUARANTINED;
+            case REJECTED, RESTOCKED, DISPOSED, QUARANTINED, CANCELLED_BY_BUYER -> false;
         };
     }
 }
