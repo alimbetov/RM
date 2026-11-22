@@ -1,133 +1,149 @@
 
-# RM Platform — ORGANIZATION Functional Depth / Detailed TZ
+# RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**ID:** RM-ORG-FUNC-R1; **review:** 01/12; **branch:** base_dev; **reviewed source SHA:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (2026-11-22).
-**State:** SPECIFIED, NOT IMPLEMENTED. Feature Freeze: no HTTP controllers, no changes to main, production HOLD.
+**Документ:** RM-ORG-FUNC-R1. **Проход:** 01/12. **Ветка:** base_dev.
+**Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
+**Статус:** ТЗ СФОРМИРОВАНО; РЕАЛИЗАЦИЯ НЕ НАЧАТА. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
-## 1. Scope and business result
+## 1. Цель и границы
 
-ORGANIZATION must manage the lifecycle of physical locations: branch (BRANCH), warehouse (WAREHOUSE), point of sale (POINT_OF_SALE). A verified tenant employee can create, read, search, edit, suspend, reactivate and close a location. Inventory/order operations must never accept an ineligible location. Stock and historical orders are preserved.
+Сделать зрелый сервис управления физическими локациями организации: филиал (BRANCH), склад (WAREHOUSE), точка продаж (POINT_OF_SALE). Полный путь: создать → найти/прочитать → изменить допустимые данные → временно деактивировать → повторно активировать → окончательно закрыть. При этом операции склада и заказов не должны использовать недоступную локацию; история движений и заказов сохраняется.
 
-No duplication of legal organization registration: IAM owns org_organization, iam_workspace, tenant memberships, RBAC and VerifiedActor; GEO owns KATO reference eligibility; ORGANIZATION owns public.org_location; INVENTORY owns balances, movements, reservations; SALES owns order status. A location is not a tenant. No tenant or type reassignment.
+**Разграничение ответственности:**
+- IAM — юридическая организация (org_organization), workspace (iam_workspace), членство, VerifiedActor, роли и RBAC. Не создавать вторую систему регистрации/администрирования организации в ORGANIZATION.
+- ORGANIZATION — public.org_location, тип, адрес, КАТО, статус и допустимость применения локации.
+- GEO — каталог и правила выбора КАТО.
+- INVENTORY — остатки, движения, резервы, складские команды.
+- SALES — заказы и подтверждение/отгрузка.
+- Локация не является tenant; смена workspace_id или типа созданной локации запрещена в R1.
 
-## 2. Source-verified baseline
+## 2. Проверенное состояние исходников
 
-| Code | What actually works | Gap |
+| Компонент | Фактически реализовано | Недостающее |
 |---|---|---|
-| AuthenticatedOrganizationLocations | Public VerifiedActor facade with create/get/search | Missing update, deactivate, reactivate, close |
-| OrganizationLocationService | package-private create + WRITE permission + GEO policy + JPA insert | no state update and no optimistic command contract |
-| OrganizationLocationQueryService | tenant scoped get/search, READ permission, Page size 1..100 | pattern LIKE, deep OFFSET, incomplete filters |
-| OrganizationLocationEntity | @Version, ACTIVE/INACTIVE/CLOSED, timestamps | status mutations absent |
-| OrganizationLocationRepository | scoped get/search, createdAt DESC/id ASC | need literal LIKE escape; planned sort is createdAt DESC/id DESC |
-| KatoLocationPolicy | rejects unknown/deleted KATO, level > 3 | needs revalidation on change/reactivation |
-| OrganizationLocationQueryQualificationTest | tenant A/B, rollback, null actor, revoke race, list filters | lacks lifecycle and cross-domain closure races |
+| AuthenticatedOrganizationLocations | Публичный VerifiedActor-фасад create/get/search | update/deactivate/reactivate/close |
+| OrganizationLocationService | Package-private create, WRITE permission, GEO validation, JPA save | Изменение профиля, статусы, CAS |
+| OrganizationLocationQueryService | Tenant-scoped get/search, READ, Page size 1..100 | Экранирование LIKE; защита от глубокого OFFSET |
+| OrganizationLocationEntity | @Version, timestamps, ACTIVE/INACTIVE/CLOSED | Нет методов переходов и изменения полей |
+| OrganizationLocationRepository | Scoped get/search, createdAt DESC и id ASC | Поиск literal name, целевой порядок id DESC |
+| KatoLocationPolicy | Отказ для неизвестного/удалённого КАТО, level > 3 | Повторная проверка при изменении/реактивации |
+| OrganizationLocationQueryQualificationTest | A/B tenant, rollback, VerifiedActor, revoke race, фильтры | Нет lifecycle/stock closure/update-race испытаний |
 
-**Findings:** ORG-01 P0 missing state transitions; ORG-02 P0 INVENTORY receive/correct lacks active-warehouse guard; ORG-03 P0 SALES confirm lacks location type/status guard; ORG-04 P1 missing editable profile; ORG-05 P1 unused @Version for command CAS; ORG-06 P1 unescaped percent/underscore in bound LIKE (not SQL injection); ORG-07 P1 deep OFFSET and different tie-break sort; ORG-08 P1 no emitted location change audit; ORG-09 P1 insufficient mixed-membership/concurrent dependency tests; ORG-10 P2 duplicate logical unique index/constraint in Liquibase (review, do not drop during freeze).
+**Реестр GAP:**
+- ORG-01 **P0:** нет явных переходов статуса.
+- ORG-02 **P0:** INVENTORY receive/correct меняет складские данные без ACTIVE/WAREHOUSE проверки.
+- ORG-03 **P0:** SALES confirm получает locationId, но не проверяет его status/type.
+- ORG-04 **P1:** отсутствие update(name/address/KATO).
+- ORG-05 **P1:** имеющийся rowVersion не используется как обязательное предусловие новых команд.
+- ORG-06 **P1:** % и _ в параметре LIKE интерпретируются как шаблон; требуется буквальный поиск. Это не доказанная SQL injection: значение параметризовано.
+- ORG-07 **P1:** безлимитный глубокий OFFSET; существующий id ASC детерминирован, но отличается от целевого createdAt DESC/id DESC.
+- ORG-08 **P1:** операции не пишут предметное доказательство изменения в аудит.
+- ORG-09 **P1:** недостаточно PG-проверок двух tenants, mixed membership и конкурентных складских операций.
+- ORG-10 **P2:** в Liquibase имеются два логически эквивалентных unique constraint на (workspace_id,id); отдельно изучить, не удалять во время freeze.
 
-These are source findings, not production exploits; the existing deterministic id ASC ordering is not random, but inconsistent with the SEARCH-R2 target.
+Вывод: текущая зрелость **1/5** по исходной методике. Наличие статуса в enum — ещё не работающий lifecycle; source GAP — не утверждение об эксплуатации уязвимости.
 
-## 3. Twelve-pass protocol (complete ORGANIZATION before another domain)
+## 3. Методика 12 последовательных проходов
 
-| # | Audit depth | Required result | Current |
+После каждого прохода фиксируем: точный SHA, бизнес-сценарии, реальные методы и таблицы, права, отрицательные случаи, связи с доменами, дефекты, изменения ТЗ, доказательства тестами. Статус ТЗ не означает runtime GREEN. На следующий домен переходим только после 12-го прохода и подписанной оценки остаточных рисков.
+
+| Проход | Тема | Результат | Сейчас |
 |---|---|---|---|
-| 01 | Source map + cross-domain review | This defect inventory and detailed TZ | SPECIFIED |
-| 02 | Operational user journeys | Warehouse / branch / POS / seller journey mapped to methods and errors | OPEN |
-| 03 | State machine and dependencies | Stock, reservations, open orders; exact closure policy | OPEN |
-| 04 | Create + profile edit | Input validation, immutable fields, KATO, optimistic version | OPEN |
-| 05 | INVENTORY integration | No receiving/correction/reserving through ineligible location | OPEN |
-| 06 | SALES integration | Correct confirm/replay/cancel/fulfill behavior and locks | OPEN |
-| 07 | IAM boundary + RBAC | VerifiedActor, A/B/AB grants, revoke race, foreign UUID | OPEN |
-| 08 | Search and pagination | Literal filters, bounded pages, consistent sorted reads | OPEN |
-| 09 | PostgreSQL and audit | Populated migration, transactional actor/action evidence | OPEN |
-| 10 | Concurrency + rollback | update/update, deactivate/reserve, crash/retry | OPEN |
-| 11 | Regression/performance | Method-to-test trace, actual EXPLAIN and workload proof | OPEN |
-| 12 | Final acceptance | Evidence verdict, residual risks, handoff | OPEN |
+| 01 | Исходники + перекрёстный аудит | Карта функций, GAP, данное ТЗ | SPECIFIED |
+| 02 | Бизнес-сценарии | Пути администратора, кладовщика, продавца и отрицательные действия | OPEN |
+| 03 | State machine | Политика складских зависимостей, переходы, ограничения | OPEN |
+| 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | OPEN |
+| 05 | INVENTORY | Допуск активного склада для приёмки/коррекции/резерва | OPEN |
+| 06 | SALES | Подтверждение, повторы, отмена, отгрузка, порядок блокировок | OPEN |
+| 07 | IAM и RBAC | VerifiedActor, A/B/AB, чужие UUID, revoke race | OPEN |
+| 08 | Поиск и пагинация | Буквальный LIKE, фильтры, предсказуемые страницы | OPEN |
+| 09 | PostgreSQL и audit | Заполненная БД, атомарный журнал действий, DDL | OPEN |
+| 10 | Конкурентность и recovery | deactivate-vs-reserve, edit-vs-edit, rollback | OPEN |
+| 11 | Нагрузочная и регрессионная квалификация | Exact tests, EXPLAIN, профиль нагрузки | OPEN |
+| 12 | Закрытие сервиса | Матрица доказательств, уровень зрелости, готовность следующего домена | OPEN |
 
-Status is per pass, not per document. A specification does not make implementation GREEN.
+## 4. Требования к операциям ORG-R1.1
 
-## 4. Required service contract: ORG-R1.1
+Сохранить один публичный сервисный фасад AuthenticatedOrganizationLocations. Внутренние UUID-методы оставить package-private; не добавлять контроллеры. Каждая команда: VerifiedActor, selected tenant, ORGANIZATION_LOCATION_WRITE и TenantAuthorization.requireForCommand в транзакции. Чтение: ORGANIZATION_LOCATION_READ и действующий транзакционный security fence. Все SELECT/UPDATE только по (workspace_id,id).
 
-Retain one public application facade AuthenticatedOrganizationLocations; keep internal UUID actor services package-private. Every command needs VerifiedActor, selected tenant, ORGANIZATION_LOCATION_WRITE and transaction-bound TenantAuthorization.requireForCommand. Every get/search requires ORGANIZATION_LOCATION_READ, without disclosing foreign object existence.
-
-| Command | Inputs / output | Semantics |
+| Метод фасада | Аргументы/результат | Правило |
 |---|---|---|
-| create | actor, tenant, type, name, kato, address -> LocationDto | ACTIVE initially; validate and audit CREATE |
-| update | actor, tenant, locationId, patch, expectedVersion -> LocationDto | Only name/address/KATO; @Version CAS; audit UPDATE |
-| deactivate | actor, tenant, locationId, expectedVersion -> LocationDto | ACTIVE -> INACTIVE after dependency check; audit DEACTIVATE |
-| reactivate | actor, tenant, locationId, expectedVersion -> LocationDto | INACTIVE -> ACTIVE after fresh GEO check; audit REACTIVATE |
-| close | actor, tenant, locationId, expectedVersion -> LocationDto | INACTIVE -> CLOSED after dependency check; audit CLOSE |
-| get | actor, tenant, locationId -> LocationDto | Scoped read; historical inactive/closed visible to authorized staff |
-| search | actor, tenant, filters, page, size -> Page<LocationDto> | Admin search all states for backward compatibility; operational warehouse selector only ACTIVE WAREHOUSE |
+| create | actor, tenant, type, name, kato, address → LocationDto | ACTIVE по умолчанию, валидировать, audit CREATE |
+| update | actor, tenant, id, patch, expectedVersion → LocationDto | Только name/address/KATO, CAS, audit UPDATE |
+| deactivate | actor, tenant, id, expectedVersion → LocationDto | ACTIVE → INACTIVE, проверка использования, audit |
+| reactivate | actor, tenant, id, expectedVersion → LocationDto | INACTIVE → ACTIVE, повторная проверка КАТО, audit |
+| close | actor, tenant, id, expectedVersion → LocationDto | INACTIVE → CLOSED, проверка использования, audit |
+| get | actor, tenant, id → LocationDto | Административное чтение в том числе исторической закрытой локации |
+| search | actor, tenant, filter, page, size → Page | Административная выдача включает все статусы; операционный выбор склада — только ACTIVE WAREHOUSE |
 
-The facade must not expose arbitrary actorId or unrestricted JPA Entity writes. Do not add generic delete, bulk updates, type conversions, tenant moving, or an independent organization microservice.
+**Правила атрибутов:** name: trim + Unicode NFC, не пустое, максимум 200, без управляющих символов. addressLine: null допустим, максимум 500, trim + NFC. КАТО проверяется через GEO. Тип, tenant, id, createdAt нельзя изменять. Для смены КАТО при наличии исторических складских операций или текущих остатков — отказ; создать новую физическую локацию. Исправление имени/адреса не переписывает immutable историю INVENTORY/SALES. Физический delete не поддерживать.
 
-**Validation:** trim/Unicode NFC name/address; name nonblank, max 200; address nullable max 500; KATO string checked by existing GEO policy. Reject control characters. Type immutable for R1. KATO may be changed only before historical inventory/order use or positive stock; otherwise create a new physical location. Names and addresses can be corrected without rewriting immutable historical stock movements.
+**Оптимистическая конкурентность:** expectedVersion обязателен для update/deactivate/reactivate/close; проверять rowVersion и изменение только через JPA @Version/CAS. При устаревшей версии — STALE_VERSION, rollback, никакого audit-event. Повтор с устаревшей версией — конфликт, а не обещание exactly-once: отдельную receipt-таблицу без необходимости не вводить. updatedAt меняется один раз при успешном изменении.
 
-**CAS semantics:** expectedVersion required on all edit/state commands; stale version means conflict and no write/audit. Do not advertise retry idempotency without a persisted receipt; repeat with stale version is a conflict. Successful transaction increments rowVersion and updatedAt once; failed transaction increments neither.
+## 5. Состояния и правила переходов
 
-## 5. Lifecycle policy
+| Откуда → куда | Разрешение |
+|---|---|
+| ACTIVE → INACTIVE | Если нет on_hand > 0, reserved > 0, ACTIVE резервов или реально связанных незавершённых операций |
+| INACTIVE → ACTIVE | Workspace по-прежнему ACTIVE, КАТО допустим |
+| INACTIVE → CLOSED | Зависимости отсутствуют; исторические ссылки не удалять |
+| ACTIVE → CLOSED | Нет: предварительно деактивировать |
+| CLOSED → любое состояние | Нет, CLOSED — финальный |
+| Повтор текущего состояния | Только явно определённая no-op семантика, после permission/version check |
 
-| From | To | Rule |
+**Консервативное решение на R1:** склад с ненулевыми остатками нельзя отключить/закрыть. Это соответствует ранее установленной строгой политике RM-SVC-R2 и защищает от «брошенного» запаса. INVENTORY transfer/stocktake ещё не готов; не обнулять остатки фиктивной коррекцией. Если требуется временная остановка склада с остатком, это отдельное согласование на проходе 03, с явным запретом всех новых операций и безопасным возвратом.
+
+## 6. Перекрёстная согласованность и блокировки
+
+1. ORGANIZATION при переходе состояния блокирует именно свою строку org_location выбранного tenant; для использования вызывает **типизированный read-only порт INVENTORY** (onHand/reserved/activeReservation). SALES adapter добавляется только если имеется достоверная привязка открытого заказа к локации.
+2. INVENTORY receive/correct/reserve и SALES confirm внутри общей транзакции проверяют через ORGANIZATION typed-port, что location действительно ACTIVE и WAREHOUSE; разделяемая блокировка строки не даёт deactivate вклиниться между admission и записью склада/заказа.
+3. Согласовать порядок lock: IAM actor/workspace → SALES order (когда есть) → location admission → stock balance → reservation. Close блокирует location, потом читает счётчики зависимостей **без обратного блокирования SALES order**, иначе возможен deadlock.
+4. Текущий PLACED заказ до confirm не сохраняет выбранный locationId: нельзя изображать существование SQL связи «все открытые заказы этого склада». Правильная защита — запрет confirm на неактивной локации. Исторические движения и FULFILLED/RELEASED резервы сохраняются по старым FK.
+5. Простого SELECT status недостаточно; конкурентные close-vs-confirm/receive должны быть синхронизированы транзакционной блокировкой, с доказательством PostgreSQL.
+
+**Уточнение типов:** для R1 коммерческая резервация и приёмка используются только с WAREHOUSE. Перед вводом ограничения проверить заполненные данные: нет ли stock balance у BRANCH/POS. Если такие сценарии нужны, утвердить POS-склад как отдельное бизнес-правило на проходе 05, не игнорировать существующие записи.
+
+## 7. Поиск, БД, аудит
+
+- Расширить LocationSearch необязательными katoCode и activeOnly, не сломав старый конструктор (type,status,name); исключить противоречивые комбинации status/activeOnly.
+- Поиск по name — *буквальное вхождение*: экранирование %, _, escape-символа с явным SQL/JPQL ESCAPE, все значения строго параметризованы; фильтр 0..100 символов. Тест Unicode.
+- Сортировка createdAt DESC, id DESC. Page size 1..100, верхняя граница page×size (обоснованный лимит, прежде чем запускать дорогой OFFSET). HMAC cursor оставлять SEARCH-R2, сейчас не строить второй search-framework.
+- Для административной выдачи закрытые локации остаются видимыми. Для выпадающего выбора склада необходим **явный** фильтр ACTIVE WAREHOUSE, а не текущая выдача всех статусов.
+- Существующие FK, check constraints, rowVersion и composite (workspace_id,id) переиспользовать; без новой таблицы локаций и destructive migration. Новые индексы — лишь после EXPLAIN и реальной необходимости.
+- Писать в существующий crm.audit_event (tenant, actor, location entityId, occurredAt, action): ORG_LOCATION_CREATE/UPDATE/DEACTIVATE/REACTIVATE/CLOSE в одной транзакции с изменением. Существующая структура **не хранит значения до/после**, поэтому не объявлять подробную историю полей готовой; отдельный журнал не вводить в R1.
+
+## 8. Обязательная квалификация
+
+| Test ID | Сценарий | Условие успеха |
 |---|---|---|
-| ACTIVE | INACTIVE | Only if no on_hand > 0, reserved > 0, ACTIVE reservations or bound unfinished operation |
-| INACTIVE | ACTIVE | Only if tenant still active and KATO eligible |
-| INACTIVE | CLOSED | Only if same zero-usage conditions hold; retain all historical references |
-| ACTIVE | CLOSED | Forbidden: deactivate first |
-| CLOSED | anything | Forbidden: CLOSED is terminal |
-| unchanged | unchanged | Explicit no-op only if permitted and version checked; no silent audit duplicates |
+| ORG-Q01 | create/get/search и атомарный audit | Правильные tenant, persisted entity и ровно один event |
+| ORG-Q02 | null actor, foreign tenant/location, отсутствие/отзыв READ/WRITE | Отказ до данных, нет раскрытия чужого объекта |
+| ORG-Q03 | edit name/address/KATO, invalid/type/tenant change | Только допустимые поля, rowVersion/updatedAt |
+| ORG-Q04 | Два edit с одним expectedVersion | Один commit, один STALE_VERSION; без ложного audit |
+| ORG-Q05 | onHand>0, reserved>0, ACTIVE reservation | Deactivate/close запрещены без частичной записи |
+| ORG-Q06 | ACTIVE→INACTIVE→ACTIVE; INACTIVE→CLOSED | Все допустимые переходы и закрытый финальный статус |
+| ORG-Q07 | Одновременно deactivate и receive/correct/confirm | Сериализация, нет записи на неактивном складе |
+| ORG-Q08 | INVENTORY/SALES с INACTIVE/CLOSED/BRANCH/foreign | Отказ до движения и изменения заказа |
+| ORG-Q09 | Остаток=0, исторические movements/reservations | История/FK сохранены, нет физического каскада |
+| ORG-Q10 | %, _, backslash, Unicode, 201 одинаковых timestamps и page bounds | Литеральный поиск, устойчивый порядок, корректный count |
+| ORG-Q11 | Один глобальный пользователь A+B, разные grants, revoke race | Effective RBAC только нужного tenant |
+| ORG-Q12 | Populated PG, H2, GEO/CRM/SALES/INVENTORY regression | Нет потери данных, exact HEAD и не пропущенный PG |
 
-This conservative R1 policy is aligned with RM-SVC-R2. If users must temporarily disable warehouses holding stock, refine the policy in pass 03 with a distinct operational suspension semantics and tests. Current INVENTORY transfer/stocktake is unfinished; do not simulate depletion or erase nonzero balances to close a warehouse.
+Исходный OrganizationLocationQueryQualificationTest частично подтверждает только Q01/Q02/Q11 в пределах существующих сценариев. Он **не** доказывает Q03–Q10 или Q12. Для каждого метода фиксировать точный SHA, тест, СУБД, результаты независимого SQL-чтения и гонки на PostgreSQL.
 
-**Cross-domain transaction rules:**
-1. ORGANIZATION obtains a row lock for the tenant-scoped location before changing lifecycle state. It calls a small typed read-only INVENTORY usage port (on-hand, reserved, active reservations) and optionally SALES location-bound status when modeled. No direct writes into another domain.
-2. INVENTORY receive/correct/reserve and SALES confirm obtain an ORGANIZATION-owned ACTIVE WAREHOUSE admission guard in the *same transaction*, with a compatible lock preventing concurrent deactivation. A foreign key to (workspace_id,id) proves ownership, NOT active status.
-3. Lock protocol to review: IAM actor/workspace admission -> SALES order row if involved -> location eligibility lock -> stock balance -> reservation. Closing locks location, then checks counts without acquiring an order row (avoid inverse ordering).
-4. The current PLACED sales order does not hold a location binding before confirm; do not invent an "open orders by warehouse" query. Confirm-time admission must block a closed warehouse. Existing historical movement/fulfilled reservation never causes data deletion.
-5. Any SELECT-only check without concurrency fencing fails the race requirement: deactivation vs receive/confirm must serialize.
+## 9. Этапы реализации и DoD
 
-**Type policy:** R1 stock fulfillment and receiving use WAREHOUSE; any existing BRANCH/POS stock records in populated DB must be inventoried before enabling restriction. POS stocking is a separate product policy, not implicit by a UUID.
-
-## 6. Search, persistence and audit
-
-- Extend LocationSearch with optional katoCode and activeOnly while retaining its old 3-argument constructor. Reject contradictions between status and activeOnly.
-- Name filter means a *literal substring*. Escape percent, underscore, and escape character with an explicit SQL/JPQL ESCAPE clause. Bound parameters remain mandatory. Validate length <=100 and unicode.
-- Default admin search continues to include closed locations. Staff operational selector must explicitly demand ACTIVE WAREHOUSE. Sort createdAt DESC, id DESC. Keep size 1..100; reject deep offset beyond documented cap to avoid expensive queries. Cursor/HMAC remains SEARCH-R2 work, not part of current quick completion.
-- Existing org_location has status, @Version, timestamps, tenant FK, KATO FK and composite tenant/ID uniqueness. Prefer JPA update; no new location tables, no destructive migration. Index changes only after EXPLAIN.
-- Use existing crm.audit_event atomically for action codes ORG_LOCATION_CREATE/UPDATE/DEACTIVATE/REACTIVATE/CLOSE, actor_user_id, tenant_id, entity_id, occurred_at. That journal contains no before/after payload, so do NOT claim detailed attribute history without a separately approved extension. Do not introduce a duplicate audit_event table.
-- Preserve no-controller Feature Freeze and production HOLD.
-
-## 7. Qualification matrix / minimum tests
-
-| ID | Mandatory test | Expected |
+| Этап | Объём | Gate |
 |---|---|---|
-| ORG-Q01 | Create, get, search, persist event | Tenant-scoped positive flow, one audited event |
-| ORG-Q02 | Null/foreign actor, wrong tenant/location, revoked permission | Deny before read/write evidence; no foreign leak |
-| ORG-Q03 | Edit name/address/KATO, invalid fields, immutable type/tenant | Strict payload, version + timestamp update |
-| ORG-Q04 | Two updates with identical expectedVersion | Exactly one succeeds; one stale-version conflict |
-| ORG-Q05 | Positive stock, reserved, ACTIVE reservation | Inactivate/close denied, no partial writes |
-| ORG-Q06 | Empty ACTIVE->INACTIVE->ACTIVE and INACTIVE->CLOSED | Legal transitions only; CLOSED terminal |
-| ORG-Q07 | Race: deactivate vs receive/correct/confirm | Correct row lock serialization; no mutation at inactive location |
-| ORG-Q08 | Inventory/Sales commands on CLOSED, INACTIVE, BRANCH, foreign location | Denied before any order or quantity mutation |
-| ORG-Q09 | Zero stock with existing historical movement | Close allowed only by approved policy; history and FK preserved |
-| ORG-Q10 | Literal LIKE %, _, backslash, unicode, same-timestamp pagination, bounds | Accurate filter/count/order and no duplicates |
-| ORG-Q11 | Shared global user A+B with unequal grants; revoke during command | Effective per-tenant permission and transaction fence |
-| ORG-Q12 | Populated PostgreSQL, H2 smoke, GEO/CRM/SALES/INVENTORY regressions | No data loss, exact-head non-skipped evidence |
+| ORG-R1.1A | JPA update, validation, state methods, facade, CAS, audit | Q01–Q04, Q06 |
+| ORG-R1.1B | Typed INVENTORY usage/admission и SALES confirm guard | Q05, Q07–Q09 |
+| ORG-R1.1C | Scoped search, literal LIKE, page safety | Q02, Q10–Q11 и EXPLAIN |
+| ORG-R1.1D | Populated PostgreSQL, поимённый TCRUD, exact-head CI | Q01–Q12 + ревью |
 
-Existing OrganizationLocationQueryQualificationTest partially covers Q01/Q02/Q11; it does not qualify Q03-Q10/Q12. Record the precise test class, method, commit SHA, database and observed SQL results; CI GREEN is not automatically full functional qualification.
+**Definition of Done:** полный сервисный путь управления локацией, enforce actor/tenant/permissions, корректная невозможность движения по неактивному складу, CAS и history safety, атомарный audit, PostgreSQL concurrency и регрессии. После доказанной реализации возможна переоценка зрелости в сторону 3–4/5; production approval остаётся отдельным решением.
 
-## 8. Implementation slices and Definition of Done
+**Не реализовывать без обоснования:** иерархия филиалов; ACL сотрудников на каждый склад; геокодирование; transfer/stocktake/valuation внутри ORG; multi-warehouse shipping; универсальная saga/event bus; удаление исторических локаций; повторный legal-org CRUD; контроллеры/UI; field-diff аудит.
 
-| Slice | Work | Gate |
-|---|---|---|
-| ORG-R1.1A | Entity operations, facade, CAS, lifecycle, audit | Q01-Q04 and Q06 |
-| ORG-R1.1B | Typed INVENTORY usage/admission + SALES confirm guard | Q05, Q07-Q09 |
-| ORG-R1.1C | Scoped search fixes and bounded pagination | Q02, Q10-Q11; PostgreSQL EXPLAIN |
-| ORG-R1.1D | Populated PostgreSQL + source-method trace + exact-head CI | Q01-Q12 and independent review |
+## 10. Следующий пакет: проход 02/12
 
-A location is qualified only when its real create/edit/deactivate/reactivate/close journey and blocked dependency operations are proven on PostgreSQL, authorization and tenant constraints hold under concurrent transitions, and history/audit remain consistent. This can raise the domain from 1/5 toward 3-4/5 for its declared scope; production approval is separate.
-
-**Explicitly deferred:** hierarchy of branches; location-level staff ACL; geocoding; inventory transfers and valuations; multi-warehouse fulfillment; generic saga/event bus; deleted-location purging; duplicate legal-org CRUD; HTTP/UI; full audit field diffs.
-
-## 9. Iteration 02/12 input
-
-Trace three concrete staff journeys (warehouse operator, branch/POS manager, seller fulfillment) through exact methods and tests. Resolve operational suspension with stock, location usage SQL/locks, and all negative transition outcomes. Keep the same domain until twelve passes reach evidenced closure.
+Разобрать реальные пути сотрудника склада, менеджера филиала/POS и подтверждающего заказ продавца. Уточнить семантику временной остановки склада с остатком, все ошибочные переходы, SQL usage-count и lock ordering до изменения runtime-кода. Следующий домен — только после 12/12.
