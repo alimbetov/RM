@@ -920,4 +920,88 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+
+    /**
+     * QR-06B/B2: fail after durable handover receipt INSERT, but before
+     * credential consumption. The entire PostgreSQL transaction must rollback.
+     * This models an abrupt SQL-side failure; it is NOT a process kill.
+     */
+    @Test void qr06bPgReceiptInsertFailureRollsBackAllEffectsThenRetrySucceeds() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        String suffix=UUID.randomUUID().toString().replace("-","");
+        String fn="qr06b_fail_receipt_"+suffix;
+        String trigger="qr06b_trg_receipt_"+suffix;
+        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $ "+
+                "BEGIN IF NEW.tenant_id = '"+c.tenant()+"'::uuid "+
+                "AND NEW.order_id = '"+o.id()+"'::uuid THEN "+
+                "RAISE EXCEPTION 'QR06B_RECEIPT_FAULT'; END IF; RETURN NEW; END; $");
+        jdbc.execute("CREATE TRIGGER "+trigger+
+                " AFTER INSERT ON crm.sales_pickup_handover "+
+                " FOR EACH ROW EXECUTE FUNCTION crm."+fn+"()");
+        String requestKey=key();
+        try {
+            assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                    issued.rawProof(),true,initialVersion,requestKey))
+                    .isInstanceOf(Exception.class);
+            assertNoHandoverEffects(c,o);
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS "+trigger+" ON crm.sales_pickup_handover");
+            jdbc.execute("DROP FUNCTION IF EXISTS crm."+fn+"()");
+        }
+        var recovered=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,requestKey);
+        assertThat(recovered.fulfilledLines()).isEqualTo(2);
+        assertExactlyOneHandover(c,o,2);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("17");
+    }
+
+    /**
+     * QR-06B/B2: inject failure at the final credential consumption UPDATE,
+     * after INVENTORY, SALES and immutable handover receipt statements.
+     * Everything must rollback and authorized replay must commit once.
+     */
+    @Test void qr06bPgCredentialConsumptionFailureRollsBackReceiptAndInventory() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        String suffix=UUID.randomUUID().toString().replace("-","");
+        String fn="qr06b_fail_consume_"+suffix;
+        String trigger="qr06b_trg_consume_"+suffix;
+        jdbc.execute("CREATE FUNCTION crm."+fn+"() RETURNS trigger LANGUAGE plpgsql AS $ "+
+                "BEGIN IF NEW.tenant_id = '"+c.tenant()+"'::uuid "+
+                "AND NEW.order_id = '"+o.id()+"'::uuid "+
+                "AND NEW.state='CONSUMED' THEN "+
+                "RAISE EXCEPTION 'QR06B_CONSUME_FAULT'; END IF; RETURN NEW; END; $");
+        jdbc.execute("CREATE TRIGGER "+trigger+
+                " AFTER UPDATE ON crm.sales_pickup_credential "+
+                " FOR EACH ROW EXECUTE FUNCTION crm."+fn+"()");
+        String requestKey=key();
+        try {
+            assertThatThrownBy(()->pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                    issued.rawProof(),true,initialVersion,requestKey))
+                    .isInstanceOf(Exception.class);
+            assertNoHandoverEffects(c,o);
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS "+trigger+" ON crm.sales_pickup_credential");
+            jdbc.execute("DROP FUNCTION IF EXISTS crm."+fn+"()");
+        }
+        var recovered=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,requestKey);
+        assertThat(recovered.fulfilledLines()).isEqualTo(2);
+        assertExactlyOneHandover(c,o,2);
+        var replay=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                issued.rawProof(),true,initialVersion,requestKey);
+        assertThat(replay).isEqualTo(recovered);
+        assertExactlyOneHandover(c,o,2);
+    }
+
 }
