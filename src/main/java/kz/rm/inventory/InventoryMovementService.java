@@ -105,14 +105,7 @@ public class InventoryMovementService {
             // Stock row is zero-initialized on first legitimate receipt only.
             // The warehouse owner row is FOR UPDATE locked, so competing first
             // receives serialize initialization without an upsert race.
-            jdbc.update("""
-                INSERT INTO crm.inv_stock_balance
-                  (tenant_id,location_id,item_id,on_hand,reserved,row_version)
-                SELECT ?,?,?,0,0,0 WHERE NOT EXISTS (
-                  SELECT 1 FROM crm.inv_stock_balance
-                  WHERE tenant_id=? AND location_id=? AND item_id=?
-                )
-                """,tenantId,locationId,itemId,tenantId,locationId,itemId);
+            stockEligibility.ensureZeroPosition(tenantId,locationId,itemId);
         }
         // Serialize by the exact tenant/location/SKU stock row, across all pods.
         List<BigDecimal[]> balance=jdbc.query("""
