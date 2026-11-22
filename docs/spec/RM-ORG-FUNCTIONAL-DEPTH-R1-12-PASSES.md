@@ -1,7 +1,7 @@
 
 # RM Platform — ORGANIZATION: глубокий аудит и ТЗ на функциональное завершение
 
-**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12, 03/12 и 04/12. **Ветка:** base_dev.
+**Документ:** RM-ORG-FUNC-R1. **Проходы:** 01/12, 02/12, 03/12, 04/12 и 05/12. **Ветка:** base_dev.
 **Исходный код на момент аудита:** c776baec5c82e0dfd4c7930aa6a68629202fa5fd (22.11.2026).
 **Статус:** ТЗ СФОРМИРОВАНО; lifecycle ORGANIZATION НЕ РЕАЛИЗОВАН, смежные INVENTORY INV-Q1..Q3 уже реализованы/квалифицированы отдельно. Feature Freeze: без HTTP-контроллеров, merge в main и production admission.
 
@@ -53,7 +53,7 @@
 | 02 | Бизнес-сценарии | Пути администратора, кладовщика, продавца и отрицательные действия | SPECIFIED |
 | 03 | State machine | Политика складских зависимостей, переходы, ограничения | SPECIFIED |
 | 04 | Create/update | Валидация, изменение адреса, КАТО, optimistic CAS | SPECIFIED |
-| 05 | INVENTORY | Допуск активного склада для приёмки/коррекции/резерва | OPEN |
+| 05 | INVENTORY | Receive/correct/writeOff/transfer/reserve/stocktake, blocker матрица, deadlock Q7 | SPECIFIED |
 | 06 | SALES | Подтверждение, повторы, отмена, отгрузка, порядок блокировок | OPEN |
 | 07 | IAM и RBAC | VerifiedActor, A/B/AB, чужие UUID, revoke race | OPEN |
 | 08 | Поиск и пагинация | Буквальный LIKE, фильтры, предсказуемые страницы | OPEN |
@@ -84,20 +84,20 @@
 
 | Откуда → куда | Разрешение |
 |---|---|
-| ACTIVE → INACTIVE | Разрешено при любом свободном onHand, если reserved=0 по всем SKU и нет ACTIVE reservations; полноценный row-lock fence |
+| ACTIVE → INACTIVE | Разрешено при любом свободном onHand, если reserved=0 по всем SKU, нет ACTIVE reservations и нет OPEN stocktakes; полноценный location-row fence (DEC-ORG-05-B) |
 | INACTIVE → ACTIVE | Workspace ACTIVE; сохранённый KATO существует: прежний deprecated код не препятствует возврату склада с остатком, новое значение КАТО требует GEO eligible |
-| INACTIVE → CLOSED | Зависимости отсутствуют; исторические ссылки не удалять |
+| INACTIVE → CLOSED | onHand=reserved=0 по всем SKU, нет ACTIVE reservations и нет OPEN stocktakes; исторические ссылки/ledger не удалять |
 | ACTIVE → CLOSED | Нет: предварительно деактивировать |
 | CLOSED → любое состояние | Нет, CLOSED — финальный |
 | Повтор текущего состояния | Только явно определённая no-op семантика, после permission/version check |
 
-**Решение DEC-ORG-03-A (проход 03):** склад с ненулевым свободным остатком **можно** временно деактивировать при reserved=0 и отсутствии ACTIVE reservations. Новые receive/correct/reserve/confirm запрещены до реактивации. **Закрыть** склад с onHand>0 нельзя: сначала выполнить законный вывод товара после реактивации (или будущий qualified transfer/stocktake). Запрещена фиктивная корректировка ради закрытия. Причины/SQL/гонки — в ревью прохода 03.
+**Решения DEC-ORG-03-A + DEC-ORG-05-B (проходы 03/05):** склад с ненулевым свободным остатком **можно** временно деактивировать при reserved=0, отсутствии ACTIVE reservations и отсутствии OPEN stocktakes. Новые receive/correct/reserve/confirm запрещены до реактивации. **Закрыть** склад с onHand>0 нельзя: сначала выполнить законный вывод товара после реактивации (или будущий qualified transfer/stocktake). Запрещена фиктивная корректировка ради закрытия. Причины/SQL/гонки — в ревью прохода 03.
 
 ## 6. Перекрёстная согласованность и блокировки
 
-1. ORGANIZATION при переходе состояния блокирует именно свою строку org_location выбранного tenant; для использования вызывает **типизированный read-only порт INVENTORY** (onHand/reserved/activeReservation). SALES adapter добавляется только если имеется достоверная привязка открытого заказа к локации.
+1. ORGANIZATION при переходе состояния блокирует именно свою строку org_location выбранного tenant; для использования вызывает **типизированный read-only порт INVENTORY** (hasOnHand/hasReservedBalance/hasActiveReservation/hasOpenStocktake). SALES adapter добавляется только если имеется достоверная привязка открытого заказа к локации.
 2. INVENTORY receive/correct/reserve и SALES confirm уже используют внутренний `StockEligibility` INVENTORY для проверки ACTIVE WAREHOUSE/PRODUCT, блокируя `org_location` в той же транзакции (`FOR UPDATE` на текущем HEAD). Не создавать параллельный проверяющий фасад в ORG: согласовать существующий admission с будущим deactivate/close; `FOR SHARE` рассматривать только после PG race/throughput tests.
-3. Учитывать оба реальных lock order: standalone INVENTORY = IAM → request-key stripe → location eligibility → catalog product → stock balance; SALES confirm/reserve = IAM paired decisions → sales order → location eligibility → catalog product → stock balance → reservation. ORG deactivate/close = IAM → location FOR UPDATE → только не-блокирующие dependency EXISTS → JPA state/audit; не приобретать обратным порядком sales order / request stripe / stock balance locks.
+3. Учитывать реальные lock order: standalone INVENTORY = IAM → request-key stripe → location eligibility → catalog product → stock balance; SALES confirm/reserve = IAM paired decisions → sales order → location eligibility → catalog product → stock balance → reservation; **Q7 transfer требует исправления P05-01**: stripe → ВСЕ location row locks по UUID → PRODUCT ONCE → stock rows в том же порядке. Текущие sequential `requireReceivable(first,item); requireReceivable(second,item)` берут PRODUCT между location locks и создают потенциальный deadlock с параллельным receive. ORG deactivate/close = IAM → location FOR UPDATE → только не-блокирующие dependency EXISTS (включая OPEN stocktake) → JPA state/audit; не приобретать обратным порядком sales order / request stripe / stock balance locks.
 4. Текущий PLACED заказ до confirm не сохраняет выбранный locationId: нельзя изображать существование SQL связи «все открытые заказы этого склада». Правильная защита — запрет confirm на неактивной локации. Исторические движения и FULFILLED/RELEASED резервы сохраняются по старым FK.
 5. Простого SELECT status недостаточно; конкурентные close-vs-confirm/receive должны быть синхронизированы транзакционной блокировкой, с доказательством PostgreSQL.
 
@@ -136,7 +136,7 @@
 | Этап | Объём | Gate |
 |---|---|---|
 | ORG-R1.1A | JPA update, validation, state methods, facade, CAS, audit | Q01–Q04, Q06 |
-| ORG-R1.1B | Typed INVENTORY usage/admission и SALES confirm guard | Q05, Q07–Q09 |
+| ORG-R1.1B | Typed INVENTORY usage flags (вкл. OPEN stocktake), ORG lifecycle admission; минимальное исправление INV-Q7 P05-01 и P05-02 fulfill | Q05, Q07–Q09 + P05-Q01..Q20 |
 | ORG-R1.1C | Scoped search, literal LIKE, page safety | Q02, Q10–Q11 и EXPLAIN |
 | ORG-R1.1D | Populated PostgreSQL, поимённый TCRUD, exact-head CI | Q01–Q12 + ревью |
 
@@ -255,3 +255,55 @@
 План `ORG-P04-Q01…Q20` включён в подробное ревью: create трех типов, Unicode/границы, blank/invalid KATO, duplicate names, A/B tenant authorization, update/full replacement, null-address clearing, no-op/stale/no audit, changed-KATO before/after movements/reservations/transfers, INACTIVE/CLOSED, two-connection update-vs-update и update-vs-deactivate/receive, rollback + revoke fence. **Все новые P04 tests — NOT RUN.**
 
 **Домен ORGANIZATION остаётся 1/5. Следующий проход 05/12:** INVENTORY owner-boundary, receipt/correct/transfer, влияние INACTIVE на операции и SQL lock/concurrency; без контроллеров и реализации ранее утверждённых ТЗ во время аудита.
+
+
+---
+
+## 14. Дополнение после прохода 05/12 — INVENTORY Integration & Warehouse Integrity
+
+**Детальное ревью:** [RM-ORG-FUNC-R1-P05 — реальные методы, SQL, locks, Q7/Q8](../reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS05-2026-11-22.md). **Verified source HEAD:** `1185d5554ae4bd07aa83109d12237ee0eec34846`, `base_dev`. **Статус:** SOURCE REVIEWED / SPECIFIED, NOT IMPLEMENTED для новых ORG lifecycle и междоменных исправлений.
+
+### 14.1 Действующий код, не дублировать
+
+- `AuthenticatedInventoryCommands`/`InventoryAuthorizedCommandService` уже предоставляют защищённые `receive/correct/writeOff/transfer`, а также `startStocktake/recordCount/postStocktake/cancelStocktake`. `StockEligibility` делает scoped `org_location FOR UPDATE` и `cat_item FOR UPDATE` на новых командах.
+- `InventoryMovementService.adjust` имеет request-stripe, replay старой проводки до eligibility, first RECEIPT zero-init, баланс `FOR UPDATE`, immutable movement; исправление не должно вводить новые таблицы stock.
+- `InventoryTransferService.transfer` формирует один `crm.inv_stock_transfer` и две immutable `TRANSFER_OUT/IN` ledger legs; проверяет tenant/source/destination/item, quantity и existing transfer receipt прежде новой записи. Исторический replay разрешён после INACTIVE/CLOSED, но **новый** transfer из или в такой склад запрещается.
+- `InventoryReservationService.reserve` проверяет ACTIVE WAREHOUSE/PUBLISHED PRODUCT для **новых** резервов; `release` остаётся cleanup. `fulfill` пока не имеет отдельного ACTIVE location check для anomaly-пути. Не мешать идемпотентному terminal replay.
+- `InventoryStocktakeService` уже имеет OPEN/POSTED/CANCELLED с snapshot/version, posted adjustment и отменой без location eligibility. Не считать новое `OPEN` отсутствие чисто исторической записи.
+
+### 14.2 DEC-ORG-05-A — операционная матрица
+
+Новая запись `receive/correct/writeOff`, `transfer FROM/TO`, `reserve/confirm`, `startStocktake/postStocktake` — **только ACTIVE WAREHOUSE** в одном tenant при требуемых business permissions. `CLOSED/INACTIVE/BRANCH/POS` — DENY до mutating SQL; transfer отказывает целиком, не создает target zero stock row и движения.
+
+Точно совпадающий старый `requestKey` для committed movement/transfer возвращает прежнюю квитанцию после IAM admission и без изменения stock **даже после CLOSED**. `cancel/release` разрешает освобождение старых резервов по статусу заказа; для legacy inconsistent `ACTIVE reservation + INACTIVE location` новую `fulfill` нужно запрещать, но terminal replay не трогать.
+
+### 14.3 P05-01 / P0 — подтверждённый lock-order defect в текущем INV-Q7
+
+`transfer` сортирует UUID двух складов, но затем вызывает `StockEligibility.requireReceivable(first,item)`, который блокирует `location(first)→PRODUCT(item)`; второй вызов пытается взять `location(second)`. Параллельный `receive(location(second), item)` берет `location(second)`, затем ждёт `PRODUCT(item)`. Это **возможный цикл**, не уже измеренный deadlock; существующий тест только для противоположных transfers его не устраняет.
+
+**Исправление внутри INVENTORY, без архитектурного слоя:** сделать package-private `StockEligibility.requireWarehouses(tenant, sortedLocationIds)`, которое сначала блокирует **оба** склада в ascending UUID, проверяет ACTIVE/type, только затем один раз блокирует PRODUCT и проверяет пригодность. Далее lock stock rows в том же порядке. `request-key stripe` и committed replay остаются раньше. Для детерминированного PostgreSQL теста выбрать разные request-stripe buckets и синхронизировать транзакции барьерами. `FOR UPDATE→FOR SHARE` отдельно, только после корректностной приёмки.
+
+### 14.4 DEC-ORG-05-B — новый blocker из INVENTORY Q8
+
+**OPEN stocktake блокирует `ACTIVE→INACTIVE` и `INACTIVE→CLOSED`** наряду с `reserved>0` / `ACTIVE reservation`. Менеджер сначала должен POST или CANCEL инвентаризацию законной командой, чтобы не оставлять незавершенный snapshot на остановленном складе. `POSTED/CANCELLED` stocktakes — история и не блокируют. `onHand>0` без reserves и OPEN stocktake по-прежнему **не препятствует** временной паузе.
+
+Форма порта (только признаки, без раскрытия stock details):
+
+~~~java
+public record LocationUsageBlockers(
+    boolean hasOnHand,
+    boolean hasReservedBalance,
+    boolean hasActiveReservation,
+    boolean hasOpenStocktake
+) {}
+~~~
+
+**Deactivation:** reserved OR ACTIVE reservation OR OPEN stocktake → deny; onHand>0 alone → allow. **Close:** additionally onHand>0 → deny. Техническая реализация — tenant/location scoped `EXISTS` через существующие таблицы `inv_stock_balance`, `inv_stock_reservation` и `inv_stocktake`. Вызов под `org_location FOR UPDATE` после IAM WRITE, **без** `FOR UPDATE` stock/reservation/stocktake rows, иначе возникает новый обратный lock-order. `inv_stocktake_location(tenant,location,status,started_at)` уже индексирован; location-reservation index — только после EXPLAIN.
+
+### 14.5 P05-02 / P1 и PostgreSQL qualification
+
+Для нового `fulfill` при legacy неактивной локации выполнить проверку ACTIVE **до** stock row lock, после order row lock, сохранив старый terminal retry и cleanup release; точную форму повторов/грантов согласовать с SALES в 06/12.
+
+Запланированные, **НЕ запускались**: `ORG-P05-Q01…Q20` в подробном ревью — INACTIVE negative cases для 5 команд; transfer source/target, rollback; mixed transfer×receive lock cycle и inverse/three-location transfers; positive stock pause; open stocktake blockers; revoke/foreign tenant; cancel/release/replay/fulfill; concurrent ORG/INVENTORY. H2 smoke недостаточен, нужны 2–3 независимые PostgreSQL sessions и exact code SHA.
+
+**Не менять архитектуру:** никакой отдельной системы блокировок, микросервисного Warehouse, нового enum статуса или собственных ORG-инвентарных таблиц. Домен ORGANIZATION остаётся **1/5**; полноценный сервисный lifecycle ещё **NOT IMPLEMENTED**. **Следующий проход 06/12 — SALES orchestration и состояния заказов в связи с warehouse status.**
