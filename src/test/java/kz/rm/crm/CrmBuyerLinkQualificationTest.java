@@ -952,6 +952,101 @@ class CrmBuyerLinkQualificationTest {
                 """,Integer.class,target)).isEqualTo(1);
     }
 
+
+    @Test void deletedEmailAddressCannotRestoreOldBuyerIdentity() {
+        String address="reused-"+UUID.randomUUID()+"@example.kz";
+        var original=emailIdentity.findOrProvision(address);
+        emailIdentity.queueVerification(original.identityId());
+        var proof=jdbc.query("""
+                SELECT id,token_envelope FROM public.iam_email_verification_challenge
+                WHERE email_identity_id=? AND purpose='CHECKOUT'
+                ORDER BY created_at DESC LIMIT 1
+                """,rs->{
+                    if(!rs.next())throw new IllegalStateException("Proof missing");
+                    return new java.util.AbstractMap.SimpleEntry<>(
+                            rs.getObject(1,UUID.class),emailCrypto.decrypt(rs.getBytes(2)));
+                },original.identityId());
+        assertThat(emailIdentity.verifyEmail(proof.getKey(),proof.getValue()))
+                .isEqualTo(original.userId());
+        deletion.deleteAccount(verified(platformAdmin()),original.userId(),
+                "retire-address-"+UUID.randomUUID());
+        assertThatThrownBy(()->emailIdentity.queueVerification(original.identityId()))
+                .isInstanceOf(SecurityException.class);
+        var newRegistration=emailIdentity.findOrProvision(address);
+        assertThat(newRegistration.userId()).isNotEqualTo(original.userId());
+        assertThat(newRegistration.identityId()).isNotEqualTo(original.identityId());
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,original.userId())).isEqualTo("DELETED");
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,newRegistration.userId())).isEqualTo("PENDING");
+    }
+
+    @Test void postgresBothCommitOrdersForDeleteVersusEmailDeliveryAdmission() throws Exception {
+        requirePostgres();
+        assertEmailEnqueueDeleteOrder(true);
+        assertEmailEnqueueDeleteOrder(false);
+    }
+
+    private void assertEmailEnqueueDeleteOrder(boolean enqueueFirst) throws Exception {
+        UUID target=buyer();
+        var tenant=seller();
+        seedSalesOrder(tenant.tenant(),target);
+        UUID emailId=jdbc.queryForObject("""
+                SELECT id FROM public.iam_email_identity WHERE user_id=?
+                """,UUID.class,target);
+        var admin=verified(platformAdmin());
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var secondStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        String request="delivery-delete-"+UUID.randomUUID();
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var first=pool.submit(()->tx.execute(status->{
+                if(enqueueFirst) emailIdentity.queueVerification(emailId);
+                else deletion.deleteAccount(admin,target,request);
+                entered.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Delivery/delete barrier timeout");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(entered.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                secondStarted.countDown();
+                try {
+                    if(enqueueFirst) deletion.deleteAccount(admin,target,request);
+                    else emailIdentity.queueVerification(emailId);
+                    return true;
+                }catch(SecurityException denied){return false;}
+            });
+            assertThat(secondStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally {release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(enqueueFirst);
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_delivery_outbox
+                WHERE email_identity_id=? AND state='PENDING'
+                """,Integer.class,emailId)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_verification_challenge
+                WHERE email_identity_id=? AND consumed_at IS NULL
+                """,Integer.class,emailId)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,target)).isEqualTo("DELETED");
+    }
+
     private void requirePostgres() throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
             org.junit.jupiter.api.Assumptions.assumeTrue(
