@@ -212,6 +212,10 @@ public class CrmBuyerLinkService {
     public Link disputeByBuyer(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion) {
         if(buyer==null || tenant==null || linkId==null) throw new SecurityException("Buyer required");
         UUID buyerId=buyer.userId();
+        // Fence disputes against committed IAM suspension/deletion and hold
+        // the account SHARE lock through this transaction.
+        if(!"ACTIVE".equals(lockActiveBuyer(buyerId)))
+            throw new SecurityException("Inactive buyer");
         Link current=lockLink(tenant,linkId);
         if(current==null || !buyerId.equals(current.buyerUserId()))
             throw new SecurityException("Only linked buyer can dispute");
