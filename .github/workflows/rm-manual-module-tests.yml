@@ -1,0 +1,153 @@
+name: RM Module JUnit - H2 and PostgreSQL
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Java service module to qualify'
+        type: choice
+        required: true
+        default: UR-R3
+        options:
+          - UR-R3
+          - SALES
+          - INVENTORY
+          - CRM
+          - FILES
+          - ORGANIZATION
+          - ALL
+      database:
+        description: 'H2 in-memory smoke or real PostgreSQL integration'
+        type: choice
+        required: true
+        default: H2
+        options:
+          - H2
+          - PostgreSQL
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/**'
+      - 'src/test/java/**'
+      - 'src/main/resources/**'
+      - 'pom.xml'
+      - '.github/workflows/rm-manual-module-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/**'
+      - 'src/test/java/**'
+      - 'src/main/resources/**'
+      - 'pom.xml'
+      - '.github/workflows/rm-manual-module-tests.yml'
+
+permissions:
+  contents: read
+
+# The diagnostic workflow does not create release admission and does not
+# replace the mandatory RM-QA-01B exact-SHA workflow.
+jobs:
+  module-h2:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.database == 'H2' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Resolve explicitly allowed test suites
+        id: select
+        shell: bash
+        env:
+          MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.module || 'UR-R3' }}
+        run: |
+          case "$MODULE" in
+            UR-R3)       suites='UserRoleMatrixR31QualificationTest' ;;
+            SALES)       suites='SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest' ;;
+            INVENTORY)   suites='InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest' ;;
+            CRM)         suites='CrmR1aQualificationTest,CrmInteractionQualificationTest' ;;
+            FILES)       suites='FilesR10aQualificationTest,FilesR10bQualificationTest' ;;
+            ORGANIZATION) suites='OrganizationLocationLifecycleQualificationTest,OrganizationLocationQueryQualificationTest,OrganizationLocationR11ConcurrencyQualificationTest' ;;
+            ALL)         suites='UserRoleMatrixR31QualificationTest,SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest,InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest,CrmR1aQualificationTest,CrmInteractionQualificationTest,FilesR10aQualificationTest,FilesR10bQualificationTest,OrganizationLocationLifecycleQualificationTest,OrganizationLocationQueryQualificationTest,OrganizationLocationR11ConcurrencyQualificationTest' ;;
+            *) echo "::error::Unsupported test module: $MODULE"; exit 2 ;;
+          esac
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+          echo "Selected: $suites"
+      - name: Execute JUnit against H2 in-memory
+        env:
+          SPRING_PROFILES_ACTIVE: dev
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          TEST_SUITES: ${{ steps.select.outputs.suites }}
+        run: mvn -B -ntp -Dtest="$TEST_SUITES" test
+      - name: Publish JUnit XML and diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-module-h2-surefire
+          path: target/surefire-reports/
+          if-no-files-found: warn
+
+  module-postgresql:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.database == 'PostgreSQL' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Resolve explicitly allowed test suites
+        id: select
+        shell: bash
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          case "$MODULE" in
+            UR-R3)       suites='UserRoleMatrixR31QualificationTest' ;;
+            SALES)       suites='SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest' ;;
+            INVENTORY)   suites='InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest' ;;
+            CRM)         suites='CrmR1aQualificationTest,CrmInteractionQualificationTest' ;;
+            FILES)       suites='FilesR10aQualificationTest,FilesR10bQualificationTest' ;;
+            ORGANIZATION) suites='OrganizationLocationLifecycleQualificationTest,OrganizationLocationQueryQualificationTest,OrganizationLocationR11ConcurrencyQualificationTest' ;;
+            ALL)         suites='UserRoleMatrixR31QualificationTest,SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest,InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest,CrmR1aQualificationTest,CrmInteractionQualificationTest,FilesR10aQualificationTest,FilesR10bQualificationTest,OrganizationLocationLifecycleQualificationTest,OrganizationLocationQueryQualificationTest,OrganizationLocationR11ConcurrencyQualificationTest' ;;
+            *) echo "::error::Unsupported test module: $MODULE"; exit 2 ;;
+          esac
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+      - name: Execute JUnit against PostgreSQL 17
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+          RM_TEST_DB_USERNAME: rm
+          RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          TEST_SUITES: ${{ steps.select.outputs.suites }}
+        run: mvn -B -ntp -Dtest="$TEST_SUITES" test
+      - name: Publish PostgreSQL JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-module-postgres-surefire
+          path: target/surefire-reports/
+          if-no-files-found: warn
