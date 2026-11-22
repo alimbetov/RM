@@ -373,8 +373,14 @@ class InventoryTransferStocktakeQualificationTest {
         var step=reconciliationRuns.advance(who,f.tenant(),run.id(),20);
         assertThat(step.run().status())
                 .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
-        assertThat(step.run().findingCount()).isZero();
-        assertThat(step.newFindings()).isEmpty();
+        // Synthetic historical events were inserted without posting_version.
+        // Their arithmetic may balance, but timestamp order cannot certify
+        // the historic chain. Persist one explicit diagnostic rather than GREEN.
+        assertThat(step.run().findingCount()).isEqualTo(1);
+        assertThat(step.newFindings()).singleElement()
+                .extracting(AuthenticatedInventoryReconciliationRuns.Finding::code)
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Code.UNVERIFIED_MOVEMENT_ORDER);
+        assertThat(step.newFindings().getFirst().inspectedMovements()).isEqualTo(502);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND location_id=? AND item_id=?
