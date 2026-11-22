@@ -11,6 +11,7 @@ on:
         options:
           - UR-R3
           - UR-R3.2
+          - UR-R3.3
           - SALES
           - INVENTORY
           - CRM
@@ -67,6 +68,7 @@ jobs:
           case "$MODULE" in
             UR-R3)       suites='UserRoleMatrixR31QualificationTest' ;;
             UR-R3.2)     suites='UserRoleMatrixR31QualificationTest,SalesInventoryRbacQualificationTest,CrmR1aQualificationTest,FilesR10bQualificationTest,OrganizationLocationLifecycleQualificationTest' ;;
+            UR-R3.3)     suites='TenantRbacRevocationQualificationTest,CommercialCoreE2EQualificationTest,InventoryTransferStocktakeQualificationTest' ;;
             SALES)       suites='SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest' ;;
             INVENTORY)   suites='InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest' ;;
             CRM)         suites='CrmR1aQualificationTest,CrmInteractionQualificationTest' ;;
