@@ -6,6 +6,7 @@ import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -71,7 +72,11 @@ public class AuthenticatedInventoryReconciliationRuns {
      * A failed transaction rolls back its findings and cursor together.
      * Independent steps are NOT a single point-in-time inventory snapshot.
      */
-    @Transactional
+    // A single page's keys, balance, active reserves and movement chain are
+    // read from one repeatable-read snapshot. Rows from distinct pages are
+    // NOT a certified tenant-wide as-of snapshot. Concurrent advances or
+    // writes may cause a serialization failure; callers retry the entire step.
+    @Transactional(isolation=Isolation.REPEATABLE_READ)
     public Step advance(VerifiedActor actor,UUID tenant,UUID runId,int pageSize) {
         admit(actor,tenant);
         if(runId==null||pageSize<1||pageSize>MAX_PAGE)
