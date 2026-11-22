@@ -59,4 +59,7 @@ public class AuthenticatedCrmCommands {
         service.restoreContact(id(actor),tenant,contact,expectedVersion);
     }
 
+    public void restoreCustomer(VerifiedActor actor, UUID tenant, UUID customer, long expectedVersion) {
+        service.restoreCustomer(id(actor),tenant,customer,expectedVersion);
+    }
 }
