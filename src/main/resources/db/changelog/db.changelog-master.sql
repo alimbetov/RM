@@ -2518,3 +2518,60 @@ CREATE TRIGGER trg_offer_qr_receipt_immutable
  FOR EACH ROW EXECUTE FUNCTION crm.reject_offer_qr_receipt_mutation();
 --rollback DROP TRIGGER trg_offer_qr_receipt_immutable ON crm.store_offer_qr_receipt;
 --rollback DROP FUNCTION crm.reject_offer_qr_receipt_mutation();
+
+
+--changeset rm:0087-files-catalog-public-media
+-- QR-02A: only sanitizer-generated, CLEAN and seller-approved derivative is public.
+-- Uploaded ORIGINAL bytes retain INTERNAL classification and are never public.
+-- The approving code writes one immutable lineage row; revocation disables reads.
+CREATE TABLE crm.file_catalog_public_variant (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ original_file_id UUID NOT NULL,
+ derivative_file_id UUID NOT NULL,
+ attachment_id UUID NOT NULL,
+ public_ref VARCHAR(64) NOT NULL,
+ sort_order INTEGER NOT NULL,
+ active_slot INTEGER,
+ request_key VARCHAR(100) NOT NULL,
+ state VARCHAR(16) NOT NULL,
+ sanitizer_version VARCHAR(20) NOT NULL,
+ width_pixels INTEGER NOT NULL,
+ height_pixels INTEGER NOT NULL,
+ approved_by UUID NOT NULL,
+ approved_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ revoked_by UUID,
+ revoked_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT pk_catalog_public_variant PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_catalog_public_variant_item FOREIGN KEY(tenant_id,item_id)
+   REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT fk_catalog_public_variant_original FOREIGN KEY(tenant_id,original_file_id)
+   REFERENCES crm.file_object(tenant_id,id),
+ CONSTRAINT fk_catalog_public_variant_derivative FOREIGN KEY(tenant_id,derivative_file_id)
+   REFERENCES crm.file_object(tenant_id,id),
+ CONSTRAINT fk_catalog_public_variant_attachment FOREIGN KEY(tenant_id,attachment_id)
+   REFERENCES crm.file_attachment(tenant_id,id),
+ CONSTRAINT fk_catalog_public_variant_approver FOREIGN KEY(approved_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_catalog_public_variant_revoker FOREIGN KEY(revoked_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uq_catalog_public_media_ref UNIQUE(public_ref),
+ CONSTRAINT uq_catalog_public_request UNIQUE(tenant_id,request_key),
+ CONSTRAINT uq_catalog_public_active_slot UNIQUE(tenant_id,item_id,active_slot),
+ CONSTRAINT ck_catalog_public_order CHECK(sort_order BETWEEN 0 AND 19),
+ CONSTRAINT ck_catalog_public_dimensions CHECK(
+   width_pixels BETWEEN 1 AND 4096 AND height_pixels BETWEEN 1 AND 4096
+   AND width_pixels * height_pixels <= 4000000),
+ CONSTRAINT ck_catalog_public_sanitizer CHECK(sanitizer_version='PNG_R1'),
+ CONSTRAINT ck_catalog_public_not_same_file CHECK(original_file_id<>derivative_file_id),
+ CONSTRAINT ck_catalog_public_state CHECK(
+    (state='ACTIVE' AND active_slot=sort_order
+      AND revoked_by IS NULL AND revoked_at IS NULL)
+    OR
+    (state='REVOKED' AND active_slot IS NULL
+      AND revoked_by IS NOT NULL AND revoked_at IS NOT NULL))
+);
+CREATE INDEX idx_catalog_public_variant_item
+ ON crm.file_catalog_public_variant(tenant_id,item_id,state,sort_order);
+--rollback DROP TABLE crm.file_catalog_public_variant;

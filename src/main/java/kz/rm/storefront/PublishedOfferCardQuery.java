@@ -1,5 +1,7 @@
 package kz.rm.storefront;
 
+import kz.rm.files.CatalogPublicProductMedia;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,7 +12,8 @@ import java.util.List;
 /**
  * QR-01 anonymous read boundary. A random public reference is not a grant:
  * every read verifies the current workspace, storefront, offer and PRODUCT
- * publication. Media and region stock stay UNKNOWN until QR-02 qualification.
+ * publication. QR-02A media is read through the FILES-owned approved-derivative
+ * policy; stock stays UNKNOWN until qualified regional query integration.
  */
 @Service
 public class PublishedOfferCardQuery {
@@ -18,12 +21,16 @@ public class PublishedOfferCardQuery {
                              String title, String description, String locale,
                              String sourceLocale, BigDecimal unitPrice,
                              String currency, long offerRowVersion,
-                             String availabilityBand) {}
+                             String availabilityBand,
+                             List<CatalogPublicProductMedia.Image> images) {}
 
     private final JdbcTemplate jdbc;
+    private final CatalogPublicProductMedia publicMedia;
 
-    public PublishedOfferCardQuery(JdbcTemplate jdbc) {
+    public PublishedOfferCardQuery(JdbcTemplate jdbc,
+                                   CatalogPublicProductMedia publicMedia) {
         this.jdbc = jdbc;
+        this.publicMedia = publicMedia;
     }
 
     @Transactional(readOnly = true)
@@ -61,8 +68,15 @@ public class PublishedOfferCardQuery {
                 rs.getString(7)!=null ? rs.getString(7)
                     : rs.getString(8)!=null ? rs.getString(8) : rs.getString(6),
                 rs.getString(6),rs.getBigDecimal(9),rs.getString(10),
-                rs.getLong(11),"UNKNOWN"), locale, publicRef);
+                rs.getLong(11),"UNKNOWN",List.of()), locale, publicRef);
         if (rows.isEmpty()) throw new IllegalArgumentException("QR_UNAVAILABLE");
-        return rows.getFirst();
+        var card = rows.getFirst();
+        // Second SQL statement is admission-checked again by FILES, never
+        // returns detached, infected or previously-private original bytes.
+        var images = List.copyOf(publicMedia.listPublished(publicRef,20));
+        return new PublicCard(card.publicRef(),card.storeSlug(),card.sku(),
+                card.title(),card.description(),card.locale(),card.sourceLocale(),
+                card.unitPrice(),card.currency(),card.offerRowVersion(),
+                card.availabilityBand(),images);
     }
 }
