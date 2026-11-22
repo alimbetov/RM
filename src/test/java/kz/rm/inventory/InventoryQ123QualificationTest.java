@@ -2,6 +2,7 @@ package kz.rm.inventory;
 
 import kz.rm.iam.*;
 import kz.rm.inventory.dto.StockSearch;
+import kz.rm.inventory.dto.InventoryMovementSearch;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assumptions;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -260,4 +261,79 @@ class InventoryQ123QualificationTest {
                 WHERE tenant_id=? AND location_id=? AND item_id=?
                 """,Long.class,t.tenant(),t.location(),t.item())).isEqualTo(2L);
     }
+
+    @Test void q456ProvenanceWriteOffAndTenantHistoryAreRealOperations() {
+        UUID staff=user("inv-history");
+        Tenant t=tenant(staff,DomainPermission.INVENTORY_RECEIVE,
+                DomainPermission.INVENTORY_ADJUST,DomainPermission.INVENTORY_STOCK_READ);
+        Tenant foreign=tenant(staff,DomainPermission.INVENTORY_STOCK_READ);
+        var actor=verified(staff);
+        commands.receive(actor,t.tenant(),t.location(),t.item(),
+                "historyReceipt01",new BigDecimal("10"));
+        commands.correct(actor,t.tenant(),t.location(),t.item(),
+                "historyAdjust01",new BigDecimal("-2"));
+        var writeOff=commands.writeOff(actor,t.tenant(),t.location(),t.item(),
+                "historyLoss0001",new BigDecimal("3"),
+                InventoryMovementService.WriteOffCause.LOSS);
+        assertThat(writeOff.before()).isEqualByComparingTo("8");
+        assertThat(writeOff.after()).isEqualByComparingTo("5");
+        assertThat(queries.getPosition(actor,t.tenant(),t.location(),t.item()).available())
+                .isEqualByComparingTo("5");
+        assertThat(queries.searchMovements(actor,t.tenant(),null,0,2).getTotalElements())
+                .isEqualTo(3);
+        var history=queries.searchMovements(actor,t.tenant(),
+                new InventoryMovementSearch(t.location(),t.item(),"WRITE_OFF",null,null),0,10);
+        assertThat(history.getTotalElements()).isEqualTo(1);
+        var evidence=history.getContent().getFirst();
+        assertThat(evidence.id()).isEqualTo(writeOff.id());
+        assertThat(evidence.actorUserId()).isEqualTo(staff);
+        assertThat(evidence.sourceType()).isEqualTo("STAFF");
+        assertThat(evidence.businessReasonCode()).isEqualTo("LOSS");
+        assertThat(evidence.reasonCode()).isEqualTo("WRITE_OFF");
+        assertThat(queries.searchMovements(actor,t.tenant(),
+                new InventoryMovementSearch(foreign.location(),null,null,null,null),0,10)
+                .getTotalElements()).isZero();
+        assertThatThrownBy(()->queries.getPosition(actor,t.tenant(),
+                foreign.location(),foreign.item())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->commands.writeOff(actor,foreign.tenant(),
+                foreign.location(),foreign.item(),"foreignLoss0001",BigDecimal.ONE,
+                InventoryMovementService.WriteOffCause.LOSS))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->commands.writeOff(actor,t.tenant(),t.location(),t.item(),
+                "historyLoss0001",new BigDecimal("3"),
+                InventoryMovementService.WriteOffCause.DAMAGE))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(commands.writeOff(actor,t.tenant(),t.location(),t.item(),
+                "historyLoss0001",new BigDecimal("3"),
+                InventoryMovementService.WriteOffCause.LOSS).id()).isEqualTo(writeOff.id());
+        assertThatThrownBy(()->commands.writeOff(actor,t.tenant(),t.location(),t.item(),
+                "writeoffOver001",new BigDecimal("6"),
+                InventoryMovementService.WriteOffCause.LOSS))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(stock(t)).isEqualByComparingTo("5");
+        assertThat(queries.reservationHistory(actor,t.tenant(),UUID.randomUUID(),0,5)
+                .getTotalElements()).isZero();
+        assertThatThrownBy(()->queries.searchMovements(actor,t.tenant(),null,0,101))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->queries.searchMovements(actor,t.tenant(),
+                new InventoryMovementSearch(null,null,null,
+                        Instant.parse("2026-02-01T00:00:00Z"),
+                        Instant.parse("2026-01-01T00:00:00Z")),0,10))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void q456WriteOffRequiresAdjustmentPermission() {
+        UUID staff=user("inv-no-writeoff");
+        Tenant t=tenant(staff,DomainPermission.INVENTORY_RECEIVE,
+                DomainPermission.INVENTORY_STOCK_READ);
+        var actor=verified(staff);
+        commands.receive(actor,t.tenant(),t.location(),t.item(),
+                "onlyReceipt001",new BigDecimal("10"));
+        assertThatThrownBy(()->commands.writeOff(actor,t.tenant(),t.location(),t.item(),
+                "deniedLoss0001",BigDecimal.ONE,
+                InventoryMovementService.WriteOffCause.LOSS))
+                .isInstanceOf(SecurityException.class);
+        assertThat(stock(t)).isEqualByComparingTo("10");
+    }
+
 }
