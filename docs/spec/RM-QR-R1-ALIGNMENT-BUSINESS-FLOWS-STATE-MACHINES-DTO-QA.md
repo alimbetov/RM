@@ -1,6 +1,6 @@
 # RM-QR-R1 — согласование QR-бизнес-процессов, state machines, DTO и тестов
 
-**Статус:** DRAFT R1.0 / проектное ТЗ, не реализация. **Дата:** 2026-11-22. **Ветка:** base_dev. **Source-review SHA:** 8ca47e77b5088877e6ed3e625057312d7340ea3d. **Production:** HOLD.
+**Статус:** DRAFT R1.1 / расширенное техническое задание, не реализация. **Дата:** 2026-11-22. **Ветка:** base_dev. **Source-review SHA:** 98b2607e231e6c84a04eea0a104f49ab60f36320 (source audit for R1.1). **Production:** HOLD.
 **Неподвижные рамки:** Java 21 / Spring Boot modular monolith / PostgreSQL; только service-first, никаких новых REST-контроллеров, публичных API, отдельных QR-микросервисов, новых веток и merge в main на этом этапе. Реализация в последующих этапах должна пройти собственный exact-SHA PostgreSQL gate.
 
 **Нормативные источники:** docs/architecture/RM-PLATFORM-STANDARD-R2.md, docs/spec/RM-STOREFRONT-AUTOORDER-R1.md, docs/spec/RM-COMMERCE-INVENTORY-COMPLETION-R1.md, docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md, docs/spec/RM-FILES-R1.md, docs/spec/RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md, docs/spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md, docs/strategy/RM-STRATEGY-R4-FUNCTIONAL-GAP-PRIORITIZATION.md. При конфликте действующий стандарт R2 и исходный код имеют приоритет над описанием предполагаемого поведения.
@@ -155,7 +155,7 @@ Purpose нельзя подавать клиентом как произволь
 ## 8. Модель хранения, tenant isolation и секреты
 
 - Не создавать универсальную crm.qr_action таблицу или отдельную CRM-копию заказа/stock.
-- STOREFRONT: crm.store_offer_qr_ref (tenant_id, offer_id, opaque_ref_hash, generation, state, issued_at, revoked_at), unique active offer alias; доступность зависит от действующей публикации.
+- STOREFRONT: crm.store_offer_qr_ref (tenant_id, offer_id, public_ref, generation, state, issued_at, revoked_at), unique active offer alias; доступность зависит от действующей публикации.
 - SALES: crm.sales_price_proposal, crm.sales_price_proposal_event, crm.sales_accepted_quote; composite FK и optimistic CAS. PriceProposal не меняет store_offer.unit_price; quote once-only consumed при checkout.
 - SALES: crm.sales_order_qr_reference и crm.sales_pickup_credential, crm.sales_pickup_handover, позже sales_return_request/line/event. QR lookup и pickup credential — **разные purpose и таблицы**. Plaintext pickup token не хранить; strong CSPRNG 192–256 bits рекомендовано, hash/HMAC, purpose, tenant/order/warehouse, expiry, one-time server-side consume и revoke.
 - SALES: immutable warehouse origin поля по связанному GEO spec. Старые CONFIRMED/COMPLETED без снимков остаются UNKNOWN_LEGACY.
@@ -253,3 +253,236 @@ Purpose нельзя подавать клиентом как произволь
 - Дробные UOM (метры/кг) требуют согласованного BigDecimal quantity контракта по всем доменам, а не просто другого input type.
 
 **Признак готовности:** только реализованный service-only code + additive migrations + unit/H2 + PostgreSQL negative/race tests с exact-SHA PASS; реальный OIDC/browser/QR camera и performance admission отдельно. Данный документ не даёт production допуска и не подтверждает реализацию.
+
+---
+
+## 12. R1.1 — нормативная детализация и решения по противоречиям
+
+Следующие правила уточняют разделы 1–11 и обязательны при реализации. Если продуктовая политика помечена DECISION REQUIRED, разработчик не вправе заменять её собственным решением. Статус спецификации не означает реализацию или прохождение тестов.
+
+| ID | Правило | Инвариант |
+|---|---|---|
+| QR-ADR-01 | QR не образует новый DomainModule | Owning domain принимает любое бизнес-решение |
+| QR-ADR-02 | PRODUCT_OFFER_QR связан с seller tenant и store_offer, не только с SKU | Один SKU может иметь разные цены у продавцов |
+| QR-ADR-03 | Постоянный public_ref товара и заказа — несекретный случайный идентификатор, сохраняемый для повторной печати | Hash-only публичного alias не позволяет восстановить тот же QR |
+| QR-ADR-04 | Только одноразовый PICKUP_CREDENTIAL хранится как защищённый digest | Нет raw token в DB, логах, аналитике |
+| QR-ADR-05 | Публичная карточка допускает только опубликованные CATALOG/FILES данные | Нет приватных файлов или закрытых складских остатков |
+| QR-ADR-06 | Принятая покупателем цена и публичная цена STOREFRONT независимы | Торг не меняет store_offer.unit_price |
+| QR-ADR-07 | Переговоры и согласование не резервируют товар | Только CONFIRMED выполняет reserve |
+| QR-ADR-08 | Quantity PRODUCT R1 — целое 1..1000 | Дробные единицы требуют отдельного CATALOG/SALES/INVENTORY контракта |
+| QR-ADR-09 | Warehouse origin snapshot сохраняется при первом успешном CONFIRMED | PLACED ещё не знает склад |
+| QR-ADR-10 | Новый pickup исполнен только после READY_FOR_PICKUP и физического handover | Старый fulfill из CONFIRMED не является подтверждением передачи |
+| QR-ADR-11 | R1 один продавец, один склад на заказ, все строки целиком | Нельзя незаметно вводить split/partial pickup |
+| QR-ADR-12 | Один full-order handover создаёт один receipt и одно множество stock movements | Повторный scan не списывает второй раз |
+| QR-ADR-13 | Возврат оформляется через отдельный RMA | COMPLETED заказ не возвращается в PLACED |
+| QR-ADR-14 | SERVICE не использует stock balance для самой услуги | Только отдельный service appointment после своего gate |
+| QR-ADR-15 | Текущий складской KATO не является адресом покупателя и зоной доставки | Историческая геоаналитика не подменяет понятия |
+| QR-ADR-16 | Только Java application services/ports/records и PG qualification | Ни одного нового REST controller или public API |
+| QR-ADR-17 | Любое изменение порядка блокировок требует отдельного lock graph и двухконнектных тестов | Сохранить SALES, INVENTORY и IAM concurrency guarantees |
+| QR-ADR-18 | Центральная круглая галочка QR — декоративный элемент | Не означает VERIFIED, PAID или гарантированное наличие |
+
+Пять независимых типов статуса нельзя смешивать: публикация SKU, публикация offer, региональное наличие, коммерческие переговоры и жизненный цикл заказа. Состояние credential, RMA и appointment добавляются отдельно по мере реализации.
+
+## 13. Подробные бизнес-контракты и поведение на границах
+
+### 13.1 BP-01/02 — публикация, QR-карточка, фото, регион
+
+**Участники:** уполномоченный seller, анонимный посетитель. **Источник истины:** STOREFRONT current published offer + CATALOG published PRODUCT + FILES approved CATALOG_ITEM attachments + INVENTORY live stock + ORG/GEO регион. Публикация товара и создание стабильного QR — разные действия.
+
+**Preconditions issue/reprint:** store_front PUBLISHED, seller workspace ACTIVE, offer PUBLISHED, SKU PRODUCT PUBLISHED, seller permission; один активный QR alias для offer. Reprint возвращает тот же публичный ref и URL при новой цене/фото/остатке. Explicit revoke закрывает ref; reissue создаёт новую generation и не восстанавливает старую.
+
+**Public read:** проверить текущее состояние store/offer/item при каждом разрешении ссылки; локаль kk/ru/en/zh-Hans, fallback source_locale; title, description, characteristics (если утверждены), approved images, public price/currency, unit, stock availability band и selected KATO. Никаких tenant staff IDs, raw balance, owner storage keys, private images, buyer PII. Отсутствие файла не блокирует обычную продажу, если обязательность фото не введена отдельной политикой. Недоступный scanner/AV ERROR никогда не превращает закрытый файл в PUBLIC.
+
+**Region:** в R1 только точное соответствие допустимого KATO; нельзя выводить иерархию регионов из совпадения текстового префикса кода, поскольку справочник частичный. Наличие товара в регионе не обещает доставку по этому региону. Показанный available — advisory; checkout и confirm повторно проверяют свои факты.
+
+**Error policy:** revoked, hidden, archived и foreign QR возвращают единый public unavailable без раскрытия внутреннего существования; seller management read получает typed reason после IAM admission.
+
+### 13.2 BP-03 — заказать по опубликованной цене
+
+**Input:** offer reference, integer quantity 1..1000, region, seller-owned terms, email-first buyer proof и idempotency key. Цена, SKU и валюты от клиента не являются доверенными.
+
+**Preconditions:** active seller, published storefront/offer/PRODUCT, допустимое количество, согласованные условия, verified или pending buyer согласно нынешнему AUTOORDER flow. Если цена изменилась с момента preview — вернуть PRICE_RECONFIRM_REQUIRED, не создавать order по молча обновлённой цене.
+
+**Transaction result:** immutable PLACED с server-owned SKU/title/quantity/unitPrice/currency snapshots, одна запись sales_checkout_receipt и status event. Нет inv_stock_reservation. Повтор с теми же параметрами возвращает тот же order; тот же key с другим payload даёт IDEMPOTENCY_CONFLICT.
+
+### 13.3 BP-04/05 — предложить цену, ответить, согласовать
+
+**Buyer submit:** verified global buyer identity; seller tenant определяется из published offer, quantity INTEGER и proposedUnitPrice BigDecimal в той же валюте, что offer; expiry/round limits. Создаётся proposal revision 1 со стороной, которая должна ответить, SELLER. Отправка не меняет stock, offer price или заказ. До подтверждения buyer identity разрешён только отдельный ограниченный pending intent, не seller-accepted quote.
+
+**Seller answer:** после отдельного tenant-scoped SALES_PRICE_NEGOTIATE permission seller может ACCEPT текущей buyer revision, REJECT либо COUNTER своей ценой. COUNTER увеличивает revision и меняет ожидающую сторону на BUYER; не изменяет quantity/currency без создания нового proposal.
+
+**Buyer answer:** buyer может ACCEPT последнее встречное предложение, REJECT либо COUNTER с новым revision. При ACCEPT любой стороной последнего предложения другой стороны создаётся ровно один AGREED / AcceptedQuote, связанный с agreedRevision. Нет двойных статусов вида sellerAccepted + buyerAccepted для одного раунда.
+
+**Competition:** два ответа на один expectedRevision → ровно один CAS winner; expired proposal, suspended seller, withdrawn buyer или non-owner participant → fail closed. Никаких скрытых скидок другим покупателям.
+
+### 13.4 BP-06 — checkout по согласованной цене
+
+Buyer после подтверждения финальной суммы передаёт acceptedQuoteId, expectedRevision и idempotencyKey. Сервер проверяет verifiedBuyer == quote.buyer, seller tenant, опубликованность offer/product, текущий статус seller, expiry quote, exact agreed quantity/price/currency. **Не передавать произвольную клиентскую negotiatedPrice в старый AutoOrderService.checkout.**
+
+В одной PostgreSQL-транзакции и совместимом с нынешними checkout locks порядке создать ровно один PLACED с priceSource=NEGOTIATED, acceptedQuoteId, immutable agreedUnitPrice, статусное событие и receipt; пометить quote CONSUMED с orderId. Оба изменения либо commit, либо rollback. Два concurrent checkouts одного quote создают один заказ. Изменение публичной цены после AGREED не меняет agreedUnitPrice, но скрытие/архивирование offer блокирует новый checkout согласно approved quote eligibility policy.
+
+Согласованная цена не равна оплаченной выручке и не резервирует stock. Поздний отказ seller confirm по shortage допустим, но должен быть объяснён клиенту.
+
+### 13.5 BP-07/08 — QR заказа, confirm и исторический склад
+
+ORDER_REFERENCE создаётся после PLACED и позволяет только найти заказ после buyer ownership proof либо seller SALES_ORDER_READ. Постоянный ref не выступает credential выдачи; email challenge не включается в ref. Исторические отменённые заказы могут отображаться владельцу.
+
+При первом CONFIRMED выбранный seller warehouse проверяется как ACTIVE WAREHOUSE того же tenant. EXISTING OrderInventoryPort.reserve резервирует все линии, после чего в той же транзакции фиксируется immutable warehouse origin: warehouseId, KATO, address, nullable WGS84 latitude/longitude и timestamp. Ошибка любой строки, чужой warehouse или закрытие склада откатывает полный reserve и status/snapshot. При idempotent retry тот же warehouse не обновляет исторические координаты.
+
+### 13.6 BP-09/10 — подготовка и одноразовая выдача
+
+Seller/warehouse actor переводит CONFIRMED→PREPARING→READY_FOR_PICKUP после проверки всех ACTIVE reservations и совпадения одного warehouse. READY не списывает on_hand и не снимает резерв.
+
+После buyer identity proof выпускается краткоживущий PICKUP_CREDENTIAL, cryptographic random, purpose-bound, one active generation на order, только digest в базе, raw secret одноразово возвращается доверенному клиенту. Потеря телефона → revoke+reissue; expiry не снимает резерв.
+
+Warehouse staff выбирает tenant и warehouse, сканирует proof, получает строго ограниченный preview (номер, позиции, qty, readiness). **Preview не погашает proof и не списывает stock.** После физической передачи staff отдельно подтверждает выдачу.
+
+В одной транзакции: fresh IAM grants SALES_ORDER_FULFILL + INVENTORY_FULFILL, order row lock, credential lock, expiry/purpose/state/warehouse checks, READY, full ACTIVE reserves → all OrderInventoryPort.fulfill operations → immutable handover receipt → COMPLETED status event → consume proof → commit. Любой сбой откатывает всё. Повторный same-key request возвращает ранее успешный receipt, без второго stock movement. Offline списание R1 запрещено.
+
+### 13.7 BP-11/12 — исключения, неявка, отзыв
+
+Lost proof и delegated pickup не равны пересылке бессрочного QR заказа; нужна отдельная повторная проверка владения/получателя. Screenshot краткоживущего proof может быть скопирован — поэтому staff admission, single-use consume и физическая проверка обязательны. Для high-value товаров дополнительное подтверждение получателя — DECISION REQUIRED.
+
+TTL QR получения не является TTL inventory reserve и не порождает автоматический CANCELLED. В текущем коде cancel запрещён из READY_FOR_PICKUP; для no-show release нужен отдельный согласованный переход с двойным permission, без автоматической подмены.
+
+### 13.8 BP-13/14/15/16 — логистика, возвраты, услуги, инвентаризация
+
+PACKAGE_LABEL, DELIVERY_HANDOFF, STOCKTAKE_ITEM и TRANSFER_BATCH в R2 служат поиску контекста, но не проводят stock без явной авторизованной команды. Доставка и самовывоз имеют независимые proofs; OUT_FOR_DELIVERY не равен COMPLETED.
+
+RETURN_REFERENCE создаётся только по RMA после physical fulfill; scan открывает заявку. Inspection классифицирует SELLABLE, DAMAGED, QUARANTINED, WRONG_ITEM, MISSING; only accepted sellable qty приходит через новый typed INVENTORY RETURN_RECEIPT с original movement provenance. Original COMPLETED остаётся исторически неизменным; деньги возвращает отдельный будущий FINANCE process.
+
+SERVICE QR карточка не даёт права вызвать PRODUCT inventory reservation. Service appointment, доступность исполнителя/слота, check-in, выполнение и отмена — отдельная R2-вертикаль. Материалы услуги остаются PRODUCT SKU со своим stock lifecycle.
+
+## 14. Строгие state machines и переходы
+
+### 14.1 Публичный QR и предложение цены
+
+| Aggregate/from | Command, actor and guard | To / guaranteed effect |
+|---|---|---|
+| OfferQr ABSENT | issue seller, active published offer | ACTIVE generation 1 |
+| OfferQr ACTIVE | reprint seller | ACTIVE, тот же исходный public_ref |
+| OfferQr ACTIVE | revoke seller, expectedVersion CAS | REVOKED, ref отключён |
+| OfferQr REVOKED | reissue seller, offer still PUBLISHED | Новая ACTIVE generation; old ref не восстановлен |
+| OfferQr ACTIVE | offer paused/hidden | QR ref остаётся, public sellable content блокируется |
+| Proposal ABSENT | submit verified buyer, valid offer/qty/price | AWAITING_SELLER revision=1 |
+| Proposal AWAITING_SELLER | sellerCounter with exact revision | AWAITING_BUYER revision+1 |
+| Proposal AWAITING_SELLER | sellerAccept exact buyer revision | AGREED + one AcceptedQuote |
+| Proposal AWAITING_SELLER | sellerReject / buyerWithdraw | REJECTED / WITHDRAWN |
+| Proposal AWAITING_BUYER | buyerCounter exact revision | AWAITING_SELLER revision+1 |
+| Proposal AWAITING_BUYER | buyerAccept exact seller revision | AGREED + one AcceptedQuote |
+| Proposal AWAITING_BUYER | buyerReject / approved sellerWithdraw | REJECTED / WITHDRAWN |
+| Proposal waiting | server now >= expiresAt | EXPIRED; no quote |
+| AcceptedQuote AVAILABLE | approved buyer checkout, not expired, eligible seller | CONSUMED + one PLACED |
+| AcceptedQuote AVAILABLE | expires / seller invalidates | EXPIRED/INVALIDATED, no new order |
+| Any terminal proposal/quote | mutate or resubmit same revision | REJECTED; new proposal required |
+
+Обе стороны не могут принять собственную последнюю ревизию как согласование другой стороны. Proposal AGREED и Quote CONSUMED — не order confirmed/reserved/paid.
+
+### 14.2 Физический order и RMA
+
+| Order/from | Command and admission | To and stock effect |
+|---|---|---|
+| ABSENT | checkout standard/quote | PLACED, stock untouched |
+| PLACED | confirm seller with dual grants and one warehouse | CONFIRMED, ACTIVE reservation for all lines, immutable origin |
+| CONFIRMED | startPreparing staff | PREPARING, no stock debit |
+| PREPARING | markReady staff with full reservations | READY_FOR_PICKUP, no stock debit |
+| READY_FOR_PICKUP | issue/reissue buyer pickup credential | Order unchanged, token generation |
+| READY_FOR_PICKUP | confirmPhysicalHandover staff dual grants + valid token | COMPLETED, fulfill all lines, unique receipt, token CONSUMED |
+| PLACED/CONFIRMED | existing allowed cancel | CANCELLED, release active reservations as applicable |
+| READY_FOR_PICKUP | noShowCancel | HOLD until separate policy; current cancel forbids it |
+| CONFIRMED/PREPARING | existing legacy fulfill | Existing COMPLETED semantics; **not** proof buyer handover |
+| COMPLETED | request return | Original stays COMPLETED, separate RMA |
+| RMA REQUESTED | approve/deny seller | AUTHORIZED/REJECTED |
+| RMA AUTHORIZED | physical receipt staff | RECEIVED, not sellable stock yet |
+| RMA RECEIVED | inspection staff | INSPECTED with typed line-level quality |
+| RMA INSPECTED | approved sellable restock | RESTOCKED with new typed stock receipt |
+| RMA INSPECTED | damaged/unverified | QUARANTINED/REJECTED, no sellable increment |
+
+Из существующего DDL READY_FOR_PICKUP допускается как значение, но current SalesInventoryCommandService.fulfill его не принимает, тогда как InventoryReservationService.fulfill принимает. Это **обязательный gap**, не косметическое переименование статуса. Для нового QR handover нужен отдельный orchestration path, сохраняющий старые regressions и lock order.
+
+## 15. Конкретные service-only команды и DTO
+
+| Домен / proposed class | Contract method | Command fields | Result / policy |
+|---|---|---|---|
+| STOREFRONT PublishedOfferQrService | issueOrGet / reprint / revoke | VerifiedActor, tenant, offerId, expectedVersion, requestKey | PublicQrRefDto; seller management right |
+| STOREFRONT PublishedOfferCardQuery | findPublished | opaqueRef, locale, regionKato? | PublicOfferCardDto, anonymous publication allowlist |
+| CATALOG PublishedCatalogDetailsPort | publishedDetails | sellerTenant, itemId, locale | Safe title/description/specifications |
+| FILES CatalogItemPublicMediaPort | listApproved | sellerTenant, publishedItemId, page | PublicImageDto with approved CLEAN variants |
+| INVENTORY RegionalAvailabilityPort | publicBand | sellerTenant, itemId, KATO | AvailabilityDto(asOf,band); no reserve |
+| SALES BuyerPriceProposalService | submit / respond | verifiedBuyer, offerRef, qty, unitPrice, currency, revision, requestKey | ProposalDto, buyer-owned |
+| SALES SellerPriceProposalService | accept / reject / counter | verifiedSeller, tenant, proposalId, expectedRevision, proposedUnitPrice? | ProposalDto / AcceptedQuoteDto |
+| SALES AcceptedQuoteCheckoutService | checkoutQuote | verifiedBuyer, quoteId, buyerConfirmedRevision, idempotencyKey | OrderReceiptDto, one-time quote |
+| SALES OrderQrLookupService | issueOrGet / readOwn | verified buyer or staff, order ref | OrderQrDto / SanitizedOrderDto |
+| SALES PickupPreparationService | start / markReady | verifiedStaff, tenant, orderId, expectedOrderVersion, requestKey | OrderStateDto and event |
+| SALES PickupCredentialService | issue / revoke | verifiedBuyer, orderRef, requestKey | PickupCredentialDto; raw token only at issue |
+| SALES PickupHandoverService | preview / confirm | verifiedStaff, selectedTenant, selectedWarehouse, proof, explicitConfirm, requestKey | PickupPreviewDto / immutable HandoverReceiptDto |
+| SALES ReturnRequestService | request / authorize / inspect | verified actor, originalOrder/line quantities, expectedRevision, quality | ReturnRequestDto; RMA source |
+| INVENTORY InventoryReturnPort | acceptSellable | tenant, RMA line, original movement, qty, warehouse, approved actor | Typed RETURN_RECEIPT |
+| ORGANIZATION LocationSnapshotPort | currentLockedWarehouse | tenant, locationId | Consistent KATO/address/GPS origin |
+
+**DTO allowlists:** PublicOfferCardDto содержит title/description/locale/gallery, unitPrice BigDecimal, currency, unitOfMeasure, availabilityBand + asOf, region, published flags. Нельзя выводить internal warehouse balance, private file keys, IAM actor, private buyer negotiations. OrderStatusDto содержит sanitized state и immutable lines; PickupPreviewDto — ожидаемые quantity и warehouse label, без private PII; HandoverReceiptDto — receiptId/orderRef/warehouse/time/lineCount, без утверждения PAID или DELIVERED.
+
+**Validation:** amount/quote totals только BigDecimal и единая currency, quantity в текущем checkout INTEGER 1..1000 включая merge повторных offer lines; разные currencies в одном заказе не смешивать. Locales kk/ru/en/zh-Hans, источник fallback явный. ExpectedVersion/revision CAS обязательны. RequestKey с canonical request fingerprint: тот же key + те же параметры → тот же результат, иначе IDEMPOTENCY_CONFLICT. Actor/tenant берутся из trusted server context, а не из данных QR/URL.
+
+## 16. Schema-level design: owner, PK/FK, constraints, индексы
+
+Все таблицы ниже **предлагаемые**; их ещё нет в production-qualified коде. Создавать только additive Liquibase changesets с проверкой занятых имён и populated upgrade. Existing sales_order, inv_stock_balance и их ownership не заменять.
+
+| Table | Minimum columns | Mandatory relational rules |
+|---|---|---|
+| crm.store_offer_qr_ref | tenant_id,id,offer_id,**public_ref**,generation,state,issued_at,revoked_at,row_version | PK(tenant,id), FK(tenant,offer_id), global UNIQUE(public_ref), UNIQUE active tenant/offer |
+| crm.sales_price_proposal | tenant_id,id,offer_id,buyer_user_id,quantity,current_unit_price,currency,state,revision,next_actor_role,expires_at,row_version | Composite tenant FK offer; verified buyer; quantity CHECK 1..1000; amount NUMERIC(19,4), >0 |
+| crm.sales_price_proposal_event | tenant_id,id,proposal_id,revision,actor_role,action,unit_price,quantity,currency,occurred_at | Append-only; UNIQUE(tenant,proposal_id,revision); composite FK proposal |
+| crm.sales_accepted_quote | tenant_id,id,proposal_id,agreed_revision,buyer_user_id,quantity,agreed_unit_price,currency,expires_at,state,consumed_order_id | UNIQUE(tenant,proposal,revision); one consumed order, owner/expiry checks |
+| crm.sales_order_line extension | accepted_quote_id NULL, price_source NULL | Tenant-qualified FK; legacy NULL means UNKNOWN_LEGACY, do not rewrite historical amount |
+| crm.sales_order_qr_reference | tenant_id,id,order_id,public_ref,issued_at,revoked_at,state | PK tenant+id, FK tenant+order, global UNIQUE(public_ref), stable non-secret reference |
+| crm.sales_pickup_credential | tenant_id,id,order_id,warehouse_id,digest,issued_at,expires_at,consumed_at,revoked_at,state,generation,row_version | Tenant FKs, one active ISSUED/order, secret never plaintext |
+| crm.sales_pickup_handover | tenant_id,id,order_id,warehouse_id,credential_id,staff_user_id,request_key,request_hash,happened_at,status_event_id | UNIQUE(tenant,order_id) R1; UNIQUE(tenant,request_key); immutable |
+| crm.sales_return_request/line/event | tenant_id, original order, line qty, event/quality, version, return warehouse | Composite tenant FKs, original completed, cumulative received qty <= original fulfilled |
+| public.org_location extension | latitude,longitude NUMERIC(9,6),coordinate_source,coordinates_updated_at,geo_verified_at | WGS84 range, paired-null CHECK, row_version and authorized update |
+| crm.sales_order extension | fulfillment_warehouse_id, warehouse_kato/address/lat/lon_snapshot, captured_at | Tenant composite FK ORG; immutable after first CONFIRMED; nullable for legacy |
+
+**Исправление прежнего контракта:** у постоянной публичной QR-ссылки и справочного ORDER_REFERENCE разрешено хранить исходный random public_ref, поскольку он **не является секретом доступа**. Прежнее предложение хранить только hash public alias конфликтовало с reprint. У pickup proof обратное правило: хранится только keyed digest, raw token не сохраняется. Reissue старого pickup proof создаёт новый secret, а не «восстанавливает» старый.
+
+**GPS:** широта -90..90 и долгота -180..180; обе NULL или обе заполнены, coordinates_updated_at + source обязательны при наличии GPS. Нельзя брать центроид KATO за точный GPS. Старые локации и CONFIRMED без GPS остаются NULL/UNKNOWN_LEGACY, без фиктивного backfill.
+
+**FILES:** публичное фото имеет owner CATALOG_ITEM + active published offer + AVAILABLE/CLEAN + approved MIME/variant; текущий FileAttachmentService проверяет CRM_CUSTOMER, не разрешает автоматически CATALOG_ITEM. No duplicate photo DB.
+
+## 17. Security and IAM — матрица полномочий
+
+| Операция | Authn/authz | Object policy |
+|---|---|---|
+| Public offer QR/card | Anonymous only by explicit publication allowlist | Published storefront/offer/product/files |
+| Buyer PriceProposal | Verified buyer identity/email proof | Только собственные proposals |
+| Seller counter/accept | Новая permission SALES_PRICE_NEGOTIATE (только после registry/role tests) | Proposal принадлежит выбранному seller tenant |
+| Seller confirm | Existing SALES_ORDER_CONFIRM + INVENTORY_RESERVE | Active tenant WAREHOUSE, order ownership |
+| Warehouse prepare | Explicit seller preparation grant, decision pending | Сотруднику разрешён выбранный warehouse |
+| Warehouse handover | Existing SALES_ORDER_FULFILL + INVENTORY_FULFILL | Same tenant, same warehouse, READY, valid proof |
+| Buyer order history | Verified buyer principal | buyer_user_id verified, QR alone insufficient |
+| Seller order history | SALES_ORDER_READ | Tenant order, PII hidden without separate grant |
+| Return inspection | New SALES_RETURN_* and typed inventory return permission | Original fulfillment and cumulative qty |
+| SYSTEM jobs | Explicit scoped service identity | No fake global PLATFORM_ADMIN |
+
+**DECISION REQUIRED:** отдельная warehouse-scoped staff object policy; текущий tenant grant не означает права каждого кладовщика на каждый склад. Для полноценной production выдачи разных складов отсутствие этой политики — HOLD. Новые права не добавляются просто ради названия роли, а должны иметь owner, registry, role grant и negative PostgreSQL tests.
+
+**Threat controls:** QR token purpose separation, cryptographic random, short TTL for pickup, keyed digest, constant-time comparison where applicable, server clock expiry, one-time consume, rate limits, safe origin URL without arbitrary redirects, no raw tokens or PII in logs/analytics/audit, anti-enumeration for foreign orders. Скриншот proof может быть переслан; для дорогих товаров нужен явный recipient challenge (business decision). QR круг с галочкой — косметический, не подтверждение прав.
+
+## 18. Транзакции и порядок блокировок — mandatory technical gate
+
+**Existing checkout:** request stripe → IAM workspace → storefront → offer → catalog. Quote checkout должен соблюдать совместимый порядок. Нельзя брать quote lock, затем пытаться взять offer lock, если существует обратный путь и нет доказанного lock graph.
+
+**Existing inventory:** seller order row FOR UPDATE → reservation request stripes and StockEligibility owner locks → stock balance → reservation. StockEligibility использует PostgreSQL FOR SHARE для ACTIVE warehouse и опубликованного SKU; изменение ORG location конфликтует с owner-row guard. Сохранить эту семантику.
+
+**Atomic handover:**
+1. Verified staff/tenant/warehouse и две действующие permissions до исполнения.
+2. Найти order по purpose-bound proof, захватить order row lock.
+3. Под ним lock credential, проверить digest, expiry, consumed/revoked и warehouseId.
+4. READY + full ACTIVE reservations, снимок origin, все строки соответствуют складу, explicit staff confirmation.
+5. Упорядоченно выполнить все OrderInventoryPort.fulfill; status COMPLETED, immutable receipt и CONSUMED proof записать в одной PostgreSQL транзакции.
+6. Commit. Уведомление/печать после commit; отказ уведомления не повторяет складское списание.
+7. Idempotent exact replay — тот же receipt; иной payload под прежним requestKey — конфликт.
+
+**Обязательные гонки:** предложение цены accept×counter, quote checkout×checkout, offer pause×checkout, staff revoke×handover, GPS update×confirm, warehouse close×reserve, reissue×reissue, 2 scanners×handover, expiry between preview and confirm, RMA receipt×receipt. Все проверять двумя независимыми PG connections и фиксацией обоих порядков commit.
+
+**Fail invariant:** при отказе остаются неизменными business order/status events, balances, reservation records/events, movements, consumed quote, handover receipt и credential state (кроме разрешённого отдельного security-attempt audit). Никакого частично списанного заказа, невалидного quote consumed и «COMPLETED без записи в ledger».
+
