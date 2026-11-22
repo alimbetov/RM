@@ -122,7 +122,7 @@ class StorefrontManagementQualificationTest {
                 "shop-" + UUID.randomUUID()))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(() -> storefronts.publish(actorA, a.tenant(), own.id(),
-                0L))
+                1L))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("""
                 SELECT state FROM crm.store_front WHERE tenant_id=? AND id=?
