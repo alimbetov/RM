@@ -2153,3 +2153,97 @@ CREATE TRIGGER trg_inv_transfer_immutable
  BEFORE UPDATE OR DELETE ON crm.inv_stock_transfer
  FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_movement_mutation();
 --rollback DROP TRIGGER trg_inv_transfer_immutable ON crm.inv_stock_transfer;
+
+
+--changeset rm:0073-inventory-stocktake
+-- A counted snapshot, not a second balance ledger. 100 SKU per bounded count.
+CREATE TABLE crm.inv_stocktake (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ location_id UUID NOT NULL,
+ start_request_key VARCHAR(100) NOT NULL,
+ item_set_sha256 VARCHAR(64) NOT NULL,
+ status VARCHAR(16) NOT NULL,
+ started_by UUID NOT NULL,
+ started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ posted_by UUID,
+ posted_at TIMESTAMP WITH TIME ZONE,
+ post_request_key VARCHAR(100),
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_inv_stocktake PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_inv_stocktake_start UNIQUE(tenant_id,start_request_key),
+ CONSTRAINT uk_inv_stocktake_post UNIQUE(tenant_id,post_request_key),
+ CONSTRAINT fk_inv_stocktake_location FOREIGN KEY(tenant_id,location_id)
+    REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_inv_stocktake_starter FOREIGN KEY(started_by)
+    REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_inv_stocktake_poster FOREIGN KEY(posted_by)
+    REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_inv_stocktake_state CHECK(status IN ('OPEN','POSTED','CANCELLED')),
+ CONSTRAINT ck_inv_stocktake_version CHECK(row_version>=0),
+ CONSTRAINT ck_inv_stocktake_post CHECK(
+    (status='POSTED' AND posted_by IS NOT NULL AND posted_at IS NOT NULL
+                      AND post_request_key IS NOT NULL)
+    OR (status<>'POSTED' AND posted_by IS NULL AND posted_at IS NULL
+                           AND post_request_key IS NULL))
+);
+CREATE TABLE crm.inv_stocktake_line (
+ tenant_id UUID NOT NULL,
+ stocktake_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ book_on_hand NUMERIC(19,4) NOT NULL,
+ book_reserved NUMERIC(19,4) NOT NULL,
+ expected_stock_version BIGINT NOT NULL,
+ counted_on_hand NUMERIC(19,4),
+ counted_by UUID,
+ counted_at TIMESTAMP WITH TIME ZONE,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_inv_stocktake_line PRIMARY KEY(tenant_id,stocktake_id,item_id),
+ CONSTRAINT fk_inv_stocktake_line_header FOREIGN KEY(tenant_id,stocktake_id)
+    REFERENCES crm.inv_stocktake(tenant_id,id),
+ CONSTRAINT fk_inv_stocktake_line_item FOREIGN KEY(tenant_id,item_id)
+    REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT fk_inv_stocktake_line_actor FOREIGN KEY(counted_by)
+    REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_inv_stocktake_line_book CHECK(book_on_hand>=book_reserved AND book_reserved>=0),
+ CONSTRAINT ck_inv_stocktake_line_count CHECK(counted_on_hand IS NULL OR counted_on_hand>=0),
+ CONSTRAINT ck_inv_stocktake_line_version CHECK(expected_stock_version>=0 AND row_version>=0)
+);
+CREATE INDEX idx_inv_stocktake_location
+ ON crm.inv_stocktake(tenant_id,location_id,status,started_at DESC);
+--rollback DROP TABLE crm.inv_stocktake_line;
+--rollback DROP TABLE crm.inv_stocktake;
+
+--changeset rm:0074-inventory-stocktake-terminal-immutability dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.inv_reject_terminal_stocktake_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE current_status VARCHAR(16);
+BEGIN
+ IF TG_TABLE_NAME='inv_stocktake' THEN
+   IF TG_OP='DELETE' OR OLD.status IN ('POSTED','CANCELLED') THEN
+      RAISE EXCEPTION 'Terminal stocktake cannot be changed or removed';
+   END IF;
+   RETURN NEW;
+ END IF;
+ IF TG_OP='INSERT' THEN
+    SELECT status INTO current_status FROM crm.inv_stocktake
+     WHERE tenant_id=NEW.tenant_id AND id=NEW.stocktake_id;
+ ELSE
+    SELECT status INTO current_status FROM crm.inv_stocktake
+     WHERE tenant_id=OLD.tenant_id AND id=OLD.stocktake_id;
+ END IF;
+ IF current_status<>'OPEN' OR current_status IS NULL THEN
+    RAISE EXCEPTION 'Stocktake lines immutable after terminal state';
+ END IF;
+ RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+CREATE TRIGGER trg_inv_stocktake_immutable
+ BEFORE UPDATE OR DELETE ON crm.inv_stocktake
+ FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_terminal_stocktake_mutation();
+CREATE TRIGGER trg_inv_stocktake_line_immutable
+ BEFORE INSERT OR UPDATE OR DELETE ON crm.inv_stocktake_line
+ FOR EACH ROW EXECUTE FUNCTION crm.inv_reject_terminal_stocktake_mutation();
+--rollback DROP TRIGGER trg_inv_stocktake_line_immutable ON crm.inv_stocktake_line;
+--rollback DROP TRIGGER trg_inv_stocktake_immutable ON crm.inv_stocktake;
+--rollback DROP FUNCTION crm.inv_reject_terminal_stocktake_mutation();
