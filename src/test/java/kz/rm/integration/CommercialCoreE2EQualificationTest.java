@@ -365,4 +365,101 @@ class CommercialCoreE2EQualificationTest {
                 .isEqualByComparingTo("2");
     }
 
+    @Test void postgresArchiveAndOfferPublicationAreSerializedInBothOrders() throws Exception {
+        postgresOnly();
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+
+        // ARCHIVE wins: the offer writer must not publish a now-archived SKU.
+        {
+            var c = setup();
+            var item = product(c);
+            storefronts.createDraft(c.staff(), c.tenant(), "commercial-" + UUID.randomUUID());
+            var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
+                    "Archived SKU must not sell", BigDecimal.ONE, "KZT");
+            var archiveReady = new java.util.concurrent.CountDownLatch(1);
+            var publishStarted = new java.util.concurrent.CountDownLatch(1);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var archive = pool.submit(() -> tx.execute(status -> {
+                    var result = catalog.archive(c.staff(), c.tenant(), item.id(),
+                            item.rowVersion());
+                    archiveReady.countDown();
+                    try {
+                        if (!release.await(15, java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IllegalStateException("Archive/offer barrier timeout");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
+                    }
+                    return result;
+                }));
+                var publish = pool.submit(() -> {
+                    if (!archiveReady.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Archive not admitted");
+                    publishStarted.countDown();
+                    return offers.publish(c.staff(), c.tenant(), draft.id(), 0L);
+                });
+                assertThat(publishStarted.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        .isTrue();
+                release.countDown();
+                assertThat(archive.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                        .isEqualTo(CatalogItem.State.ARCHIVED);
+                assertThatThrownBy(() -> publish.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                        .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                        .hasCauseInstanceOf(IllegalStateException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(jdbc.queryForObject("""
+                    SELECT state FROM crm.store_offer WHERE tenant_id=? AND id=?
+                    """, String.class, c.tenant(), draft.id())).isEqualTo("DRAFT");
+        }
+
+        // PUBLISH wins: the committed commercial obligation blocks SKU archive.
+        {
+            var c = setup();
+            var item = product(c);
+            storefronts.createDraft(c.staff(), c.tenant(), "commercial-" + UUID.randomUUID());
+            var draft = offers.createDraft(c.staff(), c.tenant(), item.id(),
+                    "Published offer keeps SKU active", BigDecimal.TEN, "KZT");
+            var offerReady = new java.util.concurrent.CountDownLatch(1);
+            var archiveStarted = new java.util.concurrent.CountDownLatch(1);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var publish = pool.submit(() -> tx.execute(status -> {
+                    var result = offers.publish(c.staff(), c.tenant(), draft.id(), 0L);
+                    offerReady.countDown();
+                    try {
+                        if (!release.await(15, java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IllegalStateException("Offer/archive barrier timeout");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
+                    }
+                    return result;
+                }));
+                var archive = pool.submit(() -> {
+                    if (!offerReady.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Offer not admitted");
+                    archiveStarted.countDown();
+                    return catalog.archive(c.staff(), c.tenant(), item.id(),
+                            item.rowVersion());
+                });
+                assertThat(archiveStarted.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        .isTrue();
+                release.countDown();
+                assertThat(publish.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                        .isEqualTo(StorefrontOfferService.State.PUBLISHED);
+                assertThatThrownBy(() -> archive.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                        .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                        .hasCauseInstanceOf(IllegalStateException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(jdbc.queryForObject("""
+                    SELECT state FROM crm.cat_item WHERE tenant_id=? AND id=?
+                    """, String.class, c.tenant(), item.id())).isEqualTo("PUBLISHED");
+        }
+    }
+
 }
