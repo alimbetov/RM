@@ -3055,19 +3055,21 @@ CREATE TRIGGER trg_qr07_return_event_immutable
 --changeset rm:0097-qr07-review-decisions
 -- Add revision-checked, replay-resistant and audit-ready R1 transitions.
 -- Legacy REQUESTED events remain valid; null is reserved for R0 events.
+ALTER TABLE crm.sales_return_event ADD COLUMN request_key VARCHAR(100);
+ALTER TABLE crm.sales_return_event ADD COLUMN request_fingerprint VARCHAR(64);
+ALTER TABLE crm.sales_return_event ADD COLUMN from_state VARCHAR(32);
+ALTER TABLE crm.sales_return_event ADD COLUMN to_state VARCHAR(32);
+ALTER TABLE crm.sales_return_event ADD COLUMN expected_row_version BIGINT;
+ALTER TABLE crm.sales_return_event ADD COLUMN policy_version VARCHAR(40);
 ALTER TABLE crm.sales_return_event
- ADD COLUMN request_key VARCHAR(100),
- ADD COLUMN request_fingerprint VARCHAR(64),
- ADD COLUMN from_state VARCHAR(32),
- ADD COLUMN to_state VARCHAR(32),
- ADD COLUMN expected_row_version BIGINT,
- ADD COLUMN policy_version VARCHAR(40);
+ ADD CONSTRAINT uq_qr07_decision_request_key UNIQUE (tenant_id,request_key);
 ALTER TABLE crm.sales_return_event
- ADD CONSTRAINT uq_qr07_decision_request_key UNIQUE (tenant_id,request_key),
  ADD CONSTRAINT ck_qr07_event_request_fingerprint
-   CHECK(request_fingerprint IS NULL OR LENGTH(request_fingerprint)=64),
+   CHECK(request_fingerprint IS NULL OR LENGTH(request_fingerprint)=64);
+ALTER TABLE crm.sales_return_event
  ADD CONSTRAINT ck_qr07_event_revision
-   CHECK(expected_row_version IS NULL OR expected_row_version>=0),
+   CHECK(expected_row_version IS NULL OR expected_row_version>=0);
+ALTER TABLE crm.sales_return_event
  ADD CONSTRAINT ck_qr07_event_decision_fields
    CHECK (
     (request_key IS NULL AND request_fingerprint IS NULL AND
