@@ -2377,3 +2377,17 @@ CREATE INDEX idx_inv_reconciliation_recent
  ON crm.inv_reconciliation_run(tenant_id,started_at DESC,id);
 --rollback DROP TABLE crm.inv_reconciliation_finding;
 --rollback DROP TABLE crm.inv_reconciliation_run;
+
+
+--changeset rm:0081-inventory-position-posting-order
+-- New movements use the already-serialized stock balance row_version as a
+-- per-position monotonic ordering token. NULL denotes unverifiable legacy
+-- history; never infer it from timestamps or UUIDs.
+ALTER TABLE crm.inv_stock_movement ADD COLUMN posting_version BIGINT;
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT ck_inv_movement_posting_version
+  CHECK (posting_version IS NULL OR posting_version > 0);
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT uk_inv_movement_posting_version
+  UNIQUE(tenant_id,location_id,item_id,posting_version);
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT uk_inv_movement_posting_version;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_posting_version;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN posting_version;
