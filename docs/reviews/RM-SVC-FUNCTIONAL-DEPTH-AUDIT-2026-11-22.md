@@ -116,3 +116,23 @@
 - Transfer и stocktake нужно добавлять на существующем balance/immutable ledger с минимальным transfer receipt и stocktake snapshot, а не создавать параллельный stock engine.
 
 **Переоценка:** INVENTORY остаётся **2/5** до закрытия INV-Q0–Q9. Документ расширяет диагностику и ТЗ, Java не меняет; текущий статус **REVIEWED / SPEC PROPOSED**, не IMPLEMENTED. Указанные бизнес-решения требуют согласования до реализации. Новый CI документации не является предметной приёмкой.
+
+
+---
+
+## 7. Углублённые сервисные ревью — 12 проходов на домен
+
+**Правило развития аудита R1.1:** после общего обзора каждый домен проходит 12 последовательных ревью с отдельным подробным ТЗ, подтверждёнными кодовыми доказательствами, бизнес-сценариями, смежными владельцами данных, негативными/конкурентными тестами и точным SHA. Смена домена — только после закрытия предыдущего по принятому объёму; документы не равны runtime qualification. Контроллеры и production admission по-прежнему вне Feature Freeze.
+
+### ORGANIZATION: итерация 01/12 (cross-domain depth audit)
+
+- **Подробное ТЗ:** [RM-ORG-FUNC-R1 — 12 итераций, lifecycle и интеграция](../spec/RM-ORG-FUNCTIONAL-DEPTH-R1-12-PASSES.md).
+- **Исходный HEAD ревью:** `c776baec5c82e0dfd4c7930aa6a68629202fa5fd`, ветка `base_dev`. **Статус:** SPECIFIED; ни один новый runtime метод ещё не реализован и не квалифицирован.
+- **Точная граница:** IAM владеет `org_organization`, `iam_workspace`, ролями и VerifiedActor; ORGANIZATION владеет только `org_location`; GEO — KATO, INVENTORY — stock/reservations, SALES — orders. Не создавать повторный юридический профиль организации в ORG.
+- **Реально существующий surface:** `AuthenticatedOrganizationLocations.create/get/search`; внутренние `OrganizationLocationService.create`, `OrganizationLocationQueryService.get/search`. Уже есть tenant-scoped JPA, permission admission, `@Version`, статусы `ACTIVE/INACTIVE/CLOSED`; **нет** update/deactivate/reactivate/close.
+- **P0 междоменные пробелы:** текущий INVENTORY receive/correct и SALES confirm не читают `org_location.status/type` перед изменением склада/заказа. Tenant-composite FK в `inv_stock_balance` проверяет идентичность, но не операционную пригодность склада. Требуется транзакционная typed-проверка ACTIVE WAREHOUSE с блокировкой для предотвращения гонки с deactivate; закрытие также должно проверять зависимости.
+- **P1:** CAS на `rowVersion` для будущих изменений, атомарный event в существующий `crm.audit_event`, нормализация и KATO revalidation, литеральный поиск c экранированием `%/_`, ограниченный OFFSET и согласованный sort `createdAt DESC,id DESC`. Текущий sort `createdAt DESC,id ASC` детерминирован, но не совпадает с проектным SEARCH-R2.
+- **Важная оговорка:** LIKE использует bind-параметр, поэтому поиск с `%/_` — не доказанная SQL injection. Статус недостатков — source-level GAP; отсутствуют runtime подтверждения и реальные PostgreSQL тесты для новых состояний.
+- **Приёмка:** ORG-Q01..Q12 из подробного ТЗ; сначала R1.1A–D, затем 02/12…12/12 с фиксацией результатов. Текущие тесты покрывают создание/чтение/tenant и отдельную гонку revocation, но не закрытие склада и полномасштабные lifecycle flows.
+
+**Обновление матрицы §2:** оценка ORGANIZATION остаётся **1/5**, пока не появится подтверждённое сквозное управление локациями. После документационного этапа нельзя менять её на 3/5 только из-за написанного ТЗ.
