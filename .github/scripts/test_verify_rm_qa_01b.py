@@ -1,0 +1,141 @@
+"""Negative/positive self-tests for RM-QA-01B (no external services)."""
+import io
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest import mock
+import zipfile
+import xml.etree.ElementTree as ET
+
+import verify_rm_qa_01b as gate
+
+
+class QualificationEvidenceVerifierTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        directory = self.root / "src/main/resources/db/changelog"
+        directory.mkdir(parents=True)
+        (directory / "db.changelog-master.sql").write_text("-- baseline\n")
+        self.manifest_path = self.root / "manifest.json"
+        self.artifact_bytes = {}
+        gates = []
+        artifact_id = 100
+        for workflow, artifacts in gate.REQUIRED.items():
+            group = {
+                "name": workflow, "sha": "f" * 40,
+                "status": "completed", "conclusion": "success",
+                "jobs": [{"name": "required-job", "conclusion": "success"}],
+                "artifacts": [],
+            }
+            for artifact in artifacts:
+                suite_cases = {"SmokeQualificationTest": ["smokePasses"]}
+                if artifact == "kms-postgres-surefire":
+                    suite_cases = {
+                        "CommercialCoreE2EQualificationTest": [
+                            "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects",
+                            "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot",
+                        ],
+                        "AutoOrderR1QualificationTest": ["retryIsIdempotentAndChangesAreRejected"],
+                        "InventoryTransferStocktakeQualificationTest": [
+                            "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings",
+                            "postgresInv16DurableAdvanceAndConcurrentReceivingHaveNoFalseDrift",
+                            "durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings",
+                            "durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements",
+                        ],
+                    }
+                else:
+                    for suite in gate.SUITES.get(workflow, ()):
+                        suite_cases[suite] = ["qualified"]
+                self.artifact_bytes[artifact_id] = self.make_zip(suite_cases)
+                group["artifacts"].append({"name": artifact, "id": artifact_id})
+                artifact_id += 1
+            gates.append(group)
+        self.manifest = {
+            "repository": "alimbetov/RM", "sha": "f" * 40, "required": gates,
+        }
+        self.save()
+        self.patches = [
+            mock.patch.object(gate, "ROOT", self.root),
+            mock.patch.object(gate, "MANIFEST", self.manifest_path),
+            mock.patch.object(gate, "api", side_effect=self.fake_api),
+            mock.patch.dict(os.environ, {
+                "GITHUB_SHA": "f" * 40, "GITHUB_REPOSITORY": "alimbetov/RM",
+                "GH_TOKEN": "self-test-only",
+            }),
+        ]
+        for patch in self.patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    @staticmethod
+    def make_zip(suites, skipped=None):
+        memory = io.BytesIO()
+        with zipfile.ZipFile(memory, "w") as archive:
+            for suite, cases in suites.items():
+                root = ET.Element("testsuite", {
+                    "name": "kz.rm." + suite, "tests": str(len(cases)),
+                    "failures": "0", "errors": "0",
+                    "skipped": str(sum((suite, case) in (skipped or set()) for case in cases)),
+                })
+                for case in cases:
+                    child = ET.SubElement(root, "testcase", {"name": case})
+                    if (suite, case) in (skipped or set()):
+                        ET.SubElement(child, "skipped", {"message": "required test skipped"})
+                archive.writestr("TEST-" + suite + ".xml", ET.tostring(root))
+        return memory.getvalue()
+
+    def fake_api(self, url, token):
+        artifact_id = int(url.split("/artifacts/")[1].split("/")[0])
+        return self.artifact_bytes[artifact_id]
+
+    def save(self):
+        self.manifest_path.write_text(json.dumps(self.manifest))
+
+    def test_all_required_evidence_passes_without_granting_production_admission(self):
+        self.assertEqual(gate.verify(), 0)
+        result = json.loads(self.manifest_path.read_text())
+        self.assertEqual(result["qa01bGate"], "PASS")
+        self.assertEqual(result["admission"], "HOLD")
+        self.assertTrue(result["migrationFingerprint"]["sha256"])
+        self.assertGreater(result["testCounts"]["tests"], 0)
+
+    def test_wrong_commit_sha_fails_closed(self):
+        self.manifest["sha"] = "bad"
+        self.save()
+        self.assertEqual(gate.verify(), 1)
+        self.assertEqual(json.loads(self.manifest_path.read_text())["qa01bGate"], "FAIL")
+
+    def test_missing_h2_artifact_fails_closed(self):
+        self.manifest["required"][0]["artifacts"] = self.manifest["required"][0]["artifacts"][1:]
+        self.save()
+        self.assertEqual(gate.verify(), 1)
+
+    def test_required_postgresql_case_skipped_fails_closed(self):
+        artifact_id = next(a["id"] for a in self.manifest["required"][0]["artifacts"]
+                           if a["name"] == "kms-postgres-surefire")
+        cases = {
+            "CommercialCoreE2EQualificationTest": [
+                "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects",
+                "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot",
+            ],
+            "AutoOrderR1QualificationTest": ["retryIsIdempotentAndChangesAreRejected"],
+            "InventoryTransferStocktakeQualificationTest": [
+                "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings",
+                "postgresInv16DurableAdvanceAndConcurrentReceivingHaveNoFalseDrift",
+                "durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings",
+                "durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements",
+            ],
+        }
+        missing = {("InventoryTransferStocktakeQualificationTest",
+                    "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings")}
+        self.artifact_bytes[artifact_id] = self.make_zip(cases, missing)
+        self.assertEqual(gate.verify(), 1)
+        self.assertIn("missing/skipped", json.loads(self.manifest_path.read_text())["evidenceErrors"][0])
+
+
+if __name__ == "__main__":
+    unittest.main()
