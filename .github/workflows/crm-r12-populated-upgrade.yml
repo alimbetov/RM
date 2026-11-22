@@ -5,6 +5,11 @@ on:
     branches: [base_dev]
   workflow_dispatch:
 
+# Run qualification for the latest branch revision; do not accumulate stale SHA jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
