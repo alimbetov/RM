@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED / MIGRATION SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -46,7 +46,7 @@
 | **01** | User journey + cross-domain source review | Разделы 1–4, gaps ниже, связанные реальные файлы/тесты | **SOURCE REVIEWED; SPEC PROPOSED** |
 | **02** | Каждый метод, DTO и пустые бизнес-ветви | [Подробный method trace pass 02](../reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md): method → SQL → actor → state → consumer → тест | **SOURCE TRACED / SPEC REFINED** |
 | **03** | Aggregate/schema/DDL | [Schema and populated-safe migration evidence](../reviews/RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03-2026-11-22.md): six actual tables, PK/FK/CHECK/index, legacy provenance | **DDL SOURCE VERIFIED / SPEC PROPOSED** |
-| 04 | Команды и state machine | confirm/cancel/fulfill + approved reject & status progression; legal transitions | OPEN |
+| **04** | Команды и state machine | [PASS 04 — точная state machine, permissions и запас](../reviews/RM-SALES-AUTOORDER-STATE-MACHINE-PASS-04-2026-11-22.md): actual code, proposed reject/cancel split, concurrency | **SOURCE VERIFIED / SPEC PROPOSED** |
 | 05 | Read model и история | seller detail/lines/events, buyer own detail, literal filters and stable paging | OPEN |
 | 06 | Idempotency/конкурентность | checkout same-key, cross-seller keys, revoke vs confirm, cancel vs fulfill, no double stock | OPEN |
 | 07 | Реальность настроек | settings autoReserve/picking/publish state реально потребляются либо явно неактивны | OPEN |
@@ -201,3 +201,18 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 **Гарантии БД:** tenant-composite FK, CHECK quantity/price/status, unique receipt и unique reservation per line, linked reservation/stock, допустимая иммутабельность событий. **Гарантии Java:** active warehouse/catalog state, VerifiedActor/RBAC, single currency, total math, state machine, whole-line reserves, transaction lock order, idempotency. Существующий `sales_order_status_event` пока без immutable PG trigger, а `reservation.item_id` не связан FK с SKU заказа — оба пробела отмечены.
 
 **Новые тестовые требования:** SALE-DB03-01..10 в evidence report. Нельзя считать их существующими или GREEN: это проектируемые квалификационные проверки. **Статус PASS 03 = SOURCE VERIFIED/SPEC PROPOSED; runtime не менялся, зрелость остаётся 2/5.** Следующий проход **04/12 — команды и state transitions**.
+
+
+## 15. PASS 04 — команды, state machine и резервы (2026-11-22)
+
+**Source SHA:** `fe50589b88d104843623ed598024e0de962bbcc2`. Полный [доказательный аудит переходов и ТЗ](../reviews/RM-SALES-AUTOORDER-STATE-MACHINE-PASS-04-2026-11-22.md).
+
+**Подтверждённые переходы:** checkout пишет `PLACED`; `confirm` — `PLACED→CONFIRMED` с обязательным reserve каждой строки; `cancel` — `PLACED/CONFIRMED/PREPARING→CANCELLED` (при выполнении условий); `fulfill` — `CONFIRMED/PREPARING→COMPLETED` с однократным складским списанием. Три terminal idempotent replay предусмотрены; их фактическая реализация проверяет counts, но ещё не доказывает per-line SKU/qty matching. `REJECTED`, `READY_FOR_PICKUP`, `OUT_FOR_DELIVERY` декларированы, но для них нет работающих публичных бизнес-команд. Вводить новые переходы только typed командами, не generic status update.
+
+**Изменение оценки SA2-03/SA4-06:** со времени pass 02/03 в `StockEligibility.requireReservable` уже реализован транзакционный допуск ACTIVE WAREHOUSE + PUBLISHED PRODUCT с row lock при **новом резервировании**, и существующий `InventoryReservationQualificationTest.q123ReservationRejectsInactiveWarehouseServiceAndArchiveButHonorsOldCommit` проверяет это. Не создавать второй eligibility engine в SALES; до конечного принятия всё ещё нужны cross-domain cancel/confirm/deactivate races. Исторические CONFIRMED replay/fulfillment не должны зависеть от текущей публикации оффера/товара.
+
+**Предлагаемые решения:** `cancel(PLACED)` с нулевыми резервами должен обходиться одним `SALES_ORDER_CANCEL`; для `CONFIRMED/PREPARING` оставить пару `SALES_ORDER_CANCEL + INVENTORY_RELEASE`. Новый `reject(actor,tenant,order,reasonCode,expectedVersion)` разрешить только из PLACED, с `SALES_ORDER_CANCEL`, без складского изменения и с одним audit event. `startPreparing` оставить P1 отдельным согласованием; `READY_FOR_PICKUP/OUT_FOR_DELIVERY` не считать активными функциями. В `cancel` использовать явный allowlist, а не denylist — иначе новый статус может случайно стать отменяемым.
+
+**DB/stock invariant:** CONFIRMED требует ровно одну ACTIVE reservation на каждую line, совпадающие tenant/order/item snapshot/warehouse/qty; COMPLETED — FULFILLED per line + уникальную fulfillment movement; CANCELLED — нет ACTIVE. Текущий код проверяет count, а не все эти равенства. Миграция immutable SKU snapshot по PASS 03 остаётся блокирующей для полного доказательства. Existing IAM transaction-scoped paired decisions нельзя ослаблять.
+
+**Новые acceptance IDs:** `SALE-SM04-01..16`, описанные в отдельном PASS 04 аудите; это **план тестирования, не выполненные тесты**. Приоритет исполнения SALE-R1.4A–D после предметного утверждения. **В рамках pass 04 Java/DDL не менялись**, maturity 2/5, production HOLD. Далее **05/12:** seller order detail/lines/history, buyer own detail, pagination, PII.
