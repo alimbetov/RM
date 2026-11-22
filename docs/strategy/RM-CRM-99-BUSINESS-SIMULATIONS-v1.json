@@ -1,0 +1,2321 @@
+{
+  "schema": "RM-CRM-99-BUSINESS-SIMULATIONS/v1",
+  "version": "2026-11-22",
+  "sourceBranch": "base_dev",
+  "reference": "docs/strategy/RM-PROJECT-KNOWLEDGE-AND-CRM-SERVICE-ROADMAP-R1.md",
+  "methodology": "99 independently enumerated desk-based behavioral simulations and code/JUnit trace reviews; NOT 99 real PostgreSQL E2E executions",
+  "guaranteeBoundary": "COMPONENT_TESTED means related JUnit exists; no full user-journey pass inferred; actual executions must come from exact-SHA Surefire",
+  "controls": {
+    "newControllers": "STOP",
+    "rest": "STOP",
+    "frontend": "STOP",
+    "mainBranch": "UNMODIFIED",
+    "production": "HOLD",
+    "noInferredCustomerSalesLink": true
+  },
+  "groups": [
+    {
+      "id": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "count": 9,
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "reviewedSuite": "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+    },
+    {
+      "id": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "count": 9,
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "reviewedSuite": "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+    },
+    {
+      "id": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "count": 9,
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "reviewedSuite": "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+    },
+    {
+      "id": "CONSENT",
+      "domain": "CRM_CORE",
+      "count": 9,
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "reviewedSuite": "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+    },
+    {
+      "id": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "count": 9,
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "reviewedSuite": "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+    },
+    {
+      "id": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "count": 9,
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "reviewedSuite": "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+    },
+    {
+      "id": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "count": 9,
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "reviewedSuite": "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+    },
+    {
+      "id": "FILES",
+      "domain": "FILES",
+      "count": 9,
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "reviewedSuite": "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+    },
+    {
+      "id": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "count": 9,
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "reviewedSuite": "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+    },
+    {
+      "id": "TASKS",
+      "domain": "TASKS",
+      "count": 9,
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "reviewedSuite": "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+    },
+    {
+      "id": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "count": 9,
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "reviewedSuite": "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+    }
+  ],
+  "summary": {
+    "total": 99,
+    "assessmentCounts": {
+      "COMPONENT_TESTED": 52,
+      "EXTERNAL_HOLD": 2,
+      "PARTIAL": 16,
+      "MISSING_FEATURE": 21,
+      "NEW_PG_TEST": 2,
+      "POLICY_GAP": 2,
+      "BLOCKED_PROVENANCE": 4
+    },
+    "byPriority": {
+      "P0": 76,
+      "P1": 18,
+      "P2": 5
+    }
+  },
+  "cases": [
+    {
+      "id": "CRM-SIM-001",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Valid confirmed principal creates first organization",
+      "expectedBehavior": "Create one owner/workspace; no implicit CRM grants",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-002",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Unverified email attempts first organization",
+      "expectedBehavior": "Reject with zero workspace/membership writes",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-003",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Same provisioning key replay",
+      "expectedBehavior": "Return same tenant without second audit event",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-004",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Two simultaneous first-tenant requests",
+      "expectedBehavior": "Exactly one owner tenant and no orphans",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-005",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Suspended principal selects former tenant",
+      "expectedBehavior": "Reject before business writes",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-006",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Foreign employee guesses tenant UUID",
+      "expectedBehavior": "Reject tenant access without leaking ownership",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-007",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "OIDC signing key rotated at external issuer",
+      "expectedBehavior": "Validate rotated issuer key via real HTTPS test IdP",
+      "assessment": "EXTERNAL_HOLD",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXTERNAL_INTEGRATION_REQUIRED",
+      "proposedAction": "Qualify independent external provider / transport scenario",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-008",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Email verification transport is unavailable",
+      "expectedBehavior": "No verified status until delivered proof; bounded retry",
+      "assessment": "EXTERNAL_HOLD",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXTERNAL_INTEGRATION_REQUIRED",
+      "proposedAction": "Qualify independent external provider / transport scenario",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-009",
+      "group": "IDENTITY",
+      "domain": "IAM_RBAC",
+      "sourceOfTruth": "IAM/ORGANIZATION",
+      "businessEvent": "Former owner loses organization membership",
+      "expectedBehavior": "Do not rebootstrap first tenant or inherit grants",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "supportingEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-010",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee creates company",
+      "expectedBehavior": "ACTIVE company appears in tenant-bound search",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-011",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee registers a person with PII",
+      "expectedBehavior": "Encrypt name, safe command response, authorized read",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-012",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Customer name is changed with correct version",
+      "expectedBehavior": "Update data, revision and immutable history",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-013",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Two employees update same customer version",
+      "expectedBehavior": "Exactly one accepted version, no lost update",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-014",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Known customer UUID supplied from tenant B",
+      "expectedBehavior": "No foreign customer record or oracle leak",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-015",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee archives a customer with active contract",
+      "expectedBehavior": "Reject and keep history unchanged",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-016",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee restores archived customer",
+      "expectedBehavior": "Restore lifecycle without fabricating consent",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-017",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Search contains SQL wildcard characters",
+      "expectedBehavior": "Literal matching; tenant isolation unchanged",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-018",
+      "group": "CUSTOMER",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Large tenant searches customers by page",
+      "expectedBehavior": "Bounded stable pagination and measured p95",
+      "assessment": "PARTIAL",
+      "priority": "P2",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-019",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Employee adds contact to active company",
+      "expectedBehavior": "Encrypted fields, active parent FK and audit",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-020",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Create contact under archived customer",
+      "expectedBehavior": "No contact row and no plaintext side effects",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-021",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Read-only CRM reader opens a private contact",
+      "expectedBehavior": "Require distinct PII_READ permission",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-022",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Write-only employee creates a private contact",
+      "expectedBehavior": "Mutation response contains no decrypted PII",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-023",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Contact encryption envelope is swapped",
+      "expectedBehavior": "AAD mismatch fails closed",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-024",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Two writers modify one contact version",
+      "expectedBehavior": "At most one succeeds, history correct",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-025",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Foreign tenant reads a known contact UUID",
+      "expectedBehavior": "Reject without data or PII",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-026",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Contact is archived while search runs",
+      "expectedBehavior": "No archived contact in active result",
+      "assessment": "PARTIAL",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-027",
+      "group": "CONTACT_PII",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM/KMS",
+      "businessEvent": "Phone/email normalization and duplicate detection",
+      "expectedBehavior": "Define matching, verification and conflict policy",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P2",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-028",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "New contact has no consent",
+      "expectedBehavior": "Eligibility false by default",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-029",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Consent granted for purpose A",
+      "expectedBehavior": "Purpose A true, purpose B false",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-030",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Grant repeated with same key",
+      "expectedBehavior": "One immutable event and same receipt",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-031",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Same key used for conflicting revoke",
+      "expectedBehavior": "Reject with no event delta",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-032",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Revoke accepted after grant",
+      "expectedBehavior": "Eligibility false and immutable history",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-033",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Foreign tenant queries private consent",
+      "expectedBehavior": "Permission deny, not a customer lookup leak",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-034",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Previously consented contact is archived",
+      "expectedBehavior": "Eligibility false; existing grant never authorizes archived contact",
+      "assessment": "NEW_PG_TEST",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "NEW_POSTGRESQL_JUNIT_REQUIRED",
+      "proposedAction": "Qualify newly added contact/customer archival consent regression at exact SHA",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-035",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Parent customer archived after consent",
+      "expectedBehavior": "All child contact eligibility false while parent archived",
+      "assessment": "NEW_PG_TEST",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "simulatedOutcome": "NEW_POSTGRESQL_JUNIT_REQUIRED",
+      "proposedAction": "Qualify newly added contact/customer archival consent regression at exact SHA",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-036",
+      "group": "CONSENT",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Restored contact after historic opt-in",
+      "expectedBehavior": "Explicit re-consent versus auto-resurrection policy and test",
+      "assessment": "POLICY_GAP",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Approve domain policy and test negative/retry behavior",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-037",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee records CALL for active contact",
+      "expectedBehavior": "OPEN record and immutable event",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-038",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee records MEETING and follow-up",
+      "expectedBehavior": "Due date saved with correct revision",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-039",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "CALL request key replay",
+      "expectedBehavior": "Return same interaction ID, no duplicate event",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-040",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Request key reused for a different CALL",
+      "expectedBehavior": "Reject conflicting fingerprint",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-041",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Manager assigns active responsible employee",
+      "expectedBehavior": "Tenant membership and role validated",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-042",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Manager assigns foreign or suspended employee",
+      "expectedBehavior": "Deny with zero interaction/event changes",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-043",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Reader tries to complete an interaction",
+      "expectedBehavior": "Permission deny; no event appended",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-044",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Two employees complete same row version",
+      "expectedBehavior": "One terminal outcome, no double history",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-045",
+      "group": "INTERACTIONS",
+      "domain": "CRM_INTERACTION",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Employee writes confidential NOTE body",
+      "expectedBehavior": "Encrypted body + purpose AAD, never plaintext",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-046",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Create draft contract under active customer",
+      "expectedBehavior": "Tenant-owned contract and baseline revision",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-047",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Activate valid contract version",
+      "expectedBehavior": "Status ACTIVE and immutable revision",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-048",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Activate contract under archived customer",
+      "expectedBehavior": "Deny without status/history side effects",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-049",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Extend contract end date",
+      "expectedBehavior": "New revision retains old snapshot",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-050",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Two employees change same revision",
+      "expectedBehavior": "Optimistic version fence prevents lost update",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-051",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Read contract expiry in a bounded window",
+      "expectedBehavior": "Correct timezone and inclusive/exclusive date semantics",
+      "assessment": "PARTIAL",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-052",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Customer archival while active contract exists",
+      "expectedBehavior": "Reject without history event",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-053",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Cancel contract then archive customer",
+      "expectedBehavior": "Domain transition policy and no stale references",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-054",
+      "group": "CONTRACTS",
+      "domain": "CRM_CORE",
+      "sourceOfTruth": "CRM",
+      "businessEvent": "Counterparty contract belongs to tenant B",
+      "expectedBehavior": "Tenant-qualified FK and read rejection",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-055",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Buyer orders published product",
+      "expectedBehavior": "Immutable quote and seller order saved",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-056",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Employee requests orders for known CRM customer",
+      "expectedBehavior": "Cannot join without verified buyer/customer identity",
+      "assessment": "BLOCKED_PROVENANCE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Design an explicit verified customer-to-buyer binding; never join by email/name",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-057",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Two CRM customers share normalized email",
+      "expectedBehavior": "Never infer identical buyer from email alone",
+      "assessment": "BLOCKED_PROVENANCE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Design an explicit verified customer-to-buyer binding; never join by email/name",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-058",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Customer record has same display name as buyer",
+      "expectedBehavior": "No name-based order association",
+      "assessment": "BLOCKED_PROVENANCE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Design an explicit verified customer-to-buyer binding; never join by email/name",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-059",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Buyer tenant differs from seller tenant",
+      "expectedBehavior": "No mistaken cross-tenant customer link",
+      "assessment": "BLOCKED_PROVENANCE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Design an explicit verified customer-to-buyer binding; never join by email/name",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-060",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Checkout replay after seller status change",
+      "expectedBehavior": "Same receipt without duplicate order",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-061",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Seller loses READ permission mid timeline request",
+      "expectedBehavior": "No cross-domain partial data exposure",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-062",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Buyer verified identity linked by explicit proof",
+      "expectedBehavior": "Implement immutable identity binding with consent and source",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-063",
+      "group": "SALES_LINK",
+      "domain": "SALES_AUTOORDER",
+      "sourceOfTruth": "CRM/SALES",
+      "businessEvent": "Customer timeline includes payment status",
+      "expectedBehavior": "Do not infer PAID from FULFILLED",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-064",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "Employee attaches clean document to customer",
+      "expectedBehavior": "Typed customer owner, scan and immutable reference",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-065",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "EICAR upload arrives for same customer",
+      "expectedBehavior": "Reject quarantine, never expose bytes",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-066",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "ClamAV service times out",
+      "expectedBehavior": "Fail closed without AVAILABLE object",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-067",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "Foreign tenant tries to read known file",
+      "expectedBehavior": "Zero binary bytes read",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-068",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "Reader lacks CRM_PII_READ for customer document",
+      "expectedBehavior": "Denied even with general FILES_READ",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-069",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "FILES_READ revoked during download",
+      "expectedBehavior": "No bytes after admission revoked",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-070",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "Owner customer archived after attachment",
+      "expectedBehavior": "Define historical document visibility and retention",
+      "assessment": "PARTIAL",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-071",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "Duplicate attachment request retried",
+      "expectedBehavior": "Idempotent owner relationship and receipt",
+      "assessment": "PARTIAL",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-072",
+      "group": "FILES",
+      "domain": "FILES",
+      "sourceOfTruth": "FILES/CRM",
+      "businessEvent": "File is restored after infrastructure restart",
+      "expectedBehavior": "Real RustFS/ClamAV and metadata consistency",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "supportingEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-073",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Owner grants CRM_READ to employee",
+      "expectedBehavior": "Employee can read, cannot write",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-074",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Owner revokes CRM_READ",
+      "expectedBehavior": "Following read rejected, no history modifications",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-075",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Suspended tenant attempts any CRM mutation",
+      "expectedBehavior": "Denied with zero business/audit delta",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-076",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Viewer tries to update private contact",
+      "expectedBehavior": "Denied before ciphertext changed",
+      "assessment": "COMPONENT_TESTED",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "EXISTING_COMPONENT_PROOF_NOT_COMPLETE_END_TO_END",
+      "proposedAction": "Retain current PostgreSQL regression; expand actor and failure-path assertions as necessary",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-077",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "RBAC revoke races with CRM interaction completion",
+      "expectedBehavior": "Both transaction orders must be deterministic",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-078",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Auditor queries sanitized customer history",
+      "expectedBehavior": "No PII in bounded timeline",
+      "assessment": "PARTIAL",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-079",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Audit export crosses tenant boundary",
+      "expectedBehavior": "Never reveal other tenant objects or counts",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-080",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "Retention job runs during customer archive",
+      "expectedBehavior": "Legal hold and event immutability preserved",
+      "assessment": "PARTIAL",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-081",
+      "group": "SECURITY_AUDIT",
+      "domain": "AUDIT",
+      "sourceOfTruth": "IAM/AUDIT/CRM",
+      "businessEvent": "CRM role matrix for all 5 membership roles",
+      "expectedBehavior": "Cover each operation including deny/zero deltas",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "supportingEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-082",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "CALL schedules next action without task",
+      "expectedBehavior": "Timestamp retained; not a TASKS entity",
+      "assessment": "PARTIAL",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+      ],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Add an end-to-end Java service scenario with zero-side-effect deny checks",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-083",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Employee creates tenant-owned task",
+      "expectedBehavior": "TASKS source of truth and RBAC required",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-084",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Manager assigns task to active employee",
+      "expectedBehavior": "Tenant-qualified owner and assignee",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-085",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Inactive employee receives task",
+      "expectedBehavior": "Reject without dangling assignment",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-086",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Employee marks task completed",
+      "expectedBehavior": "Immutable task transition and history",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-087",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Two employees close task concurrently",
+      "expectedBehavior": "One completion and idempotent retry",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-088",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "CRM interaction links to task",
+      "expectedBehavior": "Typed immutable link, not a shadow task table",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-089",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Worker is suspended with pending tasks",
+      "expectedBehavior": "Reassignment policy and no leaked reminders",
+      "assessment": "POLICY_GAP",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Approve domain policy and test negative/retry behavior",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-090",
+      "group": "TASKS",
+      "domain": "TASKS",
+      "sourceOfTruth": "TASKS/CRM",
+      "businessEvent": "Reminder job crashes after publishing",
+      "expectedBehavior": "Outbox retry and dedup guarantee",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-091",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Seller issues invoice for order",
+      "expectedBehavior": "FINANCE-owned immutable invoice snapshot",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-092",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Buyer makes partial payment",
+      "expectedBehavior": "Allocation to invoice, overpayment rejected",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-093",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Payment webhook retries",
+      "expectedBehavior": "Receipt dedup and no duplicate ledger",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-094",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Order fulfilled but not paid",
+      "expectedBehavior": "Do not emit paid status without payment proof",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P0",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-095",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Finance event races with order cancellation",
+      "expectedBehavior": "Explicit compensating policy and rollback",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-096",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Campaign targets consented contacts only",
+      "expectedBehavior": "Consent snapshot and send admission required",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P2",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-097",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Consent revoked while campaign queued",
+      "expectedBehavior": "No dispatch after revocation commit",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P1",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-098",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Tenant exceeds subscription quota",
+      "expectedBehavior": "Fail before write; idempotent usage meter",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P2",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "id": "CRM-SIM-099",
+      "group": "FINANCE_GROWTH",
+      "domain": "FINANCE",
+      "sourceOfTruth": "FINANCE/MARKETING/SUBSCRIPTION",
+      "businessEvent": "Subscription renewal fails",
+      "expectedBehavior": "Suspend entitlement without deleting CRM customer",
+      "assessment": "MISSING_FEATURE",
+      "priority": "P2",
+      "reviewMethod": "SOURCE_AND_EXISTING_JUNIT_TRACE_OR_DESIGN_GAP",
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "supportingEvidence": [],
+      "simulatedOutcome": "NOT_FULLY_QUALIFIED",
+      "proposedAction": "Implement missing owner service contract before asserting business readiness",
+      "controllerUiScope": "STOP",
+      "productionAdmission": "HOLD"
+    }
+  ]
+}
