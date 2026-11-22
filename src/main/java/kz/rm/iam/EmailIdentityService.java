@@ -371,6 +371,23 @@ public class EmailIdentityService {
 
     private void queueChallenge(UUID identityId,String purpose,boolean cooldown) {
         if(identityId==null)throw new IllegalArgumentException("Identity required");
+        // Serialize delivery admission against IAM deletion. Both trusted
+        // writers lock the account before touching challenges/outbox.
+        UUID identityOwner=jdbc.query("""
+                SELECT user_id FROM public.iam_email_identity WHERE id=?
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,identityId);
+        if(identityOwner==null)throw new SecurityException("Email identity unavailable");
+        String status=jdbc.query("""
+                SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
+                """,rs->rs.next()?rs.getString(1):null,identityOwner);
+        if(!"ACTIVE".equals(status) && !"PENDING".equals(status))
+            throw new SecurityException("Account not eligible for email delivery");
+        String identityState=jdbc.query("""
+                SELECT lifecycle_state FROM public.iam_email_identity
+                WHERE id=? AND user_id=?
+                """,rs->rs.next()?rs.getString(1):null,identityId,identityOwner);
+        if(!"CURRENT".equals(identityState) && !"PENDING".equals(identityState))
+            throw new SecurityException("Inactive email identity");
         Instant now=Instant.now();
         if(cooldown) {
             Integer recent=jdbc.queryForObject("""
@@ -500,7 +517,7 @@ public class EmailIdentityService {
 
     private void assertNotDisabled(UUID userId) {
         String status=jdbc.queryForObject(
-            "SELECT status FROM public.iam_user_account WHERE id=?",
+            "SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE",
             String.class,userId);
         if(!"ACTIVE".equals(status)&&!"PENDING".equals(status))
             throw new SecurityException("Account unavailable");
