@@ -3,7 +3,7 @@
 **Тип:** комплексное техническое задание / dependency-aware execution plan / service-only qualification contract.  
 **Дата:** 2026-11-23. **Репозиторий:** `alimbetov/RM`. **Ветка:** `base_dev`.  
 **Source baseline на момент подготовки:** `9feeb812e2b56d877e223c42bde0d55c09d4057b`.  
-**Статус:** **SPECIFICATION APPROVED FOR PLANNING / IMPLEMENTATION BY SEPARATE TASKS**. Создание этого документа не доказывает выполнение кодовых задач или прохождение CI.  
+**Статус:** **R1.1 REVIEWED / ALIGNED WITH CURRENT RM / IMPLEMENTATION VIA SEPARATE APPROVED TASKS**. Создание этого документа не доказывает выполнение кодовых задач или прохождение CI.  
 **Delivery boundary:** Java/Spring application/domain services + JDBC/JPA + PostgreSQL/Liquibase + H2 smoke + JUnit/Testcontainers; новые REST controllers/BFF/UI — **STOP**, public HTTP/OIDC admission — **HOLD**, production — **HOLD**, merge to `main` — **HOLD**.
 
 ## 0. Продуктовое решение и исключения
@@ -17,11 +17,11 @@
 
 **TASKS, полноценный task lifecycle и CRM→TASKS integration — AFTER P0/P1**, вне данного release gate; не создавать временную task-подсистему. CRM Interaction `nextAction` и существующие статусы сохранять в действующем owner. **FINANCE полноценный ledger/COGS/payment reconciliation, MARKETING, SUBSCRIPTION, KF-01..05, ML и универсальный ERP — вне scope**. Не приписывать `SALES.COMPLETED` оплату, доставку или возмещение.
 
-Новый документ является **актуальным приоритетным исполнением** для двух направлений и supersedes **только прежний продуктовый выбор трёх сегментов** в `docs/strategy/RM-PRODUCT-TARGETS-AND-KILLER-FEATURES-R1.md`; не заменяет нормативный стандарт, доменные ТЗ, источники истины и ранее утверждённые технические контракты. Противоречие с R2 стандартом → `DECISION REQUIRED`, без молчаливой смены поведения.
+Новый документ является **актуальным исполняемым планом** для двух направлений совместно с `docs/strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md` (заменяет только сегментный выбор R1, оставляя прежний файл историческим); не заменяет нормативный стандарт, доменные ТЗ, источники истины и ранее утверждённые технические контракты. Противоречие с R2 стандартом → `DECISION REQUIRED`, без молчаливой смены поведения.
 
 ## 1. Приоритет документов / основание
 
-1. Норматив: `docs/architecture/RM-PLATFORM-STANDARD-R2.md`.
+1. Норматив: `docs/architecture/RM-PLATFORM-STANDARD-R2.md`. Продуктовое решение: `docs/strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md`.
 2. Предметные ТЗ: `docs/spec/RM-TENANT-SERVICES-COMPLETION-R1.md`, `docs/spec/RM-SVC-MATURITY-COMPLETION-R2.md`, `docs/spec/RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md`, `docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md`.
 3. QR: `docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md`, `docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md`; QR-07/08 review evidence.
 4. CRM: `docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json`, `docs/reviews/RM-CRM-R22D-IAM-DELETION-EVIDENCE-2026-11-22.md`, `docs/architecture/IAM-CRM-R22F-OIDC-REVOCATION-OUTBOX.md`.
@@ -52,7 +52,7 @@ FC-10/20/30 source analysis may run in parallel after FC-00 diagnosis; mutations
 
 ### FC-00 — P0: CI/PostgreSQL: repair integrated evidence first
 
-**Task:** diagnose source of failed runs `45058719185` and `45058713523` using actual failing test name, Surefire XML, stack trace and job step. Separate application defect, environment/migration failure, flaky schedule and test contract mismatch; do not weaken gate or skip tests to make green. Check related changes and GitHub Actions concurrency/cancellation semantics.
+**Task:** diagnose and fix two *observed* categories from runs `45058719185` and `45058713523`: (1) H2 Liquibase failure in changeset `0105-crm-r22b-lifecycle-dispute`: `CREATE UNIQUE INDEX ... WHERE status IN (...)` is a PostgreSQL partial index syntax rejected by H2; (2) full PostgreSQL QR regression: multiple QR06B distributed worker JVM startups failed with `FATAL: sorry, too many clients already` during Liquibase initialization; the pressure/parallelism source must be confirmed in tests/connection pools. See section 10, `FC-00A/B`. Inspect Surefire XML, stack traces, all failed test names and resource limits. Do not weaken gate or skip tests to make green. Check related changes and GitHub Actions concurrency/cancellation semantics.
 
 **Implementation:** minimal corrective code/migration/test change in `base_dev`; no feature scope expansion. Ensure targeted + full H2/PG suites, populated upgrade and test evidence manifest are compared to *one final candidate SHA*. Reports should reject missing XML, unexecuted mandatory names, unexpected skips and mismatched head SHA.
 
@@ -106,7 +106,7 @@ FC-10/20/30 source analysis may run in parallel after FC-00 diagnosis; mutations
 
 **Required rules:** PRODUCT_OFFER, ORDER_REFERENCE, PICKUP_CREDENTIAL, RETURN_REFERENCE and PACKAGE_LABEL are different powers; public ref != proof of order ownership; seller quote counter cannot accept own revision; accepted quote is consumed once; buyer must be verified before private read/pickup; pickup raw secret never stored/logged; scan preview performs zero stock effect; double scan causes at most one completion/stock movement; return cannot exceed original handed-over quantity less previously received, original COMPLETED remains. Damaged/quarantined item never increases sellable balance; QR-08 R0 **never** posts packaging materials, finance or delivery; R1 materials debit remains STOP until separately approved and qualified.
 
-**DoD:** full list-price and negotiated paths on SAME underlying checkout/order inventory contracts; concurrency `accept×counter/reject/expire`, `confirm×stock change`, `pickup×pickup`, `return×return`, IAM suspend/revoke×each sensitive operation, recovery and price drift; PostgreSQL ledger proof; QR-08 focused + populated + full PG PASS exact SHA and XML verified before QR-08 R0 PASS. External real scanner/browser/payment are separate gates.
+**DoD (QR core):** full list-price and negotiated paths on SAME underlying checkout/order inventory contracts; concurrency `accept×counter/reject/expire`, `confirm×stock change`, `pickup×pickup`, `return×return`, IAM suspend/revoke×each sensitive operation, recovery and price drift; PostgreSQL ledger proof. **Separate QR-08/R0 PACKAGING gate:** focused + populated + full PG PASS exact SHA and XML before claiming QR-08 R0 PASS. QR-08 packaging is not a prerequisite for the base `PRODUCT_OFFER→checkout→pickup→return` journey, but any code included in candidate HEAD must still pass full regression; no skipping failing package tests. External scanner/browser/payment are separate gates.
 
 ### FC-60 — P1: cross-domain qualification / business admission
 
@@ -120,7 +120,7 @@ FC-10/20/30 source analysis may run in parallel after FC-00 diagnosis; mutations
 - 15 QR/public/negotiation/checkout;
 - 20 pickup/return/quarantine/packaging R0;
 - 10 cross-domain crash/retry/migration/races.
-**Total: 120 planned scenario IDs**, de-duplicate against currently executed JUnit cases by user-behavior equivalence; never inflate test count by trivial assertions. Mapping can identify historical existing passing tests but must confirm them at target HEAD.
+**Total: 120 planned scenario IDs as a full regression registry target**, not 120 new JUnit methods and not a blanket numerical release blocker. Mark each scenario `CORE-P0` or `EXTENDED-P1` by actual business dependency, then de-duplicate against existing executed tests by user-behavior equivalence; never inflate counts with trivial assertions. ALL identified `CORE-P0` scenarios must be verified for service functional PASS; remaining `EXTENDED-P1` scenarios may follow in the same program unless they protect a P0 invariant. Mapping can identify historical existing passing tests but must confirm them at target HEAD.
 
 **Mandatory scenario examples:**
 - owner onboarding→seller grant→catalog→offer→order→reserve→handover→CRM history;
@@ -135,7 +135,7 @@ FC-10/20/30 source analysis may run in parallel after FC-00 diagnosis; mutations
 - failed File media / quarantine cannot leak private original via public card;
 - packaging service accepted without any stock/finance movement (R0).
 
-**DoD:** exact-SHA manifests for mandatory suites and all required scenario IDs, zero unexpected skips, no unqualified gaps in either product's P0 user journey. Any `NOT RUN`, `BLOCKED` or failed critical scenario means `SERVICE FUNCTIONAL HOLD`. Distinguish independent external OIDC/HTTP, real scanner, UX, legal and production gates.
+**DoD:** exact-SHA manifests for mandatory suites and all `CORE-P0` scenario IDs, zero unexpected skips, no unqualified gaps in either product's critical user journey; complete the 120-entry registry without pretending all 120 have passed. Any `NOT RUN`, `BLOCKED` or failed critical scenario means `SERVICE FUNCTIONAL HOLD`. Distinguish independent external OIDC/HTTP, real scanner, UX, legal and production gates.
 
 ## 5. Shared architecture, transactions and data ownership
 
@@ -154,8 +154,8 @@ Per ticket mandatory record:
 
 **Gate G0:** determine failure root causes; repair H2 + full PG, exact-SHA manifest.  
 **Gate G1 (Business Core):** FC-10/20/30/40 service E2E, all P0 business scenarios, immutable history, clean+populated PG and adverse races.  
-**Gate G2 (QR Core):** FC-50 every user journey, QR-08 R0 independent admission, exact-SHA regression, no double stock effects.  
-**Gate G3 (Cross-domain):** FC-60 registry full critical coverage, fault/retry, source-of-truth, rollback, security.  
+**Gate G2 (QR Core):** FC-50 primary QR product flows, exact-SHA regression, no double stock effects. QR-08 R0 receives a **separate** qualification verdict and is not a prerequisite for the QR PRODUCT core when not selected for release; existing package code still participates in mandatory whole-project regression.  
+**Gate G3 (Cross-domain):** FC-60 registry mapped to source and tests; all critical `CORE-P0` scenarios executed with fault/retry, source-of-truth, rollback and security proof. 120-row inventory is the coverage plan, not evidence of 120 executed cases.  
 **Verdict:** `RM BUSINESS SERVICE FUNCTIONAL PASS` + `RM QR SERVICE FUNCTIONAL PASS` each awarded independently; **integrated CORE PASS** only after G0–G3 on a single qualifying release SHA. External real OIDC/transport/scanner/UX and production are separate HOLD until explicit later approval.
 
 Failure policy: a required CI failure, absent artifact, unexpected skip, unapproved policy change or unresolved P0 race → `HOLD`. Historical PASS never upgrades new HEAD automatically. Re-run exact-H2/full-PG after each integration change.
@@ -195,3 +195,82 @@ Failure policy: a required CI failure, absent artifact, unexpected skip, unappro
 - `PRODUCTION HOLD` maintained until separate real provider/browser/operational/legal gates.
 
 **Concluding decision:** target **functional completeness and proof of correct user behavior** of RM Business and RM QR Commerce before transport, UI, TASKS, new killer features or expansion to enterprise network.
+
+## 10. R1.1 — матрица согласования с фактическим проектом (2026-11-23)
+
+Это не новый бизнес-домен и не повторная реализация. Приоритет: проверенное поведение исходного Java-кода, действующие additive Liquibase и exact-SHA execution evidence. Каждый `CODE PRESENT` ниже перепроверить на HEAD задачи.
+
+| Решение | Проверенная опора в проекте | Изменение / практический результат |
+|---|---|---|
+| PRD-R2 | `docs/strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md`; R1 раньше включал Network | Только RM Business и QR Commerce; Network не имеет активного implementation backlog |
+| CRM-CORE | `CrmCustomerService`, `CrmContactRepository`, `CrmContractService`, `CrmInteractionService`, `CrmBuyerLinkService`; R2.2C/D/F evidence | Выполнять gap-specific тесты и корректировки, не дублировать CRM и buyer-link |
+| IAM-ORG | `TenantAuthorization`, `TenantMemberEnrollmentService`, `OrganizationLocationService` и authenticated facade; ORGANIZATION R1.1 history | Lifecycle location **уже реализован частично**; квалифицировать оставшиеся контракты, не создавать снова create/update/close |
+| CATALOG | `CatalogItemService`, `CatalogQueryService`, `CatalogInventoryUsagePort` | Item/price/history код существует; закрывать только published SKU↔offer↔orders/archive races |
+| STORE | `StorefrontManagementService`, `StorefrontOfferService`, `PublishedOfferCardQuery` | Storefront/offer lifecycle, CAS и price history присутствуют: проверять поведение и exact-SHA, а не проектировать вторую витрину |
+| SALES | `AutoOrderService`, `SalesInventoryCommandService`, `SalesOrderPreparationService`, authenticated queries | Не создавать второй order aggregate; доказать seller read/status/prepare/fulfill на existing flow |
+| INVENTORY | `InventoryMovementService`, `OrderInventoryPort`, `InventoryReservationService`, transfer, stocktake, reconciliation | Сохранить quantity ledger/locks и исторические qualification; отказ и восстановление проверять на новых SHA |
+| QR | `PublishedOfferQrService`, `PublishedQrCheckoutService`, `SalesPriceProposalService`, `SalesPickupHandoverService`, Return* | Сервисы физической выдачи/возврата есть; приоритет сквозной contract proof, не запуск нового QR engine |
+| QR-08 | `PackagingServiceCatalogService`, `OrderPackagingService` | R0 присутствует как кандидат, но его локальный PASS не заменяет full PG; он необязателен для товарного QR core |
+| TASKS | package `kz.rm.tasks.TaskState`, schema `task_item` | Отсутствие `TaskService` сознательно принято; никакого временного lifecycle до завершения P0/P1 |
+
+### 10.1 FC-00A: H2 migration compatibility — подтверждённый дефект
+
+**Evidence:** [run 45058719185](https://github.com/alimbetov/RM/actions/runs/45058719185), job `module-h2` `137319615781`. В startup `FilesR10bQualificationTest` общий Spring `ApplicationContext` падает на Liquibase changeset `0105-crm-r22b-lifecycle-dispute`: H2 отвергает PostgreSQL-specific `CREATE UNIQUE INDEX uk_crm_buyer_active_customer ... WHERE status IN ('PENDING','CONFIRMED','DISPUTED')`. Много последующих `ApplicationContext failure threshold exceeded` — следствие первой ошибки, а не доказательство многочисленных независимых дефектов FILES.
+
+**Требуется:** source trace dbms-conditional миграции и тестового bootstrap; сравнить семантику действующего PostgreSQL partial index с H2 test-only equivalent. **Запрещено** ретроспективно редактировать применённый production changeset / ослаблять PostgreSQL uniqueness, отключать Liquibase либо помечать тесты skip. Если forward-only PG changeset уже применён, использовать безопасный отдельный совместимый путь/корректирующую миграцию или тестовый schema adapter по нормативному порядку. Механизм выбрать после inspection; каждый backend должен реально проверять соответствующий business invariant.
+
+**Exit:** H2 clean bootstrap и обязательные service тесты PASS, PostgreSQL clean+populated upgrade PASS, прежняя PostgreSQL уникальность/конкурентная защита сохранена, artifacts и exact SHA записаны.
+
+### 10.2 FC-00B: PostgreSQL connection budget — подтверждённый отказ запуска процессов
+
+**Evidence:** [run 45058713523](https://github.com/alimbetov/RM/actions/runs/45058713523), job `qr08-full-postgresql-regression` `137319599291`: `QrWarehouseHandoverQualificationTest` (включая distributed 2-JVM B31/B33/B35) сообщает `FATAL: sorry, too many clients already` при старте worker JVM и Liquibase. Это **не** доказательство ошибки самой QR08 packaging business logic. Специальный targeted PG и populated PG QR08 на том же SHA в этом запуске были SUCCESS, но общий gate FAIL.
+
+**Требуется:** посчитать максимальное количество подключений с учётом Maven forks, JUnit workers, Spring/Hikari pools, двух JVM, job-level parallelism и PostgreSQL `max_connections` / reserved slots; вывести числа и фактические активные соединения до и после. Обеспечить адекватный resource budget посредством изоляции тяжёлых тестов, управляемой параллельности, освобождения ресурсов или сознательной квалификационной конфигурации БД. **Нельзя** скрывать распределённые тесты через skips, уменьшать предметную нагрузку и считать текущую suite GREEN без дополнительного доказательства. При выносе стресс-сценариев в отдельный mandatory job это должен быть **тот же exact SHA** с явным manifest.
+
+**Exit:** полный mandatory PostgreSQL regression PASS на том же source SHA, child JVM bootstrap стабилен; B31/B33/B35 и остальные критические distributed scenarios продолжают выполняться в обязательном квалификационном gate; отчёт о подключениях и исходных причинах сохранён.
+
+### 10.3 Критические контрактные уточнения
+
+1. **Верная транзакционная граница IAM/ORG.** Некоторые низкоуровневые сервисы всё ещё принимают internal `actorId`, тогда как публичный trusted application facade обязан принимать `VerifiedActor` и свежие tenant permissions. Не объявлять все низкоуровневые методы автоматически безопасным внешним API; тестировать принятые authenticated facade entrypoints и убрать лишь реально доступные обходы. Исправлять не массовой заменой UUID во всех внутренних методах, а сохранением trust boundary и контрактов.
+2. **Location lifecycle уже существует** (`OrganizationLocationService.update/deactivate/reactivate/close`) и не должен быть повторно запланирован как новый функционал. Закрывать фактические PG/race/populated/warehouse-blocker gaps. Один tenant не должен автоматически означать один физический склад.
+3. **Catalog price != current seller offer price:** `cat_price` — история цены каталога, `store_offer` — текущая коммерческая цена оформления. У `StorefrontOfferService` присутствует `priceHistory`; нельзя описывать её как отсутствующий метод без проверки настоящих source/CI. Immutable snapshots в SALES остаются единственным доказательством цены принятого заказа.
+4. **QR checkout:** `PublishedQrCheckoutService` использует существующий `AutoOrderService`; negotiated checkout должен использовать согласованный accepted quote контракт без второго receipt namespace и без переиспользования ключа с иной семантикой. `PLACED` не создаёт складской резерв, `CONFIRMED` создаёт.
+5. **Подготовка заказа:** `SalesOrderPreparationService` содержит `startPreparing`, `confirmPicked`, `markReadyForPickup`; выдача и списание отделены в `SalesPickupHandoverService`. `READY_FOR_PICKUP` не равен списанию или завершению.
+6. **Возвраты:** source-implemented `SalesReturnPhysicalService.receive/inspect/post` и соседние return services требуют единого state-machine и exactly-once posting проверок; не писать второй сервис возврата. `RESTOCK` увеличивает sellable stock только после утверждённой инспекции.
+7. **QR-08 packaging:** R0 сохраняет `zero inventory movement, zero financial posting`. Это опциональная функция относительно base QR Commerce, с **собственной** qualification. Входящие в HEAD R0 тесты остаются частью общей регрессии; optional не означает `skip`.
+8. **External IAM:** модуль содержит кандидата `OidcRevocationOutboxWorker` и disabled-by-default Keycloak gateway; на старых exact SHA есть scoped PG PASS, но live Keycloak provider/session invalidation, подписанная retention policy и реальный OIDC/E2E остаются отдельными HOLD. FC-10/20 не должны переизобретать R2.2F worker.
+9. **Документная иерархия:** `docs/strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md` решает **продуктовые приоритеты**; `RM-PLATFORM-STANDARD-R2` остаётся высшим по техническому/security контракту; QR-R1.4 определяет QR invariant, domain specs определяют методики. Старые R3/R4 файлы — исторические capability baseline; статусы обновлять только доказательствами.
+10. **MVP ценность и сервисный допуск:** отсутствующий TASKS, полноценная FINANCE/бухгалтерия, маркетинговые кампании и enterprise network не блокируют *этот* service-functionality gate. Однако не заявлять техническую возможность задачи, оплаты или консолидированного учёта в пользовательском MVP до отдельной квалификации.
+
+### 10.4 Точная приёмка двух продуктов независимо
+
+**Business Core P0 route** — trusted actor (синтетически удостоверенный в service test) → membership + explicit grants → CRM customer/contact/contract → PRODUCT draft/price publication → published storefront and seller offer → buyer checkout → seller confirm selected warehouse → atomic full reserve → preparation/ready → secure handover → immutable order+stock history → CRM customer↔buyer/order read только с proven linkage. Тесты проверяют разрешённые и отказные пути, но не имитируют физическое списание для отказов.
+
+**QR Core P0 route** — current published PRODUCT offer → stable QR reprint → restricted public card and safe media → [list-price OR proposal/counter/accepted quote] → existing checkout, same seller/order idempotency semantics → confirm/reserve → authenticated pickup issue → explicit employee physical handover → return request/approval/reception/inspection/post → invariants for original order and stock. Публичный ref никогда не является выдачным credential.
+
+**Admission split:** (1) `BUSINESS SERVICE FUNCTIONAL PASS`; (2) `QR SERVICE FUNCTIONAL PASS`; (3) `QR08 PACKAGING R0 PASS` независимо; (4) `INTEGRATED CORE PASS` только при общей платформенной exact-SHA регрессии. Не смешивать с `PILOT` или `PRODUCTION`.
+
+### 10.5 Реестр сценариев и test evidence
+
+120 описанных в FC-60 сценариев — **план полной матрицы**, не число уже выполненных тестов. До запуска каждого implementation slice:
+
+| Поле | Требуемая запись |
+|---|---|
+| `scenario_id` | Уникальный business behavior, без дубликатов |
+| `tier` | `CORE-P0` / `EXTENDED-P1` с обоснованием зависимости от продукта |
+| `owner` | IAM / ORG / CRM / CATALOG / STORE / SALES / INVENTORY / FILES |
+| `code_anchor` | Реальный Java method + migration/aggregate, `EXISTS/PARTIAL/MISSING` |
+| `test_anchor` | JUnit class.method либо `NOT IMPLEMENTED` |
+| `evidence` | environment, source SHA, workflow/job, XML tests/errors/failures/skips |
+| `race_oracle` | Оба порядка коммита, final DB rows, history, zero-denied-side-effects |
+| `verdict` | `PASS@SHA`, `FAIL`, `NOT RUN`, `BLOCKED`, `NOT APPLICABLE` (с объяснением) |
+
+**Gate:** все CORE-P0 должны иметь `PASS@SAME_RELEASE_SHA` и platform mandatory suites GREEN; расширенная матрица 120 должна быть полной как реестр, но неприоритетные P1 не объявлять выполненными без тестов. После согласования и исполнения следует создать отдельный machine-readable `docs/strategy/RM-CORE-FUNCTIONAL-SCENARIOS-v1.json` со schema/validator/self-tests **только если текущие реестры нельзя расширить без нарушения их identity/ownership**. Документ сам по себе не санкционирует создание нового кода и подсистемы тестов.
+
+### 10.6 Decision and change control
+
+- Source baseline для этого R1.1 appendix: `9feeb812e2b56d877e223c42bde0d55c09d4057b`. Документальный коммит R1.1 меняет HEAD, поэтому qualification на документальном SHA **отсутствует**, если workflow не завершён успешно и не зафиксирован.
+- Implementation допускается только отдельной задачей с точным HEAD, scope, acceptance cases и явными unresolved decisions. Не считать `SPEC ALIGNED` эквивалентом выполненных сервисных операций.
+- Не создавать новые branches, не менять `main`, не добавлять controllers/REST/BFF/UI, не запускать KF-01..05 и TASKS.
+- Для миграций не править применённые changesets; новые forward-only изменения + clean/populated DB доказательства, особенно PostgreSQL partial indices и тестовая H2 совместимость.
+- Повторная квалификация не должна переписывать исторические `DONE-QUALIFIED@OLD-SHA`: они сохраняются как historical evidence до fresh release SHA.
