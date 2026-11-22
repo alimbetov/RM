@@ -18,7 +18,7 @@ import java.util.UUID;
  * trusted principal, never from an untrusted HTTP request field.
  */
 @Service
-public class InventoryTenantSettingsService {
+class InventoryTenantSettingsService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
 
@@ -36,7 +36,7 @@ public class InventoryTenantSettingsService {
                            String functionalCurrency, int policyRevision) {}
 
     @Transactional
-    public Settings initialize(UUID authenticatedActorId, UUID tenantId) {
+    Settings initialize(UUID authenticatedActorId, UUID tenantId) {
         authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         // Lock the tenant row to serialize simultaneous initialization across pods.
         jdbc.queryForObject("SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE",
@@ -55,14 +55,16 @@ public class InventoryTenantSettingsService {
         return load(tenantId,false);
     }
 
-    @Transactional(readOnly=true)
-    public Settings get(UUID authenticatedActorId, UUID tenantId) {
-        authorization.require(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
+    @Transactional // shared IAM actor/workspace fences require writable PG transaction
+    Settings get(UUID authenticatedActorId, UUID tenantId) {
+        authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         return load(tenantId,false);
     }
 
     @Transactional
-    public Settings updatePicking(UUID authenticatedActorId,UUID tenantId,
+    /** Internal legacy configuration; not an operational picking control. */
+    @Deprecated
+    Settings updatePicking(UUID authenticatedActorId,UUID tenantId,
                                   PickingStrategy strategy,boolean autoReserve,long expectedVersion) {
         authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         if(strategy==null || expectedVersion<0)
@@ -80,7 +82,7 @@ public class InventoryTenantSettingsService {
     }
 
     @Transactional
-    public Settings approveCostPolicy(UUID authenticatedActorId,UUID tenantId,
+    Settings approveCostPolicy(UUID authenticatedActorId,UUID tenantId,
                                       ValuationMethod method,String currency,long expectedVersion) {
         authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_SETTINGS_MANAGE);
         if(method==null || currency==null || expectedVersion<0)
