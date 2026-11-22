@@ -54,3 +54,12 @@ mvn -Dtest=InventoryMovementQualificationTest,InventoryReservationQualificationT
 ~~~
 
 The repository has a root pom.xml and no mvnw/gradlew in the reviewed tree; use a Maven-capable environment with the project's required JDK and PostgreSQL test configuration. A command in this report is not evidence it has been executed. Attach GitHub Actions run ID, exact commit SHA, test counts and failure logs to move `ORG-R1.1` from `CODE PRESENT` to `GREEN/QUALIFIED`.
+
+
+## 5. First CI evidence and correction
+
+**CI run:** [RM Domain Security and PostgreSQL Qualification #44988252109](https://github.com/alimbetov/RM/actions/runs/44988252109) on source commit `3bcfa52e6827b668709479a05651daea1218c4d1`. **Result: FAILURE** in both H2 smoke and PostgreSQL integration, not compilation failure. PostgreSQL summary `308 tests, 1 failure, 0 errors, 18 skipped` (H2 `308 tests, 1 failure, 0 errors, 60 skipped`). The single failure was `OrganizationLocationLifecycleQualificationTest.typedCreateUpdateNoOpStaleAndUnicodeAreAuditedAtomically:126` because the test compared a Java in-memory `Instant` with nanoseconds against the same timestamp read from PostgreSQL after microsecond truncation.
+
+**Code correction:** commit `18e65ed07f1d6208e24fc457276d7700d6478d2d` updates the test to record `locations.get(...).updatedAt()` persisted value before the no-op and compare it with the persisted value after. This preserves the intended business invariant (no timestamp change), without relying on DB nanoscale precision. At document update, the new CI on corrected SHA may be queued; do **not** call ORG-R1.1 GREEN until it completes successfully. The remaining tests on the failed run were reported without errors, but the whole run was **not GREEN**.
+
+**Scope:** no production Java semantics modified by the precision correction; the adjustment is test-only.
