@@ -24,7 +24,7 @@ class MaturityReportContractTest(unittest.TestCase):
         self.root = Path(temporary.name)
         (self.root / maturity.CROSSWALK.parent).mkdir(parents=True)
         self.crosswalk = json.loads((ROOT / maturity.CROSSWALK).read_text())
-        self.save(maturity.CROSSWALK, self.crosswalk)
+        (self.root / maturity.CROSSWALK).write_bytes((ROOT / maturity.CROSSWALK).read_bytes())
         catalogue = json.loads((ROOT / "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json").read_text())
         passed = {}
         for domain in catalogue["domains"]:
