@@ -116,8 +116,8 @@ class InventoryTransferStocktakeQualificationTest {
                 .isInstanceOf(IllegalStateException.class);
         var moves=queries.searchMovements(actor(f.actor()),f.tenant(),
                 new InventoryMovementSearch(null,f.item(),null,null,null),0,20).getContent();
-        assertThat(moves.stream().filter(m->receipt.id().equals(m.sourceId())))
-                .hasSize(2).extracting(m->m.reasonCode())
+        var legs=moves.stream().filter(m->receipt.id().equals(m.sourceId())).toList();
+        assertThat(legs).hasSize(2).extracting(m->m.reasonCode())
                 .containsExactlyInAnyOrder("TRANSFER_OUT","TRANSFER_IN");
         assertThat(moves.stream().filter(m->receipt.id().equals(m.sourceId()))
                 .map(m->m.delta()).reduce(BigDecimal.ZERO,BigDecimal::add))
