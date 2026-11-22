@@ -85,4 +85,41 @@ class Tcrud04VerifiedEntrypointQualificationTest {
         assertThat(publicMethods).allSatisfy(m->assertThat(m.getParameterTypes()[0])
                 .isEqualTo(VerifiedActor.class));
     }
+
+    @Test void anonymousRegistrationPortsRemainIamInternalUntilTransportAdmission() throws Exception {
+        assertThat(Modifier.isPublic(EmailIdentityService.class
+                .getDeclaredMethod("registerPendingEmail",String.class).getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(EmailIdentityService.class
+                .getDeclaredMethod("verifyRegistration",UUID.class,String.class).getModifiers())).isFalse();
+        // Checkout compatibility is intentionally still an INTERNAL cross-module
+        // workflow; it is NOT HTTP admission or bearer-token authentication.
+        var publicUuidMethods=java.util.Arrays.stream(EmailIdentityService.class.getDeclaredMethods())
+                .filter(m->Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers()))
+                .filter(m->m.getParameterCount()>0 && m.getParameterTypes()[0]==UUID.class)
+                .map(m->m.getName()).collect(java.util.stream.Collectors.toSet());
+        assertThat(publicUuidMethods).containsExactlyInAnyOrder("queueVerification","verifyEmail");
+    }
+
+    @Test void globalAdministrationAndTenantRecoveryNeverAcceptRawActorIds() {
+        var sensitive=List.of(
+                PlatformAdminGovernanceService.class,
+                PlatformTenantBootstrapService.class,
+                PlatformTenantRecoveryService.class,
+                GlobalAccountStatusService.class,
+                TenantOwnershipTransferService.class,
+                TenantMemberEnrollmentService.class
+        );
+        for(var type:sensitive) {
+            var operations=java.util.Arrays.stream(type.getDeclaredMethods())
+                    .filter(m->Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers()))
+                    .filter(m->!m.isSynthetic()).toList();
+            assertThat(operations).as(type.getName()).isNotEmpty();
+            assertThat(operations).allSatisfy(m->{
+                assertThat(m.getParameterCount()).isPositive();
+                assertThat(m.getParameterTypes()[0]).as("Untrusted actorId: "+m)
+                        .isEqualTo(VerifiedActor.class);
+            });
+        }
+    }
+
 }
