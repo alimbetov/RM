@@ -37,6 +37,7 @@ class InventoryQ123QualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired StockEligibility eligibility;
     @Autowired DataSource source;
 
     private record Tenant(UUID tenant,UUID staff,UUID location,UUID item,
@@ -378,6 +379,125 @@ class InventoryQ123QualificationTest {
         // Diagnostic only: synthetic 24-command probe is NOT a production SLO.
         System.out.printf("INVENTORY_PG_SYNTHETIC_LOCK_PROBE concurrent=%d operations=%d"
                 +" p95_ms=%d p99_ms=%d%n",parallel,total,p95Ms,p99Ms);
+    }
+
+
+    @Test void postgresSharedOwnerAdmissionAllowsParallelChecksAndStillFencesClosure()
+            throws Exception {
+        try(var con=source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase(java.util.Locale.ROOT).contains("postgresql"));
+        }
+        UUID staff=user("inv-share-owner");
+        Tenant t=tenant(staff,DomainPermission.INVENTORY_RECEIVE);
+        var firstReady=new CountDownLatch(1);
+        var secondReady=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(3)){
+            var first=pool.submit(()->new TransactionTemplate(transactionManager).execute(tx->{
+                eligibility.requireReceivable(t.tenant(),t.location(),t.item());
+                firstReady.countDown();
+                try {
+                    if(!release.await(10,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Owner admission not released");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(firstReady.await(10,TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->new TransactionTemplate(transactionManager).execute(tx->{
+                eligibility.requireReceivable(t.tenant(),t.location(),t.item());
+                secondReady.countDown();
+                try {
+                    if(!release.await(10,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Second owner admission not released");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            try {
+                // Exclusive owner-lock admission would block this second check.
+                assertThat(secondReady.await(5,TimeUnit.SECONDS)).isTrue();
+                var close=pool.submit(()->jdbc.update("""
+                        UPDATE public.org_location SET status='INACTIVE'
+                        WHERE workspace_id=? AND id=?
+                        """,t.tenant(),t.location()));
+                assertThatThrownBy(()->close.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+                release.countDown();
+                assertThat(first.get(10,TimeUnit.SECONDS)).isTrue();
+                assertThat(second.get(10,TimeUnit.SECONDS)).isTrue();
+                assertThat(close.get(10,TimeUnit.SECONDS)).isEqualTo(1);
+            } finally { release.countDown(); }
+        }
+        assertThatThrownBy(()->new TransactionTemplate(transactionManager)
+                .execute(tx->{eligibility.requireReceivable(
+                        t.tenant(),t.location(),t.item());return true;}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Active tenant WAREHOUSE");
+    }
+
+    @Test void postgresSyntheticFanoutAdmissionProbeAcrossEightSkus() throws Exception {
+        try(var con=source.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase(java.util.Locale.ROOT).contains("postgresql"));
+        }
+        UUID staff=user("inv-fanout");
+        Tenant t=tenant(staff,DomainPermission.INVENTORY_RECEIVE);
+        var who=verified(staff);
+        var items=new java.util.ArrayList<UUID>();
+        items.add(t.item());
+        for(int i=1;i<8;i++){
+            UUID sku=UUID.randomUUID();
+            jdbc.update("""
+                    INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                    VALUES (?,?,?,'PRODUCT','ru','DRAFT',CURRENT_TIMESTAMP)
+                    """,t.tenant(),sku,"inv-fanout-"+UUID.randomUUID());
+            items.add(sku);
+        }
+        int concurrency=8,operations=24;
+        var start=new CountDownLatch(1);
+        var timings=new java.util.ArrayList<Long>();
+        try(var pool=Executors.newFixedThreadPool(concurrency)){
+            var tasks=new java.util.ArrayList<java.util.concurrent.Future<Long>>();
+            for(int i=0;i<operations;i++){
+                final int op=i;
+                tasks.add(pool.submit(()->{
+                    start.await(10,TimeUnit.SECONDS);
+                    long started=System.nanoTime();
+                    commands.receive(who,t.tenant(),t.location(),items.get(op%items.size()),
+                            String.format(java.util.Locale.ROOT,"fanoutReceipt%04d",op),
+                            BigDecimal.ONE);
+                    return System.nanoTime()-started;
+                }));
+            }
+            start.countDown();
+            for(var task:tasks)timings.add(task.get(30,TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND reason_code='RECEIPT'
+                """,Integer.class,t.tenant(),t.location())).isEqualTo(operations);
+        assertThat(jdbc.queryForObject("""
+                SELECT sum(on_hand) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=?
+                """,BigDecimal.class,t.tenant(),t.location())).isEqualByComparingTo("24");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=?
+                """,Integer.class,t.tenant(),t.location())).isEqualTo(8);
+        timings.sort(Long::compareTo);
+        long p95Ms=TimeUnit.NANOSECONDS.toMillis(timings.get(
+                (int)Math.ceil(operations*0.95)-1));
+        long p99Ms=TimeUnit.NANOSECONDS.toMillis(timings.get(
+                (int)Math.ceil(operations*0.99)-1));
+        System.out.printf("INVENTORY_PG_FANOUT_OWNER_PROBE concurrent=%d operations=%d"
+                +" skus=%d p95_ms=%d p99_ms=%d%n",
+                concurrency,operations,items.size(),p95Ms,p99Ms);
     }
 
 }
