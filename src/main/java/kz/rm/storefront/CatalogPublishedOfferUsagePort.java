@@ -28,6 +28,6 @@ public class CatalogPublishedOfferUsagePort {
                 SELECT 1 FROM crm.store_offer
                 WHERE tenant_id=? AND catalog_item_id=? AND state='PUBLISHED'
                 LIMIT 1
-                """, rs -> rs.next(), tenantId, catalogItemId));
+                """, (org.springframework.jdbc.core.ResultSetExtractor<Boolean>) rs -> rs.next(), tenantId, catalogItemId));
     }
 }
