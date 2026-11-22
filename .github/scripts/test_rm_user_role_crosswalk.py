@@ -40,7 +40,7 @@ class UserRoleCrosswalkQualificationTest(unittest.TestCase):
         self.assertEqual(report["planned"], 29)
         self.assertEqual(report["declaredCanonicalProof"], 41)
         self.assertEqual(report["roleCasesPassed"], 0)
-        self.assertEqual(report["registeredRoleCases"], 5)
+        self.assertEqual(report["registeredRoleCases"], 6)
         self.assertEqual(report["gate"], "MAPPING_VALID_NOT_SERVICE_QUALIFIED")
         self.assertEqual(report["missingCanonicalProof"],
                          ["FIL-05", "INV-02", "KMS-01", "KMS-03", "ORG-04"])
