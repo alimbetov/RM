@@ -251,7 +251,7 @@ class CommercialCoreE2EQualificationTest {
                 InventoryMovementService.WriteOffCause.OTHER);
 
         var open = stock.startStocktake(c.staff(), c.tenant(), c.warehouse(),
-                List.of(item.id()), "stocktake-" + UUID.randomUUID());
+                List.of(item.id()), "count-session-" + UUID.randomUUID());
         assertThatThrownBy(() -> catalog.archive(c.staff(), c.tenant(), item.id(),
                 item.rowVersion())).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CATALOG_ARCHIVE_BLOCKED_BY_INVENTORY");
