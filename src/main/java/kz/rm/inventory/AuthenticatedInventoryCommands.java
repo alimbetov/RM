@@ -21,5 +21,10 @@ public class AuthenticatedInventoryCommands {
             VerifiedActor actor,UUID tenant,UUID location,UUID item,String key,BigDecimal delta) {
         if(actor==null)throw new SecurityException("Verified actor required");
         return commands.correct(actor.userId(),tenant,location,item,key,delta);
+    }    public InventoryMovementService.Movement writeOff(
+            VerifiedActor actor,UUID tenant,UUID location,UUID item,String key,BigDecimal qty,
+            InventoryMovementService.WriteOffCause cause) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return commands.writeOff(actor.userId(),tenant,location,item,key,qty,cause);
     }
 }
