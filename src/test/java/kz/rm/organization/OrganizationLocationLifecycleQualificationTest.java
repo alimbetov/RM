@@ -101,6 +101,48 @@ class OrganizationLocationLifecycleQualificationTest {
     }
 
     @Test
+    void urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects() {
+        var a=tenant();
+        var b=tenant();
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM public.org_location WHERE workspace_id=?
+                """,Integer.class,a.id());
+        var location=locations.create(actor(a.employee()),a.id(),
+                new LocationCreateRequest(OrganizationLocationEntity.Type.WAREHOUSE,
+                        "UR R3.2 depot",kato(),null));
+        assertThat(location.id()).isNotNull();
+        assertThat(audit(a,location.id())).isEqualTo(1);
+        assertThatThrownBy(()->locations.create(actor(b.employee()),a.id(),
+                new LocationCreateRequest(OrganizationLocationEntity.Type.WAREHOUSE,
+                        "Foreign attempt",kato(),null))).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->locations.update(actor(b.employee()),a.id(),location.id(),
+                new LocationUpdateRequest("Foreign rename",kato(),null,0)))
+                .isInstanceOf(SecurityException.class);
+        assertThat(audit(a,location.id())).isEqualTo(1);
+
+        UUID role=jdbc.queryForObject("""
+                SELECT id FROM public.iam_tenant_role
+                WHERE tenant_id=? AND role_code LIKE 'ORG_%'
+                """,UUID.class,a.id());
+        roles.revoke(actor(a.owner()),a.id(),role,DomainPermission.ORGANIZATION_LOCATION_WRITE);
+        assertThatThrownBy(()->locations.update(actor(a.employee()),a.id(),location.id(),
+                new LocationUpdateRequest("Revoked rename",kato(),null,0)))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->locations.create(actor(a.employee()),a.id(),
+                new LocationCreateRequest(OrganizationLocationEntity.Type.WAREHOUSE,
+                        "Revoked create",kato(),null))).isInstanceOf(SecurityException.class);
+        assertThat(locations.get(actor(a.employee()),a.id(),location.id()).name())
+                .isEqualTo("UR R3.2 depot");
+        assertThat(audit(a,location.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.org_location WHERE workspace_id=?
+                """,Integer.class,a.id())).isEqualTo(before+1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.org_location WHERE workspace_id=?
+                """,Integer.class,b.id())).isZero();
+    }
+
+    @Test
     void typedCreateUpdateNoOpStaleAndUnicodeAreAuditedAtomically() {
         var t=tenant();
         var who=actor(t.employee());
