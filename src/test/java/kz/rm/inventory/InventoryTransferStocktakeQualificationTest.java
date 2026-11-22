@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.*;
 class InventoryTransferStocktakeQualificationTest {
     @Autowired AuthenticatedInventoryCommands commands;
     @Autowired AuthenticatedInventoryQueries queries;
+    @Autowired AuthenticatedInventoryReconciliation reconciliation;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -219,6 +220,39 @@ class InventoryTransferStocktakeQualificationTest {
                         """,Integer.class,f.tenant())).isZero();
             }
         }
+    }
+
+    @Test void reconciliationDetectsReservedDriftWithoutChangingStockOrLedger() {
+        var f=fixture();
+        receive(f,f.source(),"reconcileReceipt01",10);
+        var who=actor(f.actor());
+        var clean=reconciliation.inspect(who,f.tenant(),f.source(),f.item());
+        assertThat(clean.finding())
+                .isEqualTo(AuthenticatedInventoryReconciliation.Finding.CONSISTENT);
+        assertThat(clean.onHand()).isEqualByComparingTo("10");
+        assertThat(clean.activeReservations()).isEqualByComparingTo("0");
+        int movements=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,Integer.class,f.tenant(),f.source(),f.item());
+        // Synthetic corrupted projection, not a production mutation contract.
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET reserved=1,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
+        var drift=reconciliation.inspect(who,f.tenant(),f.source(),f.item());
+        assertThat(drift.finding())
+                .isEqualTo(AuthenticatedInventoryReconciliation.Finding.RESERVED_MISMATCH);
+        assertThat(drift.reserved()).isEqualByComparingTo("1");
+        assertThat(drift.activeReservations()).isEqualByComparingTo("0");
+        assertThat(stock(f,f.source())).isEqualByComparingTo("10");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,Integer.class,f.tenant(),f.source(),f.item())).isEqualTo(movements);
+        var foreign=fixture();
+        assertThatThrownBy(()->reconciliation.inspect(who,foreign.tenant(),
+                foreign.source(),foreign.item())).isInstanceOf(SecurityException.class);
     }
 
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
