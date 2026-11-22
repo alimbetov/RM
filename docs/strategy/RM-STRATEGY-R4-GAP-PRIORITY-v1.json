@@ -1,0 +1,724 @@
+{
+  "schema": "RM-STRATEGY-R4-GAP-PRIORITY/v1",
+  "sourceCatalogue": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+  "scope": "Exactly 29 planned of curated 75 R3-v1 requirements",
+  "branch": "base_dev",
+  "productionAdmission": "HOLD",
+  "method": "Ordered waves and explicit rank are product decisions; score is secondary expert prioritization only, not a measured ROI or developer estimate",
+  "scoreFormula": "5*businessValue + 4*commercialCriticality + 3*riskReduction - 2*effortPoints",
+  "scales": "Each 1..5. Effort points are ordinal, not person-days.",
+  "waves": [
+    {
+      "id": "W0",
+      "name": "First real customer commercial vertical",
+      "exit": "External login, tenant onboarding, usable seller surface, browser buyer/seller order and CRM journey qualified"
+    },
+    {
+      "id": "W1",
+      "name": "Commercial reliability, migration and evidence",
+      "exit": "Object ACL, cross-page reconciliation, catalog import, sanitized audit, encrypted interactions qualified"
+    },
+    {
+      "id": "W2",
+      "name": "Financial settlement and typed tasks",
+      "exit": "Invoice, payment, reconciliation, order finance, minimal tenant tasks and CRM links qualified"
+    },
+    {
+      "id": "W3",
+      "name": "Operations and advanced workflows",
+      "exit": "Tasks UX, GEO update, auditor export and separately gated key recovery qualified"
+    },
+    {
+      "id": "W4",
+      "name": "Growth and recurring revenue",
+      "exit": "Consent campaigns and tenant subscription metering/billing qualified"
+    }
+  ],
+  "gates": {
+    "sourceRequirements": {
+      "total": 75,
+      "implemented": 46,
+      "planned": 29,
+      "domains": 16
+    },
+    "noNewImplementation": true,
+    "releaseAdmission": "PRODUCTION_HOLD",
+    "requiredQualification": "Java service H2 smoke and real PostgreSQL exact-SHA; independent real OIDC/browser/provider/production approvals where applicable"
+  },
+  "requirements": [
+    {
+      "rank": 1,
+      "requirementId": "IAM-06",
+      "domainId": "IAM_RBAC",
+      "title": "Real issuer/JWKS session onboarding and external email delivery",
+      "delivery": "PLANNED",
+      "wave": "W0",
+      "provisionalScore": 52,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 5,
+        "riskReduction": 5,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [],
+      "acceptanceCriterion": "Trusted OIDC issuer/JWKS, negative token matrix, real email delivery and session recovery verified in isolated integration environment",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 2,
+      "requirementId": "ORG-05",
+      "domainId": "ORGANIZATION",
+      "title": "Complete first-tenant self-service onboarding",
+      "delivery": "PLANNED",
+      "wave": "W0",
+      "provisionalScore": 51,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 5,
+        "riskReduction": 4,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "IAM-06"
+      ],
+      "acceptanceCriterion": "First tenant created and selected through authenticated onboarding; membership and tenant A/B isolation E2E",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 3,
+      "requirementId": "STO-05",
+      "domainId": "STOREFRONT",
+      "title": "Ready-to-use seller storefront management UI",
+      "delivery": "PLANNED",
+      "wave": "W0",
+      "provisionalScore": 46,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 5,
+        "riskReduction": 3,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "IAM-06",
+        "ORG-05"
+      ],
+      "acceptanceCriterion": "Seller can create, edit, publish and pause offerings through usable UI with RBAC, CAS, and persistence after reload",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 4,
+      "requirementId": "SAL-06",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Full real OIDC buyer/seller browser E2E",
+      "delivery": "PLANNED",
+      "wave": "W0",
+      "provisionalScore": 50,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 5,
+        "riskReduction": 5,
+        "effortPoints": 5,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "IAM-06",
+        "ORG-05",
+        "STO-05"
+      ],
+      "acceptanceCriterion": "Real buyer and seller browser journey from offer to order, confirmation and inventory reserve with restart and denial tests",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 5,
+      "requirementId": "CRM-06",
+      "domainId": "CRM_CORE",
+      "title": "Qualified staff-facing complete CRM funnel",
+      "delivery": "PLANNED",
+      "wave": "W0",
+      "provisionalScore": 42,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 4,
+        "riskReduction": 3,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "IAM-06",
+        "ORG-05"
+      ],
+      "acceptanceCriterion": "Staff can capture/search customer, record qualified interaction and trace accepted order without leaking PII",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 6,
+      "requirementId": "FIL-06",
+      "domainId": "FILES",
+      "title": "Typed attachment owner ACL for catalog and sales",
+      "delivery": "PLANNED",
+      "wave": "W1",
+      "provisionalScore": 45,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 4,
+        "riskReduction": 5,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "IAM-06"
+      ],
+      "acceptanceCriterion": "Catalog and sales attachments enforce typed object owner ACL, scan verdict and cross-tenant deny using real storage",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 7,
+      "requirementId": "INV-07",
+      "domainId": "INVENTORY",
+      "title": "Certified tenant-wide as-of reconciliation across pages",
+      "delivery": "PLANNED",
+      "wave": "W1",
+      "provisionalScore": 41,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 4,
+        "riskReduction": 5,
+        "effortPoints": 5,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [],
+      "acceptanceCriterion": "Cross-page as-of reconciliation uses documented consistent snapshot strategy under concurrent writes; drift proof and restart test",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 8,
+      "requirementId": "CAT-04",
+      "domainId": "CATALOG",
+      "title": "Bulk catalog migration with reconciliation report",
+      "delivery": "PLANNED",
+      "wave": "W1",
+      "provisionalScore": 37,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 4,
+        "riskReduction": 3,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "ORG-05"
+      ],
+      "acceptanceCriterion": "Migrated SKUs reconcile counts, prices, owner tenant and invalid rows with immutable import receipt and rerun",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 9,
+      "requirementId": "AUD-03",
+      "domainId": "AUDIT",
+      "title": "Tenant-safe cross-domain sanitized audit query",
+      "delivery": "PLANNED",
+      "wave": "W1",
+      "provisionalScore": 45,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 4,
+        "riskReduction": 5,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "IAM-06"
+      ],
+      "acceptanceCriterion": "Sanitized cross-domain tenant-filtered audit query with pagination, PII redaction, RBAC and PostgreSQL proof",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 10,
+      "requirementId": "INT-03",
+      "domainId": "CRM_INTERACTION",
+      "title": "Purpose-scoped encrypted NOTE body and communication outcome",
+      "delivery": "PLANNED",
+      "wave": "W1",
+      "provisionalScore": 41,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 3,
+        "riskReduction": 5,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "CRM-06"
+      ],
+      "acceptanceCriterion": "Purpose-bound encrypted NOTE and outcome accessible only to authorized tenant principals, with tamper and PII assertions",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 11,
+      "requirementId": "FIN-01",
+      "domainId": "FINANCE",
+      "title": "Tenant-owned invoice issue and lifecycle",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 45,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 4,
+        "riskReduction": 4,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "SAL-06"
+      ],
+      "acceptanceCriterion": "Issue versioned tenant invoice from accepted order snapshot with stable totals and idempotent invoice issuance",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 12,
+      "requirementId": "FIN-02",
+      "domainId": "FINANCE",
+      "title": "Payments and allocations with idempotency",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 46,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 4,
+        "riskReduction": 5,
+        "effortPoints": 5,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "FIN-01"
+      ],
+      "acceptanceCriterion": "Record idempotent payments and allocations; validate partial, duplicate, overpayment and cross-tenant denial",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 13,
+      "requirementId": "FIN-03",
+      "domainId": "FINANCE",
+      "title": "Reconciliation and immutable financial events",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 46,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 4,
+        "riskReduction": 5,
+        "effortPoints": 5,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "FIN-02"
+      ],
+      "acceptanceCriterion": "Reconcile settlements and immutable event ledger with deterministic retry, transaction rollback and correction policy",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 14,
+      "requirementId": "SAL-07",
+      "domainId": "SALES_AUTOORDER",
+      "title": "Invoice/payment/settlement order integration",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 52,
+      "assessment": {
+        "businessValue": 5,
+        "commercialCriticality": 5,
+        "riskReduction": 5,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "FIN-01",
+        "FIN-02",
+        "FIN-03"
+      ],
+      "acceptanceCriterion": "Order-linked invoice/payment/settlement never conflates fulfillment and payment; cross-domain E2E and rollback",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 15,
+      "requirementId": "FIN-04",
+      "domainId": "FINANCE",
+      "title": "Order-linked finance view and audit",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 42,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 4,
+        "riskReduction": 4,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "SAL-07",
+        "AUD-03"
+      ],
+      "acceptanceCriterion": "Authorized seller sees invoice, paid/unpaid allocation and immutable audit per order with tenant isolation",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 16,
+      "requirementId": "TSK-01",
+      "domainId": "TASKS",
+      "title": "Tenant-owned task commands and transitions",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 35,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 3,
+        "riskReduction": 3,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "ORG-05"
+      ],
+      "acceptanceCriterion": "Tenant-owned task create/assign/complete state-machine with membership and unauthorized-write tests",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 17,
+      "requirementId": "TSK-02",
+      "domainId": "TASKS",
+      "title": "CRM interaction-to-task typed link",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 38,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 3,
+        "riskReduction": 4,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "TSK-01",
+        "INT-03"
+      ],
+      "acceptanceCriterion": "Typed CRM interaction-to-task reference maintains source ownership, consistency and cross-tenant rejection",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 18,
+      "requirementId": "INT-04",
+      "domainId": "CRM_INTERACTION",
+      "title": "Task creation and completion through TASKS ownership",
+      "delivery": "PLANNED",
+      "wave": "W2",
+      "provisionalScore": 35,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 3,
+        "riskReduction": 3,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "TSK-02"
+      ],
+      "acceptanceCriterion": "Create/complete task through CRM interaction without shadow TASKS tables; state and permission evidence",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 19,
+      "requirementId": "TSK-03",
+      "domainId": "TASKS",
+      "title": "Assigned task lists, reminders and deadlines",
+      "delivery": "PLANNED",
+      "wave": "W3",
+      "provisionalScore": 26,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 2,
+        "riskReduction": 3,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "TSK-01"
+      ],
+      "acceptanceCriterion": "Bounded personal/team task queries and durable deadline/reminder behavior, idempotent delivery",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 20,
+      "requirementId": "TSK-04",
+      "domainId": "TASKS",
+      "title": "Tasks browser acceptance and permission gates",
+      "delivery": "PLANNED",
+      "wave": "W3",
+      "provisionalScore": 30,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 3,
+        "riskReduction": 3,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "TSK-01",
+        "TSK-02",
+        "TSK-03",
+        "IAM-06"
+      ],
+      "acceptanceCriterion": "Browser task flow with assignments, recovery, back navigation, keyboard accessibility and access gates",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 21,
+      "requirementId": "GEO-03",
+      "domainId": "GEO",
+      "title": "Verified full Kazakhstan directory update lifecycle",
+      "delivery": "PLANNED",
+      "wave": "W3",
+      "provisionalScore": 24,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 2,
+        "riskReduction": 3,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [],
+      "acceptanceCriterion": "Repeatable KZ reference update, source version, rollback and reconciliation of code mappings",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 22,
+      "requirementId": "AUD-04",
+      "domainId": "AUDIT",
+      "title": "Auditor UI and bounded compliant export",
+      "delivery": "PLANNED",
+      "wave": "W3",
+      "provisionalScore": 27,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 2,
+        "riskReduction": 4,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "AUD-03",
+        "IAM-06"
+      ],
+      "acceptanceCriterion": "Bounded compliant export and auditor UI with sanitized records, object access checks and audit of exports",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 23,
+      "requirementId": "KMS-04",
+      "domainId": "KMS",
+      "title": "Operational tenant-key rotation and recovery",
+      "delivery": "PLANNED",
+      "wave": "W3",
+      "provisionalScore": 33,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 2,
+        "riskReduction": 5,
+        "effortPoints": 5,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [],
+      "acceptanceCriterion": "Prove distributed generation fencing, decrypt-only migration, tenant recovery and crash/rollback on PostgreSQL before enabling rotation",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 24,
+      "requirementId": "MKT-01",
+      "domainId": "MARKETING",
+      "title": "Purpose-bound customer consent targeting",
+      "delivery": "PLANNED",
+      "wave": "W4",
+      "provisionalScore": 32,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 2,
+        "riskReduction": 5,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "CRM-06",
+        "INT-03"
+      ],
+      "acceptanceCriterion": "Purpose-scoped consent snapshot eligibility with revoked/expired suppression and PII boundaries",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 25,
+      "requirementId": "MKT-02",
+      "domainId": "MARKETING",
+      "title": "Campaign lifecycle and consent-gated dispatch",
+      "delivery": "PLANNED",
+      "wave": "W4",
+      "provisionalScore": 30,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 2,
+        "riskReduction": 5,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "MKT-01"
+      ],
+      "acceptanceCriterion": "Campaign lifecycle and consent-gated dispatch with idempotent fanout, opt-out and tenant quotas",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 26,
+      "requirementId": "MKT-03",
+      "domainId": "MARKETING",
+      "title": "Campaign delivery status and suppression proof",
+      "delivery": "PLANNED",
+      "wave": "W4",
+      "provisionalScore": 29,
+      "assessment": {
+        "businessValue": 3,
+        "commercialCriticality": 2,
+        "riskReduction": 4,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "MKT-02"
+      ],
+      "acceptanceCriterion": "Track delivery outcome and suppression proof, deduplicated events and replay after provider failure",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 27,
+      "requirementId": "SUB-01",
+      "domainId": "SUBSCRIPTION",
+      "title": "Tenant plan entitlement evaluation",
+      "delivery": "PLANNED",
+      "wave": "W4",
+      "provisionalScore": 34,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 2,
+        "riskReduction": 4,
+        "effortPoints": 3,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "ORG-05"
+      ],
+      "acceptanceCriterion": "Tenant plan entitlement checks at service boundaries with deny-before-write and explicit downgrade policy",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 28,
+      "requirementId": "SUB-02",
+      "domainId": "SUBSCRIPTION",
+      "title": "Usage metering and quota enforcement",
+      "delivery": "PLANNED",
+      "wave": "W4",
+      "provisionalScore": 32,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 2,
+        "riskReduction": 4,
+        "effortPoints": 4,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "SUB-01"
+      ],
+      "acceptanceCriterion": "Idempotent usage metering, thresholds and tenant-scoped quota enforcement under concurrency",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    },
+    {
+      "rank": 29,
+      "requirementId": "SUB-03",
+      "domainId": "SUBSCRIPTION",
+      "title": "Subscription billing lifecycle and renewal proof",
+      "delivery": "PLANNED",
+      "wave": "W4",
+      "provisionalScore": 33,
+      "assessment": {
+        "businessValue": 4,
+        "commercialCriticality": 2,
+        "riskReduction": 5,
+        "effortPoints": 5,
+        "scale": "1..5",
+        "kind": "EXPERT_HYPOTHESIS"
+      },
+      "dependsOnPlanned": [
+        "SUB-01",
+        "SUB-02",
+        "FIN-02"
+      ],
+      "acceptanceCriterion": "Subscription renewal/invoice evidence is durable and idempotent; verify failed payment/retry and cancellation",
+      "readiness": "NOT_STARTED",
+      "productionAdmission": "HOLD"
+    }
+  ]
+}
