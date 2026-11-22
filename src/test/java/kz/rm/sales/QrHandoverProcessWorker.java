@@ -57,6 +57,44 @@ public final class QrHandoverProcessWorker {
                     Thread.sleep(10);
                 }
             }
+            // B3.3: a fixed-duration pace with independent successful orders
+            // loaded from a private test-only manifest. No HTTP/controller.
+            if("B33_PACED".equals(mode)) {
+                var lines=Files.readAllLines(Path.of(args[5]));
+                if(lines.isEmpty()||lines.size()>100)
+                    throw new IllegalArgumentException("Invalid B33 manifest");
+                long first=System.nanoTime();
+                var latencies=new java.util.ArrayList<Long>();
+                int success=0;
+                for(int i=0;i<lines.size();i++) {
+                    long due=first+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(i*1500L);
+                    while(System.nanoTime()<due)
+                        java.util.concurrent.locks.LockSupport.parkNanos(
+                                Math.min(5_000_000L,Math.max(1,due-System.nanoTime())));
+                    String[] fields=lines.get(i).split("\\|",-1);
+                    if(fields.length!=3)
+                        throw new IllegalArgumentException("Malformed B33 manifest record");
+                    long began=System.nanoTime();
+                    var completed=pickup.complete(staff,tenant,warehouse,fields[0],true,
+                            Long.parseLong(fields[1]),fields[2]);
+                    if(!"COMPLETED".equals(completed.status()))
+                        throw new IllegalStateException("B33_HANDOVER_NOT_COMPLETED");
+                    latencies.add(System.nanoTime()-began);
+                    success++;
+                }
+                latencies.sort(Long::compareTo);
+                long elapsedMs=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime()-first);
+                int p95Index=Math.max(0,(int)Math.ceil(.95*latencies.size())-1);
+                int p99Index=Math.max(0,(int)Math.ceil(.99*latencies.size())-1);
+                System.out.printf(java.util.Locale.ROOT,
+                        "QR06B_B33_CHILD tenant=%s success=%d technical_errors=0 duration_ms=%d "+
+                        "p95_success_ms=%d p99_success_ms=%d%n",
+                        tenant,success,elapsedMs,
+                        java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(latencies.get(p95Index)),
+                        java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(latencies.get(p99Index)));
+                System.exit(0);
+            }
             // B3.1 distributed contention: each worker is an independent JVM and
             // releases virtual clients only after the shared inter-process gate.
             if(mode.startsWith("LOAD_")) {
