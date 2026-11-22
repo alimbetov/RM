@@ -232,10 +232,18 @@ public class CrmCustomerService {
     @Transactional
     boolean hasEmailConsent(UUID actorId, UUID tenantId, UUID contactId, String purpose) {
         requireOrganizationMember(actorId,tenantId,false);
+        // A historical consent event does not authorize communication to an
+        // archived contact or customer. Read eligibility under tenant-scoped
+        // active-parent and active-contact constraints, not from event alone.
         return Boolean.TRUE.equals(jdbc.query("""
-            SELECT granted FROM crm.email_consent_event
-             WHERE tenant_id=? AND contact_id=? AND purpose=?
-             ORDER BY occurred_at DESC,id DESC
+            SELECT e.granted FROM crm.email_consent_event e
+            JOIN crm.contact c
+              ON c.tenant_id=e.tenant_id AND c.id=e.contact_id
+            JOIN crm.customer u
+              ON u.tenant_id=c.tenant_id AND u.id=c.customer_id
+            WHERE e.tenant_id=? AND e.contact_id=? AND e.purpose=?
+              AND c.status='ACTIVE' AND u.status='ACTIVE'
+            ORDER BY e.occurred_at DESC,e.id DESC LIMIT 1
             """,rs->rs.next() && rs.getBoolean(1),tenantId,contactId,purpose));
     }
 
