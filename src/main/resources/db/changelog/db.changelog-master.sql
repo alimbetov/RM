@@ -1979,3 +1979,78 @@ ALTER TABLE crm.contact_change_event ADD CONSTRAINT ck_crm_contact_change_action
  CHECK(action_code IN ('CREATED','UPDATED','ARCHIVED','RESTORED'));
 --rollback ALTER TABLE crm.contact_change_event DROP CONSTRAINT ck_crm_contact_change_action;
 --rollback ALTER TABLE crm.contact_change_event ADD CONSTRAINT ck_crm_contact_change_action CHECK(action_code IN ('UPDATED','ARCHIVED','RESTORED'));
+
+
+--changeset rm:0066-crm-interactions
+-- Tenant-owned, no free text/PII: all links are tenant-composite.
+-- A contact cannot be attached to an interaction with another customer.
+ALTER TABLE crm.contact ADD CONSTRAINT uk_crm_contact_owner_triplet
+ UNIQUE(tenant_id,id,customer_id);
+CREATE TABLE crm.customer_interaction (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ customer_id UUID NOT NULL,
+ contact_id UUID,
+ kind VARCHAR(20) NOT NULL,
+ status VARCHAR(20) NOT NULL,
+ responsible_user_id UUID,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ next_action_at TIMESTAMP WITH TIME ZONE,
+ request_key VARCHAR(100) NOT NULL,
+ request_sha256 BYTEA NOT NULL,
+ created_by UUID NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_crm_customer_interaction PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_crm_interaction_request UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_crm_interaction_customer FOREIGN KEY(tenant_id,customer_id)
+   REFERENCES crm.customer(tenant_id,id),
+ CONSTRAINT fk_crm_interaction_contact_owner FOREIGN KEY(tenant_id,contact_id,customer_id)
+   REFERENCES crm.contact(tenant_id,id,customer_id),
+ CONSTRAINT fk_crm_interaction_responsible FOREIGN KEY(responsible_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_crm_interaction_creator FOREIGN KEY(created_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_interaction_kind CHECK(kind IN ('CALL','MEETING','EMAIL','NOTE')),
+ CONSTRAINT ck_crm_interaction_status CHECK(status IN ('OPEN','COMPLETED','CANCELLED')),
+ CONSTRAINT ck_crm_interaction_version CHECK(row_version>=0)
+);
+CREATE INDEX idx_crm_interaction_customer
+ ON crm.customer_interaction(tenant_id,customer_id,occurred_at DESC,id);
+CREATE INDEX idx_crm_interaction_assignee
+ ON crm.customer_interaction(tenant_id,responsible_user_id,status,occurred_at DESC,id);
+CREATE TABLE crm.customer_interaction_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ interaction_id UUID NOT NULL,
+ actor_id UUID NOT NULL,
+ action_code VARCHAR(32) NOT NULL,
+ previous_version BIGINT,
+ new_version BIGINT NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_crm_interaction_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_crm_interaction_event_owner FOREIGN KEY(tenant_id,interaction_id)
+   REFERENCES crm.customer_interaction(tenant_id,id),
+ CONSTRAINT fk_crm_interaction_event_actor FOREIGN KEY(actor_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uk_crm_interaction_event_revision UNIQUE(tenant_id,interaction_id,new_version),
+ CONSTRAINT ck_crm_interaction_event_action CHECK(action_code IN
+   ('CREATED','RESPONSIBLE_ASSIGNED','NEXT_ACTION_SET','COMPLETED','CANCELLED'))
+);
+CREATE INDEX idx_crm_interaction_event_history
+ ON crm.customer_interaction_event(tenant_id,interaction_id,occurred_at DESC,id);
+CREATE TABLE crm.interaction_request_lock (bucket INTEGER PRIMARY KEY);
+INSERT INTO crm.interaction_request_lock(bucket) VALUES
+ (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),
+ (16),(17),(18),(19),(20),(21),(22),(23),(24),(25),(26),(27),(28),(29),(30),(31);
+--rollback DROP TABLE crm.interaction_request_lock;
+--rollback DROP TABLE crm.customer_interaction_event;
+--rollback DROP TABLE crm.customer_interaction;
+--rollback ALTER TABLE crm.contact DROP CONSTRAINT uk_crm_contact_owner_triplet;
+
+--changeset rm:0067-crm-interaction-history-immutable dbms:postgresql
+CREATE TRIGGER trg_crm_interaction_history_immutable
+ BEFORE UPDATE OR DELETE ON crm.customer_interaction_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_crm_interaction_history_immutable ON crm.customer_interaction_event;
