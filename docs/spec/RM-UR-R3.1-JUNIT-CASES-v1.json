@@ -82,6 +82,33 @@
       "mandatory": true
     },
     {
+      "caseId": "UR-R31-DUAL-TENANT",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal",
+      "requirementIds": [
+        "IAM-01",
+        "IAM-02",
+        "STO-01",
+        "STO-04"
+      ],
+      "actorProfiles": [
+        "U5",
+        "U6",
+        "U9",
+        "U11"
+      ],
+      "dimensions": [
+        "DUAL_MEMBERSHIP",
+        "TENANT_SPECIFIC_GRANTS",
+        "REVOKE_TENANT_A_ONLY",
+        "ZERO_BUSINESS_WRITE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
       "caseId": "UR-R31-INACTIVE",
       "junitSuite": "UserRoleMatrixR31QualificationTest",
       "junitMethod": "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant",
