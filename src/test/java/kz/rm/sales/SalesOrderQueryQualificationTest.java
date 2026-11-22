@@ -37,6 +37,17 @@ class SalesOrderQueryQualificationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired VerifiedTenantRoleCommands roles;
 
+    private VerifiedActor verified(UUID id) {
+        String sub=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,id);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                        .header("alg","RS256").subject(sub).issuedAt(Instant.now())
+                        .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder,users).resolve("synthetic-sales-role-token");
+    }
+
     private record Shop(UUID actor,UUID tenant,String slug,UUID offer) {}
     private Shop shop() {
         var org=organizations.saveAndFlush(new OrganizationEntity(
