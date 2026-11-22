@@ -1980,4 +1980,111 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+
+    /**
+     * B3.4 step-load and post-peak recovery baseline with TWO JVM processes.
+     * 40 separate successful orders per tenant; preallocated low/peak/recovery
+     * stages prevent business rejections from masquerading as capacity.
+     * Profiles do not assert saturation unless actual pool contention occurs.
+     */
+    @org.junit.jupiter.api.Timeout(value=240,unit=TimeUnit.SECONDS)
+    @Test void qr06bPgB34TwoJvmSteppedLoadRecoversAndPreservesFairness() throws Exception {
+        requirePostgres();
+        var contexts=List.of(context(),context());
+        var orders=new ArrayList<java.util.Map.Entry<Context,Order>>();
+        var dir=java.nio.file.Files.createTempDirectory("qr06b-b34-");
+        var manifests=new ArrayList<java.nio.file.Path>();
+        Process first=null,second=null;
+        long deadlocksBefore=jdbc.queryForObject("""
+                SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
+                """,Long.class);
+        try {
+            for(int tenantIndex=0;tenantIndex<2;tenantIndex++) {
+                var c=contexts.get(tenantIndex);
+                roles.grant(c.owner(),c.tenant(),assignedRole(c),
+                        DomainPermission.INVENTORY_RECEIVE);
+                inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemOne(),key(),new BigDecimal("200"));
+                inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemTwo(),key(),new BigDecimal("200"));
+                var lines=new ArrayList<String>();
+                for(int i=0;i<40;i++) {
+                    var o=ready(c,true);
+                    var issue=pickup.issue(c.buyer(),o.publicRef(),key());
+                    orders.add(java.util.Map.entry(c,o));
+                    String stage=i<10?"LOW":i<30?"PEAK":"RECOVERY";
+                    long due=i<10?i*1500L:
+                            i<30?15000L+(i-10)*500L:
+                                    35000L+(i-30)*2000L;
+                    lines.add(issue.rawProof()+"|"+version(c,o)+"|"+key()+"|"+due+"|"+stage);
+                }
+                var manifest=dir.resolve("tenant-"+tenantIndex+".manifest");
+                java.nio.file.Files.write(manifest,lines);
+                try {
+                    java.nio.file.Files.setPosixFilePermissions(manifest,
+                            java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                }catch(UnsupportedOperationException ignored){}
+                manifests.add(manifest);
+            }
+            var gate=dir.resolve("go");
+            var readyA=dir.resolve("ready-a");
+            var readyB=dir.resolve("ready-b");
+            first=startQr06bWorker("B34_STEPPED",contexts.get(0),
+                    manifests.get(0).toString(),0,key(),
+                    readyA,gate,dir.resolve("a.log"));
+            second=startQr06bWorker("B34_STEPPED",contexts.get(1),
+                    manifests.get(1).toString(),0,key(),
+                    readyB,gate,dir.resolve("b.log"));
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
+            while(!java.nio.file.Files.exists(readyA)||!java.nio.file.Files.exists(readyB)){
+                if(!first.isAlive()||!second.isAlive())
+                    throw new AssertionError("B34 child JVM exited during startup");
+                if(System.nanoTime()>deadline)
+                    throw new AssertionError("B34 worker startup barrier timeout");
+                Thread.sleep(25);
+            }
+            java.nio.file.Files.writeString(gate,"GO");
+            int exitFirst=waitQr06bProcess(first,dir.resolve("a.log"));
+            int exitSecond=waitQr06bProcess(second,dir.resolve("b.log"));
+            assertThat(exitFirst).isZero();
+            assertThat(exitSecond).isZero();
+            for(String logName:List.of("a.log","b.log")) {
+                var text=java.nio.file.Files.readString(dir.resolve(logName));
+                var lines=text.lines().filter(x->x.contains("QR06B_B34_"))
+                        .map(x->x.substring(x.indexOf("QR06B_B34_"))).toList();
+                assertThat(lines).hasSize(4);
+                assertThat(lines.stream().filter(x->x.contains("LOW:COMPLETED")).count())
+                        .isEqualTo(1);
+                assertThat(lines.stream().filter(x->x.contains("PEAK:COMPLETED")).count())
+                        .isEqualTo(1);
+                assertThat(lines.stream().filter(x->x.contains("RECOVERY:COMPLETED")).count())
+                        .isEqualTo(1);
+                for(String metric:lines)System.out.println(metric);
+            }
+            for(var entry:orders)assertExactlyOneHandover(entry.getKey(),entry.getValue(),2);
+            for(var c:contexts) {
+                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
+                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("100");
+                assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+                assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+                assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
+                        """,Integer.class,c.tenant())).isEqualTo(40);
+            }
+            long deadlocksAfter=jdbc.queryForObject("""
+                    SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
+                    """,Long.class);
+            assertThat(deadlocksAfter-deadlocksBefore).isZero();
+            System.out.println("QR06B_B34_RESULT jvms=2 tenants=2 completed=80 "+
+                    "deadlocks=0 unexpected_failures=0");
+        }finally {
+            if(first!=null&&first.isAlive())first.destroyForcibly();
+            if(second!=null&&second.isAlive())second.destroyForcibly();
+            for(var path:manifests)java.nio.file.Files.deleteIfExists(path);
+            for(String name:List.of("go","ready-a","ready-b","a.log","b.log"))
+                java.nio.file.Files.deleteIfExists(dir.resolve(name));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
 }
