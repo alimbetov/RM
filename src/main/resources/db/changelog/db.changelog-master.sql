@@ -3291,3 +3291,37 @@ CREATE TABLE crm.customer_buyer_link_event (
 );
 --rollback DROP TABLE crm.customer_buyer_link_event;
 --rollback DROP TABLE crm.customer_buyer_link;
+
+
+--changeset rm:0103-qr07-r25-quarantine-resolution
+-- Release/disposal is a separate append-only exit from non-sellable quarantine.
+CREATE TABLE crm.sales_return_quarantine_resolution (
+ tenant_id UUID NOT NULL,return_id UUID NOT NULL,id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,item_id UUID NOT NULL,
+ quantity NUMERIC(19,4) NOT NULL,before_quantity NUMERIC(19,4) NOT NULL,
+ after_quantity NUMERIC(19,4) NOT NULL,
+ action_code VARCHAR(20) NOT NULL,actor_user_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,evidence_ref VARCHAR(120) NOT NULL,
+ stock_movement_id UUID,happened_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_qr07_quarantine_resolution PRIMARY KEY(tenant_id,return_id),
+ CONSTRAINT uq_qr07_resolution_request_key UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_qr07_resolution_origin FOREIGN KEY(tenant_id,return_id)
+   REFERENCES crm.inv_return_quarantine_movement(tenant_id,return_id),
+ CONSTRAINT fk_qr07_resolution_stock FOREIGN KEY(tenant_id,stock_movement_id)
+   REFERENCES crm.inv_stock_movement(tenant_id,id),
+ CONSTRAINT fk_qr07_resolution_position FOREIGN KEY(tenant_id,warehouse_id,item_id)
+   REFERENCES crm.inv_return_quarantine_balance(tenant_id,warehouse_id,item_id),
+ CONSTRAINT ck_qr07_resolution_positive CHECK(quantity>0),
+ CONSTRAINT ck_qr07_resolution_balance CHECK(
+   before_quantity>=quantity AND after_quantity=before_quantity-quantity),
+ CONSTRAINT ck_qr07_resolution_kind CHECK(
+  (action_code='RESTOCK' AND stock_movement_id IS NOT NULL)
+  OR (action_code='DISPOSE' AND stock_movement_id IS NULL))
+);
+--rollback DROP TABLE crm.sales_return_quarantine_resolution;
+
+--changeset rm:0104-qr07-r25-quarantine-resolution-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_qr07_quarantine_resolution_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_return_quarantine_resolution
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+--rollback DROP TRIGGER trg_qr07_quarantine_resolution_immutable ON crm.sales_return_quarantine_resolution;
