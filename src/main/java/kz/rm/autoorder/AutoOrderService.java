@@ -1,6 +1,7 @@
 package kz.rm.autoorder;
 
 import kz.rm.iam.EmailIdentityService;
+import kz.rm.sales.SalesOrderQrReferenceService;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -22,9 +23,13 @@ import java.util.stream.Collectors;
 public class AutoOrderService {
     private final JdbcTemplate jdbc;
     private final EmailIdentityService emailIdentities;
+    private final SalesOrderQrReferenceService orderQrReferences;
 
-    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities) {
-        this.jdbc=jdbc;this.emailIdentities=emailIdentities;
+    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
+                            SalesOrderQrReferenceService orderQrReferences) {
+        this.jdbc=jdbc;
+        this.emailIdentities=emailIdentities;
+        this.orderQrReferences=orderQrReferences;
     }
 
     public record Line(UUID offerId,int quantity){}
@@ -200,6 +205,11 @@ public class AutoOrderService {
             """,tenant,idempotencyKey,requestHash,orderId,now);
         // Fresh proof is always required; token stays encrypted in an internal durable outbox.
         emailIdentities.queueVerification(identity.identityId());
+        // QR-03B: create a NONSECRET stable locator while the newly created
+        // order, immutable lines, status event, checkout receipt and IAM
+        // verification outbox share ONE transaction. It is deliberately NOT
+        // returned in this unverified email-first checkout response.
+        orderQrReferences.issueAtPlaced(tenant,orderId);
         return new CheckoutResult(new OrderReceipt(orderId,"PLACED"));
     }
 

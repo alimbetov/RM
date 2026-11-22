@@ -2575,3 +2575,38 @@ CREATE TABLE crm.file_catalog_public_variant (
 CREATE INDEX idx_catalog_public_variant_item
  ON crm.file_catalog_public_variant(tenant_id,item_id,state,sort_order);
 --rollback DROP TABLE crm.file_catalog_public_variant;
+
+
+--changeset rm:0088-sales-order-qr-reference
+-- QR-03B: a durable nonsecret order locator, created atomically with PLACED.
+-- A stable public ref NEVER authorizes order detail, pickup, refund or payment.
+-- ACTIVE uniqueness is portable to PostgreSQL and H2 using NULL active_order_id.
+CREATE TABLE crm.sales_order_qr_reference (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ order_id UUID NOT NULL,
+ active_order_id UUID,
+ public_ref VARCHAR(64) NOT NULL,
+ generation INTEGER NOT NULL,
+ state VARCHAR(16) NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ issued_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ issued_by UUID,
+ revoked_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT pk_sales_order_qr_reference PRIMARY KEY (tenant_id,id),
+ CONSTRAINT fk_sales_order_qr_order FOREIGN KEY (tenant_id,order_id)
+   REFERENCES crm.sales_order(tenant_id,id),
+ CONSTRAINT fk_sales_order_qr_issuer FOREIGN KEY (issued_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uq_sales_order_qr_public_ref UNIQUE (public_ref),
+ CONSTRAINT uq_sales_order_qr_one_active UNIQUE (tenant_id,active_order_id),
+ CONSTRAINT uq_sales_order_qr_generation UNIQUE (tenant_id,order_id,generation),
+ CONSTRAINT ck_sales_order_qr_generation CHECK (generation > 0 AND row_version >= 0),
+ CONSTRAINT ck_sales_order_qr_state CHECK (
+   (state='ACTIVE' AND active_order_id=order_id AND revoked_at IS NULL)
+   OR
+   (state='REVOKED' AND active_order_id IS NULL AND revoked_at IS NOT NULL))
+);
+CREATE INDEX idx_sales_order_qr_history
+ ON crm.sales_order_qr_reference(tenant_id,order_id,generation DESC);
+--rollback DROP TABLE crm.sales_order_qr_reference;

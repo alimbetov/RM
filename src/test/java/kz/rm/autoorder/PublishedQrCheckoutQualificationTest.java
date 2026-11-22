@@ -3,6 +3,7 @@ package kz.rm.autoorder;
 import kz.rm.iam.*;
 import kz.rm.storefront.PublishedOfferQrService;
 import kz.rm.storefront.StorefrontOfferService;
+import kz.rm.sales.SalesOrderQrReferenceService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class PublishedQrCheckoutQualificationTest {
     @Autowired PublishedQrCheckoutService qrCheckout;
+    @Autowired SalesOrderQrReferenceService orderQr;
     @Autowired AutoOrderService auto;
     @Autowired PublishedOfferQrService qr;
     @Autowired StorefrontOfferService sellerOffers;
@@ -80,6 +82,7 @@ class PublishedQrCheckoutQualificationTest {
                 "QCO_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "QR checkout seller");
         roles.grant(admin,tenant,role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.grant(admin,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
         roles.assign(admin,tenant,sellerId,role.id());
         roles.enable(admin,tenant);
         UUID store=UUID.randomUUID(),item=UUID.randomUUID(),offer=UUID.randomUUID();
@@ -240,4 +243,238 @@ class PublishedQrCheckoutQualificationTest {
                 SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
                 """,Integer.class,f.tenant())).isEqualTo(1);
     }
+
+    // QR-03B: durable order reference, but no buyer read without a verified
+    // IAM email identity AND the SALES buyer_user_id association.
+    private record EmailProof(UUID challengeId,String token) {}
+    private EmailProof proof(String rawEmail) {
+        String normalized=crypto.normalize(rawEmail);
+        return jdbc.query("""
+                SELECT c.id,c.token_envelope FROM public.iam_email_verification_challenge c
+                JOIN public.iam_email_identity e ON e.id=c.email_identity_id
+                WHERE e.lookup_hmac=? ORDER BY c.created_at DESC,c.id DESC
+                """,rs->{
+                    if(!rs.next())throw new IllegalStateException("No IAM email challenge");
+                    return new EmailProof(rs.getObject(1,UUID.class),
+                            crypto.decrypt(rs.getBytes(2)));
+                },crypto.lookup(normalized));
+    }
+    private VerifiedActor verifyBuyer(String email) {
+        EmailProof token=proof(email);
+        UUID user=auto.verifyEmail(token.challengeId(),token.token());
+        return verified(user);
+    }
+    private String storedOrderRef(Fixture f,UUID order) {
+        return jdbc.queryForObject("""
+                SELECT public_ref FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,String.class,f.tenant(),order);
+    }
+
+    @Test void qr03bPlacedOrderCreatesLocatorButEmailOnlyBuyerCannotRead() {
+        var f=setup();
+        String buyerEmail=email();
+        var created=buy(f,buyerEmail,3,0,new BigDecimal("250"),key());
+        UUID orderId=created.order().orderId();
+        String ref=storedOrderRef(f,orderId);
+        assertThat(ref).hasSize(32);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,f.tenant(),orderId)).isEqualTo(1);
+        // Verified OIDC seller without an email proof is NOT this buyer.
+        assertThatThrownBy(()->orderQr.readOwn(f.seller(),ref))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->orderQr.ownReference(f.seller(),f.tenant(),orderId))
+                .isInstanceOf(SecurityException.class);
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        var own=orderQr.ownReference(buyer,f.tenant(),orderId);
+        assertThat(own.publicRef()).isEqualTo(ref);
+        assertThat(orderQr.ownReference(buyer,f.tenant(),orderId)).isEqualTo(own);
+        var detail=orderQr.readOwn(buyer,ref);
+        assertThat(detail.orderId()).isEqualTo(orderId);
+        assertThat(detail.status()).isEqualTo("PLACED");
+        assertThat(detail.totalAmount()).isEqualByComparingTo("750.0000");
+        assertThat(detail.currency()).isEqualTo("KZT");
+        assertThat(detail.lines()).hasSize(1);
+        assertThat(detail.lines().getFirst().quantity()).isEqualTo(3);
+        assertThat(detail.lines().getFirst().unitPrice()).isEqualByComparingTo("250");
+        assertThat(detail.events()).extracting(
+                SalesOrderQrReferenceService.StatusEvent::eventType)
+                .containsExactly("PLACED");
+        assertThat(detail.toString()).doesNotContain(buyerEmail, "pending_email_identity_id");
+    }
+
+    @Test void qr03bCrossBuyerAndCrossTenantStaffCannotReadOrReprint() {
+        var a=setup();
+        var b=setup();
+        String oneEmail=email(),twoEmail=email();
+        var aOrder=buy(a,oneEmail,1,0,new BigDecimal("250"),key());
+        buy(b,twoEmail,1,0,new BigDecimal("250"),key());
+        String ref=storedOrderRef(a,aOrder.order().orderId());
+        VerifiedActor owner=verifyBuyer(oneEmail);
+        VerifiedActor stranger=verifyBuyer(twoEmail);
+        assertThat(orderQr.readOwn(owner,ref).orderId())
+                .isEqualTo(aOrder.order().orderId());
+        assertThatThrownBy(()->orderQr.readOwn(stranger,ref))
+                .isInstanceOf(SecurityException.class).hasMessage("ORDER_NOT_ACCESSIBLE");
+        assertThatThrownBy(()->orderQr.ownReference(stranger,a.tenant(),
+                aOrder.order().orderId()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->orderQr.readSeller(b.seller(),a.tenant(),ref))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->orderQr.readSeller(b.seller(),b.tenant(),ref))
+                .isInstanceOf(SecurityException.class).hasMessage("ORDER_NOT_ACCESSIBLE");
+        assertThat(orderQr.readSeller(a.seller(),a.tenant(),ref).orderId())
+                .isEqualTo(aOrder.order().orderId());
+        assertThat(orderQr.sellerReprint(a.seller(),a.tenant(),
+                aOrder.order().orderId()).publicRef()).isEqualTo(ref);
+    }
+
+    @Test void qr03bRotationInvalidatesOldRefButDoesNotTouchOrderOrStock() {
+        var f=setup();
+        String buyerEmail=email();
+        var placed=buy(f,buyerEmail,2,0,new BigDecimal("250"),key());
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        UUID id=placed.order().orderId();
+        var initial=orderQr.ownReference(buyer,f.tenant(),id);
+        var rotated=orderQr.rotateOwned(buyer,f.tenant(),id,initial.rowVersion());
+        assertThat(rotated.publicRef()).isNotEqualTo(initial.publicRef());
+        assertThat(rotated.generation()).isEqualTo(2);
+        assertThatThrownBy(()->orderQr.readOwn(buyer,initial.publicRef()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(orderQr.readOwn(buyer,rotated.publicRef()).status())
+                .isEqualTo("PLACED");
+        assertThatThrownBy(()->orderQr.rotateOwned(buyer,f.tenant(),id,
+                initial.rowVersion()))
+                .hasMessage("ORDER_QR_VERSION_CONFLICT");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+                """,Integer.class,f.tenant(),id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.audit_event
+                WHERE tenant_id=? AND entity_id=? AND action_code='ORDER_QR_ROTATED'
+                """,Integer.class,f.tenant(),id)).isEqualTo(1);
+        assertThat(orders(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=?
+                """,Integer.class,f.tenant())).isZero();
+    }
+
+    @Test void qr03bLegacyOrderGetsOneReferenceOnlyAfterBuyerProof() {
+        var f=setup();
+        String buyerEmail=email();
+        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        UUID id=placed.order().orderId();
+        // Simulate the pre-migration legacy row: no order QR existed then.
+        jdbc.update("""
+                DELETE FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=?
+                """,f.tenant(),id);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,f.tenant(),id)).isZero();
+        assertThatThrownBy(()->orderQr.ownReference(f.seller(),f.tenant(),id))
+                .isInstanceOf(SecurityException.class);
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        var generated=orderQr.ownReference(buyer,f.tenant(),id);
+        assertThat(generated.generation()).isEqualTo(1);
+        assertThat(orderQr.ownReference(buyer,f.tenant(),id)).isEqualTo(generated);
+        assertThat(storedOrderRef(f,id)).isEqualTo(generated.publicRef());
+    }
+
+    @Test void qr03bOrderTimelineReadsHistoricalSnapshotNotCurrentOfferPrice() {
+        var f=setup();
+        String buyerEmail=email();
+        var placed=buy(f,buyerEmail,4,0,new BigDecimal("250"),key());
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        String ref=storedOrderRef(f,placed.order().orderId());
+        sellerOffers.updatePrice(f.seller(),f.tenant(),f.offer(),
+                "New Price",new BigDecimal("430"),"KZT",0L);
+        // Synthetic progression validates the readonly timeline projection;
+        // it is NOT a claim that seller confirmation/stock were tested here.
+        jdbc.update("""
+                UPDATE crm.sales_order SET status='CONFIRMED',row_version=row_version+1
+                WHERE tenant_id=? AND id=?
+                """,f.tenant(),placed.order().orderId());
+        jdbc.update("""
+                INSERT INTO crm.sales_order_status_event
+                 (tenant_id,id,order_id,event_type,occurred_at)
+                VALUES (?,?,?,'CONFIRMED',CURRENT_TIMESTAMP)
+                """,f.tenant(),UUID.randomUUID(),placed.order().orderId());
+        var read=orderQr.readOwn(buyer,ref);
+        assertThat(read.status()).isEqualTo("CONFIRMED");
+        assertThat(read.events()).extracting(
+                SalesOrderQrReferenceService.StatusEvent::eventType)
+                .containsExactly("PLACED","CONFIRMED");
+        assertThat(read.totalAmount()).isEqualByComparingTo("1000");
+        assertThat(read.lines().getFirst().unitPrice()).isEqualByComparingTo("250");
+    }
+
+    @Test void qr03bSuspendedBuyerDeniedEvenWithValidRefAndOldOidcActor() {
+        var f=setup();
+        String buyerEmail=email();
+        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        String ref=storedOrderRef(f,placed.order().orderId());
+        jdbc.update("""
+                UPDATE public.iam_user_account SET status='SUSPENDED'
+                WHERE id=?
+                """,buyer.userId());
+        assertThatThrownBy(()->orderQr.readOwn(buyer,ref))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->orderQr.ownReference(buyer,f.tenant(),
+                placed.order().orderId()))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void qr03bConcurrentLegacyIssuanceHasOneRefInPostgres() throws Exception {
+        try(var c=dataSource.getConnection()){
+            Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=setup();
+        String buyerEmail=email();
+        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        UUID id=placed.order().orderId();
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        jdbc.update("""
+                DELETE FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=?
+                """,f.tenant(),id);
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
+            var first=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return orderQr.ownReference(buyer,f.tenant(),id);
+            });
+            var second=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return orderQr.ownReference(buyer,f.tenant(),id);
+            });
+            start.countDown();
+            assertThat(first.get(30,TimeUnit.SECONDS).publicRef())
+                    .isEqualTo(second.get(30,TimeUnit.SECONDS).publicRef());
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_qr_reference
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,f.tenant(),id)).isEqualTo(1);
+    }
+
+    @Test void qr03bRegularNonQrCheckoutAlsoCreatesStableOrderReference() {
+        var f=setup();
+        String buyerEmail=email();
+        var placed=auto.checkout(f.slug(),buyerEmail,key(),
+                List.of(new AutoOrderService.Line(f.offer(),1)));
+        UUID id=placed.order().orderId();
+        String ref=storedOrderRef(f,id);
+        VerifiedActor buyer=verifyBuyer(buyerEmail);
+        assertThat(orderQr.readOwn(buyer,ref).orderId()).isEqualTo(id);
+        assertThat(orderQr.ownReference(buyer,f.tenant(),id).publicRef())
+                .isEqualTo(ref);
+    }
+
 }
