@@ -23,8 +23,11 @@ import java.util.UUID;
 @Service
 public class InventoryMovementService {
     private final JdbcTemplate jdbc;
+    private final StockEligibility stockEligibility;
 
-    public InventoryMovementService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    public InventoryMovementService(JdbcTemplate jdbc,StockEligibility stockEligibility) {
+        this.jdbc=jdbc;this.stockEligibility=stockEligibility;
+    }
 
     public record Movement(UUID id, UUID tenantId, UUID locationId, UUID itemId,
                            BigDecimal delta, BigDecimal before, BigDecimal after) {}
@@ -78,6 +81,23 @@ public class InventoryMovementService {
             return old;
         }
 
+        // First check under tenant request-key fence; idempotent retries above
+        // are replayable even after closing a warehouse or archiving the SKU.
+        // Lock owner reference rows before stock for race-safe ACTIVE PRODUCT check.
+        stockEligibility.requireReceivable(tenantId,locationId,itemId);
+        if(reason==Reason.RECEIPT) {
+            // Stock row is zero-initialized on first legitimate receipt only.
+            // The warehouse owner row is FOR UPDATE locked, so competing first
+            // receives serialize initialization without an upsert race.
+            jdbc.update("""
+                INSERT INTO crm.inv_stock_balance
+                  (tenant_id,location_id,item_id,on_hand,reserved,row_version)
+                SELECT ?,?,?,0,0,0 WHERE NOT EXISTS (
+                  SELECT 1 FROM crm.inv_stock_balance
+                  WHERE tenant_id=? AND location_id=? AND item_id=?
+                )
+                """,tenantId,locationId,itemId,tenantId,locationId,itemId);
+        }
         // Serialize by the exact tenant/location/SKU stock row, across all pods.
         List<BigDecimal[]> balance=jdbc.query("""
             SELECT on_hand,reserved FROM crm.inv_stock_balance
