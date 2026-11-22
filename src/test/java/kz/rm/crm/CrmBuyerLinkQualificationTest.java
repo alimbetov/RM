@@ -640,7 +640,7 @@ class CrmBuyerLinkQualificationTest {
                 WHERE target_user_id=?
                 """,byte[].class,b);
         assertThat(subjectEnvelope).isNotNull();
-        assertThat(emailCrypto.decrypt(subjectEnvelope)).startsWith("crm-link-buyer-");
+        assertThat(emailCrypto.decryptOidcSubject(subjectEnvelope)).startsWith("crm-link-buyer-");
         assertThat(new String(subjectEnvelope,java.nio.charset.StandardCharsets.UTF_8))
                 .doesNotContain("crm-link-buyer-");
 
