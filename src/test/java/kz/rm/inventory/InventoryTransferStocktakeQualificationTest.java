@@ -296,18 +296,19 @@ class InventoryTransferStocktakeQualificationTest {
         receive(f,f.source(),"durableR15Receipt01",10);
         receive(f,f.destination(),"durableR15Receipt02",4);
         var who=actor(f.actor());
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET reserved=2,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
         var run=reconciliationRuns.start(who,f.tenant());
         assertThat(run.status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.RUNNING);
         var first=reconciliationRuns.advance(who,f.tenant(),run.id(),1);
         assertThat(first.run().inspectedPositions()).isEqualTo(1);
         assertThat(first.run().status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.RUNNING);
-        jdbc.update("""
-                UPDATE crm.inv_stock_balance SET reserved=2,row_version=row_version+1
-                WHERE tenant_id=? AND location_id=? AND item_id=?
-                """,f.tenant(),f.source(),f.item());
         var second=reconciliationRuns.advance(who,f.tenant(),run.id(),1);
         assertThat(second.run().inspectedPositions()).isEqualTo(2);
         assertThat(second.run().status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(second.run().findingCount()).isEqualTo(1);
         assertThat(reconciliationRuns.advance(who,f.tenant(),run.id(),1)
                 .run().inspectedPositions()).isEqualTo(2);
         assertThat(jdbc.queryForObject("""
