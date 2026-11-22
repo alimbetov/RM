@@ -95,6 +95,22 @@ class AutoOrderR1QualificationTest {
         assertThatThrownBy(()->orders.buyerOrders(UUID.randomUUID())).isInstanceOf(SecurityException.class);
     }
 
+    @Test void duplicateOfferLinesCannotBypassAggregatedQuantityLimit() {
+        var st=store();
+        String email="aggregate-"+UUID.randomUUID()+"@example.kz";
+        assertThatThrownBy(()->orders.checkout(st.slug(),email,"aggregate-key-001",
+                List.of(new AutoOrderService.Line(st.offerId(),600),
+                        new AutoOrderService.Line(st.offerId(),600))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Aggregated offer quantity");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,st.tenantId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?",
+                Integer.class,st.tenantId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM iam_email_identity WHERE lookup_hmac=?",
+                Integer.class,crypto.lookup(email))).isZero();
+    }
+
     @Test void retryIsIdempotentAndChangesAreRejected() {
         var st=store();
         String email="retry-"+UUID.randomUUID()+"@example.kz";
