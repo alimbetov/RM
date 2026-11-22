@@ -1,0 +1,188 @@
+package kz.rm.sales;
+
+import kz.rm.autoorder.AutoOrderService;
+import kz.rm.iam.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.TestPropertySource;
+import javax.sql.DataSource;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import static org.assertj.core.api.Assertions.*;
+
+@SpringBootTest
+@TestPropertySource(properties={
+ "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+ "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+ "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+})
+class OrderPackagingQualificationTest {
+ @Autowired OrderPackagingService service;
+ @Autowired PackagingServiceCatalogService catalog;
+ @Autowired AutoOrderService checkout;
+ @Autowired VerifiedTenantRoleCommands roles;
+ @Autowired UserAccountRepository users;
+ @Autowired OrganizationRepository organizations;
+ @Autowired WorkspaceRepository workspaces;
+ @Autowired OrganizationMembershipRepository memberships;
+ @Autowired EmailIdentityCrypto crypto;
+ @Autowired JdbcTemplate jdbc;
+ @Autowired DataSource dataSource;
+
+ record Fixture(UUID tenant,UUID order,String ref,VerifiedActor seller,VerifiedActor buyer) {}
+ private static String key(){return "PKG_"+UUID.randomUUID().toString().replace("-","");}
+ private VerifiedActor verified(UUID id){
+  String sub=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",String.class,id);
+  JwtDecoder decoder=t->Jwt.withTokenValue(t).header("alg","RS256").subject(sub)
+    .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(600)).build();
+  return new OidcActorResolver(decoder,users).resolve("synthetic-packaging-r0b");
+ }
+ private Fixture setup(){
+  var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),"Packaging Company","Packaging","KZ"));
+  UUID tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId())).getId();
+  UUID owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),"pkg-owner-"+UUID.randomUUID(),"Owner")).getId();
+  UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),"pkg-staff-"+UUID.randomUUID(),"Staff")).getId();
+  UUID buyer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),"pkg-buyer-"+UUID.randomUUID(),"Buyer")).getId();
+  memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),owner,OrganizationMembershipEntity.Role.OWNER));
+  memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),staff,OrganizationMembershipEntity.Role.MEMBER));
+  jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
+  var admin=verified(owner);
+  var role=roles.createRole(admin,tenant,"PKG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"Packaging staff");
+  roles.grant(admin,tenant,role.id(),DomainPermission.SALES_PACKAGING_MANAGE);
+  roles.assign(admin,tenant,staff,role.id());
+  roles.enable(admin,tenant);
+  VerifiedActor seller=verified(staff),buyerActor=verified(buyer);
+  String email="pkg-buyer-"+UUID.randomUUID()+"@example.kz";
+  Timestamp now=Timestamp.from(Instant.now());
+  jdbc.update("""
+    INSERT INTO public.iam_email_identity
+     (id,user_id,lookup_hmac,email_envelope,verified_at,created_at,
+      lifecycle_state,active_lookup_hmac,current_owner_id)
+    VALUES (?,?,?,?,?,?,'CURRENT',?,?)
+    """,UUID.randomUUID(),buyer,crypto.lookup(email),crypto.encrypt(email),
+    now,now,crypto.lookup(email),buyer);
+  String slug="pkg-"+UUID.randomUUID();UUID item=UUID.randomUUID(),offer=UUID.randomUUID();
+  jdbc.update("""
+    INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at)
+    VALUES (?,?,?,'PUBLISHED',?)
+    """,tenant,UUID.randomUUID(),slug,now);
+  jdbc.update("""
+    INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+    VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',?)
+    """,tenant,item,"SKU-"+UUID.randomUUID(),now);
+  jdbc.update("""
+    INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+    VALUES (?,?,'Item',100,'KZT','PUBLISHED',?)
+    """,tenant,offer,item);
+  UUID order=checkout.checkout(slug,email,key(),List.of(new AutoOrderService.Line(offer,1)))
+    .order().orderId();
+  UUID challenge=jdbc.queryForObject("""
+    SELECT id FROM public.iam_email_verification_challenge
+    WHERE email_identity_id=(SELECT id FROM public.iam_email_identity
+      WHERE user_id=? AND lifecycle_state='CURRENT')
+    ORDER BY created_at DESC,id DESC LIMIT 1
+    """,UUID.class,buyer);
+  byte[] envelope=jdbc.queryForObject("""
+    SELECT token_envelope FROM public.iam_email_verification_challenge WHERE id=?
+    """,byte[].class,challenge);
+  assertThat(checkout.verifyEmail(challenge,crypto.decrypt(envelope))).isEqualTo(buyer);
+  String ref=jdbc.queryForObject("""
+    SELECT public_ref FROM crm.sales_order_qr_reference
+    WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+    """,String.class,tenant,order);
+  catalog.publish(seller,tenant,"GIFT_WRAP","Gift wrap",new BigDecimal("500"),
+    "KZT",new BigDecimal("0.1200"),"UAT_1",0);
+  return new Fixture(tenant,order,ref,seller,buyerActor);
+ }
+ private OrderPackagingService.Result offer(Fixture f,String key){
+  return service.offer(f.seller(),f.tenant(),f.order(),"GIFT_WRAP",key);
+ }
+ private OrderPackagingService.Result decide(Fixture f,UUID line,long revision,
+                   OrderPackagingService.Choice choice,String key){
+  return service.decide(f.buyer(),f.ref(),line,revision,choice,key);
+ }
+ @Test void acceptedSnapshotSurvivesCatalogPriceChangeAndNeverDebitsStock(){
+  var f=setup();var offered=offer(f,key());
+  var accepted=decide(f,offered.serviceLineId(),0,OrderPackagingService.Choice.ACCEPT,key());
+  assertThat(accepted.state()).isEqualTo("ACCEPTED");
+  assertThat(accepted.price()).isEqualByComparingTo("500");
+  catalog.publish(f.seller(),f.tenant(),"GIFT_WRAP","Gift wrap",new BigDecimal("900"),
+    "KZT",new BigDecimal("0.1400"),"UAT_2",1);
+  assertThat(jdbc.queryForObject("""
+    SELECT price_snapshot FROM crm.sales_order_service_line
+    WHERE tenant_id=? AND id=?
+    """,BigDecimal.class,f.tenant(),accepted.serviceLineId())).isEqualByComparingTo("500");
+  assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.inv_stock_movement
+    WHERE tenant_id=? AND reason_code='PACKAGING_CONSUMPTION'
+    """,Integer.class,f.tenant())).isZero();
+ }
+ @Test void repeatOfferAndDecisionReturnOriginalReceiptButDifferentPayloadConflicts(){
+  var f=setup();String offerKey=key(),decisionKey=key();
+  var original=offer(f,offerKey);
+  assertThat(offer(f,offerKey)).isEqualTo(original);
+  var accepted=decide(f,original.serviceLineId(),0,OrderPackagingService.Choice.ACCEPT,decisionKey);
+  assertThat(decide(f,original.serviceLineId(),0,OrderPackagingService.Choice.ACCEPT,decisionKey))
+    .isEqualTo(accepted);
+  assertThatThrownBy(()->decide(f,original.serviceLineId(),0,
+    OrderPackagingService.Choice.REJECT,decisionKey))
+    .hasMessage("PACKAGING_IDEMPOTENCY_CONFLICT");
+  assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.sales_order_service_event
+    WHERE tenant_id=? AND service_line_id=?
+    """,Integer.class,f.tenant(),original.serviceLineId())).isEqualTo(2);
+ }
+ @Test void staleRevisionRejectedAndCancellationIsTerminal(){
+  var f=setup();var offered=offer(f,key());
+  var canceled=decide(f,offered.serviceLineId(),0,OrderPackagingService.Choice.CANCEL,key());
+  assertThat(canceled.state()).isEqualTo("CANCELLED");
+  assertThatThrownBy(()->decide(f,offered.serviceLineId(),0,
+    OrderPackagingService.Choice.ACCEPT,key()))
+    .hasMessage("PACKAGING_VERSION_CONFLICT");
+ }
+ @Test void foreignSellerAndBuyerCannotMutateDifferentTenant(){
+  var a=setup();var b=setup();var offered=offer(a,key());
+  assertThatThrownBy(()->service.offer(b.seller(),a.tenant(),a.order(),"GIFT_WRAP",key()))
+    .isInstanceOf(SecurityException.class);
+  assertThatThrownBy(()->decide(b,offered.serviceLineId(),0,
+    OrderPackagingService.Choice.ACCEPT,key()))
+    .isInstanceOf(SecurityException.class);
+ }
+ @Test void concurrentAcceptRejectHasExactlyOneWinnerOnPostgres() throws Exception{
+  try(var c=dataSource.getConnection()){
+   Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+  }
+  var f=setup();var offer=offer(f,key());var start=new CountDownLatch(1);
+  try(var pool=Executors.newFixedThreadPool(2)){
+   var accepted=pool.submit(()->{
+    start.await(10,TimeUnit.SECONDS);
+    try{return decide(f,offer.serviceLineId(),0,OrderPackagingService.Choice.ACCEPT,key()).state();}
+    catch(RuntimeException ex){return "LOSER";}
+   });
+   var rejected=pool.submit(()->{
+    start.await(10,TimeUnit.SECONDS);
+    try{return decide(f,offer.serviceLineId(),0,OrderPackagingService.Choice.REJECT,key()).state();}
+    catch(RuntimeException ex){return "LOSER";}
+   });
+   start.countDown();
+   var results=List.of(accepted.get(30,TimeUnit.SECONDS),rejected.get(30,TimeUnit.SECONDS));
+   assertThat(results).contains("LOSER").hasSize(2);
+   assertThat(results.stream().filter(x->!"LOSER".equals(x)).count()).isEqualTo(1);
+  }
+  assertThat(jdbc.queryForObject("""
+   SELECT count(*) FROM crm.sales_order_service_event
+   WHERE tenant_id=? AND service_line_id=?
+   """,Integer.class,f.tenant(),offer.serviceLineId())).isEqualTo(2);
+ }
+}
