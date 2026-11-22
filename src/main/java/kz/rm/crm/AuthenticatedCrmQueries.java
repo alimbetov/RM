@@ -37,5 +37,13 @@ public class AuthenticatedCrmQueries {
                                           int page,int size) {
         return search.contacts(id(actor),tenant,filter,page,size);
     }
-}
 
+    /** Archived metadata can be inspected without decrypting PERSON or contact PII. */
+    public CrmCustomerEntity.Status customerStatus(VerifiedActor actor, UUID tenant, UUID customer) {
+        return service.customerStatus(id(actor),tenant,customer);
+    }
+    public CrmContactEntity.Status contactStatus(VerifiedActor actor, UUID tenant, UUID contact) {
+        return service.contactStatus(id(actor),tenant,contact);
+    }
+
+}
