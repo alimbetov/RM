@@ -21,6 +21,7 @@ class StockBalanceQueryQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+    @Autowired TenantRoleService roles;
 
     private record Fixture(UUID tenant, UUID actor, UUID location, UUID stockItem,
                            UUID emptyItem) {}
@@ -109,4 +110,48 @@ class StockBalanceQueryQualificationTest {
         assertThatThrownBy(()->queries.search(trusted,one.tenant(),null,0,101))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void tcrud03SharedMemberInventoryReadCannotBorrowOtherTenantGrants() {
+        Fixture a=fixture(),b=fixture();
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud03-inventory-"+UUID.randomUUID(),"Multi tenant inventory")).getId();
+        UUID orgA=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,a.tenant());
+        UUID orgB=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,b.tenant());
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgA,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        var ar=roles.createRole(a.actor(),a.tenant(),
+                "INV_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A stock");
+        roles.grant(a.actor(),a.tenant(),ar.id(),DomainPermission.INVENTORY_STOCK_READ);
+        roles.assign(a.actor(),a.tenant(),staff,ar.id());
+        roles.enable(a.actor(),a.tenant());
+        var br=roles.createRole(b.actor(),b.tenant(),
+                "INV_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B nonstock");
+        roles.grant(b.actor(),b.tenant(),br.id(),DomainPermission.CRM_READ);
+        roles.assign(b.actor(),b.tenant(),staff,br.id());
+        roles.enable(b.actor(),b.tenant());
+        var shared=actor(staff);
+        var first=queries.search(shared,a.tenant(),null,0,1);
+        var second=queries.search(shared,a.tenant(),null,1,1);
+        assertThat(first.getTotalElements()).isEqualTo(2);
+        assertThat(second.getTotalElements()).isEqualTo(2);
+        assertThat(first.getContent().getFirst().tenantId()).isEqualTo(a.tenant());
+        assertThat(second.getContent().getFirst().tenantId()).isEqualTo(a.tenant());
+        assertThat(queries.search(shared,a.tenant(),
+                new StockSearch(b.location(),null,false),0,10).getTotalElements()).isZero();
+        assertThat(queries.search(shared,a.tenant(),
+                new StockSearch(null,b.stockItem(),false),0,10).getTotalElements()).isZero();
+        assertThat(queries.search(shared,a.tenant(),
+                new StockSearch(a.location(),a.stockItem(),true),0,10)
+                .getContent()).extracting(x->x.itemId()).containsExactly(a.stockItem());
+        assertThatThrownBy(()->queries.search(shared,b.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->queries.search(shared,b.tenant(),
+                new StockSearch(b.location(),b.stockItem(),false),0,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
 }
