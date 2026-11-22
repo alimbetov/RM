@@ -1169,4 +1169,36 @@ class CrmR1aQualificationTest {
                 .orElseThrow().getRowVersion()).isEqualTo(1);
     }
 
+
+    @Test void crmR14ReadOnlyRoleCannotUpdateArchiveOrRestoreContacts() {
+        var t=newTenant(); var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Role bound",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),"Private",null,null);
+        UUID orgId=jdbc.queryForObject("""
+            SELECT organization_id FROM iam_workspace WHERE id=?
+            """,UUID.class,t.tenantId());
+        var viewer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "r14-viewer-"+UUID.randomUUID(),"Viewer"));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgId,
+                viewer.getId(),OrganizationMembershipEntity.Role.VIEWER));
+        var readonly=verified(viewer.getId());
+        assertThat(secureQueries.contactStatus(readonly,t.tenantId(),contact.id()))
+                .isEqualTo(CrmContactEntity.Status.ACTIVE);
+        assertThatThrownBy(()->secureCommands.updateContact(readonly,t.tenantId(),contact.id(),
+                "No",null,null,0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.archiveContact(readonly,t.tenantId(),contact.id(),0))
+                .isInstanceOf(SecurityException.class);
+        secureCommands.archiveContact(actor,t.tenantId(),contact.id(),0);
+        assertThat(secureQueries.contactStatus(readonly,t.tenantId(),contact.id()))
+                .isEqualTo(CrmContactEntity.Status.ARCHIVED);
+        assertThatThrownBy(()->secureCommands.restoreContact(readonly,t.tenantId(),contact.id(),1))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureQueries.contactStatus(null,t.tenantId(),contact.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.restoreContact(null,t.tenantId(),contact.id(),1))
+                .isInstanceOf(SecurityException.class);
+        assertThat(crmHistory.contactHistory(readonly,t.tenantId(),contact.id(),10))
+                .extracting(CrmHistoryService.ContactChange::action).containsExactly("ARCHIVED");
+    }
+
 }
