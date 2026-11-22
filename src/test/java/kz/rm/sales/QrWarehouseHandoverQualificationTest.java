@@ -2666,13 +2666,19 @@ class QrWarehouseHandoverQualificationTest {
                 2,"SCAN_003",key());
         returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),other.requestId(),
                 4,SalesReturnPhysicalService.Disposition.QUARANTINE,"INSPECT_003",key());
-        assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
-                other.requestId(),5,key()))
-                .hasMessageContaining("RETURN_QUARANTINE_NOT_POSTABLE");
+        BigDecimal stockBefore=stock(c,c.itemOne(),"on_hand");
+        BigDecimal stockBeforeTwo=stock(c,c.itemTwo(),"on_hand");
+        var quarantine=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                other.requestId(),5,key());
+        assertThat(quarantine.state()).isEqualTo("QUARANTINED");
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo(stockBefore);
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo(stockBeforeTwo);
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM crm.sales_return_posting
-                WHERE tenant_id=? AND return_id=?
-                """,Integer.class,c.tenant(),other.requestId())).isZero();
+                SELECT count(*) FROM crm.sales_return_posting p
+                JOIN crm.inv_return_quarantine_movement m
+                  ON m.tenant_id=p.tenant_id AND m.id=p.quarantine_movement_id
+                WHERE p.tenant_id=? AND p.return_id=? AND p.disposition='QUARANTINE'
+                """,Integer.class,c.tenant(),other.requestId())).isEqualTo(1);
     }
 
     @Test void qr07R2DeniedScopesAndPrematurePostingHaveNoSideEffects() throws Exception {
