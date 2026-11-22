@@ -246,4 +246,93 @@ class OrderPackagingQualificationTest {
     """,f.tenant(),offered.serviceLineId())).isInstanceOf(Exception.class);
  }
 
+ @Test void absentCatalogCodeRejectsOfferWithoutCreatingLine(){
+  var f=setup();
+  assertThatThrownBy(()->service.offer(f.seller(),f.tenant(),f.order(),"UNKNOWN",key()))
+   .hasMessage("PACKAGING_CATALOG_INACTIVE");
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void inactiveCatalogRejectsOfferAndKeepsHistoricalVersion(){
+  var f=setup();
+  var head=catalog.current(f.seller(),f.tenant(),"GIFT_WRAP");
+  catalog.deactivate(f.seller(),f.tenant(),"GIFT_WRAP",1,head.rowVersion());
+  assertThatThrownBy(()->offer(f,key())).hasMessage("PACKAGING_CATALOG_INACTIVE");
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void catalogCurrencyMismatchDoesNotCreateServiceLine(){
+  var f=setup();
+  catalog.publish(f.seller(),f.tenant(),"GIFT_WRAP","Gift wrap",
+   new BigDecimal("700"),"USD",new BigDecimal("0.12"),"UAT_2",1);
+  assertThatThrownBy(()->offer(f,key())).hasMessage("PACKAGING_CURRENCY_MISMATCH");
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void unlinkedBuyerCannotBeOfferedPackaging(){
+  var f=setup();
+  jdbc.update("UPDATE crm.sales_order SET buyer_user_id=NULL WHERE tenant_id=? AND id=?",
+   f.tenant(),f.order());
+  assertThatThrownBy(()->offer(f,key())).hasMessage("PACKAGING_BUYER_NOT_LINKED");
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void secondOfferForSameOrderAndCodeIsRejectedByUniqueConstraint(){
+  var f=setup();offer(f,key());
+  assertThatThrownBy(()->offer(f,key())).isInstanceOf(
+   org.springframework.dao.DataIntegrityViolationException.class);
+  assertThat(lineCount(f)).isEqualTo(1);
+ }
+ @Test void buyerCannotUseUnknownServiceLine(){
+  var f=setup();offer(f,key());
+  assertThatThrownBy(()->decide(f,UUID.randomUUID(),0,
+   OrderPackagingService.Choice.ACCEPT,key()))
+   .hasMessage("PACKAGING_NOT_ACCESSIBLE");
+  assertThat(lineCount(f)).isEqualTo(1);
+ }
+ @Test void completedOrderRejectsNewPackagingOffer(){
+  var f=setup();
+  jdbc.update("UPDATE crm.sales_order SET status='COMPLETED' WHERE tenant_id=? AND id=?",
+   f.tenant(),f.order());
+  assertThatThrownBy(()->offer(f,key())).hasMessage("PACKAGING_ORDER_STATE_FORBIDDEN");
+  assertThat(lineCount(f)).isZero();
+ }
+ @Test void repeatedCancelWithNewKeyCannotCreateSecondTerminalEvent(){
+  var f=setup();var offered=offer(f,key());
+  decide(f,offered.serviceLineId(),0,OrderPackagingService.Choice.CANCEL,key());
+  assertThatThrownBy(()->decide(f,offered.serviceLineId(),1,
+   OrderPackagingService.Choice.CANCEL,key()))
+   .hasMessage("PACKAGING_DECISION_TERMINAL");
+  assertThat(jdbc.queryForObject("""
+   SELECT count(*) FROM crm.sales_order_service_event
+   WHERE tenant_id=? AND service_line_id=?
+   """,Integer.class,f.tenant(),offered.serviceLineId())).isEqualTo(2);
+ }
+ @Test void acceptAgainstCancelHasExactlyOneWinnerOnPostgres() throws Exception {
+  try(var c=dataSource.getConnection()){
+   Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+  }
+  var f=setup();var offered=offer(f,key());var start=new CountDownLatch(1);
+  try(var pool=Executors.newFixedThreadPool(2)){
+   var a=pool.submit(()->{
+    start.await(10,TimeUnit.SECONDS);
+    try{return decide(f,offered.serviceLineId(),0,OrderPackagingService.Choice.ACCEPT,key()).state();}
+    catch(RuntimeException ex){return "LOSER";}
+   });
+   var b=pool.submit(()->{
+    start.await(10,TimeUnit.SECONDS);
+    try{return decide(f,offered.serviceLineId(),0,OrderPackagingService.Choice.CANCEL,key()).state();}
+    catch(RuntimeException ex){return "LOSER";}
+   });
+   start.countDown();
+   var states=List.of(a.get(30,TimeUnit.SECONDS),b.get(30,TimeUnit.SECONDS));
+   assertThat(states.stream().filter(x->"LOSER".equals(x)).count()).isEqualTo(1);
+  }
+  assertThat(jdbc.queryForObject("""
+   SELECT count(*) FROM crm.sales_order_service_event
+   WHERE tenant_id=? AND service_line_id=?
+   """,Integer.class,f.tenant(),offered.serviceLineId())).isEqualTo(2);
+ }
+ private int lineCount(Fixture f){
+  return jdbc.queryForObject("""
+   SELECT count(*) FROM crm.sales_order_service_line WHERE tenant_id=? AND order_id=?
+   """,Integer.class,f.tenant(),f.order());
+ }
+
 }
