@@ -602,4 +602,118 @@ class CrmInteractionQualificationTest {
                 """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(before);
     }
 
+    /**
+     * CRM-R2.1B / D04: real PostgreSQL threads compete for the same row version.
+     * Exactly one terminal command commits, with exactly one additional audit event.
+     */
+    @Test void crmR21bPostgresConcurrentCompleteAndCancelAreSingleWinner() throws Exception {
+        try (var cn=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    cn.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+        var t=tenant(); var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Parallel Terminal",null);
+        var created=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),
+                Instant.parse("2026-11-21T10:00:00Z"),null,
+                "parallel-terminal-"+UUID.randomUUID());
+        var begin=new java.util.concurrent.CountDownLatch(1);
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Boolean> complete=()->{
+                if(!begin.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Concurrent barrier timeout");
+                try { interactions.complete(actor,t.tenantId(),created.id(),0); return true; }
+                catch(IllegalStateException expected) { return false; }
+            };
+            java.util.concurrent.Callable<Boolean> cancel=()->{
+                if(!begin.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Concurrent barrier timeout");
+                try { interactions.cancel(actor,t.tenantId(),created.id(),0); return true; }
+                catch(IllegalStateException expected) { return false; }
+            };
+            var first=pool.submit(complete);
+            var second=pool.submit(cancel);
+            begin.countDown();
+            boolean a=first.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            boolean b=second.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(a ^ b).isTrue();
+            var persisted=interactions.get(actor,t.tenantId(),created.id());
+            assertThat(persisted.rowVersion()).isEqualTo(1);
+            assertThat(persisted.status()).isIn(
+                    CrmInteractionService.Status.COMPLETED,
+                    CrmInteractionService.Status.CANCELLED);
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.customer_interaction_event
+                    WHERE tenant_id=? AND interaction_id=?
+                    """,Integer.class,t.tenantId(),created.id())).isEqualTo(2);
+            assertThat(interactions.history(actor,t.tenantId(),created.id(),10))
+                    .extracting(CrmInteractionService.Event::action)
+                    .containsExactlyInAnyOrder("CREATED",
+                            persisted.status()==CrmInteractionService.Status.COMPLETED
+                                    ?"COMPLETED":"CANCELLED");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * CRM-R2.1B / A07: archive and creation run in distinct PostgreSQL
+     * transactions. The archive must commit; a concurrent record can either
+     * precede it or fail, but subsequent new interactions always fail.
+     */
+    @Test void crmR21bPostgresConcurrentArchiveAndRecordFenceNewActivity() throws Exception {
+        try (var cn=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    cn.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Archive Race",null);
+        var started=new java.util.concurrent.CountDownLatch(1);
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        String requestKey="parallel-archive-"+UUID.randomUUID();
+        try {
+            var archive=pool.submit(()->{
+                if(!started.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Concurrent barrier timeout");
+                customers.archiveCustomer(actor,t.tenantId(),customer.id(),0);
+                return true;
+            });
+            var record=pool.submit(()->{
+                if(!started.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Concurrent barrier timeout");
+                try {
+                    return interactions.record(actor,t.tenantId(),customer.id(),null,
+                            CrmInteractionService.Kind.CALL,t.actorId(),
+                            Instant.parse("2026-11-21T12:00:00Z"),null,requestKey).id();
+                } catch(IllegalArgumentException expected) {
+                    return (UUID)null;
+                }
+            });
+            started.countDown();
+            assertThat(archive.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            UUID created=record.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(queries.customerStatus(actor,t.tenantId(),customer.id()))
+                    .isEqualTo(CrmCustomerEntity.Status.ARCHIVED);
+            int count=jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.customer_interaction
+                    WHERE tenant_id=? AND customer_id=? AND request_key=?
+                    """,Integer.class,t.tenantId(),customer.id(),requestKey);
+            assertThat(count).isEqualTo(created==null?0:1);
+            assertThatThrownBy(()->interactions.record(actor,t.tenantId(),customer.id(),null,
+                    CrmInteractionService.Kind.CALL,t.actorId(),
+                    Instant.parse("2026-11-21T12:00:00Z"),null,
+                    "new-after-archive-"+UUID.randomUUID()))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.customer_interaction_event e
+                    JOIN crm.customer_interaction i
+                      ON i.tenant_id=e.tenant_id AND i.id=e.interaction_id
+                    WHERE i.tenant_id=? AND i.customer_id=?
+                    """,Integer.class,t.tenantId(),customer.id())).isEqualTo(count);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
 }
