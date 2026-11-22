@@ -114,6 +114,8 @@ class InventoryStocktakeService {
         if(tenant==null||id==null||actor==null)
             throw new IllegalArgumentException("Stocktake identity required");
         Header header=lockHeader(tenant,id);
+        if(requestKey==null||!requestKey.matches("[A-Za-z0-9_-]{8,100}"))
+            throw new IllegalArgumentException("Invalid stocktake post key");
         if("POSTED".equals(header.status())){
             if(!requestKey.equals(header.postKey()))
                 throw new IllegalArgumentException("Stocktake already posted with another key");
@@ -121,8 +123,6 @@ class InventoryStocktakeService {
         }
         if(!"OPEN".equals(header.status()))
             throw new IllegalStateException("Cancelled stocktake cannot be posted");
-        if(requestKey==null||!requestKey.matches("[A-Za-z0-9_-]{8,100}"))
-            throw new IllegalArgumentException("Invalid stocktake post key");
         var lines=jdbc.query("""
                 SELECT item_id,book_on_hand,book_reserved,expected_stock_version,counted_on_hand
                 FROM crm.inv_stocktake_line
@@ -146,10 +146,11 @@ class InventoryStocktakeService {
                 throw new IllegalStateException("Counted quantity below active reservations");
             BigDecimal delta=counted.subtract(book);
             if(delta.signum()==0)continue; // no fake zero movement
-            jdbc.update("""
+            int affected=jdbc.update("""
                     UPDATE crm.inv_stock_balance SET on_hand=?,row_version=row_version+1
                     WHERE tenant_id=? AND location_id=? AND item_id=? AND row_version=?
                     """,counted,tenant,header.location(),item,expected);
+            if(affected!=1)throw new IllegalStateException("RECOUNT_REQUIRED: concurrent stock update");
             Timestamp now=Timestamp.from(Instant.now());
             jdbc.update("""
                     INSERT INTO crm.inv_stock_movement
