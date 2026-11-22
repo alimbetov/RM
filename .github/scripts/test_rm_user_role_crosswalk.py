@@ -100,12 +100,12 @@ class UserRoleCrosswalkQualificationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Planned capability"):
             self.evaluate(mutate)
 
-    def test_missing_proof_cannot_be_backfilled_by_assertion(self):
+    def test_reviewed_proof_cannot_be_marked_missing_after_binding(self):
         def mutate(j):
             x = next(x for x in j["requirements"]
                      if x["requirementId"] == "INV-02")
-            x["proofStatus"] = "DECLARED_NOT_EXECUTED_ON_THIS_SHA"
-        with self.assertRaisesRegex(ValueError, "Missing proof misrepresented"):
+            x["proofStatus"] = "MISSING_PROOF"
+        with self.assertRaisesRegex(ValueError, "Declared proof misrepresented"):
             self.evaluate(mutate)
 
     def test_only_existing_domain_permission_members_are_allowed(self):
