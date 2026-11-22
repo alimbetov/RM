@@ -18,12 +18,15 @@ public class InventoryAuthorizedCommandService {
     private final TenantAuthorization authorization;
     private final InventoryMovementService movements;
     private final InventoryTransferService transfers;
+    private final InventoryStocktakeService stocktakes;
 
     public InventoryAuthorizedCommandService(TenantAuthorization authorization,
-                        InventoryMovementService movements,InventoryTransferService transfers) {
+                        InventoryMovementService movements,InventoryTransferService transfers,
+                        InventoryStocktakeService stocktakes) {
         this.authorization=authorization;
         this.movements=movements;
         this.transfers=transfers;
+        this.stocktakes=stocktakes;
     }
 
     @Transactional
@@ -69,6 +72,34 @@ public class InventoryAuthorizedCommandService {
         validateStaffKey(requestKey);
         return transfers.transfer(tenantId,sourceLocationId,targetLocationId,
                 itemId,quantity,requestKey,actorId);
+    }
+
+    @Transactional
+    kz.rm.inventory.dto.InventoryStocktakeDto startStocktake(UUID actorId,UUID tenantId,
+             UUID locationId,java.util.List<UUID> items,String requestKey) {
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        validateStaffKey(requestKey);
+        return stocktakes.start(tenantId,locationId,items,requestKey,actorId);
+    }
+    @Transactional
+    kz.rm.inventory.dto.InventoryStocktakeDto recordCount(UUID actorId,UUID tenantId,
+              UUID stocktakeId,UUID itemId,BigDecimal quantity,long expectedLineVersion) {
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        return stocktakes.count(tenantId,stocktakeId,itemId,quantity,
+                expectedLineVersion,actorId);
+    }
+    @Transactional
+    kz.rm.inventory.dto.InventoryStocktakeDto postStocktake(UUID actorId,UUID tenantId,
+              UUID stocktakeId,String requestKey) {
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        validateStaffKey(requestKey);
+        return stocktakes.post(tenantId,stocktakeId,requestKey,actorId);
+    }
+    @Transactional
+    kz.rm.inventory.dto.InventoryStocktakeDto cancelStocktake(UUID actorId,UUID tenantId,
+              UUID stocktakeId) {
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        return stocktakes.cancel(tenantId,stocktakeId,actorId);
     }
 
     private static void validateStaffKey(String key){
