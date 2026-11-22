@@ -58,3 +58,17 @@ The original staged run completed successfully for both tenants, but **never sat
 - The 300-second run and the two 60-second runs are configured in `qr06b-b34-capacity-recovery` under the same exact SHA; no result is considered PASS until Surefire and all three runs succeed.
 
 **Saturation admission remains conditional:** a sustained Hikari waiting queue and/or clear response-latency knee must be observed; a short burst reaching pool capacity is an entry signal, not proof of stable maximum service throughput. Production readiness remains HOLD.
+
+## Proven first-stage baseline — before stronger saturation profile
+
+The first B3.4 job at exact SHA `b7cfb3734eb2150d38274f8f348f2d7020197486` completed **SUCCESS** on PostgreSQL 17: 80/80 successful pickups, 2 real JVMs, 2 tenants, zero reported new deadlocks, 0 failures/errors/skips. Recorded Hikari peak active=1, waiting=0 per worker. Success-only p95/p99:
+
+| Phase | Tenant A (ms) | Tenant B (ms) |
+|---|---|---|
+| LOW | 258 / 258 | 290 / 290 |
+| PEAK | 25 / 25 | 26 / 33 |
+| RECOVERY | 32 / 32 | 32 / 32 |
+
+These figures explicitly **disprove any claim that the baseline reached connection-pool saturation**; peak response time improvement reflects a different arrival profile and warmup, not demonstrated high-load resilience.
+
+The enhanced exact-SHA target `de7b4f0170721257d46acbbedf6e274cd0885df2` is a **different** code candidate that changes PEAK to simultaneous arrivals, adds asymmetric tenant groups (50/30 for 60s and 240/160 for 300s), instruments 100ms PostgreSQL waiter samples and executes two 60s runs plus one 300s run. It must be evaluated separately. The documentation commits do not themselves count as source-code test qualification.
