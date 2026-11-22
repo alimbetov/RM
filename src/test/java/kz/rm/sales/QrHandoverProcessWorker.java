@@ -20,7 +20,7 @@ import java.util.UUID;
 /**
  * Test-only separate JVM worker for real process exit / multi-JVM QR-06B.
  * Never packaged into production: src/test/java.
- * Arguments: mode tenant warehouse staff orderVersion proof requestKey readyPath gatePath.
+ * Arguments: mode tenant warehouse staff orderVersion proofFile requestKey readyPath gatePath.
  * No raw credential or PII is written to logs or artifacts.
  */
 public final class QrHandoverProcessWorker {
@@ -32,7 +32,7 @@ public final class QrHandoverProcessWorker {
         UUID tenant=UUID.fromString(args[1]),warehouse=UUID.fromString(args[2]),
                 staffId=UUID.fromString(args[3]);
         long version=Long.parseLong(args[4]);
-        String proof=args[5], requestKey=args[6];
+        String proof=Files.readString(Path.of(args[5])).trim(), requestKey=args[6];
         Path ready=Path.of(args[7]),gate=Path.of(args[8]);
 
         try(var context=new SpringApplicationBuilder(RmApplication.class)
