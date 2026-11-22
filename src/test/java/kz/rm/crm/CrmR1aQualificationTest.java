@@ -1062,4 +1062,111 @@ class CrmR1aQualificationTest {
                 .isEqualTo(CustomerContractEntity.Status.DRAFT);
     }
 
+
+    @Test void crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit() throws Exception {
+        var a=newTenant(); var b=newTenant();
+        var actorA=verified(a.actorId()); var actorB=verified(b.actorId());
+        var customerA=secureCommands.createCompany(actorA,a.tenantId(),"R14 customer A",null);
+        var customerB=secureCommands.createCompany(actorB,b.tenantId(),"R14 customer B",null);
+        var ca=secureCommands.addContact(actorA,a.tenantId(),customerA.id(),
+                "Old A","old@example.kz","+77001001010");
+        var cb=secureCommands.addContact(actorB,b.tenantId(),customerB.id(),
+                "Old B","b@example.kz","+77002002020");
+        var updated=secureCommands.updateContact(actorA,a.tenantId(),ca.id(),
+                "New A","new@example.kz",null,0);
+        assertThat(updated.name()).isEqualTo("New A");
+        assertThat(updated.email()).isEqualTo("new@example.kz");
+        assertThat(secureQueries.getContact(actorA,a.tenantId(),ca.id()).name()).isEqualTo("New A");
+        var envelope=jdbc.queryForObject("""
+            SELECT name_envelope FROM crm_pii.contact_secret WHERE tenant_id=? AND contact_id=?
+            """,byte[].class,a.tenantId(),ca.id());
+        assertThat(new String(envelope,java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain("New A");
+        assertThat(contactMetadata.findByTenantIdAndId(a.tenantId(),ca.id())
+                .orElseThrow().getRowVersion()).isEqualTo(1);
+        assertThat(crmHistory.contactHistory(actorA,a.tenantId(),ca.id(),10))
+                .extracting(CrmHistoryService.ContactChange::action).containsExactly("UPDATED");
+        assertThat(crmHistory.contactHistory(actorA,a.tenantId(),cb.id(),10)).isEmpty();
+        assertThatThrownBy(()->crmHistory.contactHistory(actorA,b.tenantId(),cb.id(),10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.updateContact(actorA,a.tenantId(),cb.id(),
+                "X",null,null,0)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->secureCommands.updateContact(actorA,b.tenantId(),cb.id(),
+                "X",null,null,0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->secureCommands.updateContact(actorA,a.tenantId(),ca.id(),
+                "stale",null,null,0)).isInstanceOf(IllegalStateException.class);
+        secureCommands.archiveContact(actorA,a.tenantId(),ca.id(),1);
+        assertThat(contactMetadata.findByTenantIdAndId(a.tenantId(),ca.id())
+                .orElseThrow().getStatus()).isEqualTo(CrmContactEntity.Status.ARCHIVED);
+        assertThatThrownBy(()->secureQueries.getContact(actorA,a.tenantId(),ca.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.updateContact(actorA,a.tenantId(),ca.id(),
+                "No",null,null,2)).isInstanceOf(IllegalStateException.class);
+        secureCommands.restoreContact(actorA,a.tenantId(),ca.id(),2);
+        assertThat(secureQueries.getContact(actorA,a.tenantId(),ca.id()).name()).isEqualTo("New A");
+        assertThat(crmHistory.contactHistory(actorA,a.tenantId(),ca.id(),10))
+                .extracting(CrmHistoryService.ContactChange::action)
+                .containsExactly("RESTORED","ARCHIVED","UPDATED");
+        var change=crmHistory.contactHistory(actorA,a.tenantId(),ca.id(),10).getFirst();
+        assertThat(change.actorId()).isEqualTo(a.actorId());
+        boolean pg;
+        try (var connection=dataSource.getConnection()) {
+            pg=connection.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql");
+        }
+        if(pg) {
+            assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.contact_change_event WHERE tenant_id=? AND id=?
+                """,a.tenantId(),change.id())).isInstanceOf(Exception.class);
+        }
+    }
+
+    @Test void crmR14CustomerRestoreAndContactParentStatusGuard() {
+        var t=newTenant(); var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Archived parent",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),"Secret",null,null);
+        secureCommands.archiveCustomer(actor,t.tenantId(),customer.id(),0);
+        assertThatThrownBy(()->secureQueries.getContact(actor,t.tenantId(),contact.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secureCommands.updateContact(actor,t.tenantId(),contact.id(),
+                "No",null,null,0)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->secureCommands.restoreContact(actor,t.tenantId(),contact.id(),0))
+                .isInstanceOf(IllegalStateException.class);
+        secureCommands.restoreCustomer(actor,t.tenantId(),customer.id(),1);
+        assertThat(secureQueries.getContact(actor,t.tenantId(),contact.id()).name())
+                .isEqualTo("Secret");
+        assertThat(crmHistory.customerHistory(actor,t.tenantId(),customer.id(),10))
+                .extracting(CrmHistoryService.CustomerChange::action)
+                .containsExactly("RESTORED","ARCHIVED");
+        assertThatThrownBy(()->secureCommands.restoreCustomer(actor,t.tenantId(),customer.id(),1))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test void crmR14TwoWritersSameContactVersionExactlyOneCommits() throws Exception {
+        var t=newTenant(); var actor=verified(t.actorId());
+        var customer=secureCommands.createCompany(actor,t.tenantId(),"Concurrent contact",null);
+        var contact=secureCommands.addContact(actor,t.tenantId(),customer.id(),"First",null,null);
+        try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            var gate=new CountDownLatch(1);
+            Callable<Boolean> first=()->{
+                gate.await();
+                try { secureCommands.updateContact(actor,t.tenantId(),contact.id(),
+                        "Winner A",null,null,0); return true; }
+                catch(IllegalStateException ex) { return false; }
+            };
+            Callable<Boolean> second=()->{
+                gate.await();
+                try { secureCommands.updateContact(actor,t.tenantId(),contact.id(),
+                        "Winner B",null,null,0); return true; }
+                catch(IllegalStateException ex) { return false; }
+            };
+            var f1=executor.submit(first); var f2=executor.submit(second);
+            gate.countDown();
+            assertThat((f1.get(30,TimeUnit.SECONDS)?1:0)+(f2.get(30,TimeUnit.SECONDS)?1:0))
+                    .isEqualTo(1);
+        }
+        assertThat(crmHistory.contactHistory(actor,t.tenantId(),contact.id(),10)).hasSize(1);
+        assertThat(contactMetadata.findByTenantIdAndId(t.tenantId(),contact.id())
+                .orElseThrow().getRowVersion()).isEqualTo(1);
+    }
+
 }
