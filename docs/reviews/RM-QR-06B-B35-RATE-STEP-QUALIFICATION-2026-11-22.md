@@ -53,3 +53,29 @@ Each worker observed phase completion-span rates (completed count / time from fi
 **Important result:** The monotonically increasing offered rate **did not** produce pool saturation or latency degradation: p95 improved as the JVM warmed. B3.5 cannot be closed from these results, even though the synthetic workload is functionally correct. The prior B3.4 burst demonstrated transient queueing, but a burst cannot substitute for a sustained rate knee.
 
 **Separate CI admission:** all parallel B1/B2, B3.1/B3.2/B3.3/B3.4 regressions must succeed at this same code SHA; report those results independently after final workflow completion. Any later documentation-only commit is not itself a new test proof.
+
+## B3.5 JIT proof handling (new test-only harness)
+
+The production `SalesPickupHandoverService` retains the buyer-owned 10-minute one-time pickup credential policy unchanged. The B3.5 test-specific JVM mode `B35_JIT` uses a private manifest of buyer user ID, order public reference, expected version, due timestamp and unique request key. **No credential is issued during setup.** The worker resolves an *independently verified synthetic buyer*, then invokes normal service `issue()` immediately before `complete()`. The test asserts that there are no preissued pickup credentials before releasing workers and that the expected credential count is `CONSUMED` after each tenant's 40 orders complete. It does not modify credential expiry or bypass buyer verification.
+
+The worker now reports **separately** the service-only `complete()` latency and the combined `issue() + complete()` latency. This avoids hiding QR issuance cost inside throughput calculations and allows longer rate stages without expiration of pre-generated credentials.
+
+### Measured JIT smoke evidence (separate tested candidate)
+
+**Exact code SHA:** `1d543da2324648b5dd38890d768fa0b97d4ccf1e`  
+**GitHub Actions:** https://github.com/alimbetov/RM/actions/runs/45041020008  
+The `qr06b-b35-rate-steps` PostgreSQL 17 job completed **SUCCESS**, 1 JUnit test, 0 failures/errors/skips. Two JVM, two tenant, 80 completed, 0 technical failures and deadlocks.
+
+| STRESS phase | Tenant A | Tenant B |
+|---|---:|---:|
+| p95/p99 complete() | 30/35 ms | 30/37 ms |
+| p95/p99 issue()+complete() | 41/45 ms | 43/48 ms |
+| Peak Hikari active / waiting | 1 / 0 | 1 / 0 |
+
+Both workloads remained below connection-pool pressure. **Sustainable throughput ceiling is not established**.
+
+### Extended optional 120-second-per-stage profile (not yet qualified)
+
+A later candidate in `base_dev` adds `-Drm.qr06b.b35.levelSeconds=120` to run *four 120-second phases* with **400 independently fulfillable orders**: 240 tenant A and 160 tenant B, JIT QR issue and exact per-tenant inventory conservation. This opt-in profile is guarded by `workflow_dispatch` input `extended_b35=true` in `.github/workflows/rm-qr06b-pg.yml`. Its presence in CI configuration **is not evidence that it has run**; it must receive its own exact-SHA PostgreSQL result.
+
+Even if it passes, 120-second offered-rate steps at the configured low rates may not create a throughput knee. Pool saturation under finite burst in B3.4 does not demonstrate a sustainable ceiling. Full operational rate-vs-throughput characterization and production admission remain HOLD.
