@@ -83,13 +83,20 @@ public class GlobalAccountDeletionService {
                   (SELECT id FROM public.iam_email_identity WHERE user_id=?)
                   AND state='PENDING'
                 """,targetId);
-        jdbc.update("""
-                UPDATE public.iam_email_verification_challenge
-                SET token_sha256=?,token_envelope=?,consumed_at=?
+        // Challenge hashes have a UNIQUE constraint; rotate each row independently.
+        var challenges=jdbc.query("""
+                SELECT id FROM public.iam_email_verification_challenge
                 WHERE email_identity_id IN
                   (SELECT id FROM public.iam_email_identity WHERE user_id=?)
-                  AND consumed_at IS NULL
-                """,randomBytes(32),randomBytes(48),now,targetId);
+                  AND consumed_at IS NULL ORDER BY id FOR UPDATE
+                """,(rs,i)->rs.getObject(1,UUID.class),targetId);
+        for(UUID challenge:challenges) {
+            jdbc.update("""
+                    UPDATE public.iam_email_verification_challenge
+                    SET token_sha256=?,token_envelope=?,consumed_at=?
+                    WHERE id=? AND consumed_at IS NULL
+                    """,randomBytes(32),randomBytes(48),now,challenge);
+        }
         // Historical email identity IDs must survive SALES order references.
         // Erase their encrypted addresses and lookup material, not the row IDs.
         var identities=jdbc.query("""
