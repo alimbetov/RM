@@ -2435,3 +2435,40 @@ CREATE TRIGGER trg_offer_price_revision_immutable
  FOR EACH ROW EXECUTE FUNCTION crm.reject_price_revision_mutation();
 --rollback DROP TRIGGER trg_offer_price_revision_immutable ON crm.store_offer_price_revision;
 --rollback DROP FUNCTION crm.reject_price_revision_mutation();
+
+
+--changeset rm:0084-product-offer-qr-stable-reference
+-- QR-01: references are random NON-SECRET public identifiers. Reprint returns
+-- the same literal public_ref. No QR token is a buyer or staff permission.
+-- active_offer_id is populated only for ACTIVE rows: ordinary UNIQUE works
+-- on both PostgreSQL and H2 without a PostgreSQL-only partial unique index.
+CREATE TABLE crm.store_offer_qr_ref (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ active_offer_id UUID,
+ public_ref VARCHAR(64) NOT NULL,
+ generation INTEGER NOT NULL,
+ state VARCHAR(16) NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ issued_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ revoked_at TIMESTAMP WITH TIME ZONE,
+ issued_by UUID NOT NULL,
+ CONSTRAINT pk_store_offer_qr_ref PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_offer_qr_offer FOREIGN KEY(tenant_id,offer_id)
+   REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_offer_qr_actor FOREIGN KEY(issued_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT uq_offer_qr_public_ref UNIQUE(public_ref),
+ CONSTRAINT uq_offer_qr_active_offer UNIQUE(tenant_id,active_offer_id),
+ CONSTRAINT uq_offer_qr_generation UNIQUE(tenant_id,offer_id,generation),
+ CONSTRAINT ck_offer_qr_generation CHECK(generation > 0),
+ CONSTRAINT ck_offer_qr_version CHECK(row_version >= 0),
+ CONSTRAINT ck_offer_qr_lifecycle CHECK(
+   (state='ACTIVE' AND active_offer_id=offer_id AND revoked_at IS NULL)
+   OR
+   (state='REVOKED' AND active_offer_id IS NULL AND revoked_at IS NOT NULL))
+);
+CREATE INDEX idx_offer_qr_offer_history
+ ON crm.store_offer_qr_ref(tenant_id,offer_id,generation DESC);
+--rollback DROP TABLE crm.store_offer_qr_ref;
