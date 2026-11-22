@@ -13,18 +13,17 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * RM-STORE-01: small tenant-authorized storefront lifecycle.
+ * Tenant-authorized management of the single storefront owned by a workspace.
+ * The schema already has row_version and uk_store_tenant; no additional
+ * storefront identity or feature flag is needed.
  *
- * The current schema has no storefront row_version, so compare-and-set uses the
- * expected state and a locked row. A future version-column migration must
- * preserve these externally observable state transitions.
- *
- * Offer ownership, catalog publication and the seller's offer price belong to
- * their respective services. This service never writes store_offer.
+ * Lock order shared with checkout and offer commands:
+ * IAM actor/workspace -> store_front -> store_offer -> cat_item.
  */
 @Service
 public class StorefrontManagementService {
-    public record Storefront(UUID tenantId, UUID id, String slug, StorefrontSettings.State state) {}
+    public record Storefront(UUID tenantId, UUID id, String slug,
+                             StorefrontSettings.State state, long rowVersion) {}
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
@@ -36,92 +35,89 @@ public class StorefrontManagementService {
 
     @Transactional
     public Storefront createDraft(VerifiedActor actor, UUID tenant, String slug) {
-        UUID user = authorize(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        UUID user = admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
         if (slug == null || !slug.matches("[a-z0-9][a-z0-9-]{2,99}"))
             throw new IllegalArgumentException("Invalid storefront slug");
         UUID id = UUID.randomUUID();
         jdbc.update("""
-                INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at)
-                VALUES (?,?,?,'DRAFT',?)
+                INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at,row_version)
+                VALUES (?,?,?,'DRAFT',?,0)
                 """, tenant, id, slug, Timestamp.from(Instant.now()));
         audit(tenant, user, id, "STOREFRONT_CREATED");
-        return new Storefront(tenant, id, slug, StorefrontSettings.State.DRAFT);
+        return new Storefront(tenant, id, slug, StorefrontSettings.State.DRAFT, 0);
     }
 
     @Transactional
     public Storefront publish(VerifiedActor actor, UUID tenant, UUID storefront,
-                              StorefrontSettings.State expectedState) {
-        return transition(actor, tenant, storefront, expectedState,
+                              long expectedVersion) {
+        return transition(actor, tenant, storefront, expectedVersion,
                 StorefrontSettings.State.PUBLISHED);
     }
 
     @Transactional
     public Storefront pause(VerifiedActor actor, UUID tenant, UUID storefront,
-                            StorefrontSettings.State expectedState) {
-        return transition(actor, tenant, storefront, expectedState,
+                            long expectedVersion) {
+        return transition(actor, tenant, storefront, expectedVersion,
                 StorefrontSettings.State.PAUSED);
     }
 
     @Transactional(readOnly = true)
     public Storefront get(VerifiedActor actor, UUID tenant, UUID storefront) {
-        // No storefront READ permission is registered in R2; do not open a
-        // tenant-wide public management read or assume the staff is OWNER.
-        require(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        read(actor, tenant);
         return fetch(tenant, storefront, false);
     }
 
     private Storefront transition(VerifiedActor actor, UUID tenant, UUID id,
-                                  StorefrontSettings.State expected,
-                                  StorefrontSettings.State target) {
-        UUID user = authorize(actor, tenant, DomainPermission.STOREFRONT_OFFER_PUBLISH);
-        if (expected == null || id == null)
-            throw new IllegalArgumentException("Storefront and expected state required");
-        Storefront existing = fetch(tenant, id, true);
-        if (existing.state() != expected)
-            throw new IllegalStateException("STALE_STOREFRONT_STATE");
-        if (existing.state() == target) return existing; // proven no-op
+                                  long expectedVersion, StorefrontSettings.State target) {
+        UUID user = admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        if (id == null || expectedVersion < 0)
+            throw new IllegalArgumentException("Storefront and expected version required");
+        Storefront current = fetch(tenant, id, true);
+        if (current.rowVersion() != expectedVersion)
+            throw new IllegalStateException("STALE_STOREFRONT_VERSION");
+        if (current.state() == target) return current; // fresh-version no-op, no audit
         boolean legal = (target == StorefrontSettings.State.PUBLISHED
-                && (expected == StorefrontSettings.State.DRAFT
-                    || expected == StorefrontSettings.State.PAUSED))
+                && (current.state() == StorefrontSettings.State.DRAFT
+                    || current.state() == StorefrontSettings.State.PAUSED))
                 || (target == StorefrontSettings.State.PAUSED
-                    && expected == StorefrontSettings.State.PUBLISHED);
+                    && current.state() == StorefrontSettings.State.PUBLISHED);
         if (!legal) throw new IllegalStateException("Invalid storefront transition");
-        int changed = jdbc.update("""
-                UPDATE crm.store_front SET state=?
-                WHERE tenant_id=? AND id=? AND state=?
-                """, target.name(), tenant, id, expected.name());
-        if (changed != 1) throw new IllegalStateException("Concurrent storefront transition");
+        int updated = jdbc.update("""
+                UPDATE crm.store_front SET state=?,row_version=row_version+1
+                WHERE tenant_id=? AND id=? AND row_version=? AND state=?
+                """, target.name(), tenant, id, expectedVersion, current.state().name());
+        if (updated != 1) throw new IllegalStateException("Concurrent storefront transition");
         audit(tenant, user, id, target == StorefrontSettings.State.PAUSED
                 ? "STOREFRONT_PAUSED" : "STOREFRONT_PUBLISHED");
-        return new Storefront(tenant, id, existing.slug(), target);
+        return new Storefront(tenant, id, current.slug(), target, expectedVersion + 1);
     }
 
     private Storefront fetch(UUID tenant, UUID id, boolean lock) {
         if (tenant == null || id == null)
             throw new IllegalArgumentException("Storefront identity required");
         String sql = """
-                SELECT tenant_id,id,slug,state FROM crm.store_front
+                SELECT tenant_id,id,slug,state,row_version FROM crm.store_front
                 WHERE tenant_id=? AND id=?
                 """ + (lock ? " FOR UPDATE" : "");
         List<Storefront> rows = jdbc.query(sql, (rs, n) -> new Storefront(
                 rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                rs.getString(3), StorefrontSettings.State.valueOf(rs.getString(4))),
-                tenant, id);
+                rs.getString(3), StorefrontSettings.State.valueOf(rs.getString(4)),
+                rs.getLong(5)), tenant, id);
         if (rows.isEmpty()) throw new IllegalArgumentException("Storefront not found in tenant");
         return rows.getFirst();
     }
 
-    private UUID authorize(VerifiedActor actor, UUID tenant, DomainPermission permission) {
+    private UUID admit(VerifiedActor actor, UUID tenant, DomainPermission permission) {
         if (actor == null || tenant == null)
             throw new SecurityException("Verified actor and selected tenant required");
         authorization.requireForCommand(actor.userId(), tenant, permission);
         return actor.userId();
     }
 
-    private void require(VerifiedActor actor, UUID tenant, DomainPermission permission) {
+    private void read(VerifiedActor actor, UUID tenant) {
         if (actor == null || tenant == null)
             throw new SecurityException("Verified actor and selected tenant required");
-        authorization.require(actor.userId(), tenant, permission);
+        authorization.require(actor.userId(), tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
     }
 
     private void audit(UUID tenant, UUID actor, UUID entity, String action) {
