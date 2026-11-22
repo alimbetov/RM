@@ -140,4 +140,5 @@ jobs:
             rm-r3-functional-coverage.json
             rm-r3-functional-coverage.md
             rm-user-role-crosswalk-validation.json
+            rm-user-role-scenario-results.json
           if-no-files-found: error
