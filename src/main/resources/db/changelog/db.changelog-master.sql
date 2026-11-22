@@ -2281,3 +2281,16 @@ CREATE TRIGGER trg_sales_line_immutable
  BEFORE UPDATE OR DELETE ON crm.sales_order_line
  FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_sales_line_immutable ON crm.sales_order_line;
+
+ 
+--changeset rm:0078-sales-offer-cas-lifecycle
+-- Backward compatible: existing PUBLISHED/HIDDEN offers retain their state.
+ALTER TABLE crm.store_offer ADD COLUMN row_version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE crm.store_offer DROP CONSTRAINT ck_store_offer_state;
+ALTER TABLE crm.store_offer ADD CONSTRAINT ck_store_offer_state
+ CHECK (state IN ('DRAFT','PUBLISHED','PAUSED','HIDDEN'));
+ALTER TABLE crm.store_offer ADD CONSTRAINT ck_store_offer_version
+ CHECK (row_version>=0);
+--rollback ALTER TABLE crm.store_offer DROP CONSTRAINT ck_store_offer_version;
+--rollback ALTER TABLE crm.store_offer DROP COLUMN row_version;
+-- Do not downgrade the state constraint while DRAFT/PAUSED rows exist.
