@@ -606,3 +606,29 @@ Public/exposed service functions and internal helpers require separate review of
 | `audit/AuditRetentionService.EXISTS` | 93 | trace delegate | SOURCE ONLY |
 
 Part D: 10 files, 260 extraction candidates; manually de-duplicate before final QUALIFIED matrix.
+
+
+## Part E — manually traced CRM application boundary (source-based)
+
+This table supersedes the `TRACE REQUIRED` placeholders for **CRM** facade commands/reads only. `PRESENT` is source evidence. References to test classes identify candidate evidence, not an assertion that each individual method has been independently QUALIFIED. All listed mutations are transactional within the service; the authenticated facade itself delegates to these transactions.
+
+| Operation / facade | Permission | Tenant enforcement / object predicate | Version / audit / encryption | Test evidence | State |
+|---|---|---|---|---|---|
+| `createPerson` | CRM_WRITE | explicit tenant; INSERT crm.customer + crm_pii.customer_secret tenant-scoped | encrypted PERSON name; facade redacts result | CrmR1aQualificationTest, tcrud02WriteOnlyRoleCanMutateButCannotReceiveOrReadPii | PRESENT |
+| `createCompany` | CRM_WRITE | explicit tenant; INSERT crm.customer | company label public; no PERSON encryption | CrmR1aQualificationTest | PRESENT |
+| `getCustomer` | CRM_READ, plus CRM_PII_READ for PERSON | tenant/id/status; customer_secret tenant join via matched IDs | decrypt PERSON only after PII permission | CrmR1aQualificationTest | PRESENT |
+| `updatePerson` | CRM_WRITE | tenant/id/type/ACTIVE/version CAS | tenant+record+field AAD re-encryption, customer_change_event; facade name redacted | CrmR1aQualificationTest, tcrud02WriteOnlyRoleCanMutateButCannotReceiveOrReadPii | PRESENT |
+| `updateCompany` | CRM_WRITE | tenant/id/type/ACTIVE/version CAS | customer_change_event, row_version+1 | CrmR1aQualificationTest | PRESENT |
+| `archiveCustomer` | CRM_WRITE | tenant/customer row lock; active contract check; status/version CAS | append customer change; preserve contacts/consent | CrmR1aQualificationTest | PRESENT |
+| `restoreCustomer` | CRM_WRITE | tenant/id/status/version CAS | append customer change; no resurrection of child statuses | CrmR1aQualificationTest | PRESENT |
+| `addContact` | CRM_WRITE | tenant/customer active row lock; composite FK; INSERT contact + secret | encrypted name/email/phone; CREATED event; facade redacts all contact PII | CrmR1aQualificationTest, tcrud02WriteOnlyRoleCanMutateButCannotReceiveOrReadPii | PRESENT |
+| `getContact` | CRM_PII_READ | tenant/contact and tenant-matched customer+secret JOIN; both ACTIVE | decrypt AAD-bound PII | CrmR1aQualificationTest | PRESENT |
+| `updateContact` | CRM_WRITE | tenant/parent-first locking, contact ACTIVE/version CAS | re-encrypt PII, UPDATED event, facade redacts PII | CrmR1aQualificationTest, tcrud02WriteOnlyRoleCanMutateButCannotReceiveOrReadPii | PRESENT |
+| `archiveContact`/`restoreContact` | CRM_WRITE | parent active, contact status/version CAS and locks | ARCHIVED/RESTORED append-only events | CrmR1aQualificationTest | PRESENT |
+| `customers` list | CRM_READ | root tenant, typed filters; deterministic pagination/count | PERSON name not in list | CrmR1aQualificationTest | PRESENT |
+| `contacts` list | CRM_PII_READ | tenant root, tenant-scoped PII join, count/page | PII decrypted under explicit read permission | CrmR1aQualificationTest | PRESENT |
+| `customerHistory/contactHistory/contractHistory` | CRM_READ | tenant and aggregate IDs, bounded limit, immutable DB histories | no PII in audit, PostgreSQL triggers | CrmR1aQualificationTest | PRESENT |
+| `CrmCategoryService` create/rename/archive/assignPrimary/get/list | CRM_WRITE for mutations, CRM_READ for reads | tenant category/customer association and optimistic versions | category/customer audit | CrmR1aQualificationTest | PRESENT |
+| `CrmContractService` create/changeDates/changeStatus/renew/get/list | CRM_WRITE for mutations, CRM_READ for reads | tenant contract/customer FK, state transition/version | immutable revisions, old-term baseline capture | CrmR1aQualificationTest | PRESENT |
+
+**Unresolved TCRUD-00 proof obligations**: per-method exact test case mapping, coverage of each foreign-ID/role combination, storage owner checks, all SQL SELECT/UPDATE/DELETE and pagination paths in non-CRM domains, and explicit mixed-membership/revocation tests. This is a baseline inventory, **not a finished cross-domain tenant-isolation certification**.
