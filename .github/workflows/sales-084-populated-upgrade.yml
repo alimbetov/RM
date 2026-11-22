@@ -75,7 +75,7 @@ jobs:
             echo "Existing offer identity, SKU, price, currency, state or CAS version changed"; exit 1
           fi
           docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
-            DO \\\$\\\$ DECLARE t uuid; offer_id uuid; initial_sku uuid;
+            DO \$\$ DECLARE t uuid; offer_id uuid; initial_sku uuid;
             BEGIN
               IF NOT EXISTS (
                 SELECT 1 FROM pg_trigger
@@ -89,11 +89,14 @@ jobs:
                 RAISE EXCEPTION 'Offer SKU change incorrectly accepted';
               EXCEPTION
                 WHEN raise_exception THEN
+                  IF SQLERRM <> 'Offer catalog mapping is immutable' THEN
+                    RAISE;
+                  END IF;
                   IF (SELECT catalog_item_id FROM crm.store_offer WHERE tenant_id=t AND id=offer_id)
                       IS DISTINCT FROM initial_sku
                   THEN RAISE EXCEPTION 'Offer SKU changed'; END IF;
               END;
-            END \\\$\\\$;"
+            END \$\$;"
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
