@@ -4,6 +4,7 @@ on:
     branches: [base_dev]
     paths:
       - '.github/workflows/crm-r21b-exact-sha.yml'
+      - 'src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java'
   workflow_dispatch:
     inputs:
       target_sha:
@@ -67,7 +68,7 @@ jobs:
           mvn -B -ntp -Dtest=CrmR1aQualificationTest,CrmInteractionQualificationTest test
           mkdir -p crm-r21b-evidence/full
           cp target/surefire-reports/TEST-*.xml crm-r21b-evidence/full/
-      - name: Re-run four PostgreSQL races three times
+      - name: Re-run six PostgreSQL race tests three times
         shell: bash
         run: |
           set -euo pipefail
@@ -85,7 +86,9 @@ jobs:
             'crmR21bPostgresConcurrentCompleteAndCancelAreSingleWinner',
             'crmR21bPostgresConcurrentArchiveAndRecordFenceNewActivity',
             'crmR21bPostgresAssignmentCommitsBeforeTrustedSuspension',
-            'crmR21bPostgresTrustedSuspensionCommitsBeforeAssignment'}
+            'crmR21bPostgresTrustedSuspensionCommitsBeforeAssignment',
+            'crmR21bPostgresBothTerminalCommitOrdersAreLinearizable',
+            'crmR21bPostgresBothArchiveRecordCommitOrdersPreserveHistory'}
           root=pathlib.Path('crm-r21b-evidence')
           result={'sha':os.environ['REQUESTED_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'suites':{},'status':'FAIL'}
           errors=[]
