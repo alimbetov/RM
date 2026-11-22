@@ -74,7 +74,9 @@
         "UR-R31-GRANT-REVOKE",
         "UR-R31-TENANT-AB",
         "UR-R31-DUAL-TENANT",
-        "UR-R31-UNASSIGNED"
+        "UR-R31-UNASSIGNED",
+        "UR-R33-REVOKE-COMMAND-FIRST",
+        "UR-R33-REVOKE-FIRST"
       ],
       "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
@@ -117,7 +119,11 @@
       "userRoleCaseIds": [
         "UR-R31-GRANT-REVOKE",
         "UR-R31-DUAL-TENANT",
-        "UR-R31-INACTIVE"
+        "UR-R31-INACTIVE",
+        "UR-R33-REVOKE-COMMAND-FIRST",
+        "UR-R33-REVOKE-FIRST",
+        "UR-R33-CHECKOUT-SUSPEND-FIRST",
+        "UR-R33-CHECKOUT-FIRST"
       ],
       "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
@@ -968,8 +974,11 @@
         "test": "retryIsIdempotentAndChangesAreRejected"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R33-CHECKOUT-SUSPEND-FIRST",
+        "UR-R33-CHECKOUT-FIRST"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1004,8 +1013,11 @@
         "test": "sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R33-CHECKOUT-SUSPEND-FIRST",
+        "UR-R33-CHECKOUT-FIRST"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1296,7 +1308,10 @@
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [
-        "UR-R32-INVENTORY-LEDGER"
+        "UR-R32-INVENTORY-LEDGER",
+        "UR-R33-TRANSFER-FIRST",
+        "UR-R33-RECONCILIATION-FIRST",
+        "UR-R33-RETRY"
       ],
       "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
@@ -1376,8 +1391,12 @@
         "test": "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R33-TRANSFER-FIRST",
+        "UR-R33-RECONCILIATION-FIRST",
+        "UR-R33-ROLLBACK"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1415,8 +1434,12 @@
         "test": "postgresConcurrentDifferentKeysHaveStrictlyIncreasingPostingVersions"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R33-TRANSFER-FIRST",
+        "UR-R33-RECONCILIATION-FIRST",
+        "UR-R33-RETRY"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
