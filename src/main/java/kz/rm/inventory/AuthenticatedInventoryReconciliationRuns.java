@@ -25,7 +25,7 @@ public class AuthenticatedInventoryReconciliationRuns {
     public enum Status { RUNNING, COMPLETED, FAILED }
     public enum Code {
         MISSING_BALANCE, RESERVED_MISMATCH, MOVEMENT_BALANCE_MISMATCH,
-        MOVEMENT_CHAIN_BREAK, NO_MOVEMENT_BASELINE
+        MOVEMENT_CHAIN_BREAK, NO_MOVEMENT_BASELINE, UNVERIFIED_MOVEMENT_ORDER
     }
     public record Run(UUID id, UUID tenantId, Status status, long inspectedPositions,
                       long findingCount, UUID cursorLocationId, UUID cursorItemId) {}
@@ -36,7 +36,7 @@ public class AuthenticatedInventoryReconciliationRuns {
     public record Step(Run run, List<Finding> newFindings) {}
     private record Key(UUID location, UUID item) {}
     private record Position(BigDecimal onHand, BigDecimal reserved) {}
-    private record Chain(long count, boolean broken, BigDecimal latest) {}
+    private record Chain(long count, boolean broken, boolean orderUnverified, BigDecimal latest) {}
 
     private static final int MAX_PAGE=20;
     private final JdbcTemplate jdbc;
@@ -208,8 +208,9 @@ public class AuthenticatedInventoryReconciliationRuns {
         Chain chain=chain(tenant,key);
         Code code;
         if(position==null) code=Code.MISSING_BALANCE;
-        else if(chain.broken()) code=Code.MOVEMENT_CHAIN_BREAK;
         else if(position.reserved().compareTo(active)!=0) code=Code.RESERVED_MISMATCH;
+        else if(chain.broken()) code=Code.MOVEMENT_CHAIN_BREAK;
+        else if(chain.orderUnverified()) code=Code.UNVERIFIED_MOVEMENT_ORDER;
         else if(chain.count()>0 && position.onHand().compareTo(chain.latest())!=0)
             code=Code.MOVEMENT_BALANCE_MISMATCH;
         else if(chain.count()==0) code=Code.NO_MOVEMENT_BASELINE;
@@ -227,10 +228,10 @@ public class AuthenticatedInventoryReconciliationRuns {
      */
     private Chain chain(UUID tenant,Key key) {
         return jdbc.query("""
-                SELECT balance_before,balance_after,delta_quantity
+                SELECT balance_before,balance_after,delta_quantity,posting_version
                 FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND location_id=? AND item_id=?
-                ORDER BY recorded_at ASC,id ASC
+                ORDER BY posting_version ASC NULLS FIRST,recorded_at ASC,id ASC
                 """,ps->{
                     ps.setObject(1,tenant);
                     ps.setObject(2,key.location());
@@ -239,19 +240,24 @@ public class AuthenticatedInventoryReconciliationRuns {
                 },rs->{
                     long count=0;
                     boolean broken=false;
+                    boolean unverified=false;
                     BigDecimal preceding=null,latest=null;
                     while(rs.next()) {
                         BigDecimal before=rs.getBigDecimal(1);
                         BigDecimal after=rs.getBigDecimal(2);
                         BigDecimal delta=rs.getBigDecimal(3);
-                        if(after.subtract(before).compareTo(delta)!=0 ||
-                                (preceding!=null && preceding.compareTo(before)!=0))
+                        Long version=rs.getObject(4,Long.class);
+                        if(version==null) unverified=true;
+                        if(after.subtract(before).compareTo(delta)!=0) broken=true;
+                        // Continuity across a legacy timestamp/UUID ordering is
+                        // not evidence of the original serial posting order.
+                        if(!unverified && preceding!=null && preceding.compareTo(before)!=0)
                             broken=true;
                         preceding=after;
                         latest=after;
                         count++;
                     }
-                    return new Chain(count,broken,latest);
+                    return new Chain(count,broken,unverified,latest);
                 });
     }
 }
