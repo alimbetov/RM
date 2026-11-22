@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -47,7 +47,7 @@
 | **02** | Каждый метод, DTO и пустые бизнес-ветви | [Подробный method trace pass 02](../reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md): method → SQL → actor → state → consumer → тест | **SOURCE TRACED / SPEC REFINED** |
 | **03** | Aggregate/schema/DDL | [Schema and populated-safe migration evidence](../reviews/RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03-2026-11-22.md): six actual tables, PK/FK/CHECK/index, legacy provenance | **DDL SOURCE VERIFIED / SPEC PROPOSED** |
 | **04** | Команды и state machine | [PASS 04 — точная state machine, permissions и запас](../reviews/RM-SALES-AUTOORDER-STATE-MACHINE-PASS-04-2026-11-22.md): actual code, proposed reject/cancel split, concurrency | **SOURCE VERIFIED / SPEC PROPOSED** |
-| 05 | Read model и история | seller detail/lines/events, buyer own detail, literal filters and stable paging | OPEN |
+| **05** | Read model и история | [PASS 05 — seller/buyer query, PII, order-linked reserves](../reviews/RM-SALES-AUTOORDER-READ-MODEL-PASS-05-2026-11-22.md); bounded get/history/mine/ownDetail contracts | **SOURCE REVIEWED / SPEC PROPOSED** |
 | 06 | Idempotency/конкурентность | checkout same-key, cross-seller keys, revoke vs confirm, cancel vs fulfill, no double stock | OPEN |
 | 07 | Реальность настроек | settings autoReserve/picking/publish state реально потребляются либо явно неактивны | OPEN |
 | 08 | CATALOG/STOREFRONT/INVENTORY/ORG | publish-to-offer, seller warehouse, immutable snapshot and stock eligibility | OPEN |
@@ -101,7 +101,7 @@ Existing `confirm`, `cancel`, `fulfill` сохраняют двоичный SALE
 
 `checkout(slug,email,idempotencyKey,lines)` retained; snapshot server-owned catalog SKU, title, effective price/currency at accepted order transaction; basket validation: 1..100 distinct offers, 1..1000 per line and bounded sum quantity; no client-controlled amount. `sales_checkout_receipt` remains transaction+idempotency authority. **Decision needed**: replay returns current status as today or original checkout receipt PLACED; do not silently switch both semantics.
 
-`verifyEmail(challengeId,token)` remains IAM-proof flow, no implicit CRM customer, no OIDC session. `AuthenticatedBuyerOrders.mine(actor,page,size)` and `ownDetail(actor,orderId)` return only buyer_user_id=actor.userId() orders after current verified email; no tenant-wide listings.
+`verifyEmail(challengeId,token)` remains IAM-proof flow, no implicit CRM customer, no OIDC session. `AuthenticatedBuyerOrders.mine(actor,page,size)` and `ownDetail(actor,sellerTenantId,orderId)` return only buyer_user_id=actor.userId() orders after current verified email; no tenant-wide listings.
 
 ### CATALOG→STOREFRONT
 
@@ -216,3 +216,22 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 **DB/stock invariant:** CONFIRMED требует ровно одну ACTIVE reservation на каждую line, совпадающие tenant/order/item snapshot/warehouse/qty; COMPLETED — FULFILLED per line + уникальную fulfillment movement; CANCELLED — нет ACTIVE. Текущий код проверяет count, а не все эти равенства. Миграция immutable SKU snapshot по PASS 03 остаётся блокирующей для полного доказательства. Existing IAM transaction-scoped paired decisions нельзя ослаблять.
 
 **Новые acceptance IDs:** `SALE-SM04-01..16`, описанные в отдельном PASS 04 аудите; это **план тестирования, не выполненные тесты**. Приоритет исполнения SALE-R1.4A–D после предметного утверждения. **В рамках pass 04 Java/DDL не менялись**, maturity 2/5, production HOLD. Далее **05/12:** seller order detail/lines/history, buyer own detail, pagination, PII.
+
+
+## 16. PASS 05 — Read Model, карточка заказа, история и границы PII (2026-11-22)
+
+**Reviewed source SHA:** `23f3d2048ea5335a2b463ed86b53b68eff229fab`. Подробный [PASS 05 read model evidence](../reviews/RM-SALES-AUTOORDER-READ-MODEL-PASS-05-2026-11-22.md) включает точные методы, DTO, SQL-фильтры, ключи, права, индексы и тесты.
+
+**Существующее:** `AuthenticatedSalesQueries.search` — VerifiedActor + SALES_ORDER_READ, tenant-scoped SQL `COUNT/SELECT`, status/from/to, page size 1..100, `created_at DESC,id DESC`, summary без buyer PII. `AuthenticatedBuyerOrders.mine` — VerifiedActor, ACTIVE+verified email, owner-bound SQL по `buyer_user_id`, но без LIMIT и только `id/status`. INVENTORY уже имеет собственные `getPosition/searchMovements/reservationHistory` с `INVENTORY_STOCK_READ` — не копировать эти read models в SALES.
+
+**Новые минимальные контракты:**
+- `AuthenticatedSalesQueries.get(actor,tenant,orderId)`: header, frozen order lines, optional order-linked reservation state; ни buyer email/phone/identity, ни общее состояние чужих складов.
+- `AuthenticatedSalesQueries.history(actor,tenant,orderId,page,size)`: только committed status events, сортировка `occurred_at DESC,id DESC`, tenant+order guard; legacy NULL actor/reason показывать как неизвестный.
+- `AuthenticatedBuyerOrders.mine(actor,page,size)`: ограниченная пагинация собственных заказов **всех** продавцов, `ORDER BY created_at DESC,tenant_id ASC,id DESC`, sellerTenantId включён в summary.
+- `AuthenticatedBuyerOrders.ownDetail(actor,sellerTenantId,orderId)`: **важная поправка** к предыдущему плану: PK `sales_order` составной `(tenant_id,id)`, глобальный UUID-orderId UNIQUE не зафиксирован, поэтому точный SQL должен включать `buyer_user_id=actor.userId()`, tenantId и orderId. Tenant — идентификатор записи, но не authorization source.
+
+**Инварианты отображения:** цена/название берутся из `sales_order_line.*snapshot`, не live `store_offer`; незаполненный legacy SKU маркируется как неизвестный; сумма из header проверяется против строки без silent correction; list/detail/history не раскрывают IAM, email proof, CRM Customer и stock balance. Order-reservation DTO допустим в пределах SALES_ORDER_READ только как сведения о **позиции этого заказа**, не как общий INVENTORY read. Transactionally consistent header/lines/reservations нужно доказать на PostgreSQL; `READ COMMITTED` нескольких SELECT не гарантирует единый момент.
+
+**Тесты:** `SALE-RD05-01..14` — future PostgreSQL qualification criteria, не существующие тесты. Порядок исполнения `SALE-R1.5A` seller detail, `R1.5B` bounded history, `R1.5C` buyer paging/own detail, `R1.5D` search improvements по запросам. Никаких новых REST, CQRS, JPA aggregate copies или финансовых сущностей.
+
+**Вердикт:** PASS 05/12 **SOURCE REVIEWED / SPEC PROPOSED**, зрелость 2/5, код и Liquibase не менялись. Следующий **06/12** — транзакции, idempotency, concurrency и rollback read/write.
