@@ -34,6 +34,7 @@ class InventoryStocktakeService {
     }
     private record Header(UUID id,UUID tenant,UUID location,String status,
                           UUID startedBy,Instant startedAt,UUID postedBy,Instant postedAt,
+                          UUID cancelledBy,Instant cancelledAt,
                           String startKey,String itemsSha,String postKey,long version) {}
     private record Snapshot(UUID item,BigDecimal onHand,BigDecimal reserved,long version) {}
 
@@ -181,9 +182,10 @@ class InventoryStocktakeService {
         if(!"OPEN".equals(current.status()))
             throw new IllegalStateException("Posted stocktake cannot be cancelled");
         jdbc.update("""
-                UPDATE crm.inv_stocktake SET status='CANCELLED',row_version=row_version+1
+                UPDATE crm.inv_stocktake
+                SET status='CANCELLED',cancelled_by=?,cancelled_at=?,row_version=row_version+1
                 WHERE tenant_id=? AND id=? AND status='OPEN'
-                """,tenant,id);
+                """,actor,Timestamp.from(Instant.now()),tenant,id);
         return details(tenant,id);
     }
 
@@ -191,7 +193,7 @@ class InventoryStocktakeService {
         if(tenant==null||id==null)throw new IllegalArgumentException("Stocktake identity required");
         Header h=jdbc.query("""
                 SELECT id,tenant_id,location_id,status,started_by,started_at,
-                       posted_by,posted_at,start_request_key,item_set_sha256,
+                       posted_by,posted_at,cancelled_by,cancelled_at,start_request_key,item_set_sha256,
                        post_request_key,row_version
                 FROM crm.inv_stocktake WHERE tenant_id=? AND id=?
                 """,rs->rs.next()?map(rs):null,tenant,id);
@@ -207,13 +209,13 @@ class InventoryStocktakeService {
                     rs.getObject(7,UUID.class)),tenant,id);
         return new InventoryStocktakeDto(h.id(),tenant,h.location(),h.status(),
                 h.startedBy(),h.startedAt(),h.postedBy(),h.postedAt(),
-                h.version(),List.copyOf(lines));
+                h.cancelledBy(),h.cancelledAt(),h.version(),List.copyOf(lines));
     }
 
     private Header lockHeader(UUID tenant,UUID id) {
         return jdbc.query("""
                 SELECT id,tenant_id,location_id,status,started_by,started_at,
-                       posted_by,posted_at,start_request_key,item_set_sha256,
+                       posted_by,posted_at,cancelled_by,cancelled_at,start_request_key,item_set_sha256,
                        post_request_key,row_version
                 FROM crm.inv_stocktake WHERE tenant_id=? AND id=? FOR UPDATE
                 """,rs->{
@@ -222,12 +224,13 @@ class InventoryStocktakeService {
                 },tenant,id);
     }
     private static Header map(java.sql.ResultSet rs) throws java.sql.SQLException {
-        Timestamp posted=rs.getTimestamp(8);
+        Timestamp posted=rs.getTimestamp(8),cancelled=rs.getTimestamp(10);
         return new Header(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                 rs.getObject(3,UUID.class),rs.getString(4),rs.getObject(5,UUID.class),
                 rs.getTimestamp(6).toInstant(),rs.getObject(7,UUID.class),
-                posted==null?null:posted.toInstant(),rs.getString(9),
-                rs.getString(10),rs.getString(11),rs.getLong(12));
+                posted==null?null:posted.toInstant(),rs.getObject(9,UUID.class),
+                cancelled==null?null:cancelled.toInstant(),rs.getString(11),
+                rs.getString(12),rs.getString(13),rs.getLong(14));
     }
     private Snapshot stock(UUID tenant,UUID location,UUID item) {
         return jdbc.query("""
@@ -242,7 +245,7 @@ class InventoryStocktakeService {
     private Header byStartKey(UUID tenant,String key){
         return jdbc.query("""
                 SELECT id,tenant_id,location_id,status,started_by,started_at,
-                       posted_by,posted_at,start_request_key,item_set_sha256,
+                       posted_by,posted_at,cancelled_by,cancelled_at,start_request_key,item_set_sha256,
                        post_request_key,row_version
                 FROM crm.inv_stocktake WHERE tenant_id=? AND start_request_key=?
                 """,rs->rs.next()?map(rs):null,tenant,key);
