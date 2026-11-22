@@ -14,11 +14,13 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path("rm-exact-sha-manifest.json")
 REQUIRED = {
-    "RM Domain Security and PostgreSQL Qualification": "kms-postgres-surefire",
-    "CRM R1.2 Populated PostgreSQL Upgrade Qualification": "crm-r12-populated-upgrade-surefire",
-    "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification": "inventory-0081-populated-postgresql",
-    "SALES 08.4 Populated PostgreSQL Upgrade Qualification": "sales-084-populated-postgresql",
-    "RustFS Real Infrastructure E2E": "rustfs-real-infra-e2e-surefire",
+    "RM Domain Security and PostgreSQL Qualification": ("kms-h2-surefire", "kms-postgres-surefire", "iam-pii-populated-pg-surefire"),
+    "CRM R1.2 Populated PostgreSQL Upgrade Qualification": ("crm-r12-populated-upgrade-surefire",),
+    "RM Domain Security and PostgreSQL Qualification":
+        ("CommercialCoreE2EQualificationTest", "AutoOrderR1QualificationTest"),
+    "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification": ("inventory-0081-populated-postgresql",),
+    "SALES 08.4 Populated PostgreSQL Upgrade Qualification": ("sales-084-populated-postgresql",),
+    "RustFS Real Infrastructure E2E": ("rustfs-real-infra-e2e-surefire",),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
@@ -70,60 +72,72 @@ def verify():
         jobs = gate.get("jobs", [])
         if not jobs or any(j.get("conclusion") != "success" for j in jobs):
             problems.append(f"{name}: missing/failed jobs")
-        artifact_name = REQUIRED.get(name)
-        if not artifact_name:
-            # Never admit missing required XML artifacts.
-            problems.append(f"{name}: Surefire evidence artifact not configured")
+        expected_artifacts = REQUIRED.get(name)
+        if not expected_artifacts:
+            problems.append(f"{name}: missing expected artifact configuration")
             continue
-        artifact = gate.get("artifact")
-        if not artifact or artifact.get("name") != artifact_name:
-            problems.append(f"{name}: required artifact unavailable")
-            continue
-        try:
-            data = api(f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact['id']}/zip", token)
-            archive = zipfile.ZipFile(BytesIO(data))
-            xmls = [n for n in archive.namelist() if n.endswith(".xml") and
-                    Path(n).name.startswith("TEST-")]
-            if not xmls:
-                raise ValueError("No Surefire TEST-*.xml files")
-            reported = set()
-            suite_counts = {}
-            skipped_cases = []
-            counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
-            for member in xmls:
-                root = ET.fromstring(archive.read(member))
-                if root.tag != "testsuite":
-                    continue
-                suite = root.get("name", "").split(".")[-1]
-                reported.add(suite)
-                suite_counts.setdefault(suite, {"tests": 0, "skipped": 0})
-                suite_counts[suite]["tests"] += int(root.get("tests", "0"))
-                suite_counts[suite]["skipped"] += int(root.get("skipped", "0"))
-                for case in root.findall("testcase"):
-                    skipped = case.find("skipped")
-                    if skipped is not None:
-                        skipped_cases.append({
-                            "suite": suite, "test": case.get("name"),
-                            "reason": skipped.get("message") or skipped.text or "UNSPECIFIED"
-                        })
-                for key in counts:
-                    counts[key] += int(root.attrib.get(key, "0"))
-            if counts["tests"] == 0 or counts["failures"] or counts["errors"]:
-                problems.append(f"{name}: empty or failing Surefire report")
-            # No required suite may be missing or fully skipped.
-            for suite in SUITES.get(name, ()):
-                if suite not in reported:
-                    problems.append(f"{name}: required suite {suite} missing")
-                elif suite_counts[suite]["tests"] <= suite_counts[suite]["skipped"]:
-                    problems.append(f"{name}: required suite {suite} entirely skipped")
-            gate["surefire"] = counts
-            gate["suites"] = sorted(reported)
-            gate["skippedTests"] = skipped_cases
-            gate["artifactSha256"] = hashlib.sha256(data).hexdigest()
-            for key in total:
-                total[key] += counts[key]
-        except (OSError, ValueError, KeyError, ET.ParseError, urllib.error.URLError, zipfile.BadZipFile) as exc:
-            problems.append(f"{name}: cannot verify evidence: {exc}")
+        artifacts = gate.get("artifacts", [])
+        if len(artifacts) != len(expected_artifacts) or {
+                item.get("name") for item in artifacts} != set(expected_artifacts):
+            problems.append(f"{name}: missing/duplicate artifact declarations")
+        gate["verifiedArtifacts"] = []
+        discovered_suites = {}
+        for artifact_name in expected_artifacts:
+            artifact = next((item for item in artifacts
+                             if item.get("name") == artifact_name), None)
+            if not artifact or not isinstance(artifact.get("id"), int):
+                problems.append(f"{name}: {artifact_name} unavailable")
+                continue
+            try:
+                data = api(f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact['id']}/zip", token)
+                archive = zipfile.ZipFile(BytesIO(data))
+                xmls = [n for n in archive.namelist() if n.endswith(".xml") and
+                        Path(n).name.startswith("TEST-")]
+                if not xmls:
+                    raise ValueError("No Surefire TEST-*.xml files")
+                counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+                skipped_cases = []
+                for member in xmls:
+                    suite_root = ET.fromstring(archive.read(member))
+                    if suite_root.tag != "testsuite":
+                        raise ValueError(f"Unexpected XML root in {member}")
+                    suite = suite_root.get("name", "").split(".")[-1]
+                    if not suite:
+                        raise ValueError(f"Unnamed test suite in {member}")
+                    values = {}
+                    for key in counts:
+                        value = int(suite_root.attrib.get(key, "-1"))
+                        if value < 0:
+                            raise ValueError(f"Missing or invalid {key} in {member}")
+                        values[key] = value
+                        counts[key] += value
+                    for case in suite_root.findall("testcase"):
+                        skip = case.find("skipped")
+                        if skip is not None:
+                            skipped_cases.append({
+                                "suite": suite, "test": case.get("name"),
+                                "reason": skip.get("message") or skip.text or "UNSPECIFIED"
+                            })
+                    group = discovered_suites.setdefault(suite, {"tests": 0, "skipped": 0})
+                    group["tests"] += values["tests"]
+                    group["skipped"] += values["skipped"]
+                if counts["tests"] <= 0 or counts["failures"] or counts["errors"]:
+                    problems.append(f"{name}: {artifact_name} empty/failing tests")
+                if counts["skipped"] > counts["tests"]:
+                    problems.append(f"{name}: {artifact_name} invalid skip count")
+                gate["verifiedArtifacts"].append({
+                    "name": artifact_name, "id": artifact["id"], "sha256": hashlib.sha256(data).hexdigest(),
+                    "surefire": counts, "skippedTests": skipped_cases,
+                })
+                for key in total:
+                    total[key] += counts[key]
+            except (OSError, ValueError, KeyError, ET.ParseError, urllib.error.URLError, zipfile.BadZipFile) as exc:
+                problems.append(f"{name}: {artifact_name} cannot verify evidence: {exc}")
+        for suite in SUITES.get(name, ()):
+            group = discovered_suites.get(suite)
+            if group is None or group["tests"] <= group["skipped"]:
+                problems.append(f"{name}: mandatory suite {suite} missing or entirely skipped")
+        gate["suites"] = sorted(discovered_suites)
     manifest["testCounts"] = total
     manifest["evidenceErrors"] = problems
     manifest["qa01bGate"] = "PASS" if not problems else "FAIL"
