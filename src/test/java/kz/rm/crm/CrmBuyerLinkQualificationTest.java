@@ -159,4 +159,110 @@ class CrmBuyerLinkQualificationTest {
         assertThat(links.orderHistory(owner,s.tenant(),c.id(),10)).isEmpty();
         assertThat(links.linkForCustomer(owner,s.tenant(),c.id()).rowVersion()).isZero();
     }
+    @Test void postgresBuyerLinkEventsCannotBeUpdatedOrDeleted() throws Exception {
+        requirePostgres();
+        var s=seller();var owner=verified(s.owner());var b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Immutable buyer evidence",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "immutable-"+UUID.randomUUID());
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.customer_buyer_link_event SET action_code='CONFIRMED'
+                WHERE tenant_id=? AND link_id=?
+                """,s.tenant(),link.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.customer_buyer_link_event
+                WHERE tenant_id=? AND link_id=?
+                """,s.tenant(),link.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_buyer_link_event
+                WHERE tenant_id=? AND link_id=? AND action_code='PROPOSED'
+                """,Integer.class,s.tenant(),link.id())).isEqualTo(1);
+    }
+
+    @Test void postgresConcurrentProposalsPreserveOneCustomerOneBuyer() throws Exception {
+        requirePostgres();
+        var s=seller();var owner=verified(s.owner());
+        var customer=customers.createCompany(owner,s.tenant(),"Parallel buyer linking",null);
+        UUID firstBuyer=buyer(),secondBuyer=buyer();
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<Boolean> first=()->{
+                if(!start.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Race barrier timeout");
+                try {
+                    links.propose(owner,s.tenant(),customer.id(),firstBuyer,
+                            "parallel-one-"+UUID.randomUUID());
+                    return true;
+                } catch(IllegalStateException expected) { return false; }
+            };
+            java.util.concurrent.Callable<Boolean> second=()->{
+                if(!start.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Race barrier timeout");
+                try {
+                    links.propose(owner,s.tenant(),customer.id(),secondBuyer,
+                            "parallel-two-"+UUID.randomUUID());
+                    return true;
+                } catch(IllegalStateException expected) { return false; }
+            };
+            var a=pool.submit(first);var b=pool.submit(second);
+            start.countDown();
+            assertThat(a.get(20,java.util.concurrent.TimeUnit.SECONDS)
+                    ^ b.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_buyer_link
+                WHERE tenant_id=? AND customer_id=?
+                """,Integer.class,s.tenant(),customer.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_buyer_link_event e
+                JOIN crm.customer_buyer_link l
+                  ON l.tenant_id=e.tenant_id AND l.id=e.link_id
+                WHERE l.tenant_id=? AND l.customer_id=?
+                """,Integer.class,s.tenant(),customer.id())).isEqualTo(1);
+    }
+
+    @Test void postgresConcurrentBuyerConfirmHasOneCommittedEvent() throws Exception {
+        requirePostgres();
+        var s=seller();var owner=verified(s.owner());
+        UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Confirm race",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "confirm-race-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        var verifiedBuyer=verified(b);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<Boolean> attempt=()->{
+                if(!start.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Race barrier timeout");
+                try {
+                    links.confirm(verifiedBuyer,s.tenant(),link.id(),0);
+                    return true;
+                } catch(IllegalStateException expected) { return false; }
+            };
+            var first=pool.submit(attempt);
+            var second=pool.submit(attempt);
+            start.countDown();
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)
+                    ^ second.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).state())
+                .isEqualTo(CrmBuyerLinkService.State.CONFIRMED);
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id()).rowVersion())
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_buyer_link_event
+                WHERE tenant_id=? AND link_id=? AND action_code='CONFIRMED'
+                """,Integer.class,s.tenant(),link.id())).isEqualTo(1);
+    }
+
+    private void requirePostgres() throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+    }
+
 }
