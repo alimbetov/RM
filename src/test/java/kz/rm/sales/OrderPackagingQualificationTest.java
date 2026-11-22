@@ -385,4 +385,36 @@ class OrderPackagingQualificationTest {
   assertThat(lineCount(f)).isEqualTo(1);
  }
 
+ @Test void r0PackagingAcceptRejectCancelCannotCreateInventoryOrFinancialPosting(){
+  for(OrderPackagingService.Choice choice:OrderPackagingService.Choice.values()){
+   var f=setup();
+   long movementBefore=jdbc.queryForObject("""
+    SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+    """,Long.class,f.tenant());
+   long reservationBefore=jdbc.queryForObject("""
+    SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=?
+    """,Long.class,f.tenant());
+   long invoiceBefore=jdbc.queryForObject("""
+    SELECT count(*) FROM crm.fin_invoice WHERE tenant_id=?
+    """,Long.class,f.tenant());
+   BigDecimal totalBefore=jdbc.queryForObject("""
+    SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+    """,BigDecimal.class,f.tenant(),f.order());
+   var offered=offer(f,key());
+   decide(f,offered.serviceLineId(),0,choice,key());
+   assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+    """,Long.class,f.tenant())).isEqualTo(movementBefore);
+   assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=?
+    """,Long.class,f.tenant())).isEqualTo(reservationBefore);
+   assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.fin_invoice WHERE tenant_id=?
+    """,Long.class,f.tenant())).isEqualTo(invoiceBefore);
+   assertThat(jdbc.queryForObject("""
+    SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+    """,BigDecimal.class,f.tenant(),f.order())).isEqualByComparingTo(totalBefore);
+  }
+ }
+
 }
