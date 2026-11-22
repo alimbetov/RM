@@ -131,7 +131,7 @@ public class AutoOrderService {
      * This method is not exposed through public API.
      */
     @Transactional(readOnly=true)
-    public List<OrderReceipt> buyerOrders(UUID authenticatedUserId) {
+    List<OrderReceipt> buyerOrders(UUID authenticatedUserId) {
         if(authenticatedUserId==null)throw new SecurityException("Authentication required");
         Integer verified=jdbc.queryForObject("""
             SELECT count(*) FROM iam_email_identity e JOIN iam_user_account u ON u.id=e.user_id
