@@ -226,7 +226,12 @@ public class AuthenticatedInventoryReconciliationRuns {
                 FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND location_id=? AND item_id=?
                 ORDER BY recorded_at ASC,id ASC
-                """,rs->{
+                """,ps->{
+                    ps.setObject(1,tenant);
+                    ps.setObject(2,key.location());
+                    ps.setObject(3,key.item());
+                    ps.setFetchSize(256);
+                },rs->{
                     long count=0;
                     boolean broken=false;
                     BigDecimal preceding=null,latest=null;
@@ -242,6 +247,6 @@ public class AuthenticatedInventoryReconciliationRuns {
                         count++;
                     }
                     return new Chain(count,broken,latest);
-                },tenant,key.location(),key.item());
+                });
     }
 }
