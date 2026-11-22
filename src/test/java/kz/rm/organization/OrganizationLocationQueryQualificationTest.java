@@ -237,4 +237,53 @@ class OrganizationLocationQueryQualificationTest {
         assertThatThrownBy(()->stock.search(verified(a.actor()),a.tenant(),null,0,101))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void tcrud03SameGlobalMemberDifferentLocationGrantsAndForeignIdDenied() {
+        var a=setup(); var b=setup(); String region=kato();
+        var aOne=secured.create(verified(a.actor()),a.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"Repeated Warehouse",region,null);
+        var aTwo=secured.create(verified(a.actor()),a.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"Repeated Warehouse",region,null);
+        var bOne=secured.create(verified(b.actor()),b.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"Repeated Warehouse",region,null);
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud03-org-"+UUID.randomUUID(),"Shared member")).getId();
+        UUID orgA=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,a.tenant());
+        UUID orgB=jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,b.tenant());
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgA,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
+                staff,OrganizationMembershipEntity.Role.MEMBER));
+        var ar=roles.createRole(a.actor(),a.tenant(),
+                "ORG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A reader writer");
+        roles.grant(a.actor(),a.tenant(),ar.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
+        roles.grant(a.actor(),a.tenant(),ar.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
+        roles.assign(a.actor(),a.tenant(),staff,ar.id());
+        roles.enable(a.actor(),a.tenant());
+        var br=roles.createRole(b.actor(),b.tenant(),
+                "ORG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B reader");
+        roles.grant(b.actor(),b.tenant(),br.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
+        roles.assign(b.actor(),b.tenant(),staff,br.id());
+        roles.enable(b.actor(),b.tenant());
+        var actor=verified(staff);
+        var filter=new LocationSearch(OrganizationLocationEntity.Type.WAREHOUSE,null,"Repeated");
+        assertThat(secured.search(actor,a.tenant(),filter,0,1).getTotalElements()).isEqualTo(2);
+        assertThat(secured.search(actor,a.tenant(),filter,1,1).getContent())
+                .extracting(x->x.id()).containsAnyOf(aOne.id(),aTwo.id())
+                .doesNotContain(bOne.id());
+        assertThat(secured.search(actor,b.tenant(),filter,0,1).getTotalElements()).isEqualTo(1);
+        assertThat(secured.search(actor,b.tenant(),filter,0,1).getContent())
+                .extracting(x->x.id()).containsExactly(bOne.id());
+        assertThatThrownBy(()->secured.get(actor,a.tenant(),bOne.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->secured.create(actor,b.tenant(),
+                OrganizationLocationEntity.Type.WAREHOUSE,"Unauthorized",region,null))
+                .isInstanceOf(SecurityException.class);
+        assertThat(secured.create(actor,a.tenant(),
+                OrganizationLocationEntity.Type.BRANCH,"Authorized",region,null).id()).isNotNull();
+        assertThat(secured.search(actor,b.tenant(),null,0,10).getTotalElements()).isEqualTo(1);
+    }
+
 }
