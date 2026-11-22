@@ -123,16 +123,24 @@ class StockBalanceQueryQualificationTest {
                 staff,OrganizationMembershipEntity.Role.MEMBER));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
                 staff,OrganizationMembershipEntity.Role.MEMBER));
-        var ar=roles.createRole(a.actor(),a.tenant(),
+        UUID ownerA=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud03-ownerA-"+UUID.randomUUID(),"Inventory owner A")).getId();
+        UUID ownerB=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "tcrud03-ownerB-"+UUID.randomUUID(),"Inventory owner B")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgA,
+                ownerA,OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
+                ownerB,OrganizationMembershipEntity.Role.OWNER));
+        var ar=roles.createRole(ownerA,a.tenant(),
                 "INV_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A stock");
-        roles.grant(a.actor(),a.tenant(),ar.id(),DomainPermission.INVENTORY_STOCK_READ);
-        roles.assign(a.actor(),a.tenant(),staff,ar.id());
-        roles.enable(a.actor(),a.tenant());
-        var br=roles.createRole(b.actor(),b.tenant(),
+        roles.grant(ownerA,a.tenant(),ar.id(),DomainPermission.INVENTORY_STOCK_READ);
+        roles.assign(ownerA,a.tenant(),staff,ar.id());
+        roles.enable(ownerA,a.tenant());
+        var br=roles.createRole(ownerB,b.tenant(),
                 "INV_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B nonstock");
-        roles.grant(b.actor(),b.tenant(),br.id(),DomainPermission.CRM_READ);
-        roles.assign(b.actor(),b.tenant(),staff,br.id());
-        roles.enable(b.actor(),b.tenant());
+        roles.grant(ownerB,b.tenant(),br.id(),DomainPermission.CRM_READ);
+        roles.assign(ownerB,b.tenant(),staff,br.id());
+        roles.enable(ownerB,b.tenant());
         var shared=actor(staff);
         var first=queries.search(shared,a.tenant(),null,0,1);
         var second=queries.search(shared,a.tenant(),null,1,1);
