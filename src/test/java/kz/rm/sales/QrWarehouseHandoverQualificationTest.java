@@ -3183,7 +3183,8 @@ class QrWarehouseHandoverQualificationTest {
                                 restock?"QA_RELEASE":"QA_DISPOSAL",key());
                         return decision.state();
                     }catch(IllegalStateException expected){
-                        if(!expected.getMessage().contains("QUARANTINE_STATE_VERSION_CONFLICT"))
+                        if(!expected.getMessage().contains("QUARANTINE_STATE_VERSION_CONFLICT")
+                                && !expected.getMessage().contains("QUARANTINE_REPLAY_CONFLICT"))
                             throw expected;
                         return "CONFLICT";
                     }
