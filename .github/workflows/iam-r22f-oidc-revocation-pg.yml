@@ -7,6 +7,8 @@ on:
       - 'src/main/java/kz/rm/iam/KeycloakOidcSessionRevocationGateway.java'
       - 'src/main/java/kz/rm/iam/OidcRevocationOutboxWorker.java'
       - 'src/main/java/kz/rm/iam/GlobalAccountDeletionService.java'
+      - 'src/main/java/kz/rm/iam/EmailIdentityCrypto.java'
+      - 'src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java'
       - 'src/test/java/kz/rm/iam/IamOidcRevocationOutboxQualificationTest.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - '.github/workflows/iam-r22f-oidc-revocation-pg.yml'
