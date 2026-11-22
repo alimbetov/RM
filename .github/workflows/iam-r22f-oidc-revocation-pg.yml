@@ -1,0 +1,86 @@
+name: IAM-R2.2F OIDC Revocation PostgreSQL Qualification
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/kz/rm/iam/OidcSessionRevocationGateway.java'
+      - 'src/main/java/kz/rm/iam/KeycloakOidcSessionRevocationGateway.java'
+      - 'src/main/java/kz/rm/iam/OidcRevocationOutboxWorker.java'
+      - 'src/main/java/kz/rm/iam/GlobalAccountDeletionService.java'
+      - 'src/test/java/kz/rm/iam/IamOidcRevocationOutboxQualificationTest.java'
+      - 'src/main/resources/db/changelog/db.changelog-master.sql'
+      - '.github/workflows/iam-r22f-oidc-revocation-pg.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  oidc-revocation-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '${{ github.sha }}'
+      - name: Verify exact checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "sha=$GITHUB_SHA" > iam-r22f-sha.txt
+          echo "run=$GITHUB_RUN_ID" >> iam-r22f-sha.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run real PostgreSQL worker and IAM CRM regressions
+        run: mvn -B -ntp -Dtest=IamOidcRevocationOutboxQualificationTest,CrmBuyerLinkQualificationTest,IamInitialEmailRegistrationQualificationTest,IamEmailChangeQualificationTest,IamEmailChangeOrderHistoryQualificationTest test
+      - name: Strict Surefire qualification
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,xml.etree.ElementTree as ET
+          files=list(pathlib.Path('target/surefire-reports').glob('TEST-*.xml'))
+          expected={'realProviderIsDisabledByDefaultAndDoesNotFabricateAck',
+                    'explicitProviderAcknowledgementCommitsOnceWithoutDuplicatingLogout',
+                    'providerFailureBacksOffThenRetryCommitsAfterRecovery',
+                    'staleWorkerCannotAckAfterLeaseTakeover',
+                    'multipleWorkersCannotClaimSamePendingOutboxRow'}
+          cases=[n for p in files for n in ET.parse(p).getroot().iter('testcase')]
+          names={c.attrib.get('name') for c in cases}
+          bad=[c.attrib.get('name') for c in cases
+               if c.find('failure') is not None or c.find('error') is not None]
+          skipped=[c.attrib.get('name') for c in cases if c.find('skipped') is not None]
+          result={'tests':len(cases),'failures':bad,'skipped':skipped,'missing':sorted(expected-names)}
+          pathlib.Path('iam-r22f-summary.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          assert files and len(cases)>=30 and not bad and not skipped and not result['missing']
+          PY
+      - name: Publish exact-SHA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam-r22f-oidc-revocation-${{ github.run_id }}
+          path: |
+            iam-r22f-sha.txt
+            iam-r22f-summary.json
+            target/surefire-reports/
+          if-no-files-found: warn
