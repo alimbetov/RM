@@ -23,7 +23,7 @@ class CrmInteractionQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired TenantKeyService keys;
     @Autowired JdbcTemplate jdbc;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
 
     private record Tenant(UUID tenantId,UUID actorId,UUID orgId) {}
     private Tenant tenant() {
@@ -131,11 +131,11 @@ class CrmInteractionQualificationTest {
                 "interaction-read-"+UUID.randomUUID(),"Viewer")).getId();
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),t.orgId(),
                 viewer,OrganizationMembershipEntity.Role.MEMBER));
-        var role=roles.createRole(t.actorId(),t.tenantId(),
+        var role=roles.createRole(owner,t.tenantId(),
                 "INTERACTION_READER","Reader");
-        roles.grant(t.actorId(),t.tenantId(),role.id(),DomainPermission.CRM_READ);
-        roles.assign(t.actorId(),t.tenantId(),viewer,role.id());
-        roles.enable(t.actorId(),t.tenantId());
+        roles.grant(owner,t.tenantId(),role.id(),DomainPermission.CRM_READ);
+        roles.assign(owner,t.tenantId(),viewer,role.id());
+        roles.enable(owner,t.tenantId());
         assertThat(interactions.get(verified(viewer),t.tenantId(),interaction.id()).id())
                 .isEqualTo(interaction.id());
         assertThatThrownBy(()->interactions.complete(verified(viewer),t.tenantId(),
