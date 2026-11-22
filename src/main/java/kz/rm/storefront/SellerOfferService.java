@@ -123,8 +123,6 @@ public class SellerOfferService {
         if(before.rowVersion()!=expectedVersion)
             throw new IllegalStateException("OFFER_VERSION_CONFLICT");
         if(amount==null)throw new IllegalArgumentException("OFFER_INVALID_PRICE");
-        if(before.unitPrice().compareTo(amount)==0 && before.currency().equals(isoCurrency))
-            throw new IllegalArgumentException("Offer price unchanged");
         try {
             return asOffer(offers.updatePrice(actor,tenant,offerId,before.title(),amount,
                     isoCurrency,expectedVersion));
@@ -137,9 +135,12 @@ public class SellerOfferService {
     public Storefront changeStorefrontState(VerifiedActor actor,UUID tenant,
                                             long expectedVersion,String target) {
         if(actor==null || tenant==null)throw new SecurityException("Verified actor and tenant required");
+        if (!"PUBLISHED".equals(target) && !"PAUSED".equals(target))
+            throw new IllegalArgumentException("Unsupported storefront state");
+        // Same permission for both canonical and compatibility entrypoints.
+        // This also fences tenant state and concurrent role revocation.
         authorization.requireForCommand(actor.userId(),tenant,
-                "PUBLISHED".equals(target) ? DomainPermission.STOREFRONT_OFFER_PUBLISH
-                    : DomainPermission.STOREFRONT_OFFER_MANAGE);
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
         UUID id=storefrontId(tenant);
         try {
             return asStorefront(switch(target==null?"":target) {
