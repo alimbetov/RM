@@ -42,7 +42,7 @@ public class EmailIdentityService {
      * Do not expose without provider/rate-limit qualification.
      */
     @Transactional
-    public void registerPendingEmail(String rawEmail) {
+    void registerPendingEmail(String rawEmail) {
         String normalized=crypto.normalize(rawEmail);
         Identity identity=findOrProvision(normalized);
         String status=jdbc.queryForObject("""
@@ -408,7 +408,7 @@ public class EmailIdentityService {
 
     /** Proof of initial signup/linked OIDC email. No user identifier is returned. */
     @Transactional
-    public boolean verifyRegistration(UUID challengeId,String presentedToken) {
+    boolean verifyRegistration(UUID challengeId,String presentedToken) {
         verifyForPurpose(challengeId,presentedToken,"REGISTRATION");
         return true;
     }
