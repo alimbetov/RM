@@ -6,6 +6,7 @@ import kz.rm.catalog.CatalogItemService;
 import kz.rm.iam.*;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
 import kz.rm.inventory.AuthenticatedInventoryReconciliation;
+import kz.rm.inventory.AuthenticatedInventoryReconciliationRuns;
 import kz.rm.inventory.InventoryMovementService;
 import kz.rm.sales.AuthenticatedSalesCommands;
 import kz.rm.storefront.StorefrontManagementService;
@@ -46,6 +47,7 @@ class CommercialCoreE2EQualificationTest {
     @Autowired AuthenticatedSalesCommands sales;
     @Autowired AuthenticatedInventoryCommands stock;
     @Autowired AuthenticatedInventoryReconciliation reconciliation;
+    @Autowired AuthenticatedInventoryReconciliationRuns reconciliationRuns;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -196,6 +198,22 @@ class CommercialCoreE2EQualificationTest {
         assertThat(reconciled.reserved()).isEqualByComparingTo("0");
         assertThat(reconciled.activeReservations()).isEqualByComparingTo("0");
         assertThat(reconciled.latestMovementBalance()).isEqualByComparingTo("7");
+
+        // Durable reconciliation is the final independent business evidence,
+        // not merely an ephemeral stock query. It must not alter quantity.
+        var run = reconciliationRuns.start(c.staff(), c.tenant());
+        var finished = reconciliationRuns.advance(c.staff(), c.tenant(), run.id(), 20);
+        assertThat(finished.run().status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(finished.run().inspectedPositions()).isEqualTo(1L);
+        assertThat(finished.run().findingCount()).isZero();
+        assertThat(reconciliationRuns.findings(c.staff(), c.tenant(), run.id(), 0, 20))
+                .isEmpty();
+        assertThat(jdbc.queryForObject("""
+                SELECT on_hand FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """, BigDecimal.class, c.tenant(), c.warehouse(), item.id()))
+                .isEqualByComparingTo("7");
 
         assertThatThrownBy(() -> catalog.archive(c.staff(), c.tenant(), item.id(),
                 item.rowVersion())).isInstanceOf(IllegalStateException.class)
