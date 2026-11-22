@@ -357,8 +357,9 @@ class InventoryTransferStocktakeQualificationTest {
                         ps.setBigDecimal(6,BigDecimal.ONE);
                         ps.setBigDecimal(7,BigDecimal.valueOf(before));
                         ps.setBigDecimal(8,BigDecimal.valueOf(before+1));
-                        ps.setTimestamp(9,at);
-                        ps.setTimestamp(10,at);
+                        var orderedAt=java.sql.Timestamp.from(at.toInstant().plusMillis(i+1));
+                        ps.setTimestamp(9,orderedAt);
+                        ps.setTimestamp(10,orderedAt);
                         ps.setString(11,"RECEIPT");
                     }
                 });
