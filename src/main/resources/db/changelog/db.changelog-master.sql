@@ -3433,3 +3433,38 @@ CREATE TABLE public.iam_deletion_oidc_revocation_outbox (
   OR (state='ACKNOWLEDGED' AND acknowledged_at IS NOT NULL))
 );
 --rollback DROP TABLE public.iam_deletion_oidc_revocation_outbox;
+
+
+--changeset rm:0115-qr08-r0a-packaging-catalog
+-- SALES packaging is a versioned service; it does NOT create an inventory SKU.
+CREATE TABLE crm.sales_packaging_catalog_head (
+ tenant_id UUID NOT NULL, service_code VARCHAR(40) NOT NULL,
+ current_version INTEGER NOT NULL, active BOOLEAN NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_packaging_catalog_head PRIMARY KEY(tenant_id,service_code),
+ CONSTRAINT fk_packaging_head_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT ck_packaging_head_version CHECK(current_version>0)
+);
+CREATE TABLE crm.sales_packaging_catalog_version (
+ tenant_id UUID NOT NULL, service_code VARCHAR(40) NOT NULL,
+ version INTEGER NOT NULL, display_name VARCHAR(160) NOT NULL,
+ unit_price NUMERIC(19,4) NOT NULL, currency CHAR(3) NOT NULL,
+ tax_rate NUMERIC(7,4) NOT NULL, policy_version VARCHAR(40) NOT NULL,
+ published_by UUID NOT NULL, published_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_packaging_catalog_version PRIMARY KEY(tenant_id,service_code,version),
+ CONSTRAINT fk_packaging_catalog_head FOREIGN KEY(tenant_id,service_code)
+  REFERENCES crm.sales_packaging_catalog_head(tenant_id,service_code),
+ CONSTRAINT fk_packaging_catalog_actor FOREIGN KEY(published_by)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_packaging_price CHECK(unit_price>=0),
+ CONSTRAINT ck_packaging_tax CHECK(tax_rate>=0 AND tax_rate<=1),
+ CONSTRAINT ck_packaging_version CHECK(version>0)
+);
+--rollback DROP TABLE crm.sales_packaging_catalog_version;
+--rollback DROP TABLE crm.sales_packaging_catalog_head;
+
+--changeset rm:0116-qr08-r0a-packaging-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_qr08_packaging_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_packaging_catalog_version
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_qr08_packaging_immutable ON crm.sales_packaging_catalog_version;
