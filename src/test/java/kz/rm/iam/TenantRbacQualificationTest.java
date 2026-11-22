@@ -204,4 +204,38 @@ class TenantRbacQualificationTest {
             DELETE FROM iam_tenant_rbac_event WHERE tenant_id=?
             """,t.tenant())).isInstanceOf(Exception.class);
     }
+
+    @Autowired VerifiedTenantRoleCommands trustedRoles;
+
+    @Test void tcrud04VerifiedOwnerCanAdministerButForeignActorCannotMutateRbac() {
+        var a=createTenant();
+        var b=createTenant();
+        var owner=new VerifiedActor(a.owner1(),java.time.Instant.now().plusSeconds(300));
+        var foreign=new VerifiedActor(b.owner1(),java.time.Instant.now().plusSeconds(300));
+        var employee=new VerifiedActor(a.manager(),java.time.Instant.now().plusSeconds(300));
+        assertThatThrownBy(()->trustedRoles.createRole(null,a.tenant(),"DENIED","Denied"))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedRoles.createRole(foreign,a.tenant(),"DENIED","Denied"))
+                .isInstanceOf(SecurityException.class);
+        var role=trustedRoles.createRole(owner,a.tenant(),"TCRUD04_ROLE","Scoped staff");
+        trustedRoles.grant(owner,a.tenant(),role.id(),DomainPermission.INVENTORY_STOCK_READ);
+        assertThat(trustedRoles.listGrants(owner,a.tenant(),role.id()))
+                .containsExactly(DomainPermission.INVENTORY_STOCK_READ);
+        trustedRoles.assign(owner,a.tenant(),a.manager(),role.id());
+        assertThat(trustedRoles.listAssignments(owner,a.tenant()))
+                .anySatisfy(row->{
+                    assertThat(row.userId()).isEqualTo(a.manager());
+                    assertThat(row.roleId()).isEqualTo(role.id());
+                });
+        trustedRoles.enable(owner,a.tenant());
+        authorization.require(a.manager(),a.tenant(),DomainPermission.INVENTORY_STOCK_READ);
+        assertThatThrownBy(()->trustedRoles.revoke(employee,a.tenant(),role.id(),
+                DomainPermission.INVENTORY_STOCK_READ)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedRoles.revoke(foreign,a.tenant(),role.id(),
+                DomainPermission.INVENTORY_STOCK_READ)).isInstanceOf(SecurityException.class);
+        trustedRoles.revoke(owner,a.tenant(),role.id(),DomainPermission.INVENTORY_STOCK_READ);
+        assertThatThrownBy(()->authorization.require(a.manager(),a.tenant(),
+                DomainPermission.INVENTORY_STOCK_READ)).isInstanceOf(SecurityException.class);
+    }
+
 }
