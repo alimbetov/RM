@@ -36,6 +36,8 @@ class SalesOrderQueryQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
     @Autowired VerifiedTenantRoleCommands roles;
+    @Autowired javax.sql.DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
     private VerifiedActor verified(UUID id) {
         String sub=jdbc.queryForObject(
@@ -220,6 +222,74 @@ class SalesOrderQueryQualificationTest {
         jdbc.update("UPDATE iam_user_account SET status='SUSPENDED' WHERE id=?",a.actor());
         assertThatThrownBy(()->trustedQueries.search(verified(a.actor()),
                 a.tenant(),null,0,10)).isInstanceOf(SecurityException.class);
+    }
+
+    @Test void pass09PostgresRevocationCommittedFirstDeniesWaitingSalesOrderRead()
+            throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName()
+                            .toLowerCase(java.util.Locale.ROOT).contains("postgresql"));
+        }
+        Shop a=shop();
+        order(a);
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "pass09-read-race-"+UUID.randomUUID(),"Seller reader")).getId();
+        UUID orgA=jdbc.queryForObject(
+                "SELECT organization_id FROM iam_workspace WHERE id=?",UUID.class,a.tenant());
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),orgA,staff,OrganizationMembershipEntity.Role.MEMBER));
+        var owner=verified(a.actor());
+        var reader=verified(staff);
+        var role=roles.createRole(owner,a.tenant(),
+                "READ_RACE_"+UUID.randomUUID().toString().replace("-","")
+                        .substring(0,10).toUpperCase(),"PASS09 revoked reader");
+        roles.grant(owner,a.tenant(),role.id(),DomainPermission.SALES_ORDER_READ);
+        roles.assign(owner,a.tenant(),staff,role.id());
+        roles.enable(owner,a.tenant());
+
+        var holding=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var readStarted=new CountDownLatch(1);
+        var template=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var revoke=pool.submit(()->template.execute(tx->{
+                jdbc.queryForObject("""
+                    SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE
+                    """,UUID.class,a.tenant());
+                roles.revoke(owner,a.tenant(),role.id(),DomainPermission.SALES_ORDER_READ);
+                holding.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Revocation latch timeout");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(holding.await(10,TimeUnit.SECONDS)).isTrue();
+            var read=pool.submit(()->{
+                readStarted.countDown();
+                try {
+                    trustedQueries.search(reader,a.tenant(),null,0,10);
+                    return true;
+                } catch(SecurityException denied) {
+                    return false;
+                }
+            });
+            assertThat(readStarted.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->read.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(read.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThatThrownBy(()->trustedQueries.search(reader,a.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void tcrud03MixedMembershipSalesReadIsTenantBoundAndCannotBorrowPermission() {
