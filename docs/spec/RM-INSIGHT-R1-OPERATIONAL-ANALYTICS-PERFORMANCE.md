@@ -7,6 +7,8 @@
 **Release:** PRODUCTION HOLD. Создание этого документа не является результатом выполнения тестов или открытием HTTP/OIDC.
 **Основные зависимости:** docs/architecture/RM-PLATFORM-STANDARD-R2.md; docs/spec/RM-COMMERCE-INVENTORY-COMPLETION-R1.md; docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md; docs/spec/RM-SERVICE-FIRST-SALES-INVENTORY-R1.2.md; docs/spec/RM-INVENTORY-VALUATION-R1.md; docs/strategy/RM-STRATEGY-R4-FUNCTIONAL-GAP-PRIORITIZATION.md.
 
+**Связанное проектное ТЗ:** [RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1](RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md) — склады с GPS, поиск товара по региону, immutable warehouse-origin в SALES, безопасный QR самовывоза и возвраты. Статус SPEC; эти функции ещё не реализованы.
+
 ## 1. Назначение и границы
 
 Создать проверяемую, tenant-safe и восстанавливаемую основу операционной аналитики RM поверх существующих транзакционных фактов SALES и INVENTORY; получить измеримое снижение стоимости аналитических чтений без ухудшения checkout/confirm/reserve/fulfill. Аналитика должна отвечать на реальные вопросы владельца: сколько заказов принято/отменено/исполнено, как быстро подтверждаются заказы, где движутся запасы, почему нет доступного товара, какие склады испытывают дефицит. Позднее добавить геоаналитику, рекомендации складов и прогноз спроса.
