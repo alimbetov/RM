@@ -51,16 +51,17 @@ public class InventoryReservationService {
         // The seller order FOR UPDATE protects this line from concurrent retries.
         requireOrderStatus(tenantId,orderId,true);
         OrderLine line=jdbc.query("""
-            SELECT l.quantity,s.catalog_item_id
+            SELECT l.quantity,l.catalog_item_id_snapshot
             FROM crm.sales_order_line l
-            JOIN crm.store_offer s ON s.tenant_id=l.tenant_id AND s.id=l.offer_id
             WHERE l.tenant_id=? AND l.order_id=? AND l.id=?
             """,rs->{
                 if(!rs.next()) throw new IllegalArgumentException("Order line not found");
                 return new OrderLine(rs.getInt(1),rs.getObject(2,UUID.class));
             },tenantId,orderId,orderLineId);
-        if(line.catalogItemId()==null || !line.catalogItemId().equals(itemId))
-            throw new IllegalArgumentException("Offer does not resolve to requested SKU");
+        if(line.catalogItemId()==null)
+            throw new IllegalStateException("UNMAPPED_LEGACY_ORDER: immutable SKU missing");
+        if(!line.catalogItemId().equals(itemId))
+            throw new IllegalArgumentException("Requested SKU differs from order-line snapshot");
         // Full-line reservation only in R1.1. Split locations belong to a later version.
         if(quantity.compareTo(BigDecimal.valueOf(line.quantity()))!=0)
             throw new IllegalArgumentException("Reservation must cover full order line");
