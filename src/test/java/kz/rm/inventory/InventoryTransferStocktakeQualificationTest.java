@@ -26,6 +26,7 @@ class InventoryTransferStocktakeQualificationTest {
     @Autowired AuthenticatedInventoryCommands commands;
     @Autowired AuthenticatedInventoryQueries queries;
     @Autowired AuthenticatedInventoryReconciliation reconciliation;
+    @Autowired AuthenticatedInventoryReconciliationRuns reconciliationRuns;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -287,6 +288,44 @@ class InventoryTransferStocktakeQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
         var foreign=fixture();
         assertThatThrownBy(()->reconciliation.scan(who,foreign.tenant(),null,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void durableReconciliationResumesAndRecordsDiscrepanciesWithoutRepair() {
+        var f=fixture();
+        receive(f,f.source(),"durableR15Receipt01",10);
+        receive(f,f.destination(),"durableR15Receipt02",4);
+        var who=actor(f.actor());
+        var run=reconciliationRuns.start(who,f.tenant());
+        assertThat(run.status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.RUNNING);
+        var first=reconciliationRuns.advance(who,f.tenant(),run.id(),1);
+        assertThat(first.run().inspectedPositions()).isEqualTo(1);
+        assertThat(first.run().status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.RUNNING);
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET reserved=2,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
+        var second=reconciliationRuns.advance(who,f.tenant(),run.id(),1);
+        assertThat(second.run().inspectedPositions()).isEqualTo(2);
+        assertThat(second.run().status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(reconciliationRuns.advance(who,f.tenant(),run.id(),1)
+                .run().inspectedPositions()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_reconciliation_finding
+                WHERE tenant_id=? AND run_id=?
+                """,Integer.class,f.tenant(),run.id()))
+                .isEqualTo(Math.toIntExact(second.run().findingCount()));
+        assertThat(jdbc.queryForObject("""
+                SELECT reserved FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,BigDecimal.class,f.tenant(),f.source(),f.item())).isEqualByComparingTo("2");
+        var aborted=reconciliationRuns.start(who,f.tenant());
+        assertThat(reconciliationRuns.fail(who,f.tenant(),aborted.id()).status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.FAILED);
+        assertThat(reconciliationRuns.advance(who,f.tenant(),aborted.id(),1)
+                .run().status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.FAILED);
+        var foreign=fixture();
+        assertThatThrownBy(()->reconciliationRuns.get(who,foreign.tenant(),run.id()))
                 .isInstanceOf(SecurityException.class);
     }
 
