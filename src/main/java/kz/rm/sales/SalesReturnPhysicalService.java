@@ -185,7 +185,9 @@ public class SalesReturnPhysicalService {
                        long version,String evidence,String key,DomainPermission permission) {
         if(actor==null||tenant==null||warehouse==null||id==null)
             throw new SecurityException("RETURN_STAFF_REQUIRED");
-        if(version<0||!token(key,90)||!token(evidence,120))
+        boolean proofEvidence=permission==DomainPermission.SALES_RETURN_RECEIVE;
+        if(version<0||!token(key,90)||
+           (proofEvidence?!evidence.matches("[A-Za-z0-9_-]{43}"):!token(evidence,120)))
             throw new IllegalArgumentException("RETURN_EVIDENCE_INVALID");
         auth.requireForCommand(actor.userId(),tenant,permission);
         return actor.userId();
