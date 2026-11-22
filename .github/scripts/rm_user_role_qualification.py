@@ -6,6 +6,7 @@ from pathlib import Path
 
 REGISTRY = Path("docs/spec/RM-UR-R3.1-JUNIT-CASES-v1.json")
 REGISTRY_R32 = Path("docs/spec/RM-UR-R3.2-JUNIT-CASES-v1.json")
+REGISTRY_R33 = Path("docs/spec/RM-UR-R3.3-JUNIT-CASES-v1.json")
 CROSSWALK = Path("docs/spec/RM-R3-USER-ROLE-CROSSWALK-v1.json")
 RESULT = Path("rm-user-role-scenario-results.json")
 
@@ -19,11 +20,15 @@ def assess_role_cases(root, passed_cases, sha, admission_pass, write=True):
     next_registry = json.loads(raw32)
     if next_registry.get("schema") != "RM-UR-R3.2-JUNIT-CASES/v1":
         raise ValueError("Unknown R3.2 role test case catalogue")
+    raw33 = (root / REGISTRY_R33).read_bytes()
+    third_registry = json.loads(raw33)
+    if third_registry.get("schema") != "RM-UR-R3.3-JUNIT-CASES/v1":
+        raise ValueError("Unknown R3.3 role case catalogue")
     crosswalk = json.loads((root / CROSSWALK).read_text(encoding="utf-8"))
     entries = {x["requirementId"]: x for x in crosswalk["requirements"]}
     known = set()
     rows = []
-    for case in registry["cases"] + next_registry["cases"]:
+    for case in registry["cases"] + next_registry["cases"] + third_registry["cases"]:
         cid, suite, method = (case.get(k) for k in
                               ("caseId", "junitSuite", "junitMethod"))
         if not cid or cid in known:
@@ -54,8 +59,8 @@ def assess_role_cases(root, passed_cases, sha, admission_pass, write=True):
     result = {
         "schema": "RM-UR-R3-RESULT/v2",
         "commitSha": sha,
-        "catalogueSha256": hashlib.sha256(raw+raw32).hexdigest(),
-        "r31Cases": len(registry["cases"]), "r32Cases": len(next_registry["cases"]),
+        "catalogueSha256": hashlib.sha256(raw+raw32+raw33).hexdigest(),
+        "r31Cases": len(registry["cases"]), "r32Cases": len(next_registry["cases"]), "r33Cases": len(third_registry["cases"]),
         "scope": "JAVA_SERVICE_JUNIT_POSTGRESQL",
         "productionAdmission": "HOLD",
         "mandatory": total,
