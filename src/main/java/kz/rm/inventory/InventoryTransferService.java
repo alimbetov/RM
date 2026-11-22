@@ -67,8 +67,7 @@ class InventoryTransferService {
         // Re-check state/type after acquiring locks; SKU owner row is also fenced.
         UUID first=from.compareTo(to)<0?from:to;
         UUID second=first.equals(from)?to:from;
-        eligibility.requireReceivable(tenant,first,item);
-        eligibility.requireReceivable(tenant,second,item);
+        eligibility.requireTransferWarehouses(tenant,first,second,item);
         // Target zero position is opened inside the transaction; never for source.
         jdbc.update("""
                 INSERT INTO crm.inv_stock_balance
