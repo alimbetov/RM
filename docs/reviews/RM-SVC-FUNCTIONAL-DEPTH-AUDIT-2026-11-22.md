@@ -99,3 +99,20 @@
 ## 6. Рекомендация по разработке
 
 Следующий полезный шаг — **не создавать ещё 8 сервисов в одном PR**. Сначала закрыть `FUNC-01` (ложная настройка inventory) и `FUNC-05` (каталог опубликован, но storefront не обновлён), затем `FUNC-06` (CRM Interaction → Task) и `FUNC-07` (складской lifecycle). Параллельно P0 security/owner/email gates. Реализация в той же `base_dev`, без новых контроллеров и без ослабления no-wildcard и PII правил.
+
+
+## 7. INVENTORY — узкое 12-проходное ревью и отдельное детальное ТЗ
+
+**Source для INV-кросс-ревью:** `base_dev` / `c776baec5c82e0dfd4c7930aa6a68629202fa5fd` (тот же SHA, что основная матрица). Проверены `AuthenticatedInventoryCommands/Queries`, `InventoryAuthorizedCommandService`, `InventoryMovementService`, `InventoryReservationService`, `InventoryTenantSettingsService`, `StockBalanceRepository/QueryService`, `OrderInventoryPort`, тесты INVENTORY/SALES/ORG и Liquibase 0022–0030, а также нормативная R2 политика.
+
+**См. обязательный артефакт:** [RM-INVENTORY-FUNCTIONAL-COMPLETION-R1](../spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md). Для остальных сервисов утверждён [12-проходный протокол](../spec/RM-SERVICE-12-PASS-REVIEW-PROTOCOL-R1.md). Пока проработан **только INVENTORY**, не остальные 15 доменов.
+
+**Точечные поправки к первоначальному общему выводу:**
+- Inventory movement/reserve/fulfill — настоящие транзакционные операции; «нет пустых методов» верно для проверенного ядра, но нового SKU нельзя оприходовать через service-only boundary без предварительного ручного `inv_stock_balance`. Нужен first-position admission.
+- `auto_reserve_on_confirm=FALSE` в настройках не влияет на безусловный резерв SALES; **рекомендуемая единая R1 семантика — всегда резервировать при confirm**, не пытаться поддержать оба режима без нового order state machine. `FIFO/FEFO/MANUAL` сейчас лишь metadata без выбора партий.
+- Composite FK к ORG/CATALOG гарантирует тот же tenant, но не `ACTIVE WAREHOUSE` и не `PRODUCT`; новые складские команды должны учитывать status/kind и гонки деактивации.
+- Ledger и reservation events пока не содержат actor; stock movement history не предоставлена кладовщику через verified facade; public `InventoryTenantSettingsService` с raw UUID actor требует TCRUD-04 hardening.
+- Стоимостная политика immutable, но cost ledger отсутствует; **мaturity quantity-R1** не означает FIFO valuation, FEFO или COGS.
+- Transfer и stocktake нужно добавлять на существующем balance/immutable ledger с минимальным transfer receipt и stocktake snapshot, а не создавать параллельный stock engine.
+
+**Переоценка:** INVENTORY остаётся **2/5** до закрытия INV-Q0–Q9. Документ расширяет диагностику и ТЗ, Java не меняет; текущий статус **REVIEWED / SPEC PROPOSED**, не IMPLEMENTED. Указанные бизнес-решения требуют согласования до реализации. Новый CI документации не является предметной приёмкой.
