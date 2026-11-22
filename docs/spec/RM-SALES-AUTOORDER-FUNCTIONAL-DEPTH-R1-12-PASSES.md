@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED; PASS 07/12 SETTINGS SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED; PASS 07/12 SETTINGS SOURCE REVIEWED; PASS 08/12 CROSS-DOMAIN SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -263,3 +263,16 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 **Минимальные slices:** SALE-R1.7A truthful settings/readiness and deprecated flags isolation → R1.7B authenticated storefront publish/pause & offer hide/publish with CAS/race → R1.7C explicit catalog/offer projection tied to immutable order snapshot PASS 03/06 → R1.7D PostgreSQL synthetic set→effect matrix. Без универсального feature flag сервиса, Redis, новой таблицы SALES settings и UI/HTTP на стадии Feature Freeze.
 
 **Вердикт:** PASS 07/12 **SOURCE REVIEWED / SPEC PROPOSED**, maturity 2/5, без Java/DDL и без newly-qualified tests. Следующий PASS **08/12**: cross-domain ownership and end-to-end contracts.
+
+
+## 19. PASS 08 — Междоменные владельцы данных, SKU и коммерческий snapshot
+
+**Source review:** `base_dev` / `e66a82fbda82ae0d1272d64ec09c593cf961a411`. [Подробный PASS 08 cross-domain provider/consumer audit](../reviews/RM-SALES-AUTOORDER-CROSS-DOMAIN-PASS-08-2026-11-22.md). Статус **SOURCE REVIEWED / SPEC PROPOSED**, Java/DDL для SALES PASS 08 **не реализованы**.
+
+**Предыстория:** INVENTORY quantity Q1–Q9 PostgreSQL-qualified на exact SHA `534aa18008bc54f77a4b1f0277d0f041bfa12bae`; [12-pass closure and load review](../reviews/RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md). Подтверждены tenant warehouse, опубликованный PRODUCT, резерв/освобождение/исполнение, immutable quantity ledger. Это не снимает коммерческие недостатки SALES.
+
+**P0 source contradiction:** `AutoOrderService.checkout` сохраняет `offer_id,title_snapshot,quantity,unit_price_snapshot,currency`, но **не** `catalog_item_id_snapshot` в `crm.sales_order_line`. В `SalesInventoryCommandService.lines` и `InventoryReservationService.reserve` каталог SKU определяется повторно по изменяемой `crm.store_offer.catalog_item_id`. Связь может поменяться после PLACED; заказ по состоянию на подтверждение резервирует не согласованную в момент checkout позицию. Tenant FK гарантирует границу организации, но **не** неизменность товара.
+
+**Минимальное решение (предлагается к утверждению):** additive nullable `catalog_item_id_snapshot` с same-tenant FK; новый stock-backed checkout фиксирует SKU и цену в одном заказе, new confirm/reserve потребляет snapshot, legacy NULL fail-closed без подмены SKU задним числом; `CatalogItemService.publish` не равен seller `store_offer.publish`, цену из каталога не перезаписывать автоматически. Сопутствующие вопросы: PRODUCT vs SERVICE offers, offer publication/price CAS, статусы SKU и existing PLACED orders, email transport anti-abuse.
+
+**Evidence gates до реализации и перехода к PASS 09/12:** `SALE-08-01..12` exact tests из отдельного отчёта; PostgreSQL populated migration, concurrent price/SKU offer update vs checkout, mixed tenant + PII negative, immutable order snapshots, Q9 stock E2E and old legacy compatibility. **Production HOLD**, финансовые проводки/COGS не включать.
