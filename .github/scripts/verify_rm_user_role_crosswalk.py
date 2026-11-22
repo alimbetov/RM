@@ -19,7 +19,13 @@ EXPECTED_DOMAINS = (
 )
 ACTORS = {"U" + str(i) for i in range(13)}
 STORIES = {"BS-" + f"{i:02d}" for i in range(1, 16)}
-PROOF_GAPS = {"INV-02", "FIL-05", "ORG-04", "KMS-01", "KMS-03"}
+R34_REVIEWED_PROOFS = {
+    "INV-02": ("kms-postgres-surefire", "InventoryReservationQualificationTest", "reservationReleaseAndIdempotentReplay"),
+    "FIL-05": ("rustfs-real-infra-e2e-surefire", "RustFsRealClamAvE2ETest", "realClamdRespondsCleanInfectedAndFailClosedForUnavailableEndpoint"),
+    "ORG-04": ("kms-postgres-surefire", "OrganizationLocationQueryQualificationTest", "paginationAndFiltersUseTenantBoundary"),
+    "KMS-01": ("kms-postgres-surefire", "KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
+    "KMS-03": ("kms-postgres-surefire", "KmsDeploymentGuardTest", "urR34DeploymentConfigurationAcceptsOnlySafeImmutableKeyModes"),
+}
 POLICIES = {
     "TENANT_RBAC", "IDENTITY_LIFECYCLE", "SYSTEM_MIGRATION",
     "PUBLIC_CHECKOUT_POLICY", "BUYER_IDENTITY_OWNERSHIP",
@@ -164,14 +170,19 @@ def validate_documents(catalogue, crosswalk, permissions, role_cases=None):
     missing = set(references) - seen
     if missing:
         raise ValueError("Missing R3 requirements: " + ",".join(sorted(missing)))
+    for rid, expected in R34_REVIEWED_PROOFS.items():
+        proof = references[rid][1]["proof"]
+        if not isinstance(proof, dict) or tuple(proof.get(key) for key in
+                ("artifact","suite","test")) != expected:
+            raise ValueError("UR-R3.4 reviewed proof missing or changed: " + rid)
     if counters != {"total": 75, "implemented": 46, "planned": 29,
-                    "declaredCanonicalProof": 41, "roleCasesPassed": 0}:
+                    "declaredCanonicalProof": 46, "roleCasesPassed": 0}:
         raise ValueError("Unexpected R3-v1 baseline counts: " + str(counters))
     for cid, case in by_id.items():
         if not set(case["requirementIds"]) <= seen:
             raise ValueError("Role case references unknown requirement: " + cid)
-    if proof_gaps != PROOF_GAPS:
-        raise ValueError("Five R3-v1 proof gaps must remain explicit: " + str(proof_gaps))
+    if proof_gaps:
+        raise ValueError("Unresolved R3-v1 proof gaps: " + str(proof_gaps))
     return {"schema": "RM-QUAL-USER-R3-CROSSWALK-VALIDATION/v1",
             "scope": "STRUCTURAL_MAPPING_ONLY",
             "gate": "MAPPING_VALID_NOT_SERVICE_QUALIFIED",
@@ -180,7 +191,7 @@ def validate_documents(catalogue, crosswalk, permissions, role_cases=None):
             "missingCanonicalProof": sorted(proof_gaps),
             "roleTestEvidence": "DECLARED_NOT_EXECUTED",
             "registeredRoleCases": len(by_id),
-            "notes": "R3-v1 41 declared proofs are not 41 role-case passes; exact SHA evidence is separate."}
+            "notes": "46 declared canonical proofs; five new UR-R3.4 proofs require exact-SHA execution, not inferred role-case or production admission."}
 
 
 def validate(root):
