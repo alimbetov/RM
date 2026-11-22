@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""UR-R3.0 structural crosswalk validation. Never manufactures JUnit evidence."""
+import argparse
+import hashlib
+import json
+import re
+from pathlib import Path
+
+CATALOG = Path("docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json")
+CROSSWALK = Path("docs/spec/RM-R3-USER-ROLE-CROSSWALK-v1.json")
+PERMISSION_ENUM = Path("src/main/java/kz/rm/iam/DomainPermission.java")
+EXPECTED_DOMAINS = (
+    "IAM_RBAC", "CRM_CORE", "CRM_INTERACTION", "CATALOG", "STOREFRONT",
+    "SALES_AUTOORDER", "INVENTORY", "FILES", "ORGANIZATION", "GEO",
+    "KMS", "AUDIT", "TASKS", "FINANCE", "MARKETING", "SUBSCRIPTION",
+)
+ACTORS = {"U" + str(i) for i in range(13)}
+STORIES = {"BS-" + f"{i:02d}" for i in range(1, 16)}
+PROOF_GAPS = {"INV-02", "FIL-05", "ORG-04", "KMS-01", "KMS-03"}
+POLICIES = {
+    "TENANT_RBAC", "IDENTITY_LIFECYCLE", "SYSTEM_MIGRATION",
+    "PUBLIC_CHECKOUT_POLICY", "BUYER_IDENTITY_OWNERSHIP",
+    "INFRA_DEPENDENCY", "REFERENCE_DATA", "DB_CONSTRAINT",
+    "INTERNAL_SYSTEM_CRYPTO", "INTERNAL_WORKER", "STARTUP_CONFIG",
+    "SYSTEM_RETENTION",
+}
+
+
+def permission_names(java_source):
+    """Extract enum constants from the declaration, excluding comments and later methods."""
+    match = re.search(
+        r"public enum DomainPermission\s*\{(.*?)\s*;",
+        java_source, re.DOTALL
+    )
+    if not match:
+        raise ValueError("DomainPermission enum declaration not found")
+    return set(re.findall(r"\b([A-Z][A-Z0-9_]+)\s*\(", match.group(1)))
+
+
+def validate_documents(catalogue, crosswalk, permissions):
+    if catalogue.get("schema") != "RM-R3-FUNCTIONAL-COVERAGE/v1":
+        raise ValueError("Unexpected source catalogue schema")
+    if crosswalk.get("schema") != "RM-QUAL-USER-R3-CROSSWALK/v1":
+        raise ValueError("Unexpected crosswalk schema")
+    if crosswalk.get("strategySchema") != catalogue["schema"]:
+        raise ValueError("Crosswalk source schema mismatch")
+    if crosswalk.get("qualificationMode") != "JAVA_SERVICE_JUNIT_ONLY":
+        raise ValueError("Crosswalk must remain service/JUnit only")
+    if crosswalk.get("actorProfileIds") != ["U" + str(i) for i in range(13)]:
+        raise ValueError("Missing/duplicate actor profiles")
+    if set(crosswalk.get("storyIds", [])) != STORIES or len(crosswalk["storyIds"]) != 15:
+        raise ValueError("Missing/duplicate business stories")
+    domains = catalogue.get("domains")
+    if not isinstance(domains, list) or [x.get("id") for x in domains] != list(EXPECTED_DOMAINS):
+        raise ValueError("Expected 16 canonical R3 domains")
+    references = {}
+    for domain in domains:
+        for requirement in domain["requirements"]:
+            rid = requirement["id"]
+            if rid in references:
+                raise ValueError("Duplicate source requirement: " + rid)
+            references[rid] = (domain["id"], requirement)
+    mapped = crosswalk.get("requirements")
+    if not isinstance(mapped, list):
+        raise ValueError("Crosswalk requirements must be a list")
+    seen = set()
+    counters = {"total": 0, "implemented": 0, "planned": 0,
+                "declaredCanonicalProof": 0, "roleCasesPassed": 0}
+    proof_gaps = set()
+    for item in mapped:
+        rid = item.get("requirementId")
+        if rid not in references or rid in seen:
+            raise ValueError("Unknown or duplicate crosswalk requirement: " + str(rid))
+        seen.add(rid)
+        domain, original = references[rid]
+        if (item.get("domainId") != domain
+                or item.get("title") != original["title"]
+                or item.get("delivery") != original["delivery"]
+                or item.get("implementationSource") != original["source"]
+                or item.get("canonicalProof") != original["proof"]):
+            raise ValueError("Source/delivery/proof mismatch for " + rid)
+        if not isinstance(item.get("operationId"), str) or not item["operationId"].startswith("OP:"):
+            raise ValueError("Missing canonical operation ID for " + rid)
+        stories = item.get("storyIds")
+        if not isinstance(stories, list) or not stories or len(stories) != len(set(stories)) or not set(stories) <= STORIES:
+            raise ValueError("Invalid business story mapping for " + rid)
+        actors = item.get("actorProfiles")
+        if not isinstance(actors, list) or len(actors) != len(set(actors)) or not set(actors) <= ACTORS:
+            raise ValueError("Invalid actor mapping for " + rid)
+        grants = item.get("requiredPermissionsAllOf")
+        if not isinstance(grants, list) or len(grants) != len(set(grants)) or not set(grants) <= permissions:
+            raise ValueError("Unknown/duplicate DomainPermission for " + rid)
+        policy = item.get("permissionPolicy")
+        if policy not in POLICIES and policy != "NOT_DEFINED":
+            raise ValueError("Unknown permission policy for " + rid)
+        if item.get("qualified") is not False or item.get("userRoleCaseStatus") not in {"NOT_RUN", "NOT_IMPLEMENTED"}:
+            raise ValueError("Unexecuted role cases claim qualification: " + rid)
+        if item.get("userRoleCaseIds") != []:
+            raise ValueError("Role case IDs must be bound to executed tests, not guessed: " + rid)
+        counters["total"] += 1
+        if original["delivery"] == "PLANNED":
+            counters["planned"] += 1
+            if (grants or actors or item.get("canonicalProof") is not None
+                    or item.get("permissionMappingStatus") != "NOT_APPLICABLE_PLANNED"
+                    or item.get("userRoleCaseStatus") != "NOT_IMPLEMENTED"
+                    or item.get("serviceContractStatus") != "NOT_IMPLEMENTED"):
+                raise ValueError("Planned capability claims active behavior: " + rid)
+        elif original["delivery"] == "IMPLEMENTED":
+            counters["implemented"] += 1
+            if item.get("permissionMappingStatus") not in {"REVIEW_REQUIRED", "NON_TENANT_PERMISSION_REVIEW"}:
+                raise ValueError("Permission mapping prematurely approved: " + rid)
+            if item.get("serviceContractStatus") != "REQUIRES_METHOD_REVIEW":
+                raise ValueError("Service method declared qualified without audit: " + rid)
+            if not isinstance(item.get("negativeDimensions"), list) or not item["negativeDimensions"]:
+                raise ValueError("No role/tenant negatives required for " + rid)
+            if original["proof"]:
+                counters["declaredCanonicalProof"] += 1
+                if item.get("proofStatus") != "DECLARED_NOT_EXECUTED_ON_THIS_SHA":
+                    raise ValueError("Declared proof misrepresented as execution: " + rid)
+            else:
+                proof_gaps.add(rid)
+                if item.get("proofStatus") != "MISSING_PROOF":
+                    raise ValueError("Missing proof misrepresented: " + rid)
+        else:
+            raise ValueError("Unknown delivery status: " + rid)
+    missing = set(references) - seen
+    if missing:
+        raise ValueError("Missing R3 requirements: " + ",".join(sorted(missing)))
+    if counters != {"total": 75, "implemented": 46, "planned": 29,
+                    "declaredCanonicalProof": 41, "roleCasesPassed": 0}:
+        raise ValueError("Unexpected R3-v1 baseline counts: " + str(counters))
+    if proof_gaps != PROOF_GAPS:
+        raise ValueError("Five R3-v1 proof gaps must remain explicit: " + str(proof_gaps))
+    return {"schema": "RM-QUAL-USER-R3-CROSSWALK-VALIDATION/v1",
+            "scope": "STRUCTURAL_MAPPING_ONLY",
+            "gate": "MAPPING_VALID_NOT_SERVICE_QUALIFIED",
+            "productionAdmission": "HOLD",
+            "domains": len(EXPECTED_DOMAINS), **counters,
+            "missingCanonicalProof": sorted(proof_gaps),
+            "roleTestEvidence": "NOT_RUN",
+            "notes": "R3-v1 41 declared proofs are not 41 role-case passes; exact SHA evidence is separate."}
+
+
+def validate(root):
+    raw_catalogue = (root / CATALOG).read_bytes()
+    raw_crosswalk = (root / CROSSWALK).read_bytes()
+    catalogue = json.loads(raw_catalogue)
+    crosswalk = json.loads(raw_crosswalk)
+    permissions = permission_names((root / PERMISSION_ENUM).read_text(encoding="utf-8"))
+    result = validate_documents(catalogue, crosswalk, permissions)
+    result["catalogueSha256"] = hashlib.sha256(raw_catalogue).hexdigest()
+    result["crosswalkSha256"] = hashlib.sha256(raw_crosswalk).hexdigest()
+    return result
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    report = validate(args.root)
+    payload = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
+    if args.output:
+        args.output.write_text(payload, encoding="utf-8")
+    print(payload, end="")
