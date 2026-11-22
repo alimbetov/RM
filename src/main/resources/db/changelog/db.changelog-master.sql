@@ -3420,7 +3420,7 @@ CREATE TRIGGER trg_iam_account_deletion_event_immutable
 CREATE TABLE public.iam_deletion_oidc_revocation_outbox (
  deletion_event_id UUID NOT NULL PRIMARY KEY,
  target_user_id UUID NOT NULL,
- provider_subject VARCHAR(255) NOT NULL,
+ provider_subject_envelope BYTEA NOT NULL,
  state VARCHAR(20) NOT NULL DEFAULT 'PENDING',
  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
  acknowledged_at TIMESTAMP WITH TIME ZONE,
