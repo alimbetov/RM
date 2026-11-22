@@ -202,8 +202,10 @@ class InventoryTransferStocktakeQualificationTest {
                 SELECT count(*) FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND source_type='STOCKTAKE' AND source_id=?
                 """,Integer.class,f.tenant(),stale.id())).isZero();
-        assertThat(commands.cancelStocktake(employee,f.tenant(),stale.id()).status())
-                .isEqualTo("CANCELLED");
+        var cancelled=commands.cancelStocktake(employee,f.tenant(),stale.id());
+        assertThat(cancelled.status()).isEqualTo("CANCELLED");
+        assertThat(cancelled.cancelledBy()).isEqualTo(f.actor());
+        assertThat(cancelled.cancelledAt()).isNotNull();
         assertThatThrownBy(()->commands.postStocktake(employee,f.tenant(),
                 stale.id(),"postCount003")).isInstanceOf(IllegalStateException.class);
     }
