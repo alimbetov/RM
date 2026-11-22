@@ -225,7 +225,9 @@ public class PublishedOfferQrService {
         byte[] bytes = new byte[24]; // 192 bits of unpredictable public reference.
         RANDOM.nextBytes(bytes);
         String ref = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        Instant now = Instant.now();
+        // PostgreSQL TIMESTAMPTZ stores microseconds; the first result must be
+        // byte-for-byte identical to an idempotent DB-backed replay.
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         jdbc.update("""
                 INSERT INTO crm.store_offer_qr_ref
                   (tenant_id,id,offer_id,active_offer_id,public_ref,generation,
