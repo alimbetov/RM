@@ -111,6 +111,11 @@ public class GlobalAccountDeletionService {
                     WHERE id=? AND user_id=?
                     """,randomBytes(32),randomBytes(48),id,targetId);
         }
+        // Preserve the last OIDC subject for a trusted revocation consumer
+        // before clearing it from the live IAM account. The outbox is not ACK.
+        String externalSubject=jdbc.queryForObject("""
+                SELECT external_subject FROM public.iam_user_account WHERE id=?
+                """,String.class,targetId);
         jdbc.update("DELETE FROM iam_pii.user_profile_secret WHERE user_id=?",targetId);
         int changed=jdbc.update("""
                 UPDATE public.iam_user_account
@@ -119,11 +124,19 @@ public class GlobalAccountDeletionService {
                 WHERE id=? AND status=?
                 """,now,targetId,status);
         if(changed!=1)throw new IllegalStateException("Concurrent deletion");
+        UUID deletionId=UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO public.iam_account_deletion_event
                 (id,actor_user_id,target_user_id,request_key,occurred_at)
                 VALUES (?,?,?,?,?)
-                """,UUID.randomUUID(),adminId,targetId,requestKey,now);
+                """,deletionId,adminId,targetId,requestKey,now);
+        if(externalSubject!=null && !externalSubject.isBlank()) {
+            jdbc.update("""
+                    INSERT INTO public.iam_deletion_oidc_revocation_outbox
+                    (deletion_event_id,target_user_id,provider_subject,state,created_at)
+                    VALUES (?,?,?,'PENDING',?)
+                    """,deletionId,targetId,externalSubject,now);
+        }
     }
 
     private byte[] randomBytes(int length) {
