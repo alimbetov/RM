@@ -43,6 +43,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class SalesInventoryRbacQualificationTest {
     @Autowired SalesInventoryCommandService commands;
+    @Autowired kz.rm.organization.AuthenticatedOrganizationLocations locationCommands;
     @Autowired AuthenticatedSalesCommands authenticatedCommands;
     @Autowired AuthenticatedInventoryCommands warehouse;
     @Autowired AuthenticatedInventoryQueries inventoryReads;
@@ -873,4 +874,117 @@ class SalesInventoryRbacQualificationTest {
                 """,UUID.class,c.tenant(),order)).isEqualTo(c.item());
     }
 
+
+    /** INV-R1.4: pause wins the warehouse row fence, so no order can reserve it. */
+    @Test void postgresDeactivateBeforeConfirmRejectsReservationAndRollsBackOrder() throws Exception {
+        try(var con=dataSource.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Context c=context(5);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.ORGANIZATION_LOCATION_WRITE,
+                DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        var gate=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var pause=pool.submit(()->tx.execute(s->{
+                locationCommands.deactivate(verified(c.staff()),c.tenant(),c.location(),0);
+                gate.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS)) throw new IllegalStateException("Pause timed out");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(gate.await(10,TimeUnit.SECONDS)).isTrue();
+            var started=new CountDownLatch(1);
+            var confirm=pool.submit(()->{
+                started.countDown();
+                try {
+                    commands.confirm(c.staff(),c.tenant(),id,c.location());
+                    return true;
+                } catch(IllegalArgumentException rejected) {
+                    return false;
+                }
+            });
+            assertThat(started.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->confirm.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(pause.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(confirm.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThat(status(c,id)).isEqualTo("PLACED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_reservation
+            WHERE tenant_id=? AND order_id=?
+            """,Integer.class,c.tenant(),id)).isZero();
+    }
+
+    /** INV-R1.3/R1.4: admitted reserve wins; deactivation sees active commitment. */
+    @Test void postgresConfirmBeforeDeactivateFencesPauseAndLeavesActiveWarehouse() throws Exception {
+        try(var con=dataSource.getConnection()) {
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Context c=context(5);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.ORGANIZATION_LOCATION_WRITE,
+                DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+        var gate=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var confirm=pool.submit(()->tx.execute(s->{
+                commands.confirm(c.staff(),c.tenant(),id,c.location());
+                gate.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Confirm timed out");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(gate.await(10,TimeUnit.SECONDS)).isTrue();
+            var started=new CountDownLatch(1);
+            var pause=pool.submit(()->{
+                started.countDown();
+                try {
+                    locationCommands.deactivate(verified(c.staff()),c.tenant(),c.location(),0);
+                    return true;
+                } catch(IllegalStateException blocked) {
+                    return false;
+                }
+            });
+            assertThat(started.await(5,TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->pause.get(250,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(confirm.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(pause.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThat(status(c,id)).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
+        assertThat(jdbc.queryForObject("""
+            SELECT status FROM public.org_location
+            WHERE workspace_id=? AND id=?
+            """,String.class,c.tenant(),c.location())).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_reservation
+            WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+            """,Integer.class,c.tenant(),id)).isEqualTo(1);
+    }
 }
