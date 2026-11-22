@@ -1935,3 +1935,33 @@ CREATE TRIGGER trg_contract_revision_immutable BEFORE UPDATE OR DELETE ON crm.co
 --rollback DROP TRIGGER trg_contract_revision_immutable ON crm.contract_revision;
 --rollback DROP TRIGGER trg_customer_change_immutable ON crm.customer_change_event;
 --rollback DROP FUNCTION crm.reject_r13_history_mutation();
+
+
+--changeset rm:0062-crm-r14-contact-history
+-- Tenant-bound append-only contact lifecycle metadata; never store plaintext PII.
+CREATE TABLE crm.contact_change_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ contact_id UUID NOT NULL,
+ customer_id UUID NOT NULL,
+ actor_id UUID NOT NULL,
+ action_code VARCHAR(32) NOT NULL,
+ previous_version BIGINT,
+ new_version BIGINT NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_crm_contact_change PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_crm_contact_change_contact FOREIGN KEY(tenant_id,contact_id)
+   REFERENCES crm.contact(tenant_id,id),
+ CONSTRAINT fk_crm_contact_change_customer FOREIGN KEY(tenant_id,customer_id)
+   REFERENCES crm.customer(tenant_id,id),
+ CONSTRAINT fk_crm_contact_change_actor FOREIGN KEY(actor_id) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_contact_change_action CHECK(action_code IN ('UPDATED','ARCHIVED','RESTORED'))
+);
+CREATE INDEX idx_crm_contact_change_history
+ ON crm.contact_change_event(tenant_id,contact_id,occurred_at DESC,id);
+--rollback DROP TABLE crm.contact_change_event;
+
+--changeset rm:0063-crm-r14-contact-history-immutable dbms:postgresql
+CREATE TRIGGER trg_contact_change_immutable BEFORE UPDATE OR DELETE ON crm.contact_change_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_contact_change_immutable ON crm.contact_change_event;
