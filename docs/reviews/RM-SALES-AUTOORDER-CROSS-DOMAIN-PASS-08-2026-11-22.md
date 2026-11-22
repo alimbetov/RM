@@ -1,7 +1,7 @@
 # RM SALES / AutoOrder — PASS 08/12: cross-domain ownership, immutable offer and stock contract
 
 **Source SHA:** `e66a82fbda82ae0d1272d64ec09c593cf961a411`, branch `base_dev`, date 2026-11-22.
-**Status:** `SOURCE REVIEWED / SPEC PROPOSED`, **no SALES code implementation or qualification claimed**. INVENTORY quantity Q1–Q9 is independently PostgreSQL-qualified on `534aa18008bc54f77a4b1f0277d0f041bfa12bae`, see [inventory performance/closure](RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md).
+**Status (current):** PASS 08.1–08.3 `IMPLEMENTED / POSTGRESQL QUALIFIED` on exact SHA `cb490556e56d74770ee86f839a849a354702673f`; PASS 08.4 seller-offer lifecycle and PASS 09–12 `SPEC PROPOSED / HOLD`. Earlier source-only sections below are historical review evidence, not the current implementation state. INVENTORY quantity Q1–Q9 is independently PostgreSQL-qualified on `534aa18008bc54f77a4b1f0277d0f041bfa12bae`, see [inventory performance/closure](RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md).
 **Scope:** existing `AutoOrderService.checkout/verifyEmail/buyerOrders`, `SalesInventoryCommandService.confirm/cancel/fulfill`, `InventoryReservationService.reserve`, `CatalogItemService.publish`, `crm.store_offer`, `crm.sales_order_line`, `crm.cat_item`, `crm.inv_stock_balance`. No service rearchitecture.
 
 ## 1. Real source-to-consumer map
@@ -81,3 +81,19 @@ Do *not* add new REST controllers during feature freeze, split orders across mul
 **История устранённых дефектов в процессе:** первая версия `0076` использовала PostgreSQL partial index `WHERE ... IS NOT NULL`, из-за чего H2 failed at migration; заменён обычным индексом до release. Старые fixtures, создававшие заказ без каталога или новый заказ после архивации SKU, обновлены, так как новый контракт запрещает эти операции. Итоговый CI рассматривается только на последнем кодовом SHA после всех исправлений.
 
 **Остаётся за рамками этого изменения:** seller-authorized owner CRUD и state machine для `store_offer` (08.4), реальные SERVICE orders, PII/transport/anti-abuse, delivery/invoice/COGS, full 09–12 and production admission. **Production HOLD**.
+
+
+## 7. Qualification exact SHA — VERIFIED
+
+**Exact qualified code SHA:** [`cb490556e56d74770ee86f839a849a354702673f`](https://github.com/alimbetov/RM/commit/cb490556e56d74770ee86f839a849a354702673f).
+
+| Exact-SHA CI | Result |
+|---|---|
+| [44989823109](https://github.com/alimbetov/RM/actions/runs/44989823109), H2 + PostgreSQL + populated IAM PII | **SUCCESS** |
+| [44989827422](https://github.com/alimbetov/RM/actions/runs/44989827422), second H2 + PostgreSQL + IAM PII | **SUCCESS** |
+| [44989823098](https://github.com/alimbetov/RM/actions/runs/44989823098), CRM R1.2 populated PostgreSQL upgrade | **SUCCESS** |
+| [44989823157](https://github.com/alimbetov/RM/actions/runs/44989823157), RustFS real infrastructure E2E | **SUCCESS** |
+
+PostgreSQL integration: **326 tests / 0 failures / 0 errors / 18 skipped**. Named active suites executed without skipped: `AutoOrderR1QualificationTest` **15/15**, `SalesInventoryRbacQualificationTest` **19/19**, `InventoryReservationQualificationTest` **6/6**, `SalesOrderQueryQualificationTest` **4/4**, `IamEmailChangeOrderHistoryQualificationTest` **1/1**.
+
+**Fixed regressions:** H2 rejected partial index in first unqualified 0076; changed it to portable plain index. Two previously valid fixtures tried to checkout after SKU archiving or without a catalog mapping; adjusted them to preserve the historical reservation test and genuine email-history test under the new admission rule. Production HOLD and full PASS08/09–12 HOLD remain unchanged. This is **a source+test-qualified snapshot contract**, not a public checkout release.
