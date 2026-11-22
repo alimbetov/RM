@@ -226,7 +226,7 @@
       "title": "Real issuer/JWKS session onboarding and external email delivery",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:IAM.FUTURE",
+      "operationId": "OP:PLANNED.IAM-06",
       "storyIds": [
         "BS-01"
       ],
@@ -448,7 +448,7 @@
       "title": "Qualified staff-facing complete CRM funnel",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:CRM.FUTURE",
+      "operationId": "OP:PLANNED.CRM-06",
       "storyIds": [
         "BS-08"
       ],
@@ -548,7 +548,7 @@
       "title": "Purpose-scoped encrypted NOTE body and communication outcome",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:CRM.INTERACTION_FUTURE",
+      "operationId": "OP:PLANNED.INT-03",
       "storyIds": [
         "BS-14"
       ],
@@ -571,7 +571,7 @@
       "title": "Task creation and completion through TASKS ownership",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:CRM.INTERACTION_FUTURE",
+      "operationId": "OP:PLANNED.INT-04",
       "storyIds": [
         "BS-14"
       ],
@@ -714,7 +714,7 @@
       "title": "Bulk catalog migration with reconciliation report",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:CATALOG.FUTURE",
+      "operationId": "OP:PLANNED.CAT-04",
       "storyIds": [
         "BS-03"
       ],
@@ -899,7 +899,7 @@
       "title": "Ready-to-use seller storefront management UI",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:STOREFRONT.FUTURE",
+      "operationId": "OP:PLANNED.STO-05",
       "storyIds": [
         "BS-04"
       ],
@@ -1116,7 +1116,7 @@
       "title": "Full real OIDC buyer/seller browser E2E",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:SALES.FUTURE",
+      "operationId": "OP:PLANNED.SAL-06",
       "storyIds": [
         "BS-07"
       ],
@@ -1139,7 +1139,7 @@
       "title": "Invoice/payment/settlement order integration",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:SALES.FUTURE",
+      "operationId": "OP:PLANNED.SAL-07",
       "storyIds": [
         "BS-07"
       ],
@@ -1398,7 +1398,7 @@
       "title": "Certified tenant-wide as-of reconciliation across pages",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:INVENTORY.FUTURE",
+      "operationId": "OP:PLANNED.INV-07",
       "storyIds": [
         "BS-12"
       ],
@@ -1608,7 +1608,7 @@
       "title": "Typed attachment owner ACL for catalog and sales",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:FILES.FUTURE",
+      "operationId": "OP:PLANNED.FIL-06",
       "storyIds": [
         "BS-15"
       ],
@@ -1788,7 +1788,7 @@
       "title": "Complete first-tenant self-service onboarding",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:ORGANIZATION.FUTURE",
+      "operationId": "OP:PLANNED.ORG-05",
       "storyIds": [
         "BS-12"
       ],
@@ -1875,7 +1875,7 @@
       "title": "Verified full Kazakhstan directory update lifecycle",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:GEO.FUTURE",
+      "operationId": "OP:PLANNED.GEO-03",
       "storyIds": [
         "BS-03"
       ],
@@ -1986,7 +1986,7 @@
       "title": "Operational tenant-key rotation and recovery",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:KMS.FUTURE",
+      "operationId": "OP:PLANNED.KMS-04",
       "storyIds": [
         "BS-15"
       ],
@@ -2073,7 +2073,7 @@
       "title": "Tenant-safe cross-domain sanitized audit query",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:AUDIT.FUTURE",
+      "operationId": "OP:PLANNED.AUD-03",
       "storyIds": [
         "BS-15"
       ],
@@ -2096,7 +2096,7 @@
       "title": "Auditor UI and bounded compliant export",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:AUDIT.FUTURE",
+      "operationId": "OP:PLANNED.AUD-04",
       "storyIds": [
         "BS-15"
       ],
@@ -2119,7 +2119,7 @@
       "title": "Tenant-owned task commands and transitions",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:TASKS.FUTURE",
+      "operationId": "OP:PLANNED.TSK-01",
       "storyIds": [
         "BS-14"
       ],
@@ -2142,7 +2142,7 @@
       "title": "CRM interaction-to-task typed link",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:TASKS.FUTURE",
+      "operationId": "OP:PLANNED.TSK-02",
       "storyIds": [
         "BS-14"
       ],
@@ -2165,7 +2165,7 @@
       "title": "Assigned task lists, reminders and deadlines",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:TASKS.FUTURE",
+      "operationId": "OP:PLANNED.TSK-03",
       "storyIds": [
         "BS-14"
       ],
@@ -2188,7 +2188,7 @@
       "title": "Tasks browser acceptance and permission gates",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:TASKS.FUTURE",
+      "operationId": "OP:PLANNED.TSK-04",
       "storyIds": [
         "BS-14"
       ],
@@ -2211,7 +2211,7 @@
       "title": "Tenant-owned invoice issue and lifecycle",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:FINANCE.FUTURE",
+      "operationId": "OP:PLANNED.FIN-01",
       "storyIds": [
         "BS-07"
       ],
@@ -2234,7 +2234,7 @@
       "title": "Payments and allocations with idempotency",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:FINANCE.FUTURE",
+      "operationId": "OP:PLANNED.FIN-02",
       "storyIds": [
         "BS-07"
       ],
@@ -2257,7 +2257,7 @@
       "title": "Reconciliation and immutable financial events",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:FINANCE.FUTURE",
+      "operationId": "OP:PLANNED.FIN-03",
       "storyIds": [
         "BS-07"
       ],
@@ -2280,7 +2280,7 @@
       "title": "Order-linked finance view and audit",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:FINANCE.FUTURE",
+      "operationId": "OP:PLANNED.FIN-04",
       "storyIds": [
         "BS-07"
       ],
@@ -2303,7 +2303,7 @@
       "title": "Purpose-bound customer consent targeting",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:MARKETING.FUTURE",
+      "operationId": "OP:PLANNED.MKT-01",
       "storyIds": [
         "BS-14"
       ],
@@ -2326,7 +2326,7 @@
       "title": "Campaign lifecycle and consent-gated dispatch",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:MARKETING.FUTURE",
+      "operationId": "OP:PLANNED.MKT-02",
       "storyIds": [
         "BS-14"
       ],
@@ -2349,7 +2349,7 @@
       "title": "Campaign delivery status and suppression proof",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:MARKETING.FUTURE",
+      "operationId": "OP:PLANNED.MKT-03",
       "storyIds": [
         "BS-14"
       ],
@@ -2372,7 +2372,7 @@
       "title": "Tenant plan entitlement evaluation",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:SUBSCRIPTION.FUTURE",
+      "operationId": "OP:PLANNED.SUB-01",
       "storyIds": [
         "BS-14"
       ],
@@ -2395,7 +2395,7 @@
       "title": "Usage metering and quota enforcement",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:SUBSCRIPTION.FUTURE",
+      "operationId": "OP:PLANNED.SUB-02",
       "storyIds": [
         "BS-14"
       ],
@@ -2418,7 +2418,7 @@
       "title": "Subscription billing lifecycle and renewal proof",
       "delivery": "PLANNED",
       "implementationSource": null,
-      "operationId": "OP:SUBSCRIPTION.FUTURE",
+      "operationId": "OP:PLANNED.SUB-03",
       "storyIds": [
         "BS-14"
       ],
