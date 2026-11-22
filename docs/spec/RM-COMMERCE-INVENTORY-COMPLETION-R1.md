@@ -30,7 +30,7 @@ INVENTORY Q1–Q9 Quantity R1 PostgreSQL QUALIFIED на `534aa18008bc54f77a4b1f0
 
 ### INV-C1 — warehouse lifecycle и конкурентность (P0)
 - Сервис ORGANIZATION владеет `org_location`. Реализовать или квалифицировать update/deactivate/reactivate (по текущему HEAD).
-- Деактивация WAREHOUSE запрещена при `on_hand>0`, `reserved>0`, активных обязательствах по использованию локации; реализовать транзакционную проверку внутри общего корректно упорядоченного lock/admission protocol. Если доказана необходимость отдельной проверки активных заказов, добавить с точным SQL и тестом, иначе не сканировать все заказы.
+- Принятая действующая семантика R1.4: переход ACTIVE→INACTIVE — пауза склада; допустим при `on_hand>0`, но запрещён при `reserved>0`, ACTIVE reservation или OPEN stocktake. INACTIVE запрещает новые receive/reserve/transfer. Переход INACTIVE→CLOSED требует дополнительно `on_hand=0`. Любое расширение запрета на паузу с on_hand — отдельное продуктовое решение, не менять существующую квалифицированную семантику без согласования. Реализовать транзакционную проверку внутри общего корректно упорядоченного lock/admission protocol. Если доказана необходимость отдельной проверки активных заказов, добавить с точным SQL и тестом, иначе не сканировать все заказы.
 - В каждой новой складской операции обязательны ACTIVE+WAREHOUSE, PRODUCT и разрешённый SKU state. `receive` допускает DRAFT/PUBLISHED PRODUCT, `reserve` — PUBLISHED PRODUCT. Отдельно специфицировать разрешённые compensating operations для архивных SKU / закрываемого склада без потери ledger.
 - Race tests: `reserve×deactivate`, `transfer×deactivate`, `receive×deactivate`, `update×update`, revoke×mutation. Commit order определяет безопасный исход: если deactivate committed first — новое движение denied; если mutation committed first — deactivate проверяет свежие остатки/резервы и отказывает при препятствии. Ни deadlock, ни write-after-close.
 - Сохранить `FOR SHARE` PostgreSQL owner admission с корректным fencing status changes, `ON CONFLICT DO NOTHING` first position, сортировку lock order и H2 fallback. Повторная квалификация исходных Q1–Q9 обязательна.
@@ -118,3 +118,18 @@ Production public HTTP/OIDC, actual mail provider, least-privilege SQL, full sec
 ## 8. Execution instruction
 
 Do not create a new branch or merge into main. Start with latest `base_dev` source discovery; map each declared operation to actual method/SQL and existing tests. Change only gaps. Each stage produces focused commit, migration if needed, exact-head H2 and PostgreSQL CI, negative tests, and updated evidence. No extra REST controllers while Feature Freeze holds. If an architectural or product decision conflicts with normative R2, stop that particular implementation, record decision and keep fail-closed behavior.
+
+## 9. INV-R1.3/R1.4 implementation evidence (2026-11-22)
+
+По source review на `base_dev` уже существовали `OrganizationLocationService.update/deactivate/reactivate/close`, CAS `row_version`, `InventoryLocationUsagePort.blockers`, guarded `StockEligibility` c PostgreSQL owner `FOR SHARE`, а также `postgresDeactivationFencesConcurrentReceipt`. Повторно создавать lifecycle и переписывать существующие складские сервисы не требуется.
+
+**Новые тесты добавлены (не путать с GREEN):**
+- `OrganizationLocationLifecycleQualificationTest.postgresDeactivateBeforeTransferRejectsBothLedgerLegs`
+- `OrganizationLocationLifecycleQualificationTest.postgresTransferBeforeDeactivateCommitsAndPauseSeesDrainedStock`
+- `OrganizationLocationLifecycleQualificationTest.r14ConcurrentProfileVersionCannotOverwriteCommittedPause`
+- `SalesInventoryRbacQualificationTest.postgresDeactivateBeforeConfirmRejectsReservationAndRollsBackOrder`
+- `SalesInventoryRbacQualificationTest.postgresConfirmBeforeDeactivateFencesPauseAndLeavesActiveWarehouse`
+
+Последние два случая квалифицируют reserve через реальный SALES confirm и единый `OrderInventoryPort`, не через прямое изменение складских таблиц. Приоритет коммита проверяется PostgreSQL transactions с отдельными соединениями и latch. Ожидаются сохранность заказов, обеих ног transfer, резервов и status; отсутствие частичных коммитов.
+
+**Изменения:** тестовые файлы и этот документ; production Java/SQL не менялись. Коммиты `791e4b8`, `5deb320`. Точные CI workflow runs на итоговом HEAD пока не подтверждены; `INV-R1.3/R1.4 = IMPLEMENTED TEST CASES / QUALIFICATION PENDING`. Также остаются доп. проверки `update×update` с двумя конкурирующими соединениями, `revoke×mutation` и частные negative rollback/retry сценарии. Production HOLD.
