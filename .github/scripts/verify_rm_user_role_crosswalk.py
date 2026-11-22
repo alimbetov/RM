@@ -8,6 +8,7 @@ from pathlib import Path
 
 CATALOG = Path("docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json")
 CROSSWALK = Path("docs/spec/RM-R3-USER-ROLE-CROSSWALK-v1.json")
+ROLE_CASES = Path("docs/spec/RM-UR-R3.1-JUNIT-CASES-v1.json")
 PERMISSION_ENUM = Path("src/main/java/kz/rm/iam/DomainPermission.java")
 EXPECTED_DOMAINS = (
     "IAM_RBAC", "CRM_CORE", "CRM_INTERACTION", "CATALOG", "STOREFRONT",
@@ -37,7 +38,30 @@ def permission_names(java_source):
     return set(re.findall(r"\b([A-Z][A-Z0-9_]+)\s*\(", match.group(1)))
 
 
-def validate_documents(catalogue, crosswalk, permissions):
+def validate_documents(catalogue, crosswalk, permissions, role_cases=None):
+    if role_cases is None:
+        role_cases = {'schema': 'RM-UR-R3.1-JUNIT-CASES/v1', 'cases': []}
+    if role_cases.get('schema') != 'RM-UR-R3.1-JUNIT-CASES/v1':
+        raise ValueError('Invalid role-case catalogue schema')
+    by_id = {}
+    proof_keys = set()
+    for role_case in role_cases.get('cases', []):
+        cid = role_case.get('caseId')
+        if not isinstance(cid, str) or not cid.startswith('UR-R31-') or cid in by_id:
+            raise ValueError('Duplicate or invalid role case ID: ' + str(cid))
+        if role_case.get('evidenceStatus') != 'DECLARED_NOT_EXECUTED_ON_CURRENT_SHA' or role_case.get('mandatory') is not True:
+            raise ValueError('Role case falsely qualified or nonmandatory: ' + cid)
+        key = (role_case.get('evidenceArtifact'),role_case.get('junitSuite'),role_case.get('junitMethod'))
+        if key in proof_keys or key[0] != 'kms-postgres-surefire' or key[1] != 'UserRoleMatrixR31QualificationTest':
+            raise ValueError('Duplicate, non-PG or unknown role test key: ' + cid)
+        if not isinstance(key[2], str) or not key[2].startswith('urR31'):
+            raise ValueError('Invalid JUnit method: ' + cid)
+        proof_keys.add(key)
+        if not isinstance(role_case.get('requirementIds'), list) or not role_case['requirementIds']:
+            raise ValueError('Role case requires R3 links: ' + cid)
+        if not set(role_case.get('actorProfiles', [])) <= ACTORS:
+            raise ValueError('Invalid actor references in role case: ' + cid)
+        by_id[cid] = role_case
     if catalogue.get("schema") != "RM-R3-FUNCTIONAL-COVERAGE/v1":
         raise ValueError("Unexpected source catalogue schema")
     if crosswalk.get("schema") != "RM-QUAL-USER-R3-CROSSWALK/v1":
@@ -93,10 +117,17 @@ def validate_documents(catalogue, crosswalk, permissions):
         policy = item.get("permissionPolicy")
         if policy not in POLICIES and policy != "NOT_DEFINED":
             raise ValueError("Unknown permission policy for " + rid)
-        if item.get("qualified") is not False or item.get("userRoleCaseStatus") not in {"NOT_RUN", "NOT_IMPLEMENTED"}:
+        if item.get("qualified") is not False or item.get("userRoleCaseStatus") not in {"NOT_RUN", "NOT_IMPLEMENTED", "DECLARED_NOT_EXECUTED_ON_THIS_SHA"}:
             raise ValueError("Unexecuted role cases claim qualification: " + rid)
-        if item.get("userRoleCaseIds") != []:
-            raise ValueError("Role case IDs must be bound to executed tests, not guessed: " + rid)
+        linked = item.get("userRoleCaseIds")
+        expected_links = [case_id for case_id, case in by_id.items()
+                          if rid in case["requirementIds"]]
+        if linked != expected_links:
+            raise ValueError("Role case crosswalk mismatch: " + rid)
+        if linked and item.get("userRoleCaseStatus") != "DECLARED_NOT_EXECUTED_ON_THIS_SHA":
+            raise ValueError("Linked role cases lack declared execution status: " + rid)
+        if not linked and item.get("userRoleCaseStatus") not in {"NOT_RUN", "NOT_IMPLEMENTED"}:
+            raise ValueError("Unlinked role cases falsely reported: " + rid)
         counters["total"] += 1
         if original["delivery"] == "PLANNED":
             counters["planned"] += 1
@@ -129,6 +160,9 @@ def validate_documents(catalogue, crosswalk, permissions):
     if counters != {"total": 75, "implemented": 46, "planned": 29,
                     "declaredCanonicalProof": 41, "roleCasesPassed": 0}:
         raise ValueError("Unexpected R3-v1 baseline counts: " + str(counters))
+    for cid, case in by_id.items():
+        if not set(case["requirementIds"]) <= seen:
+            raise ValueError("Role case references unknown requirement: " + cid)
     if proof_gaps != PROOF_GAPS:
         raise ValueError("Five R3-v1 proof gaps must remain explicit: " + str(proof_gaps))
     return {"schema": "RM-QUAL-USER-R3-CROSSWALK-VALIDATION/v1",
@@ -137,7 +171,8 @@ def validate_documents(catalogue, crosswalk, permissions):
             "productionAdmission": "HOLD",
             "domains": len(EXPECTED_DOMAINS), **counters,
             "missingCanonicalProof": sorted(proof_gaps),
-            "roleTestEvidence": "NOT_RUN",
+            "roleTestEvidence": "DECLARED_NOT_EXECUTED",
+            "registeredRoleCases": len(by_id),
             "notes": "R3-v1 41 declared proofs are not 41 role-case passes; exact SHA evidence is separate."}
 
 
@@ -147,7 +182,9 @@ def validate(root):
     catalogue = json.loads(raw_catalogue)
     crosswalk = json.loads(raw_crosswalk)
     permissions = permission_names((root / PERMISSION_ENUM).read_text(encoding="utf-8"))
-    result = validate_documents(catalogue, crosswalk, permissions)
+    role_cases = json.loads((root / ROLE_CASES).read_text(encoding="utf-8"))
+    result = validate_documents(catalogue, crosswalk, permissions, role_cases)
+    result["roleCaseCatalogueSha256"] = hashlib.sha256((root / ROLE_CASES).read_bytes()).hexdigest()
     result["catalogueSha256"] = hashlib.sha256(raw_catalogue).hexdigest()
     result["crosswalkSha256"] = hashlib.sha256(raw_crosswalk).hexdigest()
     return result
