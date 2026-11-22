@@ -177,6 +177,32 @@ public class AutoOrderService {
                 authenticatedUserId);
     }
 
+    /** Bounded history. Principal identity is taken only from AuthenticatedBuyerOrders. */
+    @Transactional(readOnly=true)
+    org.springframework.data.domain.Page<OrderReceipt> buyerOrdersPage(
+            UUID authenticatedUserId,int page,int size) {
+        if(page<0||size<1||size>100)
+            throw new IllegalArgumentException("Page must be nonnegative, size 1..100");
+        if(authenticatedUserId==null)throw new SecurityException("Authentication required");
+        Integer verified=jdbc.queryForObject("""
+            SELECT count(*) FROM iam_email_identity e JOIN iam_user_account u ON u.id=e.user_id
+            WHERE e.user_id=? AND e.lifecycle_state='CURRENT'
+              AND e.verified_at IS NOT NULL AND u.status='ACTIVE'
+            """,Integer.class,authenticatedUserId);
+        if(verified==null||verified==0)throw new SecurityException("Verified email required");
+        Long count=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order WHERE buyer_user_id=?
+            """,Long.class,authenticatedUserId);
+        var orders=jdbc.query("""
+            SELECT id,status FROM crm.sales_order WHERE buyer_user_id=?
+            ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?
+            """,(rs,n)->new OrderReceipt(rs.getObject(1,UUID.class),rs.getString(2)),
+                authenticatedUserId,size,(long)page*size);
+        return new org.springframework.data.domain.PageImpl<>(orders,
+                org.springframework.data.domain.PageRequest.of(page,size),
+                count==null?0:count);
+    }
+
     private record Offer(UUID offerId,String title,BigDecimal unitPrice,String currency,
                          UUID catalogItemId,int quantity){}
     /**
