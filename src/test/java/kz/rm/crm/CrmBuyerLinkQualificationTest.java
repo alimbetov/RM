@@ -65,11 +65,13 @@ class CrmBuyerLinkQualificationTest {
             identity=UUID.randomUUID();
             jdbc.update("""
                     INSERT INTO public.iam_email_identity
-                    (id,user_id,lookup_hmac,email_envelope,verified_at,created_at)
-                    VALUES (?,?,?,?,?,?)
+                    (id,user_id,lookup_hmac,email_envelope,verified_at,created_at,
+                     lifecycle_state,active_lookup_hmac,current_owner_id)
+                    VALUES (?,?,?,?,?,?,'CURRENT',?,?)
                     """,identity,buyer,UUID.randomUUID().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
                     new byte[]{1,2,3},java.sql.Timestamp.from(Instant.now()),
-                    java.sql.Timestamp.from(Instant.now()));
+                    java.sql.Timestamp.from(Instant.now()),
+                    UUID.randomUUID().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),buyer);
         }
         UUID order=UUID.randomUUID();
         jdbc.update("""
