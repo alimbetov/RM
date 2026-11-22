@@ -15,6 +15,14 @@
 
 Эта стратегия **заменяет целевой сегментный выбор** документа `RM-PRODUCT-TARGETS-AND-KILLER-FEATURES-R1.md`, но не меняет норматив `RM-PLATFORM-STANDARD-R2`, исторические отчёты или предметные технические контракты.
 
+## 1.1 Исполняемая сервисная основа двух продуктов
+
+Для технического воплощения стратегии создана [RM-DUAL-PRODUCT-FOUNDATION-R1](../architecture/RM-DUAL-PRODUCT-FOUNDATION-R1.md): единые доменные владельцы, сквозной Business и QR Journey, роли, права, переходы, данные, будущая интеграция TASKS и блокирующие решения `DEC-FUL-01 / DEC-SAL-02 / DEC-LOC-03`.
+
+Машиночитаемая [матрица 19 продуктовых capabilities](RM-DUAL-PRODUCT-CAPABILITIES-R1.json) связывает существующие Java-файлы/методы и тестовые классы с **54 критическими CORE-P0 сценариями**, уже описанными в [RM-CORE-FUNCTIONAL-CLOSURE-R1](../spec/RM-CORE-FUNCTIONAL-CLOSURE-R1.md). Существование исходников и тестового кода **не означает** `PASS@SHA`; состояния product core остаются HOLD до полного exact-SHA CI.
+
+Это архитектурная/доказательная основа, а не новая независимая backend-подсистема. Контроллеры/UI STOP, TASKS остаётся после завершения текущих P0/P1.
+
 ## 2. Текущая последовательность
 
 1. **Service functional closure:** исправить общую регрессию; закрыть IAM/ORG, CRM, CATALOG/STOREFRONT, SALES/INVENTORY, QR и cross-domain business gates по `docs/spec/RM-CORE-FUNCTIONAL-CLOSURE-R1.md`.
