@@ -129,6 +129,6 @@ Maintain per case: code path, named test method, fixture/source SHA, PostgreSQL 
 
 ## Current deliverable status
 - 99 scenario designs: **AUTHORED** (9 groups × 11; unique IDs and situation titles within this document).
-- New service tests for this second pass: **0 executed / not claimed**.
+- New service tests for this second pass: **1 Java/JUnit test authored, 0 PostgreSQL executions verified**: `crmR2ArchivedCustomerFencesNewAndChangedInteractionsButKeepsReplay` in `CrmInteractionQualificationTest`. It covers selected A03/A07 invariants only; not 99 completed tests. The last reviewed code commit is `84818bdf33dd417ea4e5614c46db33ae0ef2a6f1`; final documentation commit must still receive exact-SHA CI qualification.
 - Source-confirmed: interaction idempotency, tenant-scoped rows, rowVersion transitions, active member checks; CRM PII boundary and existing interaction JUnit class.
 - Does not infer exact latest HEAD, 99-case PostgreSQL PASS, production-ready, or zero gaps from this document.
