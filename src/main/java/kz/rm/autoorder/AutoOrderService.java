@@ -51,7 +51,7 @@ public class AutoOrderService {
             });
         }
         UUID tenant=jdbc.query("""
-            SELECT tenant_id FROM crm.store_front WHERE slug=? AND state='PUBLISHED'
+            SELECT tenant_id FROM crm.store_front WHERE slug=?
             """,rs->{if(!rs.next())throw new IllegalArgumentException("Store not accepting orders");
                 return rs.getObject(1,UUID.class);},slug);
         byte[] requestHash=digest(normalized+"|"+basket.entrySet().stream()
@@ -69,6 +69,15 @@ public class AutoOrderService {
                 return new OrderReceipt(rs.getObject(1,UUID.class),rs.getString(3));
             },tenant,idempotencyKey);
         if(!existing.isEmpty()) return new CheckoutResult(existing.get(0));
+        // Required lock order for seller CAS commands and checkout:
+        // checkout stripe -> storefront -> offer -> catalogue.
+        // An exact idempotent retry must still resolve when the shop is paused.
+        String storefrontState=jdbc.query("""
+            SELECT state FROM crm.store_front WHERE tenant_id=? AND slug=? FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null,tenant,slug);
+        if(!"PUBLISHED".equals(storefrontState))
+            throw new IllegalArgumentException("Store not accepting orders");
+
 
         // Server-owned prices and availability; no trust in client-provided title, totals or tenant.
         List<Offer> offers=new ArrayList<>();
