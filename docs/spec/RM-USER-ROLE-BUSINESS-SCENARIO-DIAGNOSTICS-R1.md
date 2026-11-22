@@ -2,8 +2,8 @@
 
 **Дата:** 2026-11-22  
 **Репозиторий:** `alimbetov/RM`; **ветка разработки:** `base_dev`  
-**Статус:** SPECIFIED / IMPLEMENTATION AND ACCEPTANCE PENDING / PRODUCTION HOLD  
-**Приоритет:** P0 (авторизация, изоляция, доказательство отказов), P1 (сквозной пользовательский UX/E2E)  
+**Статус:** SPECIFIED / JUNIT SERVICE-LEVEL QUALIFICATION ONLY / IMPLEMENTATION PENDING / PRODUCTION HOLD  
+**Приоритет:** P0 (авторизация, изоляция, доказательство отказов), P1 (сквозные бизнес-сценарии на уровне Java-сервисов)  
 **Связи:** RM-SEC-09A; RM-STORE-09B; RM-INV-16; RM-QA-01B; RM-SALES-10A; RM-STORE-10A; RM-E2E-04; RM-R2.1.
 
 ## 1. Цель
@@ -111,13 +111,13 @@
 Для каждой операции фиксировать два независимых доказательства: **response** и **persisted result**.
 
 - **ALLOW:** ожидаемый статус/DTO; правильные tenant + object ownership; ровно заявленный delta строк/версий; бизнес-инварианты удовлетворены.
-- **DENY_AUTHN:** отсутствие токена/неверная подпись/issuer/audience/expiry → HTTP 401 (когда HTTP реализован), без вызова бизнес-команды.
-- **DENY_AUTHZ:** валидный субъект, но нет membership/grant/tenant ACTIVE → HTTP 403, без запрещённого изменения.
+- **DENY_AUTHN:** на текущем сервисном уровне недоверенный/отсутствующий VerifiedActor или неверная синтетическая JWT-проверка отвергается до бизнес-команды; HTTP 401 не проверяется этим ТЗ.
+- **DENY_AUTHZ:** доверенный VerifiedActor, но нет membership/grant/tenant ACTIVE → SecurityException/доменный отказ без запрещённых изменений; HTTP 403 вне объёма.
 - **NOT_FOUND_MASKED:** чужой объект внутри доступного tenant — одинаковое внешнее поведение с отсутствующим объектом; запрещено подтверждать существование чужого заказа.
-- **CAS_CONFLICT:** HTTP 409 или эквивалентный типизированный доменный outcome, версии и история неизменны.
-- **INVALID_INPUT:** HTTP 400, нет side effects.
+- **CAS_CONFLICT:** типизированный доменный конфликт/исключение, версии и история неизменны; HTTP 409 вне объёма.
+- **INVALID_INPUT:** валидационное исключение Java-сервиса, нет side effects; HTTP 400 вне объёма.
 - **IDEMPOTENT_REPLAY:** идентичный receipt/state, новых business rows = 0.
-- **NOT_IMPLEMENTED:** сценарий не проходит production gate; никогда не интерпретировать HTTP 404 отсутствующего маршрута как успешный security test.
+- **NOT_IMPLEMENTED:** отсутствующий сервисный контракт/операция не проходит gate; отсутствие REST-маршрута не является ни успешной, ни отрицательной проверкой.
 - **INFRA_UNAVAILABLE:** недоступность IdP/JWKS, email, DB, KMS, RustFS — отказ по явному fail-closed контракту, не автоматический GRANT/PASS.
 
 Для каждого отрицательного теста сохранять before/after:
@@ -201,8 +201,8 @@
 | **R1.1** | L1/L2 матрица IAM, RBAC on/off, cross-tenant, blocked/revoke; негативные after-state assertions | Ноль неавторизованных side effects; H2 + PG GREEN |
 | **R1.2** | L2 коммерческие цепочки BS-03..BS-13 с CAS, history, inventory consistency | Авторитетные состояния подтверждены; no fake history |
 | **R1.3** | Детерминированные SQL-barrier concurrency + crash/retry, полный pre/post-state diff | Обе сериализации проверены, без необъяснённого flaky |
-| **R1.4** | L3 staging OIDC + поддержанный checkout/buyer verification/adapters + sandbox email | Реальные JWT и внешний пользовательский journey PASS |
-| **R1.5** | QA-01B same SHA manifest, негативная security qualification и финальный maturity review по сервисам | Итоговый machine-readable `QUALIFIED`, только затем кандидат L4 |
+| **R1.4** | Расширенные JUnit business journeys: роли/tenant/grants, история заказа, повтор, rollback и права после revocation | H2+PG на одном SHA, без REST/HTTP |
+| **R1.5** | QA-01B same SHA manifest, негативная service-level security qualification и maturity review | `SERVICE_QUALIFIED` для проверенных контуров; никакого автоматического L4 |
 
 P0 тесты R1.0–R1.3 не следует откладывать до UI/production; L3 начинается только после закрытия P0.
 
@@ -217,6 +217,182 @@ P0 тесты R1.0–R1.3 не следует откладывать до UI/pro
 7. `checkout × suspend`, `price × checkout`, `revoke × mutation` и `transfer × reconciliation` имеют доказательства обоих порядков на PostgreSQL.
 8. Ошибки, закрытые HTTP маршруты, неработающий IdP и отсутствующий checkout transport не трактуются как успешный пользовательский сценарий.
 9. Каждый обязательный test case и workflow подтверждены на одном SHA; манифест отвергает stale/partial evidence.
-10. L4 присваивается только при полном L3-проходе с настоящим тестовым IdP и поддержанным транспортом; L5 и Production остаются отдельными воротами.
+10. Успех JUnit/H2/PostgreSQL даёт только `SERVICE_QUALIFIED`; L4 (реальный пользовательский E2E), L5 и Production относятся к отдельным будущим воротам.
 
 **Нормативное решение:** диагностический статус сервисов нельзя повышать на основании synthetic roles, статического списка endpoint или количества JUnit тестов. Показатель готовности считается из исполненных обязательных сценариев, а не из числа строк кода. **PRODUCTION HOLD** до отдельной security/operational admission.
+
+
+---
+
+## 13. R1.1 — уточнение способа тестирования (нормативно)
+
+**Решение:** вся реализация в рамках RM-QUAL-USER-R1 выполняется **только через JUnit-тесты Java-сервисов**. REST controllers, HTTP request/response, MockMvc, browser, API client, реальный Keycloak/IdP и публичные checkout endpoints **не разрабатываются и не являются зависимостью** этой квалификации. Если старые разделы упоминают HTTP/L3, применять ограничение настоящего раздела. Уровень пользовательского E2E остаётся отдельным будущим ТЗ.
+
+Сохраняем существующие \`AuthenticatedSalesCommands\`, \`AuthenticatedSalesQueries\`, \`AuthenticatedBuyerOrders\`, \`AuthenticatedInventoryCommands\`, \`AuthenticatedInventoryReconciliation\`, \`AuthenticatedInventoryReconciliationRuns\`, \`SellerOfferService\`, \`StorefrontOfferService\`, \`StorefrontManagementService\`, CATALOG, CRM, IAM и их сервисные контракты. Никаких дополнительных диагностических контроллеров и дублей бизнес-логики.
+
+Три уровня **внутри текущей работы**:
+
+| Уровень | Технология | Доказательство | Статус |
+|---|---|---|---|
+| UT | JUnit 5 + Mockito/AssertJ, без запуска Spring/БД, где возможно | Чистые разрешения, комбинации grants, валидаторы, mapping, реакция на exception | Обязателен для выделяемых pure-logic policy |
+| IT-H2 | \`@SpringBootTest\`, H2, реальные application services, test-only trusted actors | Позитивные и негативные бизнес-операции, tenant isolation, no-op/CAS, persistence deltas | Обязательный smoke, но **не** доказательство PostgreSQL concurrency |
+| IT-PG | \`@SpringBootTest\`, PostgreSQL, независимые подключения/транзакции | Реальная блокировка, rollback, dual-tenant, revocation, interleaving, миграции и инварианты | Обязательный P0 gate |
+
+**Важно:** тесты с \`new OidcActorResolver(testDecoder,users)\` и синтетическими JWT являются квалификацией **сервисной границы доверенного субъекта**, но не доказывают реальную аутентификацию пользователя. JUnit с моками не подменяет PostgreSQL integration. Не называть набор unit-only тестов сквозным Real User E2E.
+
+### 13.1. Фикстуры пользователей и ролей
+
+Исполняемый реестр test profiles; каждый профиль включает actor alias, account status, tenant membership role/status, конфигурацию \`rbacEnforced\`, набор точных \`DomainPermission\` и области видимости объектов.
+
+| Alias | Membership | Grants | Проверяемое поведение |
+|---|---|---|---|
+| U0 | отсутствует | нет | Null/untrusted principal отказ |
+| U1 | покупатель, без seller membership | verified buyer identity | Чтение **своих** заказов, но не seller mutations |
+| U2 | OWNER A | владелец управляет RBAC; прочие grants только явные | \`TENANT_RBAC_MANAGE\` остаётся неделегируемым |
+| U3 | ADMIN A | SALES_ORDER_READ | Читает, не подтверждает заказ |
+| U4 | MANAGER A | SALES_ORDER_CONFIRM + INVENTORY_RESERVE | Подтверждает заказ, но не меняет цену |
+| U5 | MEMBER A | INVENTORY_RECEIVE + INVENTORY_STOCK_READ | Приход, сверка без корректировки |
+| U6 | VIEWER A | INVENTORY_STOCK_READ | Читает склад, не проводит движения |
+| U7 | глобальный ACTIVE, без A membership | любые внешние claims | Полный отказ в tenant командах |
+| U8 | MEMBER B | grants только B | Нет доступа к A |
+| U9 | MEMBER A и ADMIN B | независимые grants A/B | Проверка двух независимых tenant policy |
+| U10 | SUSPENDED global account | ранее назначенные grants | Полный отказ новым операциям |
+| U11 | ACTIVE, но role revoked/unassigned | stale actor context | Отказ после изменения RBAC в БД |
+| U12 | INVITED/SUSPENDED/LEFT membership | ранее назначенные grants | Нет действующего членства |
+
+**Роль не означает неявный доступ.** При \`rbacEnforced=true\` любое управляемое permission тестируется в вариантах grant present, grant absent, revoked. При \`rbacEnforced=false\` expected выводится из фактического \`TenantAuthorization.permitted\`, а не из условного «OWNER может всё». Если на тестовом fixture появилось \`TENANT_RBAC_MANAGE\` у ADMIN, операция всё равно обязана отказать.
+
+### 13.2. Реестр разрешений как тестовые данные
+
+Разместить реестры в \`src/test/resources/qualification/user-role/\`: \`actors.v1.yaml\`, \`operations.v1.yaml\`, \`scenario-cases.v1.yaml\`, \`side-effects.v1.yaml\`, \`interleavings.v1.yaml\`. Реестры **не используются в production для принятия решений**; источник права — действующий \`DomainPermission\` + \`TenantAuthorization\`.
+
+Каждая запись операции содержит \`operationId\`, \`ownerService\`, \`javaMethod\`, \`requiredGrantsAllOf\`, \`objectTenantPredicate\`, \`prerequisites\`, \`businessEffect\`, \`negativeCases\`, \`testMethod\`, \`databaseTier\`, \`mandatory\`, \`implementationStatus\`. Регистратор должен проверять, что все указанные \`DomainPermission\` существуют и обязательные \`testMethod\` действительно исполнены; отсутствие теста → \`NOT_RUN\`, а не \`PASS\`.
+
+Пример:
+
+\`\`\`yaml
+schema: RM-QUAL-USER-R1/operation-v1
+operationId: SALES.CONFIRM
+ownerService: AuthenticatedSalesCommands
+javaMethod: confirm(VerifiedActor, UUID, UUID, UUID)
+requiredGrantsAllOf:
+  - SALES_ORDER_CONFIRM
+  - INVENTORY_RESERVE
+tenantPredicate: sales_order.tenant_id == tenantId
+testLevel: IT_PG
+mandatory: true
+negativeCases:
+  - MISSING_SALES_GRANT
+  - MISSING_INVENTORY_GRANT
+  - OTHER_TENANT
+  - REVOKED_ROLE
+  - SUSPENDED_ACTOR
+expectedOnDeny:
+  salesOrderVersionDelta: 0
+  stockReservationDelta: 0
+  stockMovementDelta: 0
+\`\`\`
+
+Набор грантов для других multi-permission операций формируется из действующих сервисных проверок, не придумывается по названию метода.
+
+## 14. Матрица тестов бизнес-операций
+
+Для каждой строки нужны **ALLOW + DENY_NO_GRANT + DENY_FOREIGN_TENANT + DENY_INACTIVE + REPLAY/CAS (если применимо)**. Фактический статус \`IMPLEMENTED\` определяется наличием Java-service метода, а \`QUALIFIED\` — исключительно тестовым доказательством.
+
+| Код | Сервисная операция | Основное доказательство |
+|---|---|---|
+| IAM-01 | OWNER role create/grant/revoke/assign | Неделегируемость OWNER, re-admission после revoke |
+| IAM-02 | Workspace/actor/membership suspend | Новые команды отвергаются и не меняют authority tables |
+| CAT-01 | SKU create/publish/archive | Только свой tenant, blocked archive при зависимостях |
+| STORE-01 | Storefront create/publish/pause | Permission, CAS, no-op, audit delta |
+| STORE-02 | Offer create/publish/pause/hide | SKU tenant ownership, compatible facade semantics |
+| STORE-03 | Price edit/history | 0 revisions при no-op/reject, ровно 1 при update, immutable snapshot |
+| BUY-01 | Service-level checkout | One seller, immutable snapshot, idempotency, seller workspace ACTIVE |
+| BUY-02 | Authenticated buyer history | Verified principal, own orders only, bounded pagination |
+| SALES-01 | Seller order search/detail/events | \`SALES_ORDER_READ\`, no buyer PII, tenant predicates |
+| SALES-02 | Confirm | \`SALES_ORDER_CONFIRM ∧ INVENTORY_RESERVE\`, active reservation |
+| SALES-03 | Fulfill | \`SALES_ORDER_FULFILL ∧ INVENTORY_FULFILL\`, one posting |
+| SALES-04 | Cancel | Seller permission + applicable inventory rollback, zero orphan reservations |
+| INV-01 | Receive/correct/write-off | No oversell, idempotency, movement posting_version |
+| INV-02 | Transfer | Two atomic legs, consistent balances, no deadlocks |
+| INV-03 | Reconciliation inspect/advance | No false mismatches from legal concurrent writes, legacy UNVERIFIED |
+| CRM-01 | Read/write/PII | Separate CRM_READ/WRITE/PII_READ and data classification |
+| ORG-01 | Warehouse/location read/write | Scope by tenant, no cross-tenant FK |
+| FILE-01 | Attach/read/delete | Permission + ownership, no PII leak, no external RustFS requirement for unit suite |
+
+Неподдерживаемую операцию маркировать \`NOT_IMPLEMENTED\` и исключать из **numerator**, но не из mandatory **denominator**.
+
+## 15. Достоверная диагностика изменений и отказов
+
+Тест считается \`PASS\` только если подтверждены **три независимые составляющие**: (1) доменный результат/исключение, (2) ожидаемое изменение авторитетных таблиц, (3) сохранение критических бизнес-инвариантов.
+
+Пример \`SALES.CONFIRM\`: даже если сервис выбросил \`SecurityException\`, assert-before/after сравнивает \`crm.sales_order\`, \`crm.sales_order_status_event\`, \`crm.inv_stock_reservation\`, \`crm.inv_stock_balance\`, \`crm.inv_stock_movement\` и релевантные receipt/outbox/audit. Разрешено событие *диагностики отказа* вне business mutation; нельзя создавать success audit/event/quantity movement при DENY.
+
+Нормализованные ожидания:
+- \`ALLOW\`: точные \`status\`, версии CAS, количества строк, quantity equation и immutable snapshots.
+- \`DENY_AUTHZ\`: \`SecurityException\`, нулевые запрещённые domain deltas.
+- \`DENY_OBJECT\`: \`not found in tenant\` или эквивалентный masked domain outcome без раскрытия чужих данных.
+- \`CONFLICT\`: понятное состояние версии/заказа и нулевой side effect.
+- \`REPLAY\`: не создаёт вторую запись, возвращает детерминированный receipt/решение.
+- \`INVALID_ARGUMENT\`: вход отвергнут без записи.
+- \`BLOCKED_REQUIRED\`, \`NOT_IMPLEMENTED\`, \`NOT_RUN\`: **не** являются успешными тестами.
+
+Проверять данные после commit/rollback новой транзакцией/connection, чтобы test-level \`@Transactional\` и JPA persistence context не скрывали ошибки commit. Все негативные тесты сравнивают **последовательные read-only snapshots** релевантных данных одного fixture, а не только общие \`count(*)\` по всей базе.
+
+### 15.1. Конкурентные доказательства PostgreSQL
+
+JUnit IT-PG должен исполнять оба порядка для \`checkout × suspend\`, \`confirm × revoke\`, \`fulfill × cancel\`, \`price CAS × checkout\`, \`transfer × reconciliation\`, \`advance × advance\`. Управление порядком: JDBC row locks / barriers на отдельных connection и \`TransactionTemplate\`, не \`Thread.sleep\` как доказательство.
+
+Для каждого сценария сохранять две независимые проверки: **serializable business outcome** и **transactionally correct persistence**. Повтор после rollback/crash не дублирует receipt/movement/event; для \`REPEATABLE_READ\` возможный PostgreSQL \`40001\` квалифицируется как отдельный retry outcome, не как повреждение ledger.
+
+## 16. Отчёты по функциональному покрытию и готовности
+
+**Два процента, которые запрещено смешивать:**
+
+1. \`implementationCoverage = implementedMandatoryCases / totalMandatoryCases * 100\` — у операции существует вызываемый контракт и подготовлен тест.
+2. \`verifiedCoverage = passedMandatoryCases / totalMandatoryCases * 100\` — тест реально исполнен и все его утверждения прошли на требуемой СУБД и SHA.
+
+\`NOT_IMPLEMENTED\`, \`NOT_RUN\`, \`BLOCKED_REQUIRED\`, \`FAILED\` учитываются в знаменателе и **не** увеличивают \`verifiedCoverage\`. Дополнительно отчитывать \`negativeCoverage\`, \`crossTenantCoverage\`, \`concurrencyCoverage\`, \`rolesCovered\` и \`operationsCovered\` (каждый с собственным denominator). Не выводить «готово 95%» только из числа тестов JUnit без мэппинга на сценарии.
+
+Машинный файл \`target/qualification/rm-user-role-matrix.json\`:
+
+\`\`\`json
+{
+  "schema": "RM-QUAL-USER-R1/v2",
+  "level": "JAVA_SERVICE_UNIT_AND_INTEGRATION",
+  "repository": "alimbetov/RM",
+  "branch": "base_dev",
+  "commitSha": "injected-by-ci",
+  "totals": {
+    "mandatory": 0,
+    "implemented": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0,
+    "notRun": 0
+  },
+  "coverage": {
+    "implementationPercent": null,
+    "verifiedPercent": null
+  },
+  "cases": [],
+  "gate": "HOLD"
+}
+\`\`\`
+
+Поля \`0\` и \`null\` выше — **образец формата**, не фактическая статистика. \`gate=SERVICE_QUALIFIED\` допустим только если \`mandatory>0\`, \`passed==mandatory\`, нет пропусков, проверены H2 и PostgreSQL по обязательной матрице и SHA совпадает с RM-QA-01B. Генератор никогда не выставляет PASS по декларации реестра.
+
+## 17. Выполнение и критерии приёмки
+
+| Релиз | Содержание | Обязательное подтверждение |
+|---|---|---|
+| QUAL-USER-R1.0 | Реестр ролей, разрешений и 18 операций; автоматическая проверка completeness | Ни одной незарегистрированной mandatory операции |
+| R1.1 | UT+IT-H2: role/grant/tenant/subject матрица, side-effect assertions | Все P0 cases исполняются; неверные права не меняют DB |
+| R1.2 | IT-PG: SQL/JDBC real transactions, role revocation, CAS, owner/read, dual-tenant | Все P0 PostgreSQL cases PASS |
+| R1.3 | IT-PG: двухпорядковые concurrency + crash/retry + long movement ledger | Отдельные воспроизводимые тесты на каждый order |
+| R1.4 | Сквозная **сервисная** цепочка CATALOG → STOREFRONT → CHECKOUT → SALES → INVENTORY → RECONCILIATION, пользовательские роли меняются между шагами | Доказанные authority state transitions и отсутствие forbidden side effects |
+| R1.5 | Пооперационный coverage report + QA-01B exact-SHA gate и отчёт зрелости | \`SERVICE_QUALIFIED\` для реально проверенных кейсов; **не** Level 4 |
+
+**Не входить** в работу с REST controllers, OAuth login-flow, MockMvc, браузером, frontend или email transport. Даже если в репозитории уже есть HTTP-код, он не используется и не расширяется данным ТЗ.
+
+**Production HOLD** остаётся независимо от результатов JUnit. L4 Real User E2E и production admission потребуют отдельной будущей спецификации и пользовательского транспорта.
