@@ -38,3 +38,22 @@ Shared SQL invariants assert order state, single handover receipt, one COMPLETED
 `QR-06B/B0 = PARTIAL SOURCE REVIEW`; `QR-06B/B1 = IMPLEMENTED TEST CANDIDATE / NOT YET VERIFIED`; overall `QR-06B = HOLD`.
 
 Review GitHub Actions for the candidate SHA and require a successful PostgreSQL run and its reports before elevating status. Do not infer pass from workflow initiation.
+
+
+## 2026-11-22 update — B1 enhanced handover race qualification
+
+**Exact tested code SHA:** `4bea2040cb38632844d3f44792d33932e6034873`  
+**GitHub Actions run:** https://github.com/alimbetov/RM/actions/runs/45032478053  
+**Workflow:** RM QR-06B PostgreSQL Handover Race Qualification  
+**Result:** PostgreSQL 17 integration job SUCCESS, exact SHA verification SUCCESS, artifact upload SUCCESS.
+
+Extracted job log:
+- `TenantRbacRevocationQualificationTest`: 11 tests, 0 failures, 0 errors, 0 skipped.
+- `QrWarehouseHandoverQualificationTest`: 17 tests, 0 failures, 0 errors, 0 skipped.
+- **Total: 28 tests, 0 failures, 0 errors, 0 skipped. BUILD SUCCESS.**
+
+Added in the tested commit: five independently authorized employees competing to fulfill a single order; concrete handover vs role `INVENTORY_FULFILL` revocation in both transactional commit orders; concrete handover vs global account suspension in both commit orders. The previous B1 tests of warehouse-scope revocation in both orders and deterministic replay with an alternate request key are included in this same successful qualification run. Persisted assertions cover one handover, one COMPLETED status event, one fulfillment movement per reservation, immutable handover line references, consumed credential, stock invariants and no effects on denied operations.
+
+**Disposition:** `QR-06B/B1 = PASS (defined in-process PostgreSQL service-level scope, tested SHA only)`. This is NOT `QR-06B = PASS`, nor a production admission. The five workers are independent authorized identities inside one test JVM; two independent application processes and process crash/failure recovery remain untested. No physical network response loss was injected (service-level replay was simulated). The existing legacy workflow's H2 SUCCESS is not used to infer PG admission.
+
+Next: B2 crash and response-loss injection, multi-instance qualification; B3 mixed load; external OIDC/scanners/HTTPS and commercial pickup policy remain HOLD. Ten-minute TTL is UAT only.
