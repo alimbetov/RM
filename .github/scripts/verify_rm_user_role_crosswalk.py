@@ -9,6 +9,7 @@ from pathlib import Path
 CATALOG = Path("docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json")
 CROSSWALK = Path("docs/spec/RM-R3-USER-ROLE-CROSSWALK-v1.json")
 ROLE_CASES = Path("docs/spec/RM-UR-R3.1-JUNIT-CASES-v1.json")
+ROLE_CASES_R32 = Path("docs/spec/RM-UR-R3.2-JUNIT-CASES-v1.json")
 PERMISSION_ENUM = Path("src/main/java/kz/rm/iam/DomainPermission.java")
 EXPECTED_DOMAINS = (
     "IAM_RBAC", "CRM_CORE", "CRM_INTERACTION", "CATALOG", "STOREFRONT",
@@ -41,20 +42,23 @@ def permission_names(java_source):
 def validate_documents(catalogue, crosswalk, permissions, role_cases=None):
     if role_cases is None:
         role_cases = {'schema': 'RM-UR-R3.1-JUNIT-CASES/v1', 'cases': []}
-    if role_cases.get('schema') != 'RM-UR-R3.1-JUNIT-CASES/v1':
+    if role_cases.get('schema') not in {'RM-UR-R3.1-JUNIT-CASES/v1','RM-UR-R3-JUNIT-COMBINED/v1'}:
         raise ValueError('Invalid role-case catalogue schema')
     by_id = {}
     proof_keys = set()
     for role_case in role_cases.get('cases', []):
         cid = role_case.get('caseId')
-        if not isinstance(cid, str) or not cid.startswith('UR-R31-') or cid in by_id:
+        if not isinstance(cid, str) or not (cid.startswith('UR-R31-') or cid.startswith('UR-R32-')) or cid in by_id:
             raise ValueError('Duplicate or invalid role case ID: ' + str(cid))
         if role_case.get('evidenceStatus') != 'DECLARED_NOT_EXECUTED_ON_CURRENT_SHA' or role_case.get('mandatory') is not True:
             raise ValueError('Role case falsely qualified or nonmandatory: ' + cid)
         key = (role_case.get('evidenceArtifact'),role_case.get('junitSuite'),role_case.get('junitMethod'))
-        if key in proof_keys or key[0] != 'kms-postgres-surefire' or key[1] != 'UserRoleMatrixR31QualificationTest':
+        allowed_suites = {'UserRoleMatrixR31QualificationTest', 'SalesInventoryRbacQualificationTest',
+                          'CrmR1aQualificationTest', 'FilesR10bQualificationTest',
+                          'OrganizationLocationLifecycleQualificationTest'}
+        if key in proof_keys or key[0] != 'kms-postgres-surefire' or key[1] not in allowed_suites:
             raise ValueError('Duplicate, non-PG or unknown role test key: ' + cid)
-        if not isinstance(key[2], str) or not key[2].startswith('urR31'):
+        if not isinstance(key[2], str) or not key[2].startswith(('urR31' if cid.startswith('UR-R31-') else 'urR32')):
             raise ValueError('Invalid JUnit method: ' + cid)
         proof_keys.add(key)
         if not isinstance(role_case.get('requirementIds'), list) or not role_case['requirementIds']:
@@ -183,8 +187,13 @@ def validate(root):
     crosswalk = json.loads(raw_crosswalk)
     permissions = permission_names((root / PERMISSION_ENUM).read_text(encoding="utf-8"))
     role_cases = json.loads((root / ROLE_CASES).read_text(encoding="utf-8"))
-    result = validate_documents(catalogue, crosswalk, permissions, role_cases)
+    extra = json.loads((root / ROLE_CASES_R32).read_text(encoding="utf-8"))
+    if extra.get("schema") != "RM-UR-R3.2-JUNIT-CASES/v1":
+        raise ValueError("Invalid R3.2 registry schema")
+    combined = {"schema":"RM-UR-R3-JUNIT-COMBINED/v1", "cases":role_cases["cases"] + extra["cases"]}
+    result = validate_documents(catalogue, crosswalk, permissions, combined)
     result["roleCaseCatalogueSha256"] = hashlib.sha256((root / ROLE_CASES).read_bytes()).hexdigest()
+    result["roleCaseR32Sha256"] = hashlib.sha256((root / ROLE_CASES_R32).read_bytes()).hexdigest()
     result["catalogueSha256"] = hashlib.sha256(raw_catalogue).hexdigest()
     result["crosswalkSha256"] = hashlib.sha256(raw_crosswalk).hexdigest()
     return result
