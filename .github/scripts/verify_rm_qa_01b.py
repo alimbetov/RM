@@ -16,14 +16,14 @@ MANIFEST = Path("rm-exact-sha-manifest.json")
 REQUIRED = {
     "RM Domain Security and PostgreSQL Qualification": ("kms-h2-surefire", "kms-postgres-surefire", "iam-pii-populated-pg-surefire"),
     "CRM R1.2 Populated PostgreSQL Upgrade Qualification": ("crm-r12-populated-upgrade-surefire",),
-    "RM Domain Security and PostgreSQL Qualification":
-        ("CommercialCoreE2EQualificationTest", "AutoOrderR1QualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification": ("inventory-0081-populated-postgresql",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification": ("sales-084-populated-postgresql",),
     "RustFS Real Infrastructure E2E": ("rustfs-real-infra-e2e-surefire",),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
+    "RM Domain Security and PostgreSQL Qualification":
+        ("CommercialCoreE2EQualificationTest", "AutoOrderR1QualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification":
         ("InventoryMovementQualificationTest",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification":
@@ -72,7 +72,7 @@ def verify():
     if not migrations:
         problems.append("No Liquibase SQL migration files")
     for f in migrations:
-        digest.update(f.relative_to(ROOT).as_posix().encode() + b"\\0")
+        digest.update(f.relative_to(ROOT).as_posix().encode() + b"\0")
         digest.update(hashlib.sha256(f.read_bytes()).digest())
     manifest["migrationFingerprint"] = {
         "algorithm": "sha256:path-and-content",
