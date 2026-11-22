@@ -63,3 +63,45 @@ The repository has a root pom.xml and no mvnw/gradlew in the reviewed tree; use 
 **Code correction:** commit `18e65ed07f1d6208e24fc457276d7700d6478d2d` updates the test to record `locations.get(...).updatedAt()` persisted value before the no-op and compare it with the persisted value after. This preserves the intended business invariant (no timestamp change), without relying on DB nanoscale precision. At document update, the new CI on corrected SHA may be queued; do **not** call ORG-R1.1 GREEN until it completes successfully. The remaining tests on the failed run were reported without errors, but the whole run was **not GREEN**.
 
 **Scope:** no production Java semantics modified by the precision correction; the adjustment is test-only.
+
+
+## 6. PostgreSQL R1.1 concurrency qualification — GREEN on an exact tested SHA
+
+**Source SHA:** `69f757cf4d79c84d0198a6f2af432067a17007b2` on `base_dev`. **CI evidence:** [RM Domain Security and PostgreSQL Qualification #44989157721](https://github.com/alimbetov/RM/actions/runs/44989157721) — **completed SUCCESS** (postgres-integration, h2-smoke, postgres-pii-populated all green). **New source-verified suite:** [OrganizationLocationR11ConcurrencyQualificationTest.java](https://github.com/alimbetov/RM/blob/base_dev/src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java). No SALES/AutoOrder production code was modified; the suite uses their existing service API as test fixtures and real paired permissions.
+
+**CI result by environment:**
+
+| Job | Maven result | Execution detail |
+|---|---|---|
+| `postgres-integration` | `BUILD SUCCESS` | 314 test cases discovered; 0 failures, 0 errors, 18 skipped; **6/6 new ORG PostgreSQL concurrency cases executed and PASS** |
+| `h2-smoke` | `BUILD SUCCESS` | 314 test cases discovered; 0 failures, 0 errors, 66 skipped; **6/6 new PostgreSQL-specific race tests intentionally skipped**, because H2 does not prove PostgreSQL row locks |
+| `postgres-pii-populated` | SUCCESS | Existing isolated populated IAM/PII upgrade job passed; not evidence of ORGANIZATION populated upgrade |
+ 
+**New PostgreSQL barrier test evidence (all PASS):**
+
+| ID | Test method | Transaction order | Observable invariants |
+|---|---|---|---|
+| `ORG-R11-CON-01` | `postgresConfirmedOrderWinsThenDeactivationIsBlockedByReservation` | seller `confirm` commits first; `deactivate` waits for warehouse lock, then denies | CONFIRMED with exactly 1 ACTIVE reservation for order and 3 reserved units; location ACTIVE, no DEACTIVATED audit |
+| `ORG-R11-CON-02` | `postgresDeactivationWinsThenNewConfirmationRollsBackToPlaced` | `deactivate` locks location first; `confirm` waits, then fails on INACTIVE | seller order remains PLACED; zero reserve, zero CONFIRMED events; warehouse INACTIVE |
+| `ORG-R11-CON-03` | `postgresCommittedTransferWinsAndPauseRetainsPhysicalLedgerConservation` | `transfer` commits first; warehouse pause waits | 2 immutable transfer movement legs, 6 source + 4 target = initial 10, destination INACTIVE with free stock |
+| `ORG-R11-CON-04` | `postgresPausedTargetWinsThenTransferCannotCreateAnyLeg` | pause target first; transfer waits then refuses | source still 10, target balance absent, 0 transfer legs |
+| `ORG-R11-CON-05` | `postgresSameVersionCompetingProfilesOnlyOneMutationAndAuditCommit` | first update holds `org_location FOR UPDATE`, second same expectedVersion waits | one current profile, rowVersion 1, exactly 1 UPDATED audit event |
+| `ORG-R11-CON-06` | `postgresRevokeWaitsForAdmittedMutationAndSubsequentWriteIsDenied` | admitted deactivate holds IAM workspace `FOR SHARE`, owner revoke waits for `FOR UPDATE` | first operation commits and has one DEACTIVATED audit, next post-revoke mutation fails with SecurityException and no UPDATED audit |
+
+The tests use **two independent worker threads with transaction templates and CountDownLatch barriers**, assert a lock wait via bounded Future timeout, release a chosen transaction, and then verify the committed persistent DB state. This qualifies the tested **commit order** for each pair, not every possible multi-tenant scheduling, starvation, outage or throughput scenario.
+
+**Status of first failed run:** [#44988252109](https://github.com/alimbetov/RM/actions/runs/44988252109) had a single incorrect nanosecond-vs-microsecond timestamp assertion; corrected with test-only commit `18e65ed0`. Baseline CI [#44988578245](https://github.com/alimbetov/RM/actions/runs/44988578245) had already qualified 308 cases; the new **six additional real-PG cases** bring the new qualifying run to 314 test cases.
+
+### Qualification decision
+
+**ORG-R1.1 code + defined six PostgreSQL concurrency regressions: GREEN on SHA `69f757cf...`.** All requested pairs (`reserve/confirm×deactivate`, `transfer×deactivate`, `update×update`, `RBAC revoke×mutation`) have at least one deterministic real-PG winning-order test. No code hotfix was required after adding the six race cases.
+
+**Residual HOLD outside this narrowly qualified gate:**
+
+1. Full `ORG-P03…P07` proposed larger matrix remains unexecuted; six implemented tests do not substitute for ~98 originally planned broader cases.
+2. PostgreSQL populated-data migration, literal LIKE/deep-paging validation, comprehensive recovery/retry, load p95/p99 and full pass 08–12 release gates are not closed.
+3. `SALES` immutable order-line SKU snapshot and legacy INACTIVE warehouse fulfillment remain owned by other parallel changes; no modification or implied validation under this ORGANIZATION patch.
+4. IAM solo-owner self-functional-role policy is not changed or approved here.
+5. A later `base_dev` HEAD may include unrelated concurrent commits. Claim GREEN for the **tested SHA** and inspect subsequent diffs/CI before adopting a later HEAD as qualified.
+
+**Next recommended work:** no expansion until a separate release admission decision. Preserve these six tests as mandatory regression gate for subsequent ORGANIZATION and INVENTORY changes. Production remains **HOLD**, not because these six tests failed, but because the larger evidence and release gates are still pending.
