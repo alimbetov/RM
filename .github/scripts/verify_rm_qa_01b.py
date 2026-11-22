@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path("rm-exact-sha-manifest.json")
 REQUIRED = {
-    "RM Domain Security and PostgreSQL Qualification": None,
+    "RM Domain Security and PostgreSQL Qualification": "kms-postgres-surefire",
     "CRM R1.2 Populated PostgreSQL Upgrade Qualification": "crm-r12-populated-upgrade-surefire",
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification": "inventory-0081-populated-postgresql",
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification": "sales-084-populated-postgresql",
@@ -72,7 +72,7 @@ def verify():
             problems.append(f"{name}: missing/failed jobs")
         artifact_name = REQUIRED.get(name)
         if not artifact_name:
-            # Domain workflow lacks a verified XML artifact mapping.
+            # Never admit missing required XML artifacts.
             problems.append(f"{name}: Surefire evidence artifact not configured")
             continue
         artifact = gate.get("artifact")
@@ -87,6 +87,8 @@ def verify():
             if not xmls:
                 raise ValueError("No Surefire TEST-*.xml files")
             reported = set()
+            suite_counts = {}
+            skipped_cases = []
             counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
             for member in xmls:
                 root = ET.fromstring(archive.read(member))
@@ -94,6 +96,16 @@ def verify():
                     continue
                 suite = root.get("name", "").split(".")[-1]
                 reported.add(suite)
+                suite_counts.setdefault(suite, {"tests": 0, "skipped": 0})
+                suite_counts[suite]["tests"] += int(root.get("tests", "0"))
+                suite_counts[suite]["skipped"] += int(root.get("skipped", "0"))
+                for case in root.findall("testcase"):
+                    skipped = case.find("skipped")
+                    if skipped is not None:
+                        skipped_cases.append({
+                            "suite": suite, "test": case.get("name"),
+                            "reason": skipped.get("message") or skipped.text or "UNSPECIFIED"
+                        })
                 for key in counts:
                     counts[key] += int(root.attrib.get(key, "0"))
             if counts["tests"] == 0 or counts["failures"] or counts["errors"]:
@@ -102,8 +114,11 @@ def verify():
             for suite in SUITES.get(name, ()):
                 if suite not in reported:
                     problems.append(f"{name}: required suite {suite} missing")
+                elif suite_counts[suite]["tests"] <= suite_counts[suite]["skipped"]:
+                    problems.append(f"{name}: required suite {suite} entirely skipped")
             gate["surefire"] = counts
             gate["suites"] = sorted(reported)
+            gate["skippedTests"] = skipped_cases
             gate["artifactSha256"] = hashlib.sha256(data).hexdigest()
             for key in total:
                 total[key] += counts[key]
