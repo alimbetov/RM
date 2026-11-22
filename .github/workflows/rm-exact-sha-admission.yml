@@ -121,6 +121,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+      - name: Self-test fail-closed qualification verifier
+        if: steps.qualify.outcome == 'success'
+        run: python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_qa_01b.py' -v
       - name: Verify Surefire XML, artifact provenance and Liquibase fingerprint
         if: steps.qualify.outcome == 'success'
         env:
