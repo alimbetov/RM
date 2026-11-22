@@ -57,6 +57,101 @@ public final class QrHandoverProcessWorker {
                     Thread.sleep(10);
                 }
             }
+            // B3.4: step-load arrival schedule provided by a private manifest.
+            // One task per uniquely fulfillable order, stage-specific outcomes
+            // and Hikari active/idle/waiting pool snapshots during workload.
+            if("B34_STEPPED".equals(mode)) {
+                record Case(String proof,long version,String key,long dueMs,String phase) {}
+                var cases=new java.util.ArrayList<Case>();
+                for(String line:Files.readAllLines(Path.of(args[5]))) {
+                    String[] fields=line.split("\\|",-1);
+                    if(fields.length!=5)throw new IllegalArgumentException("B34 manifest line");
+                    cases.add(new Case(fields[0],Long.parseLong(fields[1]),fields[2],
+                            Long.parseLong(fields[3]),fields[4]));
+                }
+                if(cases.isEmpty()||cases.size()>250)
+                    throw new IllegalArgumentException("B34 workload size");
+                var hikari=context.getBean(com.zaxxer.hikari.HikariDataSource.class);
+                var bean=hikari.getHikariPoolMXBean();
+                var results=new java.util.concurrent.ConcurrentLinkedQueue<String>();
+                var failures=new java.util.concurrent.atomic.AtomicInteger();
+                var readyToRun=new java.util.concurrent.CountDownLatch(cases.size());
+                var start=new java.util.concurrent.CountDownLatch(1);
+                var peakActive=new java.util.concurrent.atomic.AtomicInteger();
+                var peakWaiting=new java.util.concurrent.atomic.AtomicInteger();
+                var peakConnections=new java.util.concurrent.atomic.AtomicInteger();
+                long wall;
+                try(var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()){
+                    var futures=new java.util.ArrayList<java.util.concurrent.Future<?>>();
+                    for(var item:cases) futures.add(executor.submit(()->{
+                        readyToRun.countDown();
+                        if(!start.await(20,java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IllegalStateException("B34 worker barrier");
+                        long until=System.nanoTime()+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(item.dueMs());
+                        while(System.nanoTime()<until)
+                            java.util.concurrent.locks.LockSupport.parkNanos(
+                                    Math.min(5_000_000L,Math.max(1,until-System.nanoTime())));
+                        long begin=System.nanoTime();
+                        String outcome="COMPLETED";
+                        try {
+                            var done=pickup.complete(staff,tenant,warehouse,item.proof(),true,
+                                    item.version(),item.key());
+                            if(!"COMPLETED".equals(done.status()))
+                                throw new IllegalStateException("Noncompleted B34 response");
+                        }catch(IllegalStateException | SecurityException business){
+                            outcome="BUSINESS_REJECTED";
+                        }catch(Exception technical){
+                            outcome="TECHNICAL_FAILURE";
+                            failures.incrementAndGet();
+                        }
+                        results.add(item.phase()+","+outcome+","+
+                                java.util.concurrent.TimeUnit.NANOSECONDS.toMicros(System.nanoTime()-begin));
+                        return null;
+                    }));
+                    if(!readyToRun.await(30,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("B34 all clients not ready");
+                    long begin=System.nanoTime();
+                    start.countDown();
+                    long lastDue=cases.stream().mapToLong(Case::dueMs).max().orElseThrow();
+                    long monitorDeadline=begin+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(lastDue+2500);
+                    while(System.nanoTime()<monitorDeadline){
+                        if(bean!=null){
+                            peakActive.accumulateAndGet(bean.getActiveConnections(),Math::max);
+                            peakWaiting.accumulateAndGet(bean.getThreadsAwaitingConnection(),Math::max);
+                            peakConnections.accumulateAndGet(bean.getTotalConnections(),Math::max);
+                        }
+                        Thread.sleep(20);
+                    }
+                    for(var f:futures)f.get(90,java.util.concurrent.TimeUnit.SECONDS);
+                    wall=System.nanoTime()-begin;
+                }finally{
+                    start.countDown();
+                }
+                var groups=new java.util.TreeMap<String,java.util.List<Long>>();
+                for(String value:results) {
+                    String[] fields=value.split(",",-1);
+                    groups.computeIfAbsent(fields[0]+":"+fields[1],ignored->new java.util.ArrayList<>())
+                            .add(Long.parseLong(fields[2]));
+                }
+                for(var group:groups.entrySet()){
+                    var measured=group.getValue();
+                    measured.sort(Long::compareTo);
+                    long p95=measured.get(Math.max(0,(int)Math.ceil(measured.size()*.95)-1));
+                    long p99=measured.get(Math.max(0,(int)Math.ceil(measured.size()*.99)-1));
+                    System.out.printf(java.util.Locale.ROOT,
+                            "QR06B_B34_CHILD tenant=%s phase_outcome=%s count=%d "+
+                            "p95_us=%d p99_us=%d%n",
+                            tenant,group.getKey(),measured.size(),p95,p99);
+                }
+                System.out.printf(java.util.Locale.ROOT,
+                        "QR06B_B34_POOL tenant=%s total=%d technical_failures=%d "+
+                        "duration_ms=%d peak_active=%d peak_waiting=%d peak_connections=%d%n",
+                        tenant,results.size(),failures.get(),
+                        java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(wall),
+                        peakActive.get(),peakWaiting.get(),peakConnections.get());
+                if(failures.get()!=0||results.size()!=cases.size())System.exit(93);
+                System.exit(0);
+            }
             // B3.3: a fixed-duration pace with independent successful orders
             // loaded from a private test-only manifest. No HTTP/controller.
             if("B33_PACED".equals(mode)) {
