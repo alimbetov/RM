@@ -3468,3 +3468,90 @@ CREATE TRIGGER trg_qr08_packaging_immutable
  BEFORE UPDATE OR DELETE ON crm.sales_packaging_catalog_version
  FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_qr08_packaging_immutable ON crm.sales_packaging_catalog_version;
+
+
+--changeset rm:0117-qr08-r0b-order-packaging-service
+-- One SALES order and immutable commercial snapshot; no inventory effects in R0.
+CREATE TABLE crm.sales_order_service_line (
+ tenant_id UUID NOT NULL, id UUID NOT NULL, order_id UUID NOT NULL,
+ service_code VARCHAR(40) NOT NULL, catalog_version INTEGER NOT NULL,
+ name_snapshot VARCHAR(160) NOT NULL, price_snapshot NUMERIC(19,4) NOT NULL,
+ currency_snapshot CHAR(3) NOT NULL, tax_rate_snapshot NUMERIC(7,4) NOT NULL,
+ policy_snapshot VARCHAR(40) NOT NULL, warehouse_id UUID,
+ status VARCHAR(16) NOT NULL, row_version BIGINT NOT NULL DEFAULT 0,
+ offered_by UUID NOT NULL, buyer_user_id UUID NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL, decided_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT pk_sales_order_service_line PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_sales_order_packaging_one_service UNIQUE(tenant_id,order_id,service_code),
+ CONSTRAINT fk_sales_order_packaging_order FOREIGN KEY(tenant_id,order_id)
+  REFERENCES crm.sales_order(tenant_id,id),
+ CONSTRAINT fk_sales_order_packaging_catalog FOREIGN KEY(tenant_id,service_code,catalog_version)
+  REFERENCES crm.sales_packaging_catalog_version(tenant_id,service_code,version),
+ CONSTRAINT fk_sales_order_packaging_staff FOREIGN KEY(offered_by)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_sales_order_packaging_buyer FOREIGN KEY(buyer_user_id)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_sales_order_packaging_price CHECK(price_snapshot>=0),
+ CONSTRAINT ck_sales_order_packaging_tax CHECK(tax_rate_snapshot>=0 AND tax_rate_snapshot<=1),
+ CONSTRAINT ck_sales_order_packaging_status CHECK(status IN
+  ('OFFERED','ACCEPTED','REJECTED','CANCELLED')),
+ CONSTRAINT ck_sales_order_packaging_decided CHECK(
+  (status='OFFERED' AND decided_at IS NULL)
+  OR (status<>'OFFERED' AND decided_at IS NOT NULL))
+);
+CREATE TABLE crm.sales_order_service_event (
+ tenant_id UUID NOT NULL, id UUID NOT NULL, service_line_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL, event_type VARCHAR(16) NOT NULL,
+ to_state VARCHAR(16) NOT NULL, revision BIGINT NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sales_order_service_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_sales_order_service_event_rev UNIQUE(tenant_id,service_line_id,revision),
+ CONSTRAINT fk_sales_order_service_event_line FOREIGN KEY(tenant_id,service_line_id)
+  REFERENCES crm.sales_order_service_line(tenant_id,id),
+ CONSTRAINT fk_sales_order_service_event_actor FOREIGN KEY(actor_user_id)
+  REFERENCES public.iam_user_account(id)
+);
+CREATE TABLE crm.sales_order_service_receipt (
+ tenant_id UUID NOT NULL, request_key VARCHAR(100) NOT NULL,
+ actor_user_id UUID NOT NULL, action_code VARCHAR(16) NOT NULL,
+ request_sha256 VARCHAR(64) NOT NULL, service_line_id UUID NOT NULL,
+ result_state VARCHAR(16) NOT NULL, result_revision BIGINT NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sales_order_service_receipt PRIMARY KEY(tenant_id,request_key),
+ CONSTRAINT fk_sales_order_service_receipt_line FOREIGN KEY(tenant_id,service_line_id)
+  REFERENCES crm.sales_order_service_line(tenant_id,id)
+);
+--rollback DROP TABLE crm.sales_order_service_receipt;
+--rollback DROP TABLE crm.sales_order_service_event;
+--rollback DROP TABLE crm.sales_order_service_line;
+
+--changeset rm:0118-qr08-r0b-immutable-evidence dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_qr08_order_service_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_order_service_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_qr08_order_service_receipt_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_order_service_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_qr08_order_service_receipt_immutable ON crm.sales_order_service_receipt;
+--rollback DROP TRIGGER trg_qr08_order_service_event_immutable ON crm.sales_order_service_event;
+
+--changeset rm:0119-qr08-r0b-snapshot-fence dbms:postgresql splitStatements:false
+CREATE OR REPLACE FUNCTION crm.reject_packaging_snapshot_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (OLD.tenant_id,OLD.id,OLD.order_id,OLD.service_code,OLD.catalog_version,
+     OLD.name_snapshot,OLD.price_snapshot,OLD.currency_snapshot,OLD.tax_rate_snapshot,
+     OLD.policy_snapshot,OLD.warehouse_id,OLD.offered_by,OLD.buyer_user_id,OLD.created_at)
+    IS DISTINCT FROM
+    (NEW.tenant_id,NEW.id,NEW.order_id,NEW.service_code,NEW.catalog_version,
+     NEW.name_snapshot,NEW.price_snapshot,NEW.currency_snapshot,NEW.tax_rate_snapshot,
+     NEW.policy_snapshot,NEW.warehouse_id,NEW.offered_by,NEW.buyer_user_id,NEW.created_at)
+ THEN RAISE EXCEPTION 'PACKAGING_SNAPSHOT_IMMUTABLE'; END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_qr08_order_service_snapshot_fence
+ BEFORE UPDATE ON crm.sales_order_service_line
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_packaging_snapshot_mutation();
+--rollback DROP TRIGGER trg_qr08_order_service_snapshot_fence ON crm.sales_order_service_line;
+--rollback DROP FUNCTION crm.reject_packaging_snapshot_mutation();
