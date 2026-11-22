@@ -41,6 +41,7 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired SalesOrderPreparationService prep;
     @Autowired SalesPickupHandoverService pickup;
     @Autowired SalesReturnRequestService returns;
+    @Autowired SalesReturnReviewService returnReview;
     @Autowired SalesInventoryCommandService sales;
     @Autowired SalesOrderQrReferenceService orderRefs;
     @Autowired WarehouseStaffScopeService scopes;
@@ -2371,6 +2372,154 @@ class QrWarehouseHandoverQualificationTest {
                 FROM crm.sales_return_line rl
                 WHERE tenant_id=? AND order_id=? AND order_line_id=?
                 """,Integer.class,c.tenant(),o.id(),o.lines().getFirst())).isEqualTo(4);
+        assertExactlyOneHandover(c,o,1);
+    }
+
+
+    private SalesReturnRequestService.Created qr07R1Claim(Context c,Order o,int qty) {
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),
+                true,version(c,o),key());
+        return returns.request(c.buyer(),o.publicRef(),o.lines().getFirst(),qty,
+                "DAMAGED","UAT_1",key());
+    }
+
+    @Test void qr07R1ReviewApproveAndImmutableDecisionReplay() throws Exception {
+        requirePostgres();
+        var c=context(),o=ready(c,false);
+        var claim=qr07R1Claim(c,o,2);
+        UUID role=assignedRole(c);
+        roles.grant(c.owner(),c.tenant(),role,DomainPermission.SALES_RETURN_REVIEW);
+        String reviewKey=key(),approveKey=key();
+        var reviewed=returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),
+                0,"UAT_1",reviewKey);
+        assertThat(reviewed.state()).isEqualTo(SalesReturnState.UNDER_REVIEW);
+        assertThat(reviewed.rowVersion()).isEqualTo(1);
+        var approval=returnReview.approve(c.staff(),c.tenant(),claim.requestId(),
+                1,"UAT_1",approveKey);
+        assertThat(approval.state()).isEqualTo(SalesReturnState.APPROVED);
+        assertThat(approval.rowVersion()).isEqualTo(2);
+        assertThat(returnReview.approve(c.staff(),c.tenant(),claim.requestId(),
+                1,"UAT_1",approveKey).decisionEventId()).isEqualTo(approval.decisionEventId());
+        assertThat(returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),
+                0,"UAT_1",reviewKey).decisionEventId()).isEqualTo(reviewed.decisionEventId());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(3);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.sales_return_request
+                WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),claim.requestId())).isEqualTo(2);
+        assertExactlyOneHandover(c,o,1);
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("15");
+    }
+
+    @Test void qr07R1RejectReleasesAllocatedPartialReturnCapacity() throws Exception {
+        requirePostgres();
+        var c=context(),o=ready(c,false);
+        var claim=qr07R1Claim(c,o,5);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
+        returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),0,"UAT_1",key());
+        var denied=returnReview.reject(c.staff(),c.tenant(),claim.requestId(),1,"UAT_1",key());
+        assertThat(denied.state()).isEqualTo(SalesReturnState.REJECTED);
+        var fresh=returns.request(c.buyer(),o.publicRef(),o.lines().getFirst(),5,
+                "DAMAGED","UAT_1",key());
+        assertThat(fresh.requestId()).isNotEqualTo(claim.requestId());
+        assertExactlyOneHandover(c,o,1);
+    }
+
+    @Test void qr07R1FailsClosedWithoutGrantOrForCrossTenantReviewer() throws Exception {
+        requirePostgres();
+        var c=context(),other=context(),o=ready(c,false);
+        var claim=qr07R1Claim(c,o,2);
+        assertThatThrownBy(()->returnReview.startReview(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key())).isInstanceOf(SecurityException.class);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
+        assertThatThrownBy(()->returnReview.startReview(other.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key())).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->returnReview.startReview(c.staff(),other.tenant(),
+                claim.requestId(),0,"UAT_1",key())).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->returnReview.startReview(c.buyer(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key())).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),claim.requestId())).isEqualTo("REQUESTED");
+    }
+
+    @Test void qr07R1RejectsStalePolicyWrongVersionAndIllegalTransition() throws Exception {
+        requirePostgres();
+        var c=context(),o=ready(c,false);
+        var claim=qr07R1Claim(c,o,1);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
+        assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key()))
+                .hasMessageContaining("RETURN_REVIEW_TRANSITION_FORBIDDEN");
+        assertThatThrownBy(()->returnReview.startReview(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_2",key()))
+                .hasMessageContaining("RETURN_POLICY_VERSION_CONFLICT");
+        var first=returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),
+                0,"UAT_1",key());
+        assertThat(first.rowVersion()).isEqualTo(1);
+        assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key()))
+                .hasMessageContaining("RETURN_REVIEW_VERSION_CONFLICT");
+        assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
+                claim.requestId(),1,"UAT_2",key()))
+                .hasMessageContaining("RETURN_POLICY_VERSION_CONFLICT");
+        assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
+                claim.requestId(),1,"UAT_1","bad key"))
+                .hasMessageContaining("RETURN_REVIEW_INPUT_INVALID");
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),claim.requestId())).isEqualTo("UNDER_REVIEW");
+    }
+
+    @Test void qr07R1ConcurrentApproveAndRejectCommitExactlyOneDecision() throws Exception {
+        requirePostgres();
+        var c=context(),o=ready(c,false);
+        var claim=qr07R1Claim(c,o,2);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
+        returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),0,"UAT_1",key());
+        var barrier=new CountDownLatch(2);
+        var go=new CountDownLatch(1);
+        int success=0,conflict=0;
+        try(var pool=Executors.newFixedThreadPool(2)){
+            var futures=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(int n=0;n<2;n++){
+                final boolean approval=n==0;
+                futures.add(pool.submit(()->{
+                    barrier.countDown();
+                    if(!go.await(15,TimeUnit.SECONDS))throw new IllegalStateException("BARRIER");
+                    try {
+                        if(approval)returnReview.approve(c.staff(),c.tenant(),
+                                claim.requestId(),1,"UAT_1",key());
+                        else returnReview.reject(c.staff(),c.tenant(),
+                                claim.requestId(),1,"UAT_1",key());
+                        return true;
+                    }catch(IllegalStateException e){
+                        if(!e.getMessage().contains("RETURN_REVIEW_VERSION_CONFLICT"))
+                            throw e;
+                        return false;
+                    }
+                }));
+            }
+            assertThat(barrier.await(15,TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            for(var f:futures)if(f.get(90,TimeUnit.SECONDS))success++;else conflict++;
+        }finally{go.countDown();}
+        assertThat(success).isEqualTo(1);
+        assertThat(conflict).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(3);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),claim.requestId())).isEqualTo(2);
         assertExactlyOneHandover(c,o,1);
     }
 
