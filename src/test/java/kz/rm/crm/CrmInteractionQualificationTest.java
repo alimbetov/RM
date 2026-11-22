@@ -32,6 +32,8 @@ class CrmInteractionQualificationTest {
     @Autowired TenantKeyService keys;
     @Autowired JdbcTemplate jdbc;
     @Autowired VerifiedTenantRoleCommands roles;
+    @Autowired TenantAccessStatusService tenantAccess;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private record Tenant(UUID tenantId,UUID actorId,UUID orgId) {}
     private Tenant tenant() {
@@ -717,67 +719,144 @@ class CrmInteractionQualificationTest {
     }
 
     /**
-     * CRM-R2.1B / E03: concurrent membership suspension and assignment.
-     * This smoke establishes admissible outcomes and post-revocation denial.
-     * It does NOT by itself prove strict admission/commit ordering; a controlled
-     * two-transaction fencing test remains mandatory for full qualification.
+     * CRM-R2.1B / E03: an already-admitted CRM assignment commits first.
+     * Genuine owner-only IAM suspension must wait for the open CRM transaction.
      */
-    @Test void crmR21bPostgresConcurrentAssignAndMemberSuspendRejectsSubsequentAssignment()
-            throws Exception {
-        try (var cn=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+    @Test void crmR21bPostgresAssignmentCommitsBeforeTrustedSuspension() throws Exception {
+        try (var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
             org.junit.jupiter.api.Assumptions.assumeTrue(
-                    cn.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
         }
-        var t=tenant();var actor=verified(t.actorId());
+        var t=tenant();
+        var actor=verified(t.actorId());
         UUID employee=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
-                "parallel-staff-"+UUID.randomUUID(),"Parallel employee")).getId();
+                "fenced-staff-"+UUID.randomUUID(),"Fenced employee")).getId();
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
                 t.orgId(),employee,OrganizationMembershipEntity.Role.MEMBER));
-        var customer=customers.createCompany(actor,t.tenantId(),"Revoke Race",null);
-        var created=interactions.record(actor,t.tenantId(),customer.id(),null,
+        var customer=customers.createCompany(actor,t.tenantId(),"Admission First",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
                 CrmInteractionService.Kind.CALL,t.actorId(),
                 Instant.parse("2026-11-21T08:00:00Z"),null,
-                "parallel-revoke-"+UUID.randomUUID());
-        var begin=new java.util.concurrent.CountDownLatch(1);
-        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
-        try {
-            var suspend=pool.submit(()->{
-                if(!begin.await(10,java.util.concurrent.TimeUnit.SECONDS))
-                    throw new AssertionError("Concurrent barrier timeout");
-                return jdbc.update("""
-                        UPDATE public.iam_org_membership
-                        SET status='SUSPENDED', row_version=row_version+1
-                        WHERE organization_id=? AND user_id=?
-                        """,t.orgId(),employee);
-            });
-            var assign=pool.submit(()->{
-                if(!begin.await(10,java.util.concurrent.TimeUnit.SECONDS))
-                    throw new AssertionError("Concurrent barrier timeout");
+                "fenced-admit-"+UUID.randomUUID());
+
+        var admitted=new java.util.concurrent.CountDownLatch(1);
+        var allowCommit=new java.util.concurrent.CountDownLatch(1);
+        var suspendStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                interactions.assignResponsible(actor,t.tenantId(),interaction.id(),employee,0);
+                admitted.countDown();
                 try {
-                    interactions.assignResponsible(actor,t.tenantId(),
-                            created.id(),employee,0);
+                    if(!allowCommit.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Assignment release timed out");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(admitted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var suspension=pool.submit(()->{
+                suspendStarted.countDown();
+                tenantAccess.suspendMember(actor,t.tenantId(),employee);
+                return true;
+            });
+            assertThat(suspendStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->suspension.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {
+                allowCommit.countDown();
+            }
+            assertThat(command.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(suspension.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        }
+        var after=interactions.get(actor,t.tenantId(),interaction.id());
+        assertThat(after.rowVersion()).isEqualTo(1);
+        assertThat(after.responsibleUserId()).isEqualTo(employee);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND target_user_id=? AND action_code='MEMBER_SUSPENDED'
+                """,Integer.class,t.tenantId(),employee)).isEqualTo(1);
+        assertThatThrownBy(()->interactions.assignResponsible(
+                actor,t.tenantId(),interaction.id(),employee,1))
+                .isInstanceOf(SecurityException.class);
+        assertThat(interactions.get(actor,t.tenantId(),interaction.id()).rowVersion()).isEqualTo(1);
+    }
+
+    /**
+     * CRM-R2.1B / E03: owner commits member suspension first; a waiting
+     * assignment must fail without changing the interaction or its audit.
+     */
+    @Test void crmR21bPostgresTrustedSuspensionCommitsBeforeAssignment() throws Exception {
+        try (var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+        var t=tenant();
+        var actor=verified(t.actorId());
+        UUID employee=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "suspend-first-"+UUID.randomUUID(),"Suspend first employee")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                t.orgId(),employee,OrganizationMembershipEntity.Role.MEMBER));
+        var customer=customers.createCompany(actor,t.tenantId(),"Suspension First",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),
+                Instant.parse("2026-11-21T09:00:00Z"),null,
+                "fenced-suspend-"+UUID.randomUUID());
+        var suspended=new java.util.concurrent.CountDownLatch(1);
+        var allowCommit=new java.util.concurrent.CountDownLatch(1);
+        var commandStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var suspension=pool.submit(()->tx.execute(status->{
+                tenantAccess.suspendMember(actor,t.tenantId(),employee);
+                suspended.countDown();
+                try {
+                    if(!allowCommit.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Suspension release timed out");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(suspended.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var command=pool.submit(()->{
+                commandStarted.countDown();
+                try {
+                    interactions.assignResponsible(actor,t.tenantId(),interaction.id(),employee,0);
                     return true;
                 } catch(SecurityException expected) {
                     return false;
                 }
             });
-            begin.countDown();
-            assertThat(suspend.get(20,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(1);
-            boolean assigned=assign.get(20,java.util.concurrent.TimeUnit.SECONDS);
-            var persisted=interactions.get(actor,t.tenantId(),created.id());
-            assertThat(persisted.rowVersion()).isEqualTo(assigned?1:0);
-            assertThat(persisted.responsibleUserId()).isEqualTo(
-                    assigned?employee:t.actorId());
-            assertThat(jdbc.queryForObject("""
-                    SELECT count(*) FROM crm.customer_interaction_event
-                    WHERE tenant_id=? AND interaction_id=?
-                    """,Integer.class,t.tenantId(),created.id())).isEqualTo(assigned?2:1);
-            assertThatThrownBy(()->interactions.assignResponsible(actor,t.tenantId(),
-                    created.id(),employee,persisted.rowVersion()))
-                    .isInstanceOf(SecurityException.class);
-        } finally {
-            pool.shutdownNow();
+            assertThat(commandStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->command.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {
+                allowCommit.countDown();
+            }
+            assertThat(suspension.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(command.get(20,java.util.concurrent.TimeUnit.SECONDS)).isFalse();
         }
+        var after=interactions.get(actor,t.tenantId(),interaction.id());
+        assertThat(after.rowVersion()).isZero();
+        assertThat(after.responsibleUserId()).isEqualTo(t.actorId());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND target_user_id=? AND action_code='MEMBER_SUSPENDED'
+                """,Integer.class,t.tenantId(),employee)).isEqualTo(1);
     }
 
 }
