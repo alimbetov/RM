@@ -2386,7 +2386,7 @@ class QrWarehouseHandoverQualificationTest {
 
     @Test void qr07R1ReviewApproveAndImmutableDecisionReplay() throws Exception {
         requirePostgres();
-        var c=context(),o=ready(c,false);
+        var c=context();var o=ready(c,false);
         var claim=qr07R1Claim(c,o,2);
         UUID role=assignedRole(c);
         roles.grant(c.owner(),c.tenant(),role,DomainPermission.SALES_RETURN_REVIEW);
@@ -2417,7 +2417,7 @@ class QrWarehouseHandoverQualificationTest {
 
     @Test void qr07R1RejectReleasesAllocatedPartialReturnCapacity() throws Exception {
         requirePostgres();
-        var c=context(),o=ready(c,false);
+        var c=context();var o=ready(c,false);
         var claim=qr07R1Claim(c,o,5);
         roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
         returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),0,"UAT_1",key());
@@ -2431,7 +2431,7 @@ class QrWarehouseHandoverQualificationTest {
 
     @Test void qr07R1FailsClosedWithoutGrantOrForCrossTenantReviewer() throws Exception {
         requirePostgres();
-        var c=context(),other=context(),o=ready(c,false);
+        var c=context();var other=context();var o=ready(c,false);
         var claim=qr07R1Claim(c,o,2);
         assertThatThrownBy(()->returnReview.startReview(c.staff(),c.tenant(),
                 claim.requestId(),0,"UAT_1",key())).isInstanceOf(SecurityException.class);
@@ -2453,7 +2453,7 @@ class QrWarehouseHandoverQualificationTest {
 
     @Test void qr07R1RejectsStalePolicyWrongVersionAndIllegalTransition() throws Exception {
         requirePostgres();
-        var c=context(),o=ready(c,false);
+        var c=context();var o=ready(c,false);
         var claim=qr07R1Claim(c,o,1);
         roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
         assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
@@ -2481,7 +2481,7 @@ class QrWarehouseHandoverQualificationTest {
 
     @Test void qr07R1ConcurrentApproveAndRejectCommitExactlyOneDecision() throws Exception {
         requirePostgres();
-        var c=context(),o=ready(c,false);
+        var c=context();var o=ready(c,false);
         var claim=qr07R1Claim(c,o,2);
         roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
         returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),0,"UAT_1",key());
@@ -2496,7 +2496,7 @@ class QrWarehouseHandoverQualificationTest {
                     barrier.countDown();
                     if(!go.await(15,TimeUnit.SECONDS))throw new IllegalStateException("BARRIER");
                     try {
-                        if(approval)returnReview.approve(c.staff(),c.tenant(),
+                        if(approval) returnReview.approve(c.staff(),c.tenant(),
                                 claim.requestId(),1,"UAT_1",key());
                         else returnReview.reject(c.staff(),c.tenant(),
                                 claim.requestId(),1,"UAT_1",key());
