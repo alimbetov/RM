@@ -42,16 +42,20 @@ class IamEmailChangeOrderHistoryQualificationTest {
         var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
                 "Mail Store LLP","Mail Store","KZ"));
         var workspace=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
-        UUID offer=UUID.randomUUID();
+        UUID offer=UUID.randomUUID(),item=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,workspace.getId(),item,"mail-store-"+UUID.randomUUID());
         String slug="mail-"+UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at)
             VALUES (?,?,?,'PUBLISHED',?)
             """,workspace.getId(),UUID.randomUUID(),slug,Timestamp.from(Instant.now()));
         jdbc.update("""
-            INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state)
-            VALUES (?,?,? ,?,'KZT','PUBLISHED')
-            """,workspace.getId(),offer,"Test",new BigDecimal("15.00"));
+            INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+            VALUES (?,?,? ,?,'KZT','PUBLISHED',?)
+            """,workspace.getId(),offer,"Test",new BigDecimal("15.00"),item);
         return new Store(workspace.getId(),slug,offer);
     }
     private Proof proof(String address,String purpose){
