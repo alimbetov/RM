@@ -185,4 +185,65 @@ class OrderPackagingQualificationTest {
    WHERE tenant_id=? AND service_line_id=?
    """,Integer.class,f.tenant(),offer.serviceLineId())).isEqualTo(2);
  }
+ @Test void orderAlreadyPreparingCannotReceiveNewPackagingOffer(){
+  var f=setup();
+  jdbc.update("""
+    UPDATE crm.sales_order SET status='PREPARING',row_version=row_version+1
+    WHERE tenant_id=? AND id=?
+    """,f.tenant(),f.order());
+  assertThatThrownBy(()->offer(f,key()))
+    .hasMessage("PACKAGING_ORDER_STATE_FORBIDDEN");
+  assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.sales_order_service_line WHERE tenant_id=? AND order_id=?
+    """,Integer.class,f.tenant(),f.order())).isZero();
+ }
+ @Test void buyerCannotAcceptAfterOrderPreparationStarted(){
+  var f=setup();var offered=offer(f,key());
+  jdbc.update("""
+    UPDATE crm.sales_order SET status='PREPARING',row_version=row_version+1
+    WHERE tenant_id=? AND id=?
+    """,f.tenant(),f.order());
+  assertThatThrownBy(()->decide(f,offered.serviceLineId(),0,
+    OrderPackagingService.Choice.ACCEPT,key()))
+    .hasMessage("PACKAGING_ORDER_STATE_FORBIDDEN");
+  assertThat(jdbc.queryForObject("""
+    SELECT status FROM crm.sales_order_service_line
+    WHERE tenant_id=? AND id=?
+    """,String.class,f.tenant(),offered.serviceLineId())).isEqualTo("OFFERED");
+ }
+ @Test void rejectedPackagingIsNotReacceptedOrCharged(){
+  var f=setup();var offered=offer(f,key());
+  var rejected=decide(f,offered.serviceLineId(),0,OrderPackagingService.Choice.REJECT,key());
+  assertThat(rejected.state()).isEqualTo("REJECTED");
+  assertThatThrownBy(()->decide(f,offered.serviceLineId(),1,
+    OrderPackagingService.Choice.ACCEPT,key()))
+    .hasMessage("PACKAGING_DECISION_TERMINAL");
+  assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+    """,Integer.class,f.tenant())).isZero();
+ }
+ @Test void sameRequestKeyCannotBeReusedForDifferentServiceLine(){
+  var f=setup();String common=key();var offered=offer(f,common);
+  assertThatThrownBy(()->service.offer(f.seller(),f.tenant(),f.order(),
+    "OTHER_WRAP",common)).hasMessage("PACKAGING_IDEMPOTENCY_CONFLICT");
+  assertThat(jdbc.queryForObject("""
+    SELECT count(*) FROM crm.sales_order_service_line
+    WHERE tenant_id=? AND order_id=?
+    """,Integer.class,f.tenant(),f.order())).isEqualTo(1);
+ }
+ @Test void postgresSnapshotAndEvidenceAreImmutableAtDatabaseLayer() throws Exception {
+  try(var c=dataSource.getConnection()){
+   Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+  }
+  var f=setup();var offered=offer(f,key());
+  assertThatThrownBy(()->jdbc.update("""
+    UPDATE crm.sales_order_service_line SET price_snapshot=100
+    WHERE tenant_id=? AND id=?
+    """,f.tenant(),offered.serviceLineId())).isInstanceOf(Exception.class);
+  assertThatThrownBy(()->jdbc.update("""
+    DELETE FROM crm.sales_order_service_event
+    WHERE tenant_id=? AND service_line_id=?
+    """,f.tenant(),offered.serviceLineId())).isInstanceOf(Exception.class);
+ }
+
 }
