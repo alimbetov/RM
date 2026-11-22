@@ -518,4 +518,88 @@ class CrmInteractionQualificationTest {
                 """,Integer.class,t.tenantId(),created.id())).isEqualTo(before);
     }
 
+    /** CRM-R2-D02: a duplicate idempotency key with changed intent must not mutate state. */
+    @Test void crmR2ChangedReplayPayloadKeepsSingleInteractionAndEvent() {
+        var t=tenant();
+        var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Replay Boundary",null);
+        Instant at=Instant.parse("2026-11-21T10:00:00Z");
+        String key="r2-conflict-"+UUID.randomUUID();
+        var original=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),at,null,key);
+        assertThatThrownBy(()->interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.EMAIL,t.actorId(),at,null,key))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),at,null,key).id())
+                .isEqualTo(original.id());
+        assertThat(interactions.get(actor,t.tenantId(),original.id()).rowVersion()).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction
+                WHERE tenant_id=? AND request_key=?
+                """,Integer.class,t.tenantId(),key)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),original.id())).isEqualTo(1);
+    }
+
+    /** CRM-R2-D04/D05: final states are mutually exclusive and cannot add events on retry. */
+    @Test void crmR2TerminalTransitionRejectsOppositeAndDuplicateWithoutSideEffects() {
+        var t=tenant();
+        var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Terminal Boundary",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.MEETING,t.actorId(),
+                Instant.parse("2026-11-21T09:00:00Z"),null,
+                "r2-terminal-"+UUID.randomUUID());
+        var cancelled=interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+        assertThat(cancelled.status()).isEqualTo(CrmInteractionService.Status.CANCELLED);
+        assertThat(cancelled.rowVersion()).isEqualTo(1);
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),interaction.id());
+        assertThatThrownBy(()->interactions.complete(actor,t.tenantId(),interaction.id(),1))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->interactions.cancel(actor,t.tenantId(),interaction.id(),1))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(interactions.get(actor,t.tenantId(),interaction.id()).rowVersion()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(before);
+    }
+
+    /** CRM-R2-D06/D07: invalid revision and stale follow-up do not change deadline or audit. */
+    @Test void crmR2InvalidAndStaleMutationPreservesFollowupAndAudit() {
+        var t=tenant();
+        var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"Stale Boundary",null);
+        Instant at=Instant.parse("2026-11-20T09:00:00Z");
+        Instant due=at.plusSeconds(86400);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,t.actorId(),at,due,
+                "r2-stale-"+UUID.randomUUID());
+        var moved=interactions.setNextAction(actor,t.tenantId(),interaction.id(),
+                due.plusSeconds(3600),0);
+        int before=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),interaction.id());
+        assertThatThrownBy(()->interactions.assignResponsible(actor,t.tenantId(),
+                interaction.id(),t.actorId(),-1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->interactions.setNextAction(actor,t.tenantId(),
+                interaction.id(),due.plusSeconds(7200),0))
+                .isInstanceOf(IllegalStateException.class);
+        var latest=interactions.get(actor,t.tenantId(),interaction.id());
+        assertThat(latest.rowVersion()).isEqualTo(moved.rowVersion());
+        assertThat(latest.nextActionAt()).isEqualTo(moved.nextActionAt());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(before);
+    }
+
 }
