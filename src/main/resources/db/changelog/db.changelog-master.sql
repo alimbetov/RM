@@ -2247,3 +2247,18 @@ CREATE TRIGGER trg_inv_stocktake_line_immutable
 --rollback DROP TRIGGER trg_inv_stocktake_line_immutable ON crm.inv_stocktake_line;
 --rollback DROP TRIGGER trg_inv_stocktake_immutable ON crm.inv_stocktake;
 --rollback DROP FUNCTION crm.inv_reject_terminal_stocktake_mutation();
+
+
+--changeset rm:0075-stocktake-cancellation-evidence
+-- Cancellation is terminal and attributable, not a silent status flip.
+ALTER TABLE crm.inv_stocktake ADD COLUMN cancelled_by UUID;
+ALTER TABLE crm.inv_stocktake ADD COLUMN cancelled_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE crm.inv_stocktake ADD CONSTRAINT fk_inv_stocktake_canceller
+ FOREIGN KEY(cancelled_by) REFERENCES public.iam_user_account(id);
+ALTER TABLE crm.inv_stocktake ADD CONSTRAINT ck_inv_stocktake_cancellation
+ CHECK((status='CANCELLED' AND cancelled_by IS NOT NULL AND cancelled_at IS NOT NULL)
+    OR (status<>'CANCELLED' AND cancelled_by IS NULL AND cancelled_at IS NULL));
+--rollback ALTER TABLE crm.inv_stocktake DROP CONSTRAINT ck_inv_stocktake_cancellation;
+--rollback ALTER TABLE crm.inv_stocktake DROP CONSTRAINT fk_inv_stocktake_canceller;
+--rollback ALTER TABLE crm.inv_stocktake DROP COLUMN cancelled_at;
+--rollback ALTER TABLE crm.inv_stocktake DROP COLUMN cancelled_by;
