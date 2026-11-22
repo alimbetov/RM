@@ -28,7 +28,7 @@ class OrganizationLocationQueryQualificationTest {
     @Autowired OrganizationLocationQueryService query;
     @Autowired AuthenticatedOrganizationLocations secured;
     @Autowired PlatformTransactionManager transactions;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
     @Autowired DataSource dataSource;
     @Autowired AuthenticatedInventoryQueries stock;
     @Autowired OrganizationRepository organizations;
@@ -146,11 +146,11 @@ class OrganizationLocationQueryQualificationTest {
                     .toLowerCase().contains("postgresql"));
         }
         var t=setup();
-        var role=roles.createRole(t.actor(),t.tenant(),
+        var role=roles.createRole(verified(t.actor()),t.tenant(),
                 "ORG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "Organization location manager");
-        roles.grant(t.actor(),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
-        roles.grant(t.actor(),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
+        roles.grant(verified(t.actor()),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
+        roles.grant(verified(t.actor()),t.tenant(),role.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
 
         UUID orgId=jdbc.queryForObject(
                 "SELECT organization_id FROM public.iam_workspace WHERE id=?",
@@ -159,8 +159,8 @@ class OrganizationLocationQueryQualificationTest {
                 "org-staff-"+UUID.randomUUID(),"Location staff"));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
                 orgId,staff.getId(),OrganizationMembershipEntity.Role.MEMBER));
-        roles.assign(t.actor(),t.tenant(),staff.getId(),role.id());
-        roles.enable(t.actor(),t.tenant());
+        roles.assign(verified(t.actor()),t.tenant(),staff.getId(),role.id());
+        roles.enable(verified(t.actor()),t.tenant());
         var admitted=new CountDownLatch(1);
         var release=new CountDownLatch(1);
         var tx=new TransactionTemplate(transactions);
@@ -181,7 +181,7 @@ class OrganizationLocationQueryQualificationTest {
             }));
             assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
             var revoke=pool.submit(()->{
-                roles.revoke(t.actor(),t.tenant(),role.id(),
+                roles.revoke(verified(t.actor()),t.tenant(),role.id(),
                         DomainPermission.ORGANIZATION_LOCATION_WRITE);
                 return true;
             });
@@ -256,17 +256,17 @@ class OrganizationLocationQueryQualificationTest {
                 staff,OrganizationMembershipEntity.Role.MEMBER));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
                 staff,OrganizationMembershipEntity.Role.MEMBER));
-        var ar=roles.createRole(a.actor(),a.tenant(),
+        var ar=roles.createRole(verified(a.actor()),a.tenant(),
                 "ORG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"A reader writer");
-        roles.grant(a.actor(),a.tenant(),ar.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
-        roles.grant(a.actor(),a.tenant(),ar.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
-        roles.assign(a.actor(),a.tenant(),staff,ar.id());
-        roles.enable(a.actor(),a.tenant());
-        var br=roles.createRole(b.actor(),b.tenant(),
+        roles.grant(verified(a.actor()),a.tenant(),ar.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
+        roles.grant(verified(a.actor()),a.tenant(),ar.id(),DomainPermission.ORGANIZATION_LOCATION_WRITE);
+        roles.assign(verified(a.actor()),a.tenant(),staff,ar.id());
+        roles.enable(verified(a.actor()),a.tenant());
+        var br=roles.createRole(verified(b.actor()),b.tenant(),
                 "ORG_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),"B reader");
-        roles.grant(b.actor(),b.tenant(),br.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
-        roles.assign(b.actor(),b.tenant(),staff,br.id());
-        roles.enable(b.actor(),b.tenant());
+        roles.grant(verified(b.actor()),b.tenant(),br.id(),DomainPermission.ORGANIZATION_LOCATION_READ);
+        roles.assign(verified(b.actor()),b.tenant(),staff,br.id());
+        roles.enable(verified(b.actor()),b.tenant());
         var actor=verified(staff);
         var filter=new LocationSearch(OrganizationLocationEntity.Type.WAREHOUSE,null,"Repeated");
         assertThat(secured.search(actor,a.tenant(),filter,0,1).getTotalElements()).isEqualTo(2);
