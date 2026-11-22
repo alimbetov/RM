@@ -107,10 +107,13 @@ public class StorefrontOfferService {
 
     private Offer transition(VerifiedActor actor, UUID tenant, UUID offerId,
                              long expectedVersion, State target) {
-        UUID user = admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        UUID user = admit(actor, tenant, target == State.PUBLISHED
+                ? DomainPermission.STOREFRONT_OFFER_PUBLISH
+                : DomainPermission.STOREFRONT_OFFER_MANAGE);
         lockStorefront(tenant);
         Offer current = locked(tenant, offerId, expectedVersion);
-        if (current.state() == target) return current;
+        if (current.state() == target)
+            throw new IllegalStateException("OFFER_INVALID_STATE");
         boolean legal = switch (target) {
             case PUBLISHED -> current.state() == State.DRAFT
                     || current.state() == State.PAUSED || current.state() == State.HIDDEN;
@@ -192,10 +195,15 @@ public class StorefrontOfferService {
 
     private static void validatePrice(String title, BigDecimal amount, String currency) {
         if (title == null || title.isBlank() || title.trim().length() > 240
-                || amount == null || amount.signum() < 0 || amount.scale() > 4
+                || amount == null || amount.signum() <= 0 || amount.scale() > 4
                 || amount.precision() - amount.scale() > 15
                 || currency == null || !currency.matches("[A-Z]{3}"))
             throw new IllegalArgumentException("Invalid seller offer title/price/currency");
+        try {
+            java.util.Currency.getInstance(currency);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Invalid ISO 4217 currency", invalid);
+        }
     }
 
     private UUID admit(VerifiedActor actor, UUID tenant, DomainPermission permission) {
