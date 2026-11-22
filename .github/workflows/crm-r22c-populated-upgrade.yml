@@ -7,6 +7,7 @@ on:
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - 'src/main/java/kz/rm/crm/CrmBuyerLinkService.java'
       - 'src/main/java/kz/rm/iam/GlobalAccountDeletionService.java'
+      - 'src/main/java/kz/rm/iam/EmailIdentityService.java'
       - 'src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java'
   workflow_dispatch:
 permissions:
