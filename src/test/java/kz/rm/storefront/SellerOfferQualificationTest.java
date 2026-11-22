@@ -89,6 +89,72 @@ class SellerOfferQualificationTest {
         roles.enable(verified(c.owner()),c.tenant());
     }
 
+    @Test void permissionsAreTenantLocalEvenForDualTenantMember() {
+        Context a=context(),b=context();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),
+            jdbc.queryForObject("SELECT organization_id FROM iam_workspace WHERE id=?",
+                UUID.class,b.tenant()),
+            a.seller(),OrganizationMembershipEntity.Role.MEMBER));
+        grant(a,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        assertThatThrownBy(()->offers.createDraft(verified(a.seller()),b.tenant(),b.sku(),
+            "Denied",BigDecimal.TEN,"KZT")).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject(
+            "SELECT count(*) FROM crm.store_offer WHERE tenant_id=?",
+            Integer.class,b.tenant())).isZero();
+    }
+
+    @Test void sellerPermissionRevocationFencesNextCommand() {
+        Context c=context();
+        var role=roles.createRole(verified(c.owner()),c.tenant(),
+            "OFFER_REVOKE_"+UUID.randomUUID().toString().replace("-").substring(0,8).toUpperCase(),
+            "Revocable offers role");
+        roles.grant(verified(c.owner()),c.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.assign(verified(c.owner()),c.tenant(),c.seller(),role.id());
+        roles.enable(verified(c.owner()),c.tenant());
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"Revocable",BigDecimal.TEN,"KZT");
+        roles.revoke(verified(c.owner()),c.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        assertThatThrownBy(()->offers.changePrice(actor,c.tenant(),draft.id(),0,
+            BigDecimal.valueOf(20),"KZT")).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject(
+            "SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?",
+            Long.class,c.tenant(),draft.id())).isZero();
+    }
+
+    @Test void postgresOfferCatalogIdentityCannotBeRemapped() throws Exception {
+        requirePostgres();
+        Context c=context();
+        grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(c.seller());
+        var draft=offers.createDraft(actor,c.tenant(),c.sku(),"SKU invariant",BigDecimal.TEN,"KZT");
+        offers.publish(actor,c.tenant(),draft.id(),0);
+        UUID replacement=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,c.tenant(),replacement,"remap-"+UUID.randomUUID());
+        assertThatThrownBy(()->jdbc.update("""
+            UPDATE crm.store_offer SET catalog_item_id=? WHERE tenant_id=? AND id=?
+            """,replacement,c.tenant(),draft.id())).isInstanceOf(Exception.class);
+        assertThat(jdbc.queryForObject(
+            "SELECT catalog_item_id FROM crm.store_offer WHERE tenant_id=? AND id=?",
+            UUID.class,c.tenant(),draft.id())).isEqualTo(c.sku());
+    }
+
+    @Test void foreignOfferAndMissingOfferAreIndistinguishableToTenantSeller() {
+        Context a=context(),b=context();
+        grant(a,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        grant(b,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var foreign=offers.createDraft(verified(b.seller()),b.tenant(),b.sku(),
+            "Foreign",BigDecimal.TEN,"KZT");
+        var aActor=verified(a.seller());
+        assertThatThrownBy(()->offers.publish(aActor,a.tenant(),foreign.id(),0))
+            .isInstanceOf(IllegalArgumentException.class).hasMessage("Offer unavailable");
+        assertThatThrownBy(()->offers.publish(aActor,a.tenant(),UUID.randomUUID(),0))
+            .isInstanceOf(IllegalArgumentException.class).hasMessage("Offer unavailable");
+    }
+
     @Test void tenantAuthorizedStorefrontDraftCreationAndStateCas() {
         Context c=context();
         grant(c,DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
