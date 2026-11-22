@@ -73,6 +73,7 @@
         "UR-R31-ROLE-FALLBACK",
         "UR-R31-GRANT-REVOKE",
         "UR-R31-TENANT-AB",
+        "UR-R31-DUAL-TENANT",
         "UR-R31-UNASSIGNED"
       ],
       "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
@@ -115,6 +116,7 @@
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "userRoleCaseIds": [
         "UR-R31-GRANT-REVOKE",
+        "UR-R31-DUAL-TENANT",
         "UR-R31-INACTIVE"
       ],
       "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
@@ -772,6 +774,7 @@
         "UR-R31-ROLE-FALLBACK",
         "UR-R31-GRANT-REVOKE",
         "UR-R31-TENANT-AB",
+        "UR-R31-DUAL-TENANT",
         "UR-R31-INACTIVE",
         "UR-R31-UNASSIGNED"
       ],
@@ -899,6 +902,7 @@
       "userRoleCaseIds": [
         "UR-R31-GRANT-REVOKE",
         "UR-R31-TENANT-AB",
+        "UR-R31-DUAL-TENANT",
         "UR-R31-INACTIVE"
       ],
       "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
