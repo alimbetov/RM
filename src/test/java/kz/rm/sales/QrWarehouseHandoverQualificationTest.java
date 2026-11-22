@@ -1836,6 +1836,7 @@ class QrWarehouseHandoverQualificationTest {
      * are expected to commit and are verified after both processes terminate.
      * Includes concurrent authenticated warehouse moves and DB lock telemetry.
      */
+    @org.junit.jupiter.api.Timeout(value=240,unit=TimeUnit.SECONDS)
     @Test void qr06bPgB33TwoJvmSixtySecondSoakWithInterference() throws Exception {
         requirePostgres();
         var contexts=List.of(context(),context());
