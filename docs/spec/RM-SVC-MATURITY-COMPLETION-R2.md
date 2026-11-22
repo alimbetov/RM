@@ -2,7 +2,7 @@
 
 **Тип:** сквозное техническое задание / dependency-aware execution backlog (не дублирующий доменные ТЗ).
 **Дата:** 2026-11-22. **Репозиторий/ветка:** `alimbetov/RM` / `base_dev`.
-**Статус:** PLANNED / NOT IMPLEMENTED BY THIS DOCUMENT. **Release:** SERVICE-ONLY FEATURE FREEZE; HTTP/OIDC transport, production и merge в `main` — HOLD.
+**Статус:** REVIEWED / ALIGNED SPEC, PLANNED / NOT IMPLEMENTED BY THIS DOCUMENT. **Release:** SERVICE-ONLY FEATURE FREEZE; HTTP/OIDC transport, production и merge в `main` — HOLD.
 **База:** повторный аудит RM-SVC-MATURITY-R2; документы ниже; результат GitHub fetch в `base_dev` на дату составления. Перед каждым изменением записать фактические `git rev-parse HEAD`, diff и CI, не считать этот документ проверкой самого нового HEAD.
 
 ## 0. Приоритет источников и инварианты
@@ -11,7 +11,7 @@
 
 **Не делать:** дублирующие entity/aggregate, микросервисы, новые ветки, Redis, универсальные CRUD/ACL/workflow engines, новые контроллеры, преждевременные маркетинговые/AI-возможности, прямые SQL-изменения чужих агрегатов, автоматические OWNER wildcard/PII grants, переписывание применённых Liquibase changesets. Соблюдать Java 21/Spring Boot 4.1.3, PostgreSQL+H2, additive Liquibase, modular monolith, VerifiedActor/trusted service identity, scoped tenant/permission/object admission и PostgreSQL бизнес-транзакции.
 
-**Статусы:** `DONE-QUALIFIED@SHA` означает подтверждение только на указанном SHA; `PARTIAL` — реализация/проверка не завершена; `OPEN` — отсутствует квалифицированный результат; `DECISION` — бизнес-решение необходимо до кода. Переход на более поздний HEAD требует повторного соответствующего CI.
+**Статусы:** `DONE-QUALIFIED@SHA` означает подтверждение только на указанном SHA; `PARTIAL` — реализация/проверка не завершена; `OPEN` — отсутствует квалифицированный результат; `DECISION` — бизнес-решение необходимо до кода. Переход на более поздний HEAD требует повторного соответствующего CI. **Evidence source precedence:** actual code + passing jobs on exact SHA > current reviewed domain specs > dated audit snapshots; historical reports may contain already fixed gaps.
 
 ## 1. Исходная матрица зрелости (оценка, не процент тестов)
 
@@ -52,10 +52,10 @@
 | ID | Приоритет | Задача / действие | Зависимости | Definition of Done |
 |---|---|---|---|---|
 | RM-QA-01 | P0 | Сверить общий HEAD `base_dev`, diff с последними квалифицированными SHA, конфликтующие Liquibase и параллельные SALES/INV/ORG работы | нет | Одна SHA-matrix изменённых сервисов/миграций/тестов; no false GREEN |
-| RM-INV-13 | P0 | Закрыть остаточные R1.3 concurrency/retry/rollback (reserve/confirm × deactivate, transfer × deactivate, receive × deactivate) без регрессии Q1–Q9 | QA-01 | Все конкретные PG двухтранзакционные тесты, отсутствие deadlock/oversell/partial ledger, H2/PG exact-SHA GREEN |
-| RM-INV-14 | P0 | Проверить stock movement/reservation при archive/deactivate, idempotency same-key/different-payload, точное состояние requestKey | INV-13 | Реальные DB invariants и корректный terminal replay; failures do not mutate stock |
+| RM-INV-13 | P0 | **Diff-first qualification**, а не переписывание уже закрытого ORG-R1.1: уточнить непокрытые receive × deactivate и пересекающиеся INV-R1.3 сценарии; повторно запустить существующие confirm × deactivate и transfer × deactivate на текущем SHA | QA-01 | Список реально отсутствующих PG гонок, оба порядка commit, отсутствие deadlock/oversell/partial ledger; exact-SHA GREEN, повторно не создавать уже существующие тесты |
+| RM-INV-14 | P0 | Проверить stock movement/reservation при archive/deactivate, idempotency same-key/different-payload и терминальный replay; целевые недостающие сценарии, не дублировать Q1–Q9 | INV-13 | Реальные DB invariants, no hidden stock mutation, запрет ложного double-debit; historical cleanup отдельно от новых движений |
 | RM-INV-15 | P0 | Reconciliation onHand/reserved/available и immutable movements/transfer/reservation, отдельная typed read/diagnostic операция | INV-13, INV-14 | Нулевые расхождения на seeded/rollbacks/races; negative tamper case detected, без пересчёта истории на запись |
-| RM-SEC-01 | P0 | TCRUD-00/03/04 per-method evidence всех имеющихся фасадов, IAM/KMS/AUDIT/system, скрыть raw UUID bypass где нужно | QA-01 | Method→permission→SQL→tests register; foreign ID, A/B/AB, revoke/disabled tenant; никакого blanket PASS |
+| RM-SEC-01 | P0 | TCRUD-00/03/04 per-method evidence (известные 103 операции — snapshot worklist, не окончательный размер); итеративно проверить прежде всего изменяемые CATALOG/STOREFRONT/SALES/INVENTORY порты, затем IAM/KMS/AUDIT/system; закрыть подтверждённые raw UUID bypass | QA-01 | Для изменённой вертикали Method→permission→SQL→PG tests заполнено до её release; полный платформенный trace — отдельный параллельный gate, не блокирует написание внутренних сервисов |
 | RM-SEC-02 | P0-DECISION | Утвердить solo-OWNER functional role bootstrap без wildcard и CRM_PII_READ | SEC-01 | Явное решение, auditable controlled grant, no self-escalation tests; до решения существующая политика fail-closed |
 | RM-MAIL-01 | P0 для реального onboarding | Outbox worker + email provider/SMTP, retries/fencing, delivery proof и anti-abuse | IAM proof, нормативное mail ТЗ | PENDING→SEND→ACK/RETRY/poison, token not leaked, реальные negative и outage tests; не считать outbox доставкой |
 
@@ -65,17 +65,17 @@
 
 | ID | Приоритет | Scope | Зависимости | Приёмка |
 |---|---|---|---|---|
-| RM-CAT-01 | P0 | Safe `archive`: read-only Inventory usage blockers (onHand, reserved, active reservation, open stocktake) + published offer blocker, deterministic lock order | INV-14, ownership contract | Архивация не блокирует штатное перемещение оставшегося склада; два порядка race archive×receive/offer publish, foreign tenant, rollback |
+| RM-CAT-01 | P0 | Safe `archive`: read-only INVENTORY usage blockers (onHand, reserved, active reservation, open stocktake) и STOREFRONT published-offer blocker; lock/order согласовать с StockEligibility и actual PG SQL | INV-14, ownership contract | Архивация запрещена до устранения зависимостей; без циклического захвата owner/stock/location row locks; оба порядка archive×receive/offer publish; проверка archival historical order |
 | RM-CAT-02 | P0 | Документировать и проверить PRODUCT/SERVICE policy, archived prior-order treatment, category price/offer semantics | CAT-01 | PRODUCT stock-backed admission; SERVICE checkout/fulfill отдельное DECISION, не подменять stock SKU |
-| RM-STORE-01 | P0 | `AuthenticatedStorefrontCommands`: tenant-authorized create/update/publish/pause; storefront slug unique by policy, CAS/version, immutable audit | SEC-01, CATALOG | Permission denied for other tenant; published→paused blocks new checkout; no-op does not fabricate event |
-| RM-STORE-02 | P0 | Tenant-owned create/update price/hide/publish `store_offer`, offer→published catalog PRODUCT same tenant; price/currency validation и CAS | STORE-01, CAT-02 | Exactly one of concurrent updates wins, foreign SKU/offer rejected; no silent price overwrite from catalog |
+| RM-STORE-01 | P0 | Tenant-authorized storefront writer через существующий trusted facade pattern: create/update/publish/pause; сначала сверить действующие DDL/permission codes, затем минимальный CAS и audit | QA-01, CATALOG schema, targeted SEC-01 | Иной tenant denied, published→paused блокирует **новый** checkout; прежний заказ и exact replay policy не переписываются; no-op без фиктивного события |
+| RM-STORE-02 | P0 | Tenant-owned create/update price/hide/publish `store_offer`; PRODUCT SKU и tenant validation, legal offer lifecycle, CAS; отдельная permission policy не подменяется CATALOG grants | STORE-01, CAT-02 | Exactly one of concurrent price updates wins; foreign SKU/offer rejected; no silent catalog price overwrite; исторические snapshot неизменны |
 | RM-STORE-03 | P0 | Explicit catalog→offer handoff: authoritative SKU id/kind vs independently seller-set offer price; current offer revision in checkout; no auto-sync ambiguity | STORE-02 | Publish SKU alone does not magically publish offer; checkout snapshots remain stable after catalog/offer edits |
 | RM-SALE-084 | P0 | Завершить SALES PASS 08.4: защитить seller offer, storefront/offer commands и checkout price/state race; reuse 08.1–08.3 snapshot | STORE-01..03 | PG simultaneous publish/pause, price CAS×checkout, cross-tenant ownership; snapshot matches locked accepted offer; legacy snapshot tests remain GREEN |
-| RM-SALE-09 | P0 | SALES PASS 09/12: actor, seller tenant RBAC, multi-tenant A/B/AB, permissions, revoke×checkout/confirm/cancel/fulfill, foreign UUID/PII | SALE-084, SEC-01 | All named adversarial PG tests; no unauthorized writes or foreign page/count totals |
+| RM-SALE-09 | P0 | SALES PASS 09/12: seller authenticated commands и public/buyer checkout **разными trust policies**, A/B/AB, revoke×seller commands, foreign UUID/PII; checkout не требует фиктивной tenant membership покупателя | SALE-084, targeted SEC-01 | Named PG tests на обеих границах; публичный покупатель не получает seller permission; foreign page/count zero leakage |
 | RM-SALE-10 | P1 | Staff order get/detail/line/status history, bounded page/count, buyer mine pagination, sanitized PII | SALE-09 | Seller can view exact lines/status/reservations; buyer only own, no tenant leakage, stable sort |
 | RM-SALE-11 | P1 | Per-line confirm/fulfill reconciliation + exact replay (SKU, qty, location, reservation, movement), cancel(PLACED) without unnecessary INVENTORY_RELEASE if zero reservation | INV-15, SALE-09 | Replay does not create ledger entries; PLACED cancel least privilege; corrupted line/reservation detected |
 | RM-SALE-12 | P1 | Принять минимальный staff draft workflow отдельно от immutable placed order; not in-place edits to checkout snapshots | SALE-10 | Valid draft→submit legal transitions, history, rejected stale CAS; if unresolved policy, DECISION not code |
-| RM-COM-E2E | P0 release gate | Service E2E: SKU draft→publish→offer publish→checkout→confirm reserve→fulfill→ledger, and cancel/rollback/price/archive/revoke races | INV-15,CAT-01,STORE-03,SALE-084,SALE-09 | Exact SHA H2/PG real transactions; immutable buyer price/SKU, 0 excess debit, 0 cross-tenant reads; named trace + CI evidence |
+| RM-COM-E2E | P0 release gate | Service E2E: draft PRODUCT→publish→seller offer publish→checkout→confirm/reserve→fulfill/ledger, плюс cancel/retry/price/archive/revoke | INV-15,CAT-01,STORE-03,SALE-084,SALE-09 | Single exact-SHA H2/PG evidence, 0 excess debit/foreign reads; no claim of payment or delivery, no forced SERVICE reserve |
 
 **Не дублировать:** `sales_order_line.catalog_item_id_snapshot`, changesets 0076/0077, PostgreSQL immutable line trigger и PASS 08.1–08.3 уже реализованы/квалифицированы на `cb490556`. Задача — интеграционные регрессии и коммерческий seller-offer lifecycle.
 
@@ -83,7 +83,7 @@
 
 | ID | Задача | Зависимости | Приёмка |
 |---|---|---|---|
-| RM-ORG-12 | Завершить ORG R1.1→R1.2 lifecycle, populated migrations, архив/закрытие и SALES/INV races, фильтры и pagination | INV-15, SALE-11 | ACTIVE/INACTIVE/CLOSED, onHand/reserve/open stocktake blockers, history, both race orders, exact PG |
+| RM-ORG-12 | **Квалифицировать существующий** ORG-R1.1 lifecycle до R1.2: populated upgrades, непокрытые SALES/INV races, фильтры/pagination и recovery; не создавать второй lifecycle | INV-15, SALE-11 | Не ломать подтверждённые шесть PG race-тестов; ACTIVE/INACTIVE/CLOSED, no stranded commitments, exact SHA |
 | RM-CRM-01 | Customer/Contact/Category/Contract: закрыть expiry filters, nearest-contract/read summary, scope/PII, pagination | SEC-01 | Tenant+responsible visibility policy explicit, A/B/AB, consent/PII separate, bounded stable search |
 | RM-CRM-02 | CRM Interaction: encrypted NOTE/result and purposeful decrypt, next-action semantics | CRM-01, KMS policy | No plaintext in SQL/log/audit; wrong AAD/foreign tenant fail-closed; valid completed interaction results |
 | RM-TASK-01 | Minimal `TaskService` assign/accept/start/complete/cancel/list/history with tenant RBAC and due date; CRM interaction linkage | CRM-02, owner scope DECISION | Real task actions & state machine, no cross-tenant contacts, authorization for reassignment, CAS/race |
@@ -145,7 +145,7 @@
 
 ## 10. Очередность и release milestones
 
-1. **M0 / CONSISTENCY:** QA-01, INV-13/14/15, SEC-01, catalog/archive risk; точный baseline. Параллельную SALES работу не переписывать.
+1. **M0 / CONSISTENCY:** QA-01, точечные ещё не закрытые INV-13/14/15, targeted SEC-01, catalog/archive risk; точный baseline, без повторной разработки закрытых тестов. Параллельную SALES работу не переписывать.
 2. **M1 / SELLER OFFER:** STORE-01/02/03 + SALE-084 (PASS 08.4) с CAS, permission и price/state test.
 3. **M2 / COMMERCIAL CORE:** SALE-09, SALE-11 и COM-E2E на одной общей SHA. Это **service-only завершение коммерческой цепочки**, не maturity 4 по пользовательской шкале.
 4. **M3 / CRM OPERATIONS:** ORG-12, CRM-01/02, TASK-01, SALES detail/history, FILES ACL and AUDIT query.
@@ -162,3 +162,44 @@
 - **5:** доказанный production-ready release, independent security, resilience, operability, least privilege, backup/restore, metrics/SLO; отдельное signoff.
 
 **Общий статус на 2026-11-22:** код этим ТЗ не менялся; tasks OPEN, если не указано DONE-QUALIFIED@SHA для предыдущего конкретного среза; full commercial E2E и production **HOLD**. Следующий практический этап — проверить HEAD, закрыть опасные P0 расхождения, затем `SALES PASS 08.4` и `PASS 09/12` с обязательной интеграцией CATALOG/STOREFRONT/INVENTORY.
+
+
+## 12. Повторное согласование ТЗ с текущим RM-R2 (22.11.2026)
+
+**Основание повторного review:** прямое чтение этого файла на `base_dev` и нормативного `RM-PLATFORM-STANDARD-R2.md`, действующих `RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md`, `RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md`, `RM-CATALOG-FUNCTIONAL-DEPTH-R1-12-PASSES.md`, `RM-TENANT-SERVICES-COMPLETION-R1.md`, `RM-TENANT-CRUD-COMPLETION-R1.md`, `RM-SVC-R2-CONSOLIDATED-IMPLEMENTATION-PLAN.md` и 12-pass protocol. Это **документационная сверка**, а не дополнительный кодовый/CI прогон.
+
+### 12.1 Выявленные разрывы и решение
+
+| ID | Несогласованность первоначального backlog | Принятое уточнение |
+|---|---|---|
+| ALIGN-01 | Старый общий аудит говорит о недостающем SKU snapshot; новейшее SALES ТЗ квалифицирует PASS 08.1–08.3 | Не разрабатывать повторно migration 0076/0077, SKU snapshot или immutability; только regression/current-head qualification |
+| ALIGN-02 | Общее название INV-R1.3 повторяет шесть уже GREEN проверок ORG-R1.1 | Diff-first test inventory; добавлять только не покрытые interleavings и текущие регрессии |
+| ALIGN-03 | Полный TCRUD-00/03 на 103 операции мог стать жёсткой prerequisite для реализации seller offer | Реализация допускается с **targeted** полным trace изменённых портов; общий security gate остаётся открытым для выпуска всей платформы |
+| ALIGN-04 | CAT.archive и INVENTORY warehouse/SKU locks могут ввести deadlock при неосторожном обратном порядке | Сохранить согласованный порядок lock, typed read-only usage port, нет stock/location FOR UPDATE из под item-row lock; проверить archive×stock/new offer на PG |
+| ALIGN-05 | OWNER/business permission иногда смешивается с публичным покупателем | Покупатель — ограниченная public/identity policy, не staff tenant membership; seller mutations через VerifiedActor + выбранный tenant + explicit permission |
+| ALIGN-06 | Каталожная цена рискует превратиться во второй источник продажи | `cat_price` справочная price history; текущая коммерческая согласованная цена — `store_offer` на checkout и immutable `sales_order_line` после оформления |
+| ALIGN-07 | `SERVICE` и финансы могли расширить Wave 1 | Wave 1 только PRODUCT stock-backed; SERVICE commerce и invoice/payment/COGS — отдельно после решения их контрактов |
+| ALIGN-08 | `ORG-R1.2` можно ошибочно считать реализацией lifecycle с нуля | ORG-R1.1 реализован и шесть PostgreSQL interleavings GREEN; R1.2 — непокрытые контракты, migration, recovery и общий release gate |
+| ALIGN-09 | Service-level E2E может быть назван зрелостью 4/5 | M2 означает **ядро, квалифицированное внутри монолита**, не реальный trusted пользовательский HTTP/OIDC E2E и не production |
+| ALIGN-10 | Крупные задачи MAIL/REL могут затормозить service-only вертикаль | Отделить internal business qualification от external transport/security admission; все публичные интеграции остаются HOLD |
+
+### 12.2 Дополнительные обязательные эксплуатационные оговорки
+
+1. **Offer price race:** checkout и seller CAS price/pause должны сериализоваться либо выдавать проверяемый конфликт; один заказ обязан иметь единый согласованный snapshot по всем строкам и валютам, повтор по requestKey с иным payload должен быть rejected.
+2. **Existing-order behavior:** опубликованный ранее оффер/товар после паузы или архивации не переписывает старый заказ. Как вести retry уже принятого checkout в PAUSED — отдельное `DEC-STORE-REPLAY-01`: до решения не менять текущий порядок проверок и не выдавать это за согласованную политику.
+3. **Warehouse transition:** INACTIVE warehouse запрещает новые stock-backed операции, но release/cancel cleanup выполняется по квалифицированному historical-state пути. Fulfill ранее созданного резерва проверяет точный порядок locks и законность склада; не разрешать обход warehouse admission ради успешного теста.
+4. **Immutable ledger:** исправление расхождения только компенсирующим документированным событием; нельзя пересчитывать и переписывать прошлые movements. Диагностика R1.5 не должна сама делать скрытый inventory adjustment.
+5. **Cash vs fulfillment:** SALES status `COMPLETED` не означает `PAID` или `DELIVERED`. Финансовые операции через собственные сервисы с tenant/currency/allocations.
+6. **FILES:** сохранить исходную политику **без прикладного шифрования file bytes**; CRM/IAM PII envelope остаётся зашифрованным. Новые типы владельцев только через typed domain ACL и real storage/scanner gates.
+7. **KMS rotation:** `TenantKeyService.rotate` намеренно fail-closed, не объявлять багом, требующим включить без fencing/backup/recovery.
+8. **Scope decisions:** responsible-only CRM portfolio ACL, location-level inventory ACL, TASKS чужие assignments, price policy, SERVICE fulfillment и OWNER bootstrap — `DECISION` до code; не выводить их только из названия должности.
+
+### 12.3 Исполняемый процесс Codex / developers
+
+- В начале каждого ticket читать `base_dev` HEAD, source interfaces и последние commits, сравнить с историческими evidence SHA; обозначить `ALREADY QUALIFIED`, `CODE PRESENT / NOT QUALIFIED`, `GAP CONFIRMED` или `DECISION BLOCKED`.
+- Одна функциональная вертикаль за инкремент; изменять только принадлежащие domain-owner файлы, composite tenant FK и additive Liquibase; синхронизировать общие ресурсы `store_offer`/`sales_order_line` с параллельным SALES окном.
+- PostgreSQL pairwise interleavings, same/different requestKey replay, rollback и cross-tenant negative tests обязательны для изменённых потоков; H2 smoke не заменяет PostgreSQL. Нельзя закрывать типовые test groups без настоящих JUnit method names и CI links.
+- Для прогресса заполнять по каждому тикету: `owner`, `status`, `source SHA`, `code paths`, `tests H2/PG`, `CI run`, `remaining gaps`. Не утверждать готовность нового HEAD от GREEN на старом SHA.
+- Перед слиянием в `main`: отдельный reviewed PR, exact-HEAD CI, проверка всех общих бизнес-инвариантов. **Этот обзор не разрешает merge или production.**
+
+**Итог:** backlog **архитектурно согласован как поэтапное ТЗ** с указанными ограничениями. Это не утверждение открытых предметных решений и не свидетельство прохождения новых тестов. Начинать с `RM-QA-01` и `RM-STORE-01/02` после targeted security/source audit; параллельно закрывать оставшиеся `RM-INV-13/14/15` и `RM-CAT-01`, затем `RM-SALE-084` и `RM-SALE-09`.
