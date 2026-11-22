@@ -3412,3 +3412,24 @@ CREATE TRIGGER trg_iam_account_deletion_event_immutable
  BEFORE UPDATE OR DELETE ON public.iam_account_deletion_event
  FOR EACH ROW EXECUTE FUNCTION public.iam_reject_account_status_event_mutation();
 --rollback DROP TRIGGER trg_iam_account_deletion_event_immutable ON public.iam_account_deletion_event;
+
+
+--changeset rm:0110-iam-deletion-oidc-revocation-outbox
+-- Transactional local intent only. External provider revocation must be
+-- acknowledged by a separately qualified consumer; never claim success here.
+CREATE TABLE public.iam_deletion_oidc_revocation_outbox (
+ deletion_event_id UUID NOT NULL PRIMARY KEY,
+ target_user_id UUID NOT NULL,
+ provider_subject VARCHAR(255) NOT NULL,
+ state VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ acknowledged_at TIMESTAMP WITH TIME ZONE,
+ CONSTRAINT fk_iam_revocation_deletion_event FOREIGN KEY(deletion_event_id)
+   REFERENCES public.iam_account_deletion_event(id),
+ CONSTRAINT fk_iam_revocation_target FOREIGN KEY(target_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_iam_revocation_state CHECK(
+  (state='PENDING' AND acknowledged_at IS NULL)
+  OR (state='ACKNOWLEDGED' AND acknowledged_at IS NOT NULL))
+);
+--rollback DROP TABLE public.iam_deletion_oidc_revocation_outbox;
