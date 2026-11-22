@@ -3158,3 +3158,65 @@ CREATE TRIGGER trg_qr07_posting_immutable
 --rollback DROP TRIGGER trg_qr07_posting_immutable ON crm.sales_return_posting;
 --rollback DROP TRIGGER trg_qr07_inspection_immutable ON crm.sales_return_inspection;
 --rollback DROP TRIGGER trg_qr07_reception_immutable ON crm.sales_return_reception;
+
+
+--changeset rm:0100-qr07-r25-quarantine-ledger
+-- Quarantine is segregated from sellable on_hand / reserved.
+-- Every quarantine addition must be backed by one inspected return.
+CREATE TABLE crm.inv_return_quarantine_balance (
+ tenant_id UUID NOT NULL, warehouse_id UUID NOT NULL, item_id UUID NOT NULL,
+ quantity NUMERIC(19,4) NOT NULL DEFAULT 0, row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_qr07_quarantine_balance PRIMARY KEY(tenant_id,warehouse_id,item_id),
+ CONSTRAINT fk_qr07_quarantine_warehouse FOREIGN KEY(tenant_id,warehouse_id)
+  REFERENCES public.org_location(workspace_id,id),
+ CONSTRAINT fk_qr07_quarantine_item FOREIGN KEY(tenant_id,item_id)
+  REFERENCES crm.cat_item(tenant_id,id),
+ CONSTRAINT ck_qr07_quarantine_qty CHECK(quantity>=0)
+);
+CREATE TABLE crm.inv_return_quarantine_movement (
+ tenant_id UUID NOT NULL,id UUID NOT NULL, return_id UUID NOT NULL,
+ warehouse_id UUID NOT NULL,item_id UUID NOT NULL,
+ delta_quantity NUMERIC(19,4) NOT NULL, before_quantity NUMERIC(19,4) NOT NULL,
+ after_quantity NUMERIC(19,4) NOT NULL, actor_user_id UUID NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_qr07_quarantine_movement PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_qr07_quarantine_return UNIQUE(tenant_id,return_id),
+ CONSTRAINT fk_qr07_quarantine_return FOREIGN KEY(tenant_id,return_id)
+  REFERENCES crm.sales_return_request(tenant_id,id),
+ CONSTRAINT fk_qr07_quarantine_position FOREIGN KEY(tenant_id,warehouse_id,item_id)
+  REFERENCES crm.inv_return_quarantine_balance(tenant_id,warehouse_id,item_id),
+ CONSTRAINT ck_qr07_quarantine_movement_positive CHECK(delta_quantity>0),
+ CONSTRAINT ck_qr07_quarantine_movement_math CHECK(after_quantity=before_quantity+delta_quantity)
+);
+ALTER TABLE crm.sales_return_posting ADD COLUMN quarantine_movement_id UUID;
+ALTER TABLE crm.sales_return_posting DROP CONSTRAINT ck_qr07_posting_disposition;
+ALTER TABLE crm.sales_return_posting
+ ADD CONSTRAINT fk_qr07_posting_quarantine FOREIGN KEY(tenant_id,quarantine_movement_id)
+ REFERENCES crm.inv_return_quarantine_movement(tenant_id,id);
+ALTER TABLE crm.sales_return_posting
+ ADD CONSTRAINT uq_qr07_posting_quarantine UNIQUE(tenant_id,quarantine_movement_id);
+ALTER TABLE crm.sales_return_posting
+ ADD CONSTRAINT ck_qr07_posting_disposition CHECK(
+  (disposition='RESTOCK' AND movement_id IS NOT NULL AND quarantine_movement_id IS NULL)
+  OR (disposition='WRITE_OFF' AND movement_id IS NULL AND quarantine_movement_id IS NULL)
+  OR (disposition='QUARANTINE' AND movement_id IS NULL AND quarantine_movement_id IS NOT NULL)
+ );
+ALTER TABLE crm.sales_return_request DROP CONSTRAINT ck_sales_return_request_state;
+ALTER TABLE crm.sales_return_request ADD CONSTRAINT ck_sales_return_request_state
+ CHECK(state IN ('REQUESTED','UNDER_REVIEW','APPROVED','REJECTED','AWAITING_RECEIPT',
+ 'RECEIVED','INSPECTED','RESTOCKED','DISPOSED','QUARANTINED','CANCELLED_BY_BUYER'));
+--rollback ALTER TABLE crm.sales_return_request DROP CONSTRAINT ck_sales_return_request_state;
+--rollback ALTER TABLE crm.sales_return_request ADD CONSTRAINT ck_sales_return_request_state CHECK(state IN ('REQUESTED','UNDER_REVIEW','APPROVED','REJECTED','AWAITING_RECEIPT','RECEIVED','INSPECTED','RESTOCKED','DISPOSED','CANCELLED_BY_BUYER'));
+--rollback ALTER TABLE crm.sales_return_posting DROP CONSTRAINT ck_qr07_posting_disposition;
+--rollback ALTER TABLE crm.sales_return_posting ADD CONSTRAINT ck_qr07_posting_disposition CHECK((disposition='RESTOCK' AND movement_id IS NOT NULL) OR (disposition='WRITE_OFF' AND movement_id IS NULL));
+--rollback ALTER TABLE crm.sales_return_posting DROP CONSTRAINT uq_qr07_posting_quarantine;
+--rollback ALTER TABLE crm.sales_return_posting DROP CONSTRAINT fk_qr07_posting_quarantine;
+--rollback ALTER TABLE crm.sales_return_posting DROP COLUMN quarantine_movement_id;
+--rollback DROP TABLE crm.inv_return_quarantine_movement;
+--rollback DROP TABLE crm.inv_return_quarantine_balance;
+
+--changeset rm:0101-qr07-r25-quarantine-movement-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_qr07_quarantine_movement_immutable
+ BEFORE UPDATE OR DELETE ON crm.inv_return_quarantine_movement
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_pickup_receipt_mutation();
+--rollback DROP TRIGGER trg_qr07_quarantine_movement_immutable ON crm.inv_return_quarantine_movement;
