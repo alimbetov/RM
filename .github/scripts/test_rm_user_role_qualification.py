@@ -29,12 +29,22 @@ class RoleEvidenceContractTest(unittest.TestCase):
             ("FilesR10bQualificationTest", "urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes"),
             ("OrganizationLocationLifecycleQualificationTest", "urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects"),
         })
+        cases["kms-postgres-surefire"].update({
+            ("TenantRbacRevocationQualificationTest", "activeCommandCompletesBeforeConcurrentRevocationCommits"),
+            ("TenantRbacRevocationQualificationTest", "commandCannotProceedUntilEarlierRevocationCommits"),
+            ("CommercialCoreE2EQualificationTest", "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects"),
+            ("CommercialCoreE2EQualificationTest", "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot"),
+            ("InventoryTransferStocktakeQualificationTest", "urR33PostgresTransferCommitsBeforeReconciliationSnapshot"),
+            ("InventoryTransferStocktakeQualificationTest", "urR33PostgresReconciliationSnapshotCommitsBeforeTransferVisibility"),
+            ("InventoryTransferStocktakeQualificationTest", "durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings"),
+            ("InventoryTransferStocktakeQualificationTest", "transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances"),
+        })
         result=assess_role_cases(ROOT,cases,"a"*40,True,write=False)
-        self.assertEqual(result["mandatory"],11)
-        self.assertEqual(result["verifiedInternal"],11)
+        self.assertEqual(result["mandatory"],19)
+        self.assertEqual(result["verifiedInternal"],19)
         self.assertEqual(result["gate"],"USER_ROLE_SERVICE_QUALIFIED")
         held=assess_role_cases(ROOT,cases,"a"*40,False,write=False)
-        self.assertEqual(held["executedPostgresql"],11)
+        self.assertEqual(held["executedPostgresql"],19)
         self.assertEqual(held["verifiedInternal"],0)
         self.assertEqual(held["gate"],"HOLD")
 
