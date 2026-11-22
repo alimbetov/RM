@@ -3365,3 +3365,28 @@ ALTER TABLE crm.customer_buyer_link_event ADD CONSTRAINT ck_crm_buyer_link_event
 --rollback DROP INDEX crm.uk_crm_buyer_active_customer;
 --rollback ALTER TABLE crm.customer_buyer_link ADD CONSTRAINT uk_crm_buyer_link_buyer UNIQUE(tenant_id,buyer_user_id);
 --rollback ALTER TABLE crm.customer_buyer_link ADD CONSTRAINT uk_crm_buyer_link_customer UNIQUE(tenant_id,customer_id);
+
+
+--changeset rm:0106-crm-r22c-dispute-adjudication
+-- Independent tenant reviewer must record a structured, non-PII reason code.
+CREATE TABLE crm.customer_buyer_dispute_decision (
+ tenant_id UUID NOT NULL,
+ link_id UUID NOT NULL,
+ reviewer_user_id UUID NOT NULL,
+ reason_code VARCHAR(32) NOT NULL,
+ decided_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_crm_buyer_dispute_decision PRIMARY KEY(tenant_id,link_id),
+ CONSTRAINT fk_crm_buyer_dispute_decision_link FOREIGN KEY(tenant_id,link_id)
+   REFERENCES crm.customer_buyer_link(tenant_id,id),
+ CONSTRAINT fk_crm_buyer_dispute_decision_reviewer FOREIGN KEY(reviewer_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_buyer_dispute_reason CHECK(reason_code IN
+   ('IDENTITY_MISMATCH','BUYER_DENIED','INSUFFICIENT_EVIDENCE'))
+);
+--rollback DROP TABLE crm.customer_buyer_dispute_decision;
+
+--changeset rm:0107-crm-r22c-adjudication-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_crm_r22c_adjudication_immutable
+ BEFORE UPDATE OR DELETE ON crm.customer_buyer_dispute_decision
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_crm_r22c_adjudication_immutable ON crm.customer_buyer_dispute_decision;
