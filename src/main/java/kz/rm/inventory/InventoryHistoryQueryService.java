@@ -6,6 +6,7 @@ import kz.rm.inventory.dto.StockBalanceDto;
 import kz.rm.inventory.dto.InventoryMovementSearch;
 import kz.rm.inventory.dto.InventoryMovementDto;
 import kz.rm.inventory.dto.InventoryReservationEventDto;
+import kz.rm.inventory.dto.InventoryStocktakeDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -29,12 +30,20 @@ import java.util.UUID;
 class InventoryHistoryQueryService {
     private final TenantAuthorization authorization;
     private final JdbcTemplate jdbc;
-    InventoryHistoryQueryService(TenantAuthorization authorization,JdbcTemplate jdbc) {
-        this.authorization=authorization;this.jdbc=jdbc;
+    private final InventoryStocktakeService stocktakes;
+    InventoryHistoryQueryService(TenantAuthorization authorization,JdbcTemplate jdbc,
+                                 InventoryStocktakeService stocktakes) {
+        this.authorization=authorization;this.jdbc=jdbc;this.stocktakes=stocktakes;
     }
 
     private void admit(UUID actor,UUID tenant) {
         authorization.requireForCommand(actor,tenant,DomainPermission.INVENTORY_STOCK_READ);
+    }
+
+    @Transactional
+    InventoryStocktakeDto stocktake(UUID actor,UUID tenant,UUID stocktakeId) {
+        admit(actor,tenant);
+        return stocktakes.details(tenant,stocktakeId);
     }
 
     @Transactional
