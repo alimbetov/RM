@@ -36,6 +36,8 @@
 - [RM-TENANT-CRUD-COMPLETION-R1 — verified CRUD matrix, tenant isolation and gap-based service backlog](docs/spec/RM-TENANT-CRUD-COMPLETION-R1.md)
 - [RM-TENANT-SERVICES-COMPLETION-R1 — coordinated service development, tenant permissions, domain contracts and QA gates](docs/spec/RM-TENANT-SERVICES-COMPLETION-R1.md)
 - [RM-SVC-FUNCTIONAL-DEPTH-AUDIT-R1 — source-based business functionality, stubs and service completion gaps](docs/reviews/RM-SVC-FUNCTIONAL-DEPTH-AUDIT-2026-11-22.md)
+- [RM-SERVICE-12-PASS-REVIEW-PROTOCOL-R1 — one domain at a time, 12 quality passes](docs/spec/RM-SERVICE-12-PASS-REVIEW-PROTOCOL-R1.md)
+- [RM-INVENTORY-FUNCTIONAL-COMPLETION-R1 — 12-pass INVENTORY audit, domain alignment and phased implementation specification](docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md)
 
 **Document authority:** RM-PLATFORM-STANDARD-R2 defines approved rules; domain docs/ADRs provide detail; reviews document historical evidence; code and tests establish what is implemented. A standard approval is not production approval.
 
