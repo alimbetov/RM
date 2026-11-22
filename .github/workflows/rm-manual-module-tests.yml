@@ -7,9 +7,10 @@ on:
         description: 'Java service module to qualify'
         type: choice
         required: true
-        default: UR-R3
+        default: UR-R3.2
         options:
           - UR-R3
+          - UR-R3.2
           - SALES
           - INVENTORY
           - CRM
@@ -61,10 +62,11 @@ jobs:
         id: select
         shell: bash
         env:
-          MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.module || 'UR-R3' }}
+          MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.module || 'UR-R3.2' }}
         run: |
           case "$MODULE" in
             UR-R3)       suites='UserRoleMatrixR31QualificationTest' ;;
+            UR-R3.2)     suites='UserRoleMatrixR31QualificationTest,SalesInventoryRbacQualificationTest,CrmR1aQualificationTest,FilesR10bQualificationTest,OrganizationLocationLifecycleQualificationTest' ;;
             SALES)       suites='SalesInventoryRbacQualificationTest,SalesOrderQueryQualificationTest' ;;
             INVENTORY)   suites='InventoryReservationQualificationTest,InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest,InventoryQ123QualificationTest' ;;
             CRM)         suites='CrmR1aQualificationTest,CrmInteractionQualificationTest' ;;
