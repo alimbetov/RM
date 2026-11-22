@@ -197,3 +197,12 @@ SELECT
 **Принятое решение DEC-ORG-05-A:** new R1 mutations require ACTIVE WAREHOUSE on both ends of transfer; old receipt replay and authorized cleanup survive INACTIVE/CLOSED, terminal ledger immutable; ORG must use a shared location-row fence and inventory-owned read-only blockers. **DEC-ORG-05-B:** OPEN stocktake дополнительно запрещает deactivation/close, пока не POSTED/CANCELLED. Свободный `onHand>0` по-прежнему **НЕ** запрещает temporary INACTIVE согласно DEC-ORG-03-A.
 
 **Статус:** проход 05/12 **SOURCE VERIFIED / SPECIFIED**, runtime ORG lifecycle и новая mixed-command deadlock qualification **НЕ реализованы**. ORGANIZATION остается **1/5**; следующий 06/12 — SALES confirmed/fulfill/cancel, order-state admissions и concurrency с локациями. Другой домен не начинать до 12/12.
+
+
+---
+
+## Актуализация после прохода 06/12 — P05-01 исправлен кодом
+
+С момента исходного снимка P05 `1185d555…` в `base_dev` появилась адресная правка: `StockEligibility.requireTransferWarehouses(tenant, first, second, item)` сначала берёт оба location row locks в ascending UUID, затем ровно один PRODUCT lock; `InventoryTransferService.transfer` вызывает её вместо `requireReceivable(first,item); requireReceivable(second,item)`. Добавлен `InventoryTransferStocktakeQualificationTest.receiptAtTransferDestinationDoesNotCycleWithWarehouseOwnerLocks`. Установлено на source SHA `cf0ae73c22d881d703f072afcacd7c5de8f5deff`.
+
+**Статус P05-01:** `CODE FIX PRESENT / targeted test present`; исходное обнаружение остаётся историческим evidence, **не текущим открытым source bug**. Факт присутствия теста сам по себе не доказывает его GREEN на этом SHA и не закрывает `deactivate×transfer`, поскольку ORG lifecycle ещё не существует. `P05-02` guard NEW fulfillment и 20 P05 ORG+INVENTORY acceptance cases остаются отдельно открытыми. См. [проход 06/12](RM-ORG-FUNCTIONAL-DEPTH-PASS06-2026-11-22.md).
