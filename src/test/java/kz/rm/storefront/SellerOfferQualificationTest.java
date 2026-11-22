@@ -107,7 +107,7 @@ class SellerOfferQualificationTest {
     @Test void sellerPermissionRevocationFencesNextCommand() {
         Context c=context();
         var role=roles.createRole(verified(c.owner()),c.tenant(),
-            "OFFER_REVOKE_"+UUID.randomUUID().toString().replace("-").substring(0,8).toUpperCase(),
+            "OFFER_REVOKE_"+UUID.randomUUID().toString().replace("-","").substring(0,8).toUpperCase(),
             "Revocable offers role");
         roles.grant(verified(c.owner()),c.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
         roles.assign(verified(c.owner()),c.tenant(),c.seller(),role.id());
