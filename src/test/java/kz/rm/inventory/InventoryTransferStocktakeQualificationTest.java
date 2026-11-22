@@ -231,4 +231,57 @@ class InventoryTransferStocktakeQualificationTest {
                 """,f.tenant(),receipt.id()))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
     }
+
+    @Test void stocktakeRejectsCountsBelowReservationsAndNoChangeEmitsNoFakeMovement() {
+        var f=fixture();receive(f,f.source(),"stockQ8Reserve001",10);
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance
+                SET reserved=3,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
+        var who=actor(f.actor());
+        var take=commands.startStocktake(who,f.tenant(),f.source(),
+                List.of(f.item()),"countReserved001");
+        commands.recordCount(who,f.tenant(),take.id(),f.item(),BigDecimal.valueOf(2),0);
+        assertThatThrownBy(()->commands.postStocktake(who,f.tenant(),take.id(),
+                "postBelowRes001")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("below active reservations");
+        assertThat(stock(f,f.source())).isEqualByComparingTo("10");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND source_type='STOCKTAKE' AND source_id=?
+                """,Integer.class,f.tenant(),take.id())).isZero();
+        var other=commands.startStocktake(who,f.tenant(),f.source(),
+                List.of(f.item()),"countNoChange001");
+        commands.recordCount(who,f.tenant(),other.id(),f.item(),BigDecimal.TEN,0);
+        assertThat(commands.postStocktake(who,f.tenant(),other.id(),"postNoChange001")
+                .status()).isEqualTo("POSTED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND source_type='STOCKTAKE' AND source_id=?
+                """,Integer.class,f.tenant(),other.id())).isZero();
+        assertThat(stock(f,f.source())).isEqualByComparingTo("10");
+    }
+
+    @Test void stocktakeRequiresFullCountAndDeniesForeignLocation() {
+        var f=fixture(),foreign=fixture();
+        receive(f,f.source(),"stockQ8Guard0001",6);
+        var who=actor(f.actor());
+        assertThatThrownBy(()->commands.startStocktake(who,f.tenant(),foreign.source(),
+                List.of(f.item()),"foreignTake001"))
+                .isInstanceOf(IllegalArgumentException.class);
+        var started=commands.startStocktake(who,f.tenant(),f.source(),
+                List.of(f.item()),"fullTake0001");
+        assertThatThrownBy(()->commands.postStocktake(who,f.tenant(),started.id(),
+                "incompletePost01")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("uncounted SKU");
+        assertThatThrownBy(()->commands.startStocktake(who,f.tenant(),f.destination(),
+                List.of(f.item()),"fullTake0001")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->queries.stocktake(who,f.tenant(),UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(commands.cancelStocktake(who,f.tenant(),started.id()).status())
+                .isEqualTo("CANCELLED");
+        assertThat(commands.cancelStocktake(who,f.tenant(),started.id()).status())
+                .isEqualTo("CANCELLED");
+    }
 }
