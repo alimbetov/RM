@@ -1,0 +1,134 @@
+{
+  "schema": "RM-UR-R3.2-JUNIT-CASES/v1",
+  "scope": "Service-only cross-domain authorization and persistence; no HTTP/REST/OIDC",
+  "qualificationLevel": "POSTGRESQL_REQUIRED",
+  "cases": [
+    {
+      "caseId": "UR-R32-SALES-COMMAND",
+      "junitSuite": "SalesInventoryRbacQualificationTest",
+      "junitMethod": "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory",
+      "requirementIds": [
+        "SAL-03",
+        "INV-02"
+      ],
+      "actorProfiles": [
+        "U4",
+        "U7",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "DENY_MISSING_GRANT",
+        "DENY_OTHER_TENANT",
+        "ALLOW_CONFIRM",
+        "ZERO_STATUS_EVENT_DELTA",
+        "ZERO_RESERVATION_DELTA"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R32-INVENTORY-LEDGER",
+      "junitSuite": "SalesInventoryRbacQualificationTest",
+      "junitMethod": "urR32InventoryGrantRevokeAndForeignActorPreserveLedger",
+      "requirementIds": [
+        "INV-01",
+        "INV-03"
+      ],
+      "actorProfiles": [
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "ALLOW_RECEIVE",
+        "DENY_MISSING_ADJUST",
+        "DENY_OTHER_TENANT",
+        "DENY_REVOKED",
+        "ZERO_LEDGER_DELTA"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R32-CRM-WRITE",
+      "junitSuite": "CrmR1aQualificationTest",
+      "junitMethod": "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged",
+      "requirementIds": [
+        "CRM-01",
+        "CRM-04"
+      ],
+      "actorProfiles": [
+        "U5",
+        "U7",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "DENY_MISSING_WRITE",
+        "DENY_OTHER_TENANT",
+        "ALLOW_WRITE",
+        "DENY_REVOKED",
+        "ZERO_CUSTOMER_DELTA"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R32-FILES-BYTES",
+      "junitSuite": "FilesR10bQualificationTest",
+      "junitMethod": "urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes",
+      "requirementIds": [
+        "FIL-01",
+        "FIL-02"
+      ],
+      "actorProfiles": [
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "DENY_OTHER_TENANT",
+        "DENY_REVOKED",
+        "NO_BYTES_CONSUMED",
+        "ZERO_STORAGE_PROMOTION",
+        "ALLOW_CLEAN_FILE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R32-ORG-LOCATION",
+      "junitSuite": "OrganizationLocationLifecycleQualificationTest",
+      "junitMethod": "urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects",
+      "requirementIds": [
+        "ORG-01",
+        "ORG-02"
+      ],
+      "actorProfiles": [
+        "U5",
+        "U8",
+        "U11"
+      ],
+      "dimensions": [
+        "ALLOW_CREATE",
+        "DENY_OTHER_TENANT",
+        "DENY_REVOKED",
+        "ZERO_LOCATION_DELTA",
+        "ZERO_AUDIT_DELTA"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    }
+  ]
+}
