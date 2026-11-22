@@ -35,7 +35,7 @@ class SalesOrderQueryQualificationTest {
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
-    @Autowired TenantRoleService roles;
+    @Autowired VerifiedTenantRoleCommands roles;
 
     private record Shop(UUID actor,UUID tenant,String slug,UUID offer) {}
     private Shop shop() {
@@ -175,18 +175,18 @@ class SalesOrderQueryQualificationTest {
                 staff,OrganizationMembershipEntity.Role.MEMBER));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),orgB,
                 staff,OrganizationMembershipEntity.Role.MEMBER));
-        var roleA=roles.createRole(a.actor(),a.tenant(),
+        var roleA=roles.createRole(verified(a.actor()),a.tenant(),
                 "SELL_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "Sales read A");
-        roles.grant(a.actor(),a.tenant(),roleA.id(),DomainPermission.SALES_ORDER_READ);
-        roles.assign(a.actor(),a.tenant(),staff,roleA.id());
-        roles.enable(a.actor(),a.tenant());
-        var roleB=roles.createRole(b.actor(),b.tenant(),
+        roles.grant(verified(a.actor()),a.tenant(),roleA.id(),DomainPermission.SALES_ORDER_READ);
+        roles.assign(verified(a.actor()),a.tenant(),staff,roleA.id());
+        roles.enable(verified(a.actor()),a.tenant());
+        var roleB=roles.createRole(verified(b.actor()),b.tenant(),
                 "SELL_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "No sales read B");
-        roles.grant(b.actor(),b.tenant(),roleB.id(),DomainPermission.CRM_READ);
-        roles.assign(b.actor(),b.tenant(),staff,roleB.id());
-        roles.enable(b.actor(),b.tenant());
+        roles.grant(verified(b.actor()),b.tenant(),roleB.id(),DomainPermission.CRM_READ);
+        roles.assign(verified(b.actor()),b.tenant(),staff,roleB.id());
+        roles.enable(verified(b.actor()),b.tenant());
         String subject=jdbc.queryForObject("SELECT external_subject FROM iam_user_account WHERE id=?",
                 String.class,staff);
         org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
