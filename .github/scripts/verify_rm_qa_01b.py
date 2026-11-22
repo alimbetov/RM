@@ -46,6 +46,10 @@ REQUIRED_CASES = {
          "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings"),
         ("InventoryTransferStocktakeQualificationTest",
          "postgresInv16DurableAdvanceAndConcurrentReceivingHaveNoFalseDrift"),
+        ("InventoryTransferStocktakeQualificationTest",
+         "durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings"),
+        ("InventoryTransferStocktakeQualificationTest",
+         "durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements"),
     },
 }
 
