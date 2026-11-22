@@ -50,6 +50,7 @@ public class StorefrontOfferService {
                                             state,catalog_item_id,row_version)
                 VALUES (?,?,?,?,?,'DRAFT',?,0)
                 """, tenant, id, title.trim(), amount, currency, catalogItemId);
+        recordPriceRevision(tenant,id,0,null,amount,null,currency,user);
         audit(tenant, user, id, "STOREFRONT_OFFER_CREATED");
         return new Offer(tenant, id, catalogItemId, title.trim(), amount,
                 currency, State.DRAFT, 0);
@@ -77,6 +78,9 @@ public class StorefrontOfferService {
                 """, normalized, amount, currency, tenant, offerId, expectedVersion,
                 current.state().name());
         if (changed != 1) throw new IllegalStateException("Concurrent offer modification");
+        if(current.unitPrice().compareTo(amount)!=0 || !current.currency().equals(currency))
+            recordPriceRevision(tenant,offerId,expectedVersion+1,
+                    current.unitPrice(),amount,current.currency(),currency,user);
         audit(tenant, user, offerId, "STOREFRONT_OFFER_PRICE_UPDATED");
         return new Offer(tenant, offerId, current.catalogItemId(), normalized,
                 amount, currency, current.state(), expectedVersion + 1);
@@ -168,6 +172,44 @@ public class StorefrontOfferService {
                 tenant, id);
         if (rows.isEmpty()) throw new IllegalArgumentException("Offer not found in tenant");
         return rows.getFirst();
+    }
+
+    /** The offer CAS update and its immutable history commit atomically. */
+    private void recordPriceRevision(UUID tenant,UUID offerId,long version,
+                                     BigDecimal oldPrice,BigDecimal newPrice,
+                                     String oldCurrency,String newCurrency,UUID actor) {
+        jdbc.update("""
+                INSERT INTO crm.store_offer_price_revision
+                  (tenant_id,id,offer_id,offer_row_version,old_price,new_price,
+                   old_currency,new_currency,actor_user_id,recorded_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+                """,tenant,UUID.randomUUID(),offerId,version,oldPrice,newPrice,
+                oldCurrency,newCurrency,actor,Timestamp.from(Instant.now()));
+    }
+
+    public record PriceRevision(UUID id,long offerRowVersion,
+                                BigDecimal oldPrice,BigDecimal newPrice,
+                                String oldCurrency,String newCurrency,
+                                UUID actorUserId,Instant recordedAt) {}
+
+    @Transactional
+    public List<PriceRevision> priceHistory(VerifiedActor actor,UUID tenant,
+                                             UUID offerId,int page,int size) {
+        admit(actor,tenant,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        if(offerId==null||page<0||size<1||size>100)
+            throw new IllegalArgumentException("Invalid price history page");
+        fetch(tenant,offerId,false); // do not leak foreign-tenant records
+        return jdbc.query("""
+                SELECT id,offer_row_version,old_price,new_price,old_currency,
+                       new_currency,actor_user_id,recorded_at
+                FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                ORDER BY offer_row_version DESC,id DESC LIMIT ? OFFSET ?
+                """,(rs,n)->new PriceRevision(rs.getObject(1,UUID.class),rs.getLong(2),
+                        rs.getBigDecimal(3),rs.getBigDecimal(4),rs.getString(5),
+                        rs.getString(6),rs.getObject(7,UUID.class),
+                        rs.getTimestamp(8).toInstant()),
+                tenant,offerId,size,(long)page*size);
     }
 
     private void lockStorefront(UUID tenant) {
