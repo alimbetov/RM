@@ -43,3 +43,18 @@ The child JVM records p95/p99 by **phase and outcome** and 20-ms-sampled Hikari 
 5. Promote a quantitative performance SLO only after statistically repeatable runs and separate pass/fail criteria for business rejects versus infrastructure faults.
 
 **Production admission remains HOLD.**
+
+## Extended qualification candidate (2026-11-22)
+
+**Tested source candidate:** `de7b4f0170721257d46acbbedf6e274cd0885df2`  
+**New exact SHA CI:** https://github.com/alimbetov/RM/actions/runs/45038810734 — evidence pending.
+
+The original staged run completed successfully for both tenants, but **never saturated Hikari**: observed peak active connections = 1, peak waiting = 0 on each JVM. Therefore it was admitted only as a low-pressure baseline. The new revision replaces the PEAK arrivals with a *concurrent burst*, adds two repeated 60-second runs plus a separate 300-second run and makes tenant request distributions asymmetric.
+
+- 60-second variant: 50 orders from tenant A, 30 from tenant B. LOW 12/7, PEAK 25/15 simultaneous requests, RECOVERY 13/8.
+- 300-second variant: 240 orders from tenant A, 160 from tenant B. LOW 60/40, PEAK 120/80 simultaneous requests, RECOVERY 60/40. Every request is an independent reserved order, not a conflicting scan against one order.
+- Test-only private manifest, hard separate JVMs, exact SQL receipt/stock/tenant checks, p95/p99 per phase and operation outcome, Hikari peak active/waiting/total, zero-deadlock guard.
+- Parent simultaneously polls `pg_stat_activity` lock wait sessions every ~100 milliseconds, reporting sample sum and maximum waiters. This does not measure precise lock-wait duration or eliminate sampling bias.
+- The 300-second run and the two 60-second runs are configured in `qr06b-b34-capacity-recovery` under the same exact SHA; no result is considered PASS until Surefire and all three runs succeed.
+
+**Saturation admission remains conditional:** a sustained Hikari waiting queue and/or clear response-latency knee must be observed; a short burst reaching pool capacity is an entry signal, not proof of stable maximum service throughput. Production readiness remains HOLD.
