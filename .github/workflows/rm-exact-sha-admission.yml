@@ -1,15 +1,13 @@
 name: RM Exact-SHA Qualification Admission
 
 on:
+  push:
+    branches: [base_dev]
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - RM Domain Security and PostgreSQL Qualification
-      - CRM R1.2 Populated PostgreSQL Upgrade Qualification
-      - INVENTORY 0081 Populated PostgreSQL Upgrade Qualification
-      - SALES 08.4 Populated PostgreSQL Upgrade Qualification
-      - RustFS Real Infrastructure E2E
-    types: [completed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   actions: read
@@ -18,7 +16,7 @@ permissions:
 jobs:
   exact-sha-manifest:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Aggregate mandatory results for the current base_dev SHA
         id: qualify
@@ -30,14 +28,10 @@ jobs:
             const repo = context.repo.repo;
             const branch = 'base_dev';
             const {data: branchData} = await github.rest.repos.getBranch({owner,repo,branch});
-            const sha = branchData.commit.sha;
-            // A completed stale workflow_run must never approve a newer candidate.
-            if (context.eventName === 'workflow_run' &&
-                (context.payload.workflow_run.head_sha !== sha ||
-                 context.payload.workflow_run.head_branch !== branch)) {
-              core.notice('Stale SHA event; current head is ' + sha);
-              return;
-            }
+            const sha = context.sha;
+            // Never qualify a stale branch commit, even if all its jobs were green.
+            if (branchData.commit.sha !== sha)
+              return core.setFailed('Stale qualification SHA: ' + sha);
             const required = [
               'RM Domain Security and PostgreSQL Qualification',
               'CRM R1.2 Populated PostgreSQL Upgrade Qualification',
@@ -45,27 +39,41 @@ jobs:
               'SALES 08.4 Populated PostgreSQL Upgrade Qualification',
               'RustFS Real Infrastructure E2E'
             ];
-            const results = await github.paginate(github.rest.actions.listWorkflowRunsForRepo,{
-              owner,repo,head_sha:sha,branch,per_page:100
-            });
             const manifest = {
               schema:'RM-QA-01B/v1',repository:owner+'/'+repo,branch,sha,
               observed_at:new Date().toISOString(),required:[]
             };
-            let allGreen=true;
-            for(const name of required) {
-              const matching = results.filter(r=>r.name===name && r.head_sha===sha &&
-                r.event==='push').sort((a,b)=>b.id-a.id);
-              const run=matching[0];
-              const record = run ? {
-                name,id:run.id,sha:run.head_sha,status:run.status,
-                conclusion:run.conclusion,url:run.html_url,run_attempt:run.run_attempt
-              } : {name,status:'MISSING',conclusion:null};
-              // Require at least one completed, successful run for EACH
-              // mandatory pipeline. A queued or skipped run never qualifies.
-              if(!run || run.status!=='completed' || run.conclusion!=='success')
-                allGreen=false;
-              manifest.required.push(record);
+            let allGreen=false;
+            // Workflows run concurrently. Wait for all exact-SHA evidence rather
+            // than turning early queued jobs into an artificial admission failure.
+            for(let attempt=0;attempt<40;attempt++) {
+              const {data: current} = await github.rest.repos.getBranch({
+                owner,repo,branch
+              });
+              if(current.commit.sha!==sha)
+                return core.setFailed('Branch changed while awaiting qualification');
+              const results = await github.paginate(
+                github.rest.actions.listWorkflowRunsForRepo,
+                {owner,repo,head_sha:sha,branch,per_page:100}
+              );
+              manifest.required=[];
+              for(const name of required) {
+                const matches=results.filter(r=>r.name===name &&
+                  r.head_sha===sha && r.event==='push').sort((a,b)=>b.id-a.id);
+                const run=matches[0];
+                manifest.required.push(run ? {
+                  name,id:run.id,sha:run.head_sha,status:run.status,
+                  conclusion:run.conclusion,url:run.html_url,
+                  run_attempt:run.run_attempt
+                } : {name,status:'MISSING',conclusion:null});
+              }
+              allGreen=manifest.required.every(r=>
+                r.status==='completed' && r.conclusion==='success' && r.sha===sha);
+              if(allGreen) break;
+              if(manifest.required.some(r=>
+                  r.status==='completed' &&
+                  r.conclusion!=='success' && r.conclusion!==null)) break;
+              if(attempt<39) await new Promise(resolve=>setTimeout(resolve,30000));
             }
             manifest.admission = allGreen?'QUALIFIED':'HOLD';
             fs.writeFileSync('rm-exact-sha-manifest.json',
