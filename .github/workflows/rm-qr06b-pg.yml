@@ -8,6 +8,7 @@ on:
       - 'src/main/java/kz/rm/iam/**'
       - 'src/main/java/kz/rm/inventory/**'
       - 'src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/QrHandoverProcessWorker.java'
       - 'src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java'
       - 'src/main/resources/db/changelog/**'
       - '.github/workflows/rm-qr06b-pg.yml'
@@ -54,7 +55,10 @@ jobs:
           RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
-        run: mvn -B -ntp -Dtest=QrWarehouseHandoverQualificationTest,TenantRbacRevocationQualificationTest test
+        run: |
+          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr06b-classpath.txt
+          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr06b-classpath.txt)"
+          mvn -B -ntp -Dtest=QrWarehouseHandoverQualificationTest,TenantRbacRevocationQualificationTest test
       - name: Upload qualified evidence tied to commit SHA
         if: always()
         uses: actions/upload-artifact@v4
