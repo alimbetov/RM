@@ -58,14 +58,19 @@ class CrmBuyerLinkQualificationTest {
                 (tenant_id,id,slug,state,created_at,row_version)
                 VALUES (?,?,?,'DRAFT',?,0)
                 """,tenant,UUID.randomUUID(),"link-"+UUID.randomUUID(),java.sql.Timestamp.from(Instant.now()));
-        UUID identity=UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO public.iam_email_identity
-                (id,user_id,lookup_hmac,email_envelope,verified_at,created_at)
-                VALUES (?,?,?,?,?,?)
-                """,identity,buyer,UUID.randomUUID().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                new byte[]{1,2,3},java.sql.Timestamp.from(Instant.now()),
-                java.sql.Timestamp.from(Instant.now()));
+        UUID identity=jdbc.query("""
+                SELECT id FROM public.iam_email_identity WHERE user_id=?
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,buyer);
+        if(identity==null) {
+            identity=UUID.randomUUID();
+            jdbc.update("""
+                    INSERT INTO public.iam_email_identity
+                    (id,user_id,lookup_hmac,email_envelope,verified_at,created_at)
+                    VALUES (?,?,?,?,?,?)
+                    """,identity,buyer,UUID.randomUUID().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    new byte[]{1,2,3},java.sql.Timestamp.from(Instant.now()),
+                    java.sql.Timestamp.from(Instant.now()));
+        }
         UUID order=UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO crm.sales_order
