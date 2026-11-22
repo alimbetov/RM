@@ -27,7 +27,8 @@ public class AuthenticatedInventoryReconciliation {
         MISSING_BALANCE,
         NO_MOVEMENT_BASELINE,
         MOVEMENT_CHAIN_BREAK,
-        HISTORY_WINDOW_LIMIT
+        HISTORY_WINDOW_LIMIT,
+        UNVERIFIED_MOVEMENT_ORDER
     }
     public record Result(UUID tenantId, UUID locationId, UUID itemId,
                          BigDecimal onHand, BigDecimal reserved,
@@ -82,12 +83,13 @@ public class AuthenticatedInventoryReconciliation {
             Key key=keys.get(i);
             Result result=inspectPosition(tenant,key.location(),key.item());
             Finding finding=result.finding();
-            if(finding!=Finding.MISSING_BALANCE) {
+            if(finding!=Finding.MISSING_BALANCE &&
+                    finding!=Finding.UNVERIFIED_MOVEMENT_ORDER) {
                 List<Leg> legs=jdbc.query("""
                         SELECT balance_before,balance_after,delta_quantity
                         FROM crm.inv_stock_movement
                         WHERE tenant_id=? AND location_id=? AND item_id=?
-                        ORDER BY recorded_at DESC,id DESC LIMIT ?
+                        ORDER BY posting_version DESC NULLS LAST,recorded_at DESC,id DESC LIMIT ?
                         """,(rs,n)->new Leg(rs.getBigDecimal(1),rs.getBigDecimal(2),
                                 rs.getBigDecimal(3)),tenant,key.location(),key.item(),
                         MAX_MOVEMENTS_PER_POSITION+1);
@@ -146,7 +148,7 @@ public class AuthenticatedInventoryReconciliation {
         BigDecimal latest=jdbc.query("""
                 SELECT balance_after FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND location_id=? AND item_id=?
-                ORDER BY recorded_at DESC,id DESC LIMIT 1
+                ORDER BY posting_version DESC NULLS LAST,recorded_at DESC,id DESC LIMIT 1
                 """,rs->rs.next()?rs.getBigDecimal(1):null,tenant,location,item);
         if(active==null)active=BigDecimal.ZERO;
         if(position==null) {
@@ -154,9 +156,15 @@ public class AuthenticatedInventoryReconciliation {
                 throw new IllegalArgumentException("Position not found in tenant");
             return new Result(tenant,location,item,null,null,active,latest,Finding.MISSING_BALANCE);
         }
+        Long unverifiable=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=? AND posting_version IS NULL
+                """,Long.class,tenant,location,item);
         Finding finding=position[1].compareTo(active)!=0?Finding.RESERVED_MISMATCH:
-                latest!=null && latest.compareTo(position[0])!=0?Finding.MOVEMENT_BALANCE_MISMATCH:
-                latest==null?Finding.NO_MOVEMENT_BASELINE:Finding.CONSISTENT;
+                latest==null?Finding.NO_MOVEMENT_BASELINE:
+                unverifiable!=null && unverifiable>0?Finding.UNVERIFIED_MOVEMENT_ORDER:
+                latest.compareTo(position[0])!=0?Finding.MOVEMENT_BALANCE_MISMATCH:
+                Finding.CONSISTENT;
         return new Result(tenant,location,item,position[0],position[1],active,latest,finding);
     }
 }
