@@ -1541,4 +1541,192 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+
+    private record B32Operation(String category,boolean success,long nanos) {}
+    private static void b32Print(String profile,java.util.List<B32Operation> outcomes,
+                                 long wallNanos) {
+        for(String group:java.util.List.of("COMPLETED","BUSINESS_REJECTED","STOCK_MUTATION")) {
+            var latencies=outcomes.stream().filter(x->x.category().equals(group))
+                    .map(B32Operation::nanos).toList();
+            if(latencies.isEmpty())continue;
+            System.out.printf(java.util.Locale.ROOT,
+                    "QR06B_B32 profile=%s outcome=%s count=%d p50_ms=%d p95_ms=%d p99_ms=%d%n",
+                    profile,group,latencies.size(),b3Percentile(latencies,50),
+                    b3Percentile(latencies,95),b3Percentile(latencies,99));
+        }
+        long done=outcomes.stream().filter(x->x.category().equals("COMPLETED")).count();
+        long errors=outcomes.stream().filter(x->!x.success()).count();
+        System.out.printf(java.util.Locale.ROOT,
+                "QR06B_B32_TOTAL profile=%s successes=%d technical_errors=%d "+
+                "wall_ms=%d completed_per_sec=%.2f%n",
+                profile,done,errors,TimeUnit.NANOSECONDS.toMillis(wallNanos),
+                done/Math.max(1e-9,wallNanos/1e9));
+    }
+
+    /** B3.2 entry: 48 independent successful orders across TWO independent tenants.
+     * Two bounded waves intentionally distinguish actual completed-order throughput
+     * from B3.1's mostly-rejected same-order attempts. */
+    @Test void qr06bPgB32TwoTenantIndependentSuccessfulThroughput() throws Exception {
+        requirePostgres();
+        var a=context();var b=context();
+        var contexts=List.of(a,b);
+        for(Context c:contexts) {
+            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                    c.itemOne(),key(),new BigDecimal("200"));
+            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                    c.itemTwo(),key(),new BigDecimal("200"));
+        }
+        var all=new ArrayList<java.util.Map.Entry<Context,B31Target>>();
+        for(Context c:contexts) {
+            for(int i=0;i<24;i++) {
+                var o=ready(c,true);
+                var proof=pickup.issue(c.buyer(),o.publicRef(),key());
+                all.add(java.util.Map.entry(c,new B31Target(o,proof,version(c,o))));
+            }
+        }
+        var observations=new ArrayList<B32Operation>();
+        long totalMeasuredNanos=0;
+        for(int wave=0;wave<2;wave++) {
+            var batch=all.subList(wave*24,(wave+1)*24);
+            var readyGate=new CountDownLatch(batch.size());
+            var release=new CountDownLatch(1);
+            long began;
+            try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+                var futures=new ArrayList<java.util.concurrent.Future<B32Operation>>();
+                for(var entry:batch) futures.add(pool.submit(()->{
+                    readyGate.countDown();
+                    if(!release.await(20,TimeUnit.SECONDS))
+                        throw new IllegalStateException("B32_RELEASE_TIMEOUT");
+                    long start=System.nanoTime();
+                    var target=entry.getValue();
+                    var c=entry.getKey();
+                    var response=pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                            target.proof().rawProof(),true,target.version(),key());
+                    if(!"COMPLETED".equals(response.status()))
+                        throw new AssertionError("Unexpected handover state");
+                    return new B32Operation("COMPLETED",true,System.nanoTime()-start);
+                }));
+                assertThat(readyGate.await(20,TimeUnit.SECONDS)).isTrue();
+                began=System.nanoTime();
+                release.countDown();
+                for(var future:futures)
+                    observations.add(future.get(120,TimeUnit.SECONDS));
+            }finally {
+                release.countDown();
+            }
+            totalMeasuredNanos+=System.nanoTime()-began;
+        }
+        assertThat(observations).hasSize(48).allMatch(B32Operation::success);
+        b32Print("48_independent_2tenant_2waves",observations,totalMeasuredNanos);
+        for(var e:all)
+            assertExactlyOneHandover(e.getKey(),e.getValue().order(),2);
+        for(Context c:contexts) {
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("100");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("148");
+            assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.sales_pickup_handover
+                    WHERE tenant_id=?
+                    """,Integer.class,c.tenant())).isEqualTo(24);
+        }
+    }
+
+    /** B3.2 entry: authenticated RECEIVE, CORRECT, WRITE_OFF and TRANSFER
+     * overlap a batch of distinct successful handovers in separate tenant contexts.
+     * Requires no direct stock-table mutations or untrusted actor identifiers. */
+    @Test void qr06bPgB32MixedStockOperationsAndTenantIsolation() throws Exception {
+        requirePostgres();
+        var a=context();var b=context();
+        var contexts=List.of(a,b);
+        var orders=new ArrayList<java.util.Map.Entry<Context,B31Target>>();
+        for(Context c:contexts) {
+            UUID role=assignedRole(c);
+            for(var permission:List.of(DomainPermission.INVENTORY_RECEIVE,
+                    DomainPermission.INVENTORY_ADJUST))
+                roles.grant(c.owner(),c.tenant(),role,permission);
+            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),c.itemOne(),
+                    key(),new BigDecimal("100"));
+            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),c.itemTwo(),
+                    key(),new BigDecimal("100"));
+            for(int i=0;i<8;i++) {
+                var o=ready(c,true);
+                orders.add(java.util.Map.entry(c,
+                        new B31Target(o,pickup.issue(c.buyer(),o.publicRef(),key()),
+                                version(c,o))));
+            }
+        }
+        var readyGate=new CountDownLatch(orders.size()+contexts.size()*4);
+        var release=new CountDownLatch(1);
+        var observations=new ArrayList<B32Operation>();
+        long began;
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures=new ArrayList<java.util.concurrent.Future<B32Operation>>();
+            for(var e:orders) futures.add(pool.submit(()->{
+                readyGate.countDown();
+                if(!release.await(25,TimeUnit.SECONDS))
+                    throw new IllegalStateException("B32_HANDOVER_BARRIER_TIMEOUT");
+                long start=System.nanoTime();
+                var c=e.getKey();var target=e.getValue();
+                pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                        target.proof().rawProof(),true,target.version(),key());
+                return new B32Operation("COMPLETED",true,System.nanoTime()-start);
+            }));
+            for(Context c:contexts) {
+                futures.add(pool.submit(()->{
+                    readyGate.countDown();awaitQr06b(release);
+                    long start=System.nanoTime();
+                    inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                            c.itemOne(),key(),BigDecimal.ONE);
+                    return new B32Operation("STOCK_MUTATION",true,System.nanoTime()-start);
+                }));
+                futures.add(pool.submit(()->{
+                    readyGate.countDown();awaitQr06b(release);
+                    long start=System.nanoTime();
+                    inventoryCommands.correct(c.staff(),c.tenant(),c.warehouse(),
+                            c.itemTwo(),key(),BigDecimal.ONE);
+                    return new B32Operation("STOCK_MUTATION",true,System.nanoTime()-start);
+                }));
+                futures.add(pool.submit(()->{
+                    readyGate.countDown();awaitQr06b(release);
+                    long start=System.nanoTime();
+                    inventoryCommands.writeOff(c.staff(),c.tenant(),c.warehouse(),
+                            c.itemOne(),key(),BigDecimal.ONE,
+                            kz.rm.inventory.InventoryMovementService.WriteOffCause.DAMAGE);
+                    return new B32Operation("STOCK_MUTATION",true,System.nanoTime()-start);
+                }));
+                futures.add(pool.submit(()->{
+                    readyGate.countDown();awaitQr06b(release);
+                    long start=System.nanoTime();
+                    inventoryCommands.transfer(c.staff(),c.tenant(),c.warehouse(),
+                            c.otherWarehouse(),c.itemTwo(),BigDecimal.ONE,key());
+                    return new B32Operation("STOCK_MUTATION",true,System.nanoTime()-start);
+                }));
+            }
+            assertThat(readyGate.await(25,TimeUnit.SECONDS)).isTrue();
+            began=System.nanoTime();
+            release.countDown();
+            for(var f:futures)observations.add(f.get(120,TimeUnit.SECONDS));
+        } finally {
+            release.countDown();
+        }
+        b32Print("mixed_16orders_8inventory",observations,System.nanoTime()-began);
+        assertThat(observations.stream().filter(x->x.category().equals("COMPLETED")).count())
+                .isEqualTo(16);
+        assertThat(observations.stream().filter(x->x.category().equals("STOCK_MUTATION")).count())
+                .isEqualTo(8);
+        for(var e:orders) assertExactlyOneHandover(e.getKey(),e.getValue().order(),2);
+        for(Context c:contexts) {
+            assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("80");
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("96");
+            assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+            assertThat(jdbc.queryForObject("""
+                    SELECT on_hand FROM crm.inv_stock_balance
+                    WHERE tenant_id=? AND location_id=? AND item_id=?
+                    """,BigDecimal.class,c.tenant(),c.otherWarehouse(),c.itemTwo()))
+                    .isEqualByComparingTo("1");
+        }
+    }
+
 }
