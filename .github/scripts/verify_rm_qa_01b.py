@@ -56,6 +56,8 @@ REQUIRED_CASES = {
         ("SalesInventoryRbacQualificationTest", "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"),
         ("SalesInventoryRbacQualificationTest", "urR32InventoryGrantRevokeAndForeignActorPreserveLedger"),
         ("CrmR1aQualificationTest", "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"),
+        ("CrmInteractionQualificationTest", "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"),
+        ("CrmInteractionQualificationTest", "crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"),
         ("FilesR10bQualificationTest", "urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes"),
         ("OrganizationLocationLifecycleQualificationTest", "urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects"),
         ("TenantRbacRevocationQualificationTest", "activeCommandCompletesBeforeConcurrentRevocationCommits"),
