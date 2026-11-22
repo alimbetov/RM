@@ -1829,4 +1829,145 @@ class QrWarehouseHandoverQualificationTest {
                 b3Percentile(latencies,99));
     }
 
+
+    /**
+     * B3.3 controlled, 60-second, two-JVM, two-tenant successful-order soak.
+     * 40 distinct fulfillable orders per worker; unlike B3.1 all operations
+     * are expected to commit and are verified after both processes terminate.
+     * Includes concurrent authenticated warehouse moves and DB lock telemetry.
+     */
+    @Test void qr06bPgB33TwoJvmSixtySecondSoakWithInterference() throws Exception {
+        requirePostgres();
+        var contexts=List.of(context(),context());
+        var orders=new ArrayList<java.util.Map.Entry<Context,Order>>();
+        var dir=java.nio.file.Files.createTempDirectory("qr06b-b33-");
+        Process workerA=null,workerB=null;
+        var manifests=new ArrayList<java.nio.file.Path>();
+        long deadlocksBefore=jdbc.queryForObject("""
+                SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
+                """,Long.class);
+        try {
+            for(int tenantIndex=0;tenantIndex<contexts.size();tenantIndex++) {
+                var c=contexts.get(tenantIndex);
+                UUID role=assignedRole(c);
+                for(var permission:List.of(DomainPermission.INVENTORY_RECEIVE,
+                        DomainPermission.INVENTORY_ADJUST))
+                    roles.grant(c.owner(),c.tenant(),role,permission);
+                inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemOne(),key(),new BigDecimal("200"));
+                inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemTwo(),key(),new BigDecimal("200"));
+                var manifest=dir.resolve("tenant-"+tenantIndex+".manifest");
+                var lines=new ArrayList<String>();
+                for(int i=0;i<40;i++) {
+                    var o=ready(c,true);
+                    var issue=pickup.issue(c.buyer(),o.publicRef(),key());
+                    orders.add(java.util.Map.entry(c,o));
+                    lines.add(issue.rawProof()+"|"+version(c,o)+"|"+key());
+                }
+                java.nio.file.Files.write(manifest,lines);
+                try {
+                    java.nio.file.Files.setPosixFilePermissions(manifest,
+                            java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                }catch(UnsupportedOperationException ignored) {}
+                manifests.add(manifest);
+            }
+            var gate=dir.resolve("go");
+            var readyA=dir.resolve("ready-a");
+            var readyB=dir.resolve("ready-b");
+            var a=contexts.get(0);var b=contexts.get(1);
+            workerA=startQr06bWorker("B33_PACED",a,manifests.get(0).toString(),
+                    0,key(),readyA,gate,dir.resolve("a.log"));
+            workerB=startQr06bWorker("B33_PACED",b,manifests.get(1).toString(),
+                    0,key(),readyB,gate,dir.resolve("b.log"));
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(55);
+            while(!java.nio.file.Files.exists(readyA)||!java.nio.file.Files.exists(readyB)) {
+                if(!workerA.isAlive()||!workerB.isAlive())
+                    throw new AssertionError("B33 child startup failure");
+                if(System.nanoTime()>deadline)
+                    throw new AssertionError("B33 readiness timeout");
+                Thread.sleep(25);
+            }
+            long started=System.nanoTime();
+            java.nio.file.Files.writeString(gate,"GO");
+            // Interleave real inventory operations AFTER JVMs have started
+            // and while their paced handovers are executing.
+            long lockWaitSamples=0;
+            long maxWaiting=0;
+            int mutationCount=0;
+            for(int second=0;second<60;second++) {
+                long due=started+TimeUnit.SECONDS.toNanos(second);
+                while(System.nanoTime()<due)
+                    java.util.concurrent.locks.LockSupport.parkNanos(
+                            Math.min(TimeUnit.MILLISECONDS.toNanos(5),
+                                    Math.max(1,due-System.nanoTime())));
+                if(second==2||second==14||second==27||second==41) {
+                    for(var c:contexts) {
+                        if(second==2)
+                            inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
+                                    c.itemOne(),key(),BigDecimal.ONE);
+                        if(second==14)
+                            inventoryCommands.correct(c.staff(),c.tenant(),c.warehouse(),
+                                    c.itemOne(),key(),BigDecimal.ONE);
+                        if(second==27)
+                            inventoryCommands.writeOff(c.staff(),c.tenant(),c.warehouse(),
+                                    c.itemOne(),key(),BigDecimal.ONE,
+                                    kz.rm.inventory.InventoryMovementService.WriteOffCause.DAMAGE);
+                        if(second==41)
+                            inventoryCommands.transfer(c.staff(),c.tenant(),
+                                    c.warehouse(),c.otherWarehouse(),
+                                    c.itemTwo(),BigDecimal.ONE,key());
+                        mutationCount++;
+                    }
+                }
+                Integer waiting=jdbc.queryForObject("""
+                        SELECT count(*) FROM pg_stat_activity
+                        WHERE datname=current_database()
+                          AND wait_event_type='Lock'
+                          AND pid<>pg_backend_pid()
+                        """,Integer.class);
+                lockWaitSamples+=waiting==null?0:waiting;
+                maxWaiting=Math.max(maxWaiting,waiting==null?0:waiting);
+            }
+            assertThat(waitQr06bProcess(workerA,dir.resolve("a.log")))
+                    .withFailMessage(()->qr06bDiagnostics(dir.resolve("a.log"),"REDACTED"))
+                    .isZero();
+            assertThat(waitQr06bProcess(workerB,dir.resolve("b.log")))
+                    .withFailMessage(()->qr06bDiagnostics(dir.resolve("b.log"),"REDACTED"))
+                    .isZero();
+            long elapsed=System.nanoTime()-started;
+            long deadlocksAfter=jdbc.queryForObject("""
+                    SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
+                    """,Long.class);
+            assertThat(deadlocksAfter-deadlocksBefore).isZero();
+            assertThat(mutationCount).isEqualTo(8);
+            for(var e:orders)assertExactlyOneHandover(e.getKey(),e.getValue(),2);
+            for(var c:contexts) {
+                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("21");
+                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("99");
+                assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+                assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+                assertThat(jdbc.queryForObject("""
+                        SELECT on_hand FROM crm.inv_stock_balance
+                        WHERE tenant_id=? AND location_id=? AND item_id=?
+                        """,BigDecimal.class,c.tenant(),c.otherWarehouse(),c.itemTwo()))
+                        .isEqualByComparingTo("1");
+            }
+            System.out.printf(java.util.Locale.ROOT,
+                    "QR06B_B33_SOAK duration_ms=%d jvms=2 tenants=2 completed=80 "+
+                    "failures=0 stock_mutations=%d deadlocks=0 "+
+                    "lock_wait_sample_sum=%d max_waiting_sessions=%d "+
+                    "completed_per_sec=%.3f%n",
+                    TimeUnit.NANOSECONDS.toMillis(elapsed),mutationCount,
+                    lockWaitSamples,maxWaiting,80.0/(elapsed/1e9));
+        } finally {
+            if(workerA!=null&&workerA.isAlive())workerA.destroyForcibly();
+            if(workerB!=null&&workerB.isAlive())workerB.destroyForcibly();
+            for(var manifest:manifests)java.nio.file.Files.deleteIfExists(manifest);
+            for(String path:List.of("go","ready-a","ready-b","a.log","b.log"))
+                java.nio.file.Files.deleteIfExists(dir.resolve(path));
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
 }
