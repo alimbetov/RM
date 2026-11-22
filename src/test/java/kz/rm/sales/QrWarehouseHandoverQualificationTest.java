@@ -42,6 +42,7 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired SalesPickupHandoverService pickup;
     @Autowired SalesReturnRequestService returns;
     @Autowired SalesReturnReviewService returnReview;
+    @Autowired SalesReturnPhysicalService returnPhysical;
     @Autowired SalesInventoryCommandService sales;
     @Autowired SalesOrderQrReferenceService orderRefs;
     @Autowired WarehouseStaffScopeService scopes;
@@ -2578,6 +2579,162 @@ class QrWarehouseHandoverQualificationTest {
                 WHERE tenant_id=? AND id=?
                 """,String.class,c.tenant(),reviewed.decisionEventId()))
                 .isEqualTo("UNDER_REVIEW");
+    }
+
+
+    private SalesReturnRequestService.Created qr07R2Approved(Context c,Order o,int quantity){
+        var claim=qr07R1Claim(c,o,quantity);
+        UUID role=assignedRole(c);
+        for(var permission:new DomainPermission[]{
+                DomainPermission.SALES_RETURN_REVIEW,
+                DomainPermission.SALES_RETURN_RECEIVE,
+                DomainPermission.SALES_RETURN_INSPECT,
+                DomainPermission.SALES_RETURN_POST,
+                DomainPermission.INVENTORY_RECEIVE})
+            roles.grant(c.owner(),c.tenant(),role,permission);
+        returnReview.startReview(c.staff(),c.tenant(),claim.requestId(),0,"UAT_1",key());
+        returnReview.approve(c.staff(),c.tenant(),claim.requestId(),1,"UAT_1",key());
+        return claim;
+    }
+
+    @Test void qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2Approved(c,o,2);
+        UUID item=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal start=stock(c,item,"on_hand");
+        var received=returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,"SCAN_001",key());
+        assertThat(received.state()).isEqualTo("RECEIVED");
+        assertThat(received.version()).isEqualTo(4);
+        assertThat(stock(c,item,"on_hand")).isEqualByComparingTo(start);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=? AND event_type IN('AWAITING_RECEIPT','RECEIVED')
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(2);
+        var inspected=returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),4,SalesReturnPhysicalService.Disposition.RESTOCK,
+                "INSPECT_001",key());
+        assertThat(inspected.state()).isEqualTo("INSPECTED");
+        assertThat(stock(c,item,"on_hand")).isEqualByComparingTo(start);
+        String postingKey=key();
+        var posted=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),5,postingKey);
+        assertThat(posted.state()).isEqualTo("RESTOCKED");
+        assertThat(posted.version()).isEqualTo(6);
+        assertThat(returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),5,postingKey).evidenceId()).isEqualTo(posted.evidenceId());
+        assertThat(stock(c,item,"on_hand"))
+                .isEqualByComparingTo(start.add(BigDecimal.valueOf(2)));
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_posting p
+                JOIN crm.inv_stock_movement m
+                  ON m.tenant_id=p.tenant_id AND m.id=p.movement_id
+                WHERE p.tenant_id=? AND p.return_id=?
+                  AND m.delta_quantity=2 AND m.item_id=?
+                """,Integer.class,c.tenant(),claim.requestId(),item)).isEqualTo(1);
+        assertExactlyOneHandover(c,o,1);
+    }
+
+    @Test void qr07R2WriteOffAndQuarantineNeverIncreaseSellableStock() throws Exception {
+        requirePostgres();
+        var c=context();var first=ready(c,false);
+        var claim=qr07R2Approved(c,first,1);
+        BigDecimal a=stock(c,c.itemOne(),"on_hand"),b=stock(c,c.itemTwo(),"on_hand");
+        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
+                2,"SCAN_002",key());
+        returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),
+                4,SalesReturnPhysicalService.Disposition.WRITE_OFF,"INSPECT_002",key());
+        var posted=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),5,key());
+        assertThat(posted.state()).isEqualTo("DISPOSED");
+        assertThat(jdbc.queryForObject("""
+                SELECT movement_id FROM crm.sales_return_posting
+                WHERE tenant_id=? AND return_id=?
+                """,rs->rs.next()?rs.getObject(1,UUID.class):null,
+                c.tenant(),claim.requestId())).isNull();
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo(a);
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo(b);
+        var otherOrder=ready(c,false);
+        var other=qr07R2Approved(c,otherOrder,1);
+        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),other.requestId(),
+                2,"SCAN_003",key());
+        returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),other.requestId(),
+                4,SalesReturnPhysicalService.Disposition.QUARANTINE,"INSPECT_003",key());
+        assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                other.requestId(),5,key()))
+                .hasMessageContaining("RETURN_QUARANTINE_NOT_POSTABLE");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_posting
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),other.requestId())).isZero();
+    }
+
+    @Test void qr07R2DeniedScopesAndPrematurePostingHaveNoSideEffects() throws Exception {
+        requirePostgres();
+        var c=context();var foreign=context();var o=ready(c,false);
+        var claim=qr07R2Approved(c,o,1);
+        assertThatThrownBy(()->returnPhysical.receive(foreign.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),2,"SCAN_004",key()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),2,key()))
+                .hasMessageContaining("RETURN_PHYSICAL_EVIDENCE_REQUIRED");
+        scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
+        assertThatThrownBy(()->returnPhysical.receive(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),2,"SCAN_005",key()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),claim.requestId())).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_reception WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isZero();
+    }
+
+    @Test void qr07R2ConcurrentScansCanCreateOnlyOnePhysicalReception() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2Approved(c,o,2);
+        var barrier=new CountDownLatch(2);
+        var start=new CountDownLatch(1);
+        int pass=0,reject=0;
+        try(var pool=Executors.newFixedThreadPool(2)){
+            var futures=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(int i=0;i<2;i++) {
+                String requestKey=key();
+                futures.add(pool.submit(()->{
+                    barrier.countDown();
+                    if(!start.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("RECEPTION_START_TIMEOUT");
+                    try {
+                        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                                claim.requestId(),2,"SCAN_RACE",requestKey);
+                        return true;
+                    }catch(IllegalStateException e){
+                        if(!e.getMessage().contains("RETURN_RECEPTION_REPLAY_CONFLICT"))
+                            throw e;
+                        return false;
+                    }
+                }));
+            }
+            assertThat(barrier.await(15,TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            for(var future:futures)if(future.get(60,TimeUnit.SECONDS))pass++;else reject++;
+        }finally{start.countDown();}
+        assertThat(pass).isEqualTo(1);
+        assertThat(reject).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_reception
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),claim.requestId())).isEqualTo("RECEIVED");
+        assertExactlyOneHandover(c,o,1);
     }
 
 }
