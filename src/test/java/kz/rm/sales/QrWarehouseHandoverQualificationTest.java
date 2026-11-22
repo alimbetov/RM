@@ -3004,4 +3004,64 @@ class QrWarehouseHandoverQualificationTest {
                 .isEqualTo(2);
     }
 
+
+    @Test void qr07R25ConcurrentReturnPostingAndWarehouseRevocationIsAtomic()
+            throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R2Approved(c,o,2);
+        returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
+                claim.requestId(),2,qr07PhysicalProof(c,claim.requestId()),key());
+        returnPhysical.inspect(c.staff(),c.tenant(),c.warehouse(),claim.requestId(),4,
+                SalesReturnPhysicalService.Disposition.RESTOCK,"INSPECT_RACE_R25",key());
+        UUID sku=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal before=stock(c,sku,"on_hand");
+        var barrier=new CountDownLatch(2);
+        var start=new CountDownLatch(1);
+        boolean success;
+        try(var threads=Executors.newFixedThreadPool(2)){
+            var postFuture=threads.submit(()->{
+                barrier.countDown();
+                if(!start.await(15,TimeUnit.SECONDS))throw new IllegalStateException("BARRIER");
+                try{
+                    returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
+                            claim.requestId(),5,key());
+                    return true;
+                }catch(SecurityException denied){
+                    return false;
+                }
+            });
+            var revokeFuture=threads.submit(()->{
+                barrier.countDown();
+                if(!start.await(15,TimeUnit.SECONDS))throw new IllegalStateException("BARRIER");
+                scopes.revoke(c.owner(),c.tenant(),c.warehouse(),c.staff().userId());
+                return true;
+            });
+            assertThat(barrier.await(15,TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            success=postFuture.get(90,TimeUnit.SECONDS);
+            assertThat(revokeFuture.get(90,TimeUnit.SECONDS)).isTrue();
+        }finally{start.countDown();}
+        int postings=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_posting
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId());
+        assertThat(postings).isEqualTo(success?1:0);
+        assertThat(stock(c,sku,"on_hand")).isEqualByComparingTo(
+                before.add(BigDecimal.valueOf(success?2:0)));
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement m
+                JOIN crm.sales_return_posting p
+                  ON p.tenant_id=m.tenant_id AND p.movement_id=m.id
+                WHERE p.tenant_id=? AND p.return_id=?
+                """,Integer.class,c.tenant(),claim.requestId()))
+                .isEqualTo(success?1:0);
+        assertThatThrownBy(()->returnPhysical.post(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),5,key()))
+                .isInstanceOf(SecurityException.class);
+    }
+
 }
