@@ -2,7 +2,7 @@
 
 **Тип:** специализированное детальное ТЗ + 12-проходный перекрёстный аудит одного домена.  
 **Дата / ветка / source SHA:** 2026-11-22 · `base_dev` · `c776baec5c82e0dfd4c7930aa6a68629202fa5fd`.  
-**Статус:** INV-Q1–Q3 `POSTGRESQL QUALIFIED` (§15); INV-Q4–Q9 `IMPLEMENTED / CI QUALIFICATION PENDING` (§16); INV-VAL остаётся `HOLD`. Любой production admission — HOLD.  
+**Статус:** INV-Q1–Q9 `POSTGRESQL QUALIFIED` в границах quantity service-only R1 (§15–17); 12-проходный INVENTORY review **CLOSED FOR QUANTITY R1**. INV-VAL и production admission — **HOLD**.  
 **Цель:** зрелый *количественный* складской сервис с завершённым сценарием кладовщика и безопасной интеграцией SALES, CATALOG, ORG, IAM — без общего CRUD-framework, новых микросервисов, HTTP-контроллеров и самодельного workflow-engine.  
 **Смежные документы:** `RM-PLATFORM-STANDARD-R2.md` (нормативный), `RM-SVC-FUNCTIONAL-DEPTH-AUDIT-2026-11-22.md` (обобщённый аудит), `RM-TENANT-SERVICES-COMPLETION-R1.md`, `RM-INVENTORY-VALUATION-R1.md`, `RM-SERVICE-FIRST-SALES-INVENTORY-R1.2.md`, `RM-SVC-R2-SERVICE-COMPLETION-CROSS-DOMAIN-CONSISTENCY.md`. Новый документ **не отменяет** иммутабельные согласованные механизмы reserve/fulfill, DDL 0022–0030 или dual-permission SALES+INVENTORY. При противоречии — нормативный стандарт R2 и принятое доменное решение выше проекта.
 
@@ -313,4 +313,22 @@ INVENTORY quantity-R1 может получить статус **FUNCTIONALLY MA
 
 **Nongoals и открытые границы:** нет реальных FIFO/FEFO/lot batches, COGS/финансовой себестоимости, перманентного stock-freeze, межтенантных перемещений, per-warehouse RBAC и транспортных HTTP endpoint. Для переноса старого склада архивированного SKU и корректировок после деактивации ORG нужен отдельный согласованный historical remediation flow. Production остаётся HOLD.
 
-**Admission gate:** H2 и PostgreSQL integration, обе populated миграции, RustFS regression (не является тестом INVENTORY), SKU concurrency, revocation fence, immutable SQL triggers — все на exact source SHA. До фактических результатов этих workflow статус Q4–Q9 = **IMPLEMENTED / NOT YET QUALIFIED**.
+**Admission gate (закрыт для quantity Q1–Q9):** H2, PostgreSQL integration, populated CRM upgrade, RustFS regression, shared owner admission, SKU concurrency, revocation and immutable triggers подтверждены по exact source SHA `534aa18008bc54f77a4b1f0277d0f041bfa12bae`, см. §17. Финансовая оценка, transport и production остаются HOLD.
+
+
+## 17. Итог 12/12: INVENTORY quantity R1 — квалифицированная предметная вертикаль
+
+**Source exact SHA:** `534aa18008bc54f77a4b1f0277d0f041bfa12bae`.  
+**Доказательство:** [RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md](../reviews/RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md).  
+**Workflow по одному SHA:** [PG & H2 44987925832](https://github.com/alimbetov/RM/actions/runs/44987925832), [повторный PG 44987931306](https://github.com/alimbetov/RM/actions/runs/44987931306), [CRM populated 44987925857](https://github.com/alimbetov/RM/actions/runs/44987925857), [RustFS E2E 44987925840](https://github.com/alimbetov/RM/actions/runs/44987925840): все **SUCCESS**.
+
+**Доменная матрица:** `InventoryQ123QualificationTest` 9/9, `InventoryTransferStocktakeQualificationTest` 7/7, `SalesInventoryRbacQualificationTest` 16/16 — PostgreSQL, без skipped. Общее `postgres-integration` 301/0/0/18 skipped, пропуски относятся к другим тестовым режимам. Changesets 0070–0075 проходят populated upgrade; старые checksum не изменены. Создание первой stock row теперь conflict-safe с `INSERT ... ON CONFLICT DO NOTHING` и совместимыми PostgreSQL `FOR SHARE` owner locks; H2 оставляет `FOR UPDATE`.
+
+**12 проходов завершены в границах действительного quantity-R1:**
+01 — бизнес-сценарий кладовщика, 02 — реальные методы без пустых команд, 03 — DDL/tenant-инварианты и immutable evidence, 04 — все предметные команды, 05 — чтение/история/фильтры, 06 — reserve/transfer/stocktake transitions и idempotency, 07 — настройки без фиктивного эффекта, 08 — связи ORG/CATALOG/SALES, 09 — VerifiedActor/RBAC и чужие UUID, 10 — конкурентная корректность + технический lock-review, 11 — честная граница quantity без valuation, 12 — exact-SHA H2/PG/populated/infrastructure gates.
+
+**Performance diagnostic (один CI-прогон):** 8 workers ×24 receipts: один SKU `p95=65ms,p99=71ms`; 8 SKU одного склада `p95=22ms,p99=22ms`. Это не production SLA и не доказательство repeatable throughput; не придумывать показатели. Блокировки `inv_stock_balance FOR UPDATE` по одному SKU остаются обязательными. 64 глобальных request-lock stripes и дорогие глубокие OFFSET queries остаются предметом измерения при высокой реальной нагрузке, не новым фреймворком.
+
+**Вердикт:** **INVENTORY — 3/5 functional maturity, QUANTITY R1 SERVICE QUALIFIED**. Входными доказательствами являются реальные SQL effects и названные тесты, а не только отсутствие пустых методов. Открыто: INV-VAL-R1.2 (стоимостный учёт), FEFO/lot/serial, historical remediation архивированных остатков, portfolio ACL, полноценные transport/anti-abuse, масштабная нагрузочная квалификация, all-services TCRUD-00/03. **Production HOLD** не меняется.
+
+**Переход:** к следующей узкой вертикали SALES/AutoOrder по уже существующему `RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md` (проходы 01–07 source-reviewed), не создавая альтернативного ТЗ. Следующий предметный проход — 08/12: provider/consumer INVENTORY↔CATALOG↔STOREFRONT и фактическая immutable SKU/price snapshot привязка заказа. Не объединять его с FIN/оплатой.
