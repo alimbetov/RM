@@ -2651,11 +2651,13 @@ class QrWarehouseHandoverQualificationTest {
         var posted=returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
                 claim.requestId(),5,key());
         assertThat(posted.state()).isEqualTo("DISPOSED");
-        assertThat(jdbc.query("""
+        UUID unusedMovement=jdbc.query("""
                 SELECT movement_id FROM crm.sales_return_posting
                 WHERE tenant_id=? AND return_id=?
-                """,rs->rs.next()?rs.getObject(1,UUID.class):null,
-                c.tenant(),claim.requestId())).isNull();
+                """,(org.springframework.jdbc.core.ResultSetExtractor<UUID>)
+                        rs->rs.next()?rs.getObject(1,UUID.class):null,
+                c.tenant(),claim.requestId());
+        assertThat(unusedMovement).isNull();
         assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo(a);
         assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo(b);
         var otherOrder=ready(c,false);
