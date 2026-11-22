@@ -122,6 +122,10 @@ class DomainCommandBoundaryQualificationTest {
                 "kz.rm.organization.OrganizationLocationService").getModifiers())).isFalse();
         assertThat(Modifier.isPublic(Class.forName(
                 "kz.rm.organization.OrganizationLocationQueryService").getModifiers())).isFalse();
+        // Spring Data still constructs the bean, but other domains cannot import
+        // the inherited unscoped JpaRepository.findAll/findById methods.
+        assertThat(Modifier.isPublic(Class.forName(
+                "kz.rm.organization.OrganizationLocationRepository").getModifiers())).isFalse();
     }
 
     @Test void filesMetadataIsAccessibleOnlyThroughVerifiedPrincipalFacades() throws Exception {
