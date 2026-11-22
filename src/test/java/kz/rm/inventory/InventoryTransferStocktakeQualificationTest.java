@@ -34,6 +34,7 @@ class InventoryTransferStocktakeQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource source;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private record Fixture(UUID tenant,UUID actor,UUID source,UUID destination,UUID item) {}
     private UUID newUser() {
@@ -378,6 +379,32 @@ class InventoryTransferStocktakeQualificationTest {
                 SELECT count(*) FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND location_id=? AND item_id=?
                 """,Integer.class,f.tenant(),f.source(),f.item())).isEqualTo(502);
+    }
+
+    @Test void durableReconciliationRollbackDoesNotAdvanceCursorOrPersistFindings() {
+        var f=fixture();
+        receive(f,f.source(),"rollbackReceiptR15",6);
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET reserved=1,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
+        var who=actor(f.actor());
+        var run=reconciliationRuns.start(who,f.tenant());
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        assertThatThrownBy(()->tx.execute(status->{
+            var step=reconciliationRuns.advance(who,f.tenant(),run.id(),10);
+            assertThat(step.run().findingCount()).isEqualTo(1);
+            throw new IllegalStateException("forced rollback of diagnostic checkpoint");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(reconciliationRuns.get(who,f.tenant(),run.id()).status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.RUNNING);
+        assertThat(reconciliationRuns.get(who,f.tenant(),run.id()).inspectedPositions())
+                .isZero();
+        assertThat(reconciliationRuns.findings(who,f.tenant(),run.id(),0,10)).isEmpty();
+        var applied=reconciliationRuns.advance(who,f.tenant(),run.id(),10);
+        assertThat(applied.run().status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(applied.run().findingCount()).isEqualTo(1);
     }
 
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
