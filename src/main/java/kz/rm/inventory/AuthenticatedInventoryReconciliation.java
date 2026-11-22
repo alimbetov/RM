@@ -6,6 +6,7 @@ import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -50,7 +51,9 @@ public class AuthenticatedInventoryReconciliation {
      * and orphan movements, not only existing balance rows. The entire scan is
      * not a globally consistent snapshot across separate calls.
      */
-    @Transactional
+    // REPEATABLE READ pins balance, reservation and ledger queries to one MVCC
+    // snapshot for this call. A cursor across separate calls remains diagnostic.
+    @Transactional(isolation=Isolation.REPEATABLE_READ)
     public Batch scan(VerifiedActor actor, UUID tenant, Cursor after, int size) {
         if(actor==null) throw new SecurityException("Verified actor required");
         if(tenant==null || size<1 || size>MAX_POSITIONS
@@ -120,7 +123,8 @@ public class AuthenticatedInventoryReconciliation {
         this.jdbc=jdbc;
     }
 
-    @Transactional
+    // The three independent SELECTs MUST observe the same database snapshot.
+    @Transactional(isolation=Isolation.REPEATABLE_READ)
     public Result inspect(VerifiedActor actor, UUID tenant, UUID location, UUID item) {
         if(actor==null)throw new SecurityException("Verified actor required");
         if(tenant==null||location==null||item==null)
