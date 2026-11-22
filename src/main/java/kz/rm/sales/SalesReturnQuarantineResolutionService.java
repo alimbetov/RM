@@ -93,8 +93,12 @@ public class SalesReturnQuarantineResolutionService {
         if(!"QUARANTINED".equals(source.state())||source.version()!=expectedVersion)
             throw new IllegalStateException("QUARANTINE_STATE_VERSION_CONFLICT");
 
-        // Lock stock/SKU first, same order as quarantine intake; this is only
-        // a serialization fence and does NOT itself increase sellable stock.
+        // Align lock acquisition with standard INVENTORY: request stripe and
+        // stock row inside restock() first. An exception further below rolls
+        // back the sellable credit in the same outer PostgreSQL transaction.
+        UUID movement=action==Action.RESTOCK
+                ?inventory.restock(staff,tenant,warehouse,source.item(),returnId,
+                        source.quantity()).id():null;
         BigDecimal sellable=jdbc.query("""
                 SELECT on_hand FROM crm.inv_stock_balance
                 WHERE tenant_id=? AND location_id=? AND item_id=? FOR UPDATE
@@ -114,9 +118,6 @@ public class SalesReturnQuarantineResolutionService {
                 SET quantity=?,row_version=row_version+1
                 WHERE tenant_id=? AND warehouse_id=? AND item_id=?
                 """,after,tenant,warehouse,source.item());
-        UUID movement=action==Action.RESTOCK
-                ?inventory.restock(staff,tenant,warehouse,source.item(),returnId,
-                        source.quantity()).id():null;
         UUID id=UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO crm.sales_return_quarantine_resolution
