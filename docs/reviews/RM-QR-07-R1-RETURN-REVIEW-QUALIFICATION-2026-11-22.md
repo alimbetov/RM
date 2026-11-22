@@ -2,9 +2,9 @@
 
 **Date:** 2026-11-22
 **Branch:** `base_dev`; no new controllers, no `main` merge.
-**Candidate source SHA:** `69b561171512ed3d65fffea9a60fc7523730226e`.
-**Dedicated exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45042382714
-**Admission:** **PENDING** until candidate's PostgreSQL 17 JUnit tests and same-SHA regression are conclusively green. QR-07/R2 and production remain HOLD.
+**Qualified exact source SHA:** `ebdd8971195c2ba1bc3205f8ffff83cb6f8e44eb`.
+**Dedicated exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45042596024
+**Admission:** QR-07/R0+R1 dedicated PostgreSQL gate **PASS**; separate full-project same-SHA regression unverified, QR-07/R2 and production remain HOLD.
 
 ## Implemented R1 contract
 
@@ -35,4 +35,18 @@ These are seven R1 test methods added to the existing three R0 methods (ten QR07
 - QR-08 packaging/services only after their own approval and test qualification.
 - QR-06B/B3.5 sustainable-capacity admission, external OIDC, HTTPS and physical scanner gates remain separate and unresolved; production HOLD.
 
-**No claim of R1 PASS until CI evidence is verified.**
+**Qualified decision:** Dedicated QR-07 R0/R1 PostgreSQL service tests PASS. No claim of full-project regression or production admission.
+
+## Exact-SHA R1 result and fixture correction
+
+The first candidate job at SHA `e403b1f0cfd60bd0ae3a65824529b0a8af542d02` failed **one R0 test**, while nine other QR07 tests passed. Root cause: the existing partial-return test selected `o.lines().getFirst()` despite the lines being sorted by a randomized SKU ID; the first line can have **3** units rather than **5**, making a requested `2+3` return correctly fail. No production return-state or inventory fix was needed. The test fixture now explicitly selects `sales_order_line.quantity=5`.
+
+The corrected code SHA `ebdd8971195c2ba1bc3205f8ffff83cb6f8e44eb` is qualified by https://github.com/alimbetov/RM/actions/runs/45042596024 :
+
+- `QrWarehouseHandoverQualificationTest#qr07R*` on PostgreSQL 17;
+- **10 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**;
+- R0 3 tests, R1 7 tests;
+- Liquibase 0095/0096/0097 run through Spring Boot test startup;
+- immutable decision event and live tenant RBAC negative checks exercised.
+
+**Scope caveat:** Ten test methods establish only tested service behaviors; this is not the complete 20+ case business qualification or the independent full regression. R2 stock movements, external OIDC and production release still HOLD. R1 30-day eligibility and `UAT_1` methodology are provisional, not commercial policy.
