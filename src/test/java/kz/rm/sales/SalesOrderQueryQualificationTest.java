@@ -177,6 +177,51 @@ class SalesOrderQueryQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test void pass09RevokedSellerReadAndUnrelatedGlobalIdentityFailClosed() {
+        Shop a=shop(), b=shop();
+        UUID accepted=order(a);
+        UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "pass09-staff-"+UUID.randomUUID(),"Sales reader")).getId();
+        UUID orgA=jdbc.queryForObject(
+                "SELECT organization_id FROM iam_workspace WHERE id=?",UUID.class,a.tenant());
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),orgA,staff,OrganizationMembershipEntity.Role.MEMBER));
+        var owner=verified(a.actor());
+        var reader=verified(staff);
+        var role=roles.createRole(owner,a.tenant(),
+                "READ_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "PASS09 seller read");
+        roles.grant(owner,a.tenant(),role.id(),DomainPermission.SALES_ORDER_READ);
+        roles.assign(owner,a.tenant(),staff,role.id());
+        roles.enable(owner,a.tenant());
+
+        var permitted=trustedQueries.search(reader,a.tenant(),null,0,10);
+        assertThat(permitted.getContent()).extracting(x->x.id()).contains(accepted);
+        assertThat(permitted.toString()).doesNotContain("@example.kz","buyer_user_id",
+                "pending_email_identity_id");
+        assertThatThrownBy(()->trustedQueries.search(reader,b.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        roles.revoke(owner,a.tenant(),role.id(),DomainPermission.SALES_ORDER_READ);
+        assertThatThrownBy(()->trustedQueries.search(reader,a.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->trustedQueries.search(reader,a.tenant(),
+                new SalesOrderSearch("PLACED",null,null),0,1))
+                .isInstanceOf(SecurityException.class);
+
+        UUID unrelated=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "pass09-global-"+UUID.randomUUID(),"Global-only user")).getId();
+        assertThatThrownBy(()->trustedQueries.search(verified(unrelated),a.tenant(),null,0,10))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void pass09SuspendedActorCannotReadOwnTenantOrders() {
+        Shop a=shop();
+        order(a);
+        jdbc.update("UPDATE iam_user_account SET status='SUSPENDED' WHERE id=?",a.actor());
+        assertThatThrownBy(()->trustedQueries.search(verified(a.actor()),
+                a.tenant(),null,0,10)).isInstanceOf(SecurityException.class);
+    }
+
     @Test void tcrud03MixedMembershipSalesReadIsTenantBoundAndCannotBorrowPermission() {
         Shop a=shop(),b=shop();
         UUID first=order(a),second=order(a),foreign=order(b);
