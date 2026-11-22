@@ -60,21 +60,26 @@ class Tcrud04VerifiedEntrypointQualificationTest {
         assertThat(Modifier.isPublic(trusted.getModifiers())).isTrue();
     }
 
-    /**
-     * The existing IAM administration service has older public UUID operations
-     * consumed by test and bootstrap code across packages. Lock down the
-     * current legacy surface: new raw actor entrypoints fail this test. A
-     * subsequent IAM migration must retire the allowlist, not grow it.
-     */
-    @Test void legacyTenantRoleUuidExposureCannotGrowWithoutExplicitReview() {
+    @Test void legacyTenantRoleUuidEntryPointsAreNotPublic() {
         Set<String> legacy=Set.of("createRole","grant","revoke","assign","unassign",
                 "enable","setRoleActive","listGrants","listAssignments","listRoles");
         var raw=java.util.Arrays.stream(TenantRoleService.class.getDeclaredMethods())
-                .filter(m->Modifier.isPublic(m.getModifiers()))
                 .filter(m->!Modifier.isStatic(m.getModifiers()) && !m.isSynthetic())
                 .filter(m->m.getParameterCount()>0 && m.getParameterTypes()[0]==UUID.class)
-                .map(m->m.getName()).collect(java.util.stream.Collectors.toSet());
-        assertThat(raw).as("Legacy IAM raw UUID surface must not expand")
-                .isEqualTo(legacy);
+                .filter(m->legacy.contains(m.getName())).toList();
+        assertThat(raw).extracting(m->m.getName()).containsExactlyInAnyOrderElementsOf(legacy);
+        assertThat(raw).allSatisfy(m->assertThat(Modifier.isPublic(m.getModifiers()))
+                .as("Untrusted actorId may not be public: "+m).isFalse());
+    }
+
+    @Test void verifiedIamFacadeCoversRoleLifecycleAndReadOperations() {
+        var names=Set.of("createRole","grant","revoke","assign","unassign","enable",
+                "activateRole","listRoles","listGrants","listAssignments");
+        var publicMethods=java.util.Arrays.stream(VerifiedTenantRoleCommands.class.getDeclaredMethods())
+                .filter(m->Modifier.isPublic(m.getModifiers()) && !m.isSynthetic()).toList();
+        assertThat(publicMethods).extracting(m->m.getName())
+                .containsExactlyInAnyOrderElementsOf(names);
+        assertThat(publicMethods).allSatisfy(m->assertThat(m.getParameterTypes()[0])
+                .isEqualTo(VerifiedActor.class));
     }
 }
