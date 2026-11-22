@@ -34,7 +34,7 @@ SUITES = {
          "InventoryTransferStocktakeQualificationTest", "FilesR10bQualificationTest",
          "OrganizationLocationLifecycleQualificationTest", "KatoTerritoryQualificationTest",
          "KmsFencedJobQualificationTest", "AuditRetentionQualificationTest",
-         "SalesOrderQueryQualificationTest"),
+         "SalesOrderQueryQualificationTest", "UserRoleMatrixR31QualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification":
         ("InventoryMovementQualificationTest",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification":
@@ -48,6 +48,11 @@ SUITES = {
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
 REQUIRED_CASES = {
     "kms-postgres-surefire": {
+        ("UserRoleMatrixR31QualificationTest", "urR31AllFiveMembershipRolesHaveFallbackReadButNoImplicitWrite"),
+        ("UserRoleMatrixR31QualificationTest", "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand"),
+        ("UserRoleMatrixR31QualificationTest", "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites"),
+        ("UserRoleMatrixR31QualificationTest", "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant"),
+        ("UserRoleMatrixR31QualificationTest", "urR31UnassignedStaffAndMissingActorAreDeniedWithoutSideEffects"),
         ("CommercialCoreE2EQualificationTest",
          "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects"),
         ("CommercialCoreE2EQualificationTest",
