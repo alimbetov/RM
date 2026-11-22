@@ -2262,3 +2262,23 @@ ALTER TABLE crm.inv_stocktake ADD CONSTRAINT ck_inv_stocktake_cancellation
 --rollback ALTER TABLE crm.inv_stocktake DROP CONSTRAINT fk_inv_stocktake_canceller;
 --rollback ALTER TABLE crm.inv_stocktake DROP COLUMN cancelled_at;
 --rollback ALTER TABLE crm.inv_stocktake DROP COLUMN cancelled_by;
+
+--changeset rm:0076-sales-line-catalog-snapshot
+-- Historical NULL remains intentionally unknown; never reconstruct SKU from a mutable offer.
+ALTER TABLE crm.sales_order_line ADD COLUMN catalog_item_id_snapshot UUID;
+ALTER TABLE crm.sales_order_line ADD CONSTRAINT fk_sales_line_catalog_snapshot
+ FOREIGN KEY (tenant_id,catalog_item_id_snapshot)
+ REFERENCES crm.cat_item(tenant_id,id);
+CREATE INDEX idx_sales_line_catalog_snapshot
+ ON crm.sales_order_line(tenant_id,catalog_item_id_snapshot)
+ WHERE catalog_item_id_snapshot IS NOT NULL;
+--rollback DROP INDEX idx_sales_line_catalog_snapshot;
+--rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT fk_sales_line_catalog_snapshot;
+--rollback ALTER TABLE crm.sales_order_line DROP COLUMN catalog_item_id_snapshot;
+
+--changeset rm:0077-sales-line-immutable-acceptance dbms:postgresql splitStatements:false
+-- The entire accepted line (price, identity, quantity and presentation) is immutable.
+CREATE TRIGGER trg_sales_line_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_order_line
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_sales_line_immutable ON crm.sales_order_line;
