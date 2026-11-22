@@ -81,6 +81,11 @@ public class SellerOfferService {
     private static String currency(String value) {
         if (value == null || !value.matches("[A-Z]{3}"))
             throw new IllegalArgumentException("Invalid currency");
+        try {
+            java.util.Currency.getInstance(value);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Unsupported ISO 4217 currency", invalid);
+        }
         return value;
     }
 
