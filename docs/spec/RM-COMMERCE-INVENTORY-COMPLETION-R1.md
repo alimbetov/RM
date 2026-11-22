@@ -133,3 +133,23 @@ Do not create a new branch or merge into main. Start with latest `base_dev` sour
 Последние два случая квалифицируют reserve через реальный SALES confirm и единый `OrderInventoryPort`, не через прямое изменение складских таблиц. Приоритет коммита проверяется PostgreSQL transactions с отдельными соединениями и latch. Ожидаются сохранность заказов, обеих ног transfer, резервов и status; отсутствие частичных коммитов.
 
 **Изменения:** тестовые файлы и этот документ; production Java/SQL не менялись. Коммиты `791e4b8`, `5deb320`. Точные CI workflow runs на итоговом HEAD пока не подтверждены; `INV-R1.3/R1.4 = IMPLEMENTED TEST CASES / QUALIFICATION PENDING`. Также остаются доп. проверки `update×update` с двумя конкурирующими соединениями, `revoke×mutation` и частные negative rollback/retry сценарии. Production HOLD.
+
+## 10. INV-R1.3 / INV-R1.4 exact-head qualification — GREEN (2026-11-22)
+
+**Source SHA:** `f6bf8b214c1db0cdb13bcdb15e018b7a8f0d1f69` (the immediately preceding commit is documentation-only; production Java remains unchanged).  
+**Workflow:** [RM Domain Security and PostgreSQL Qualification / 44990149504](https://github.com/alimbetov/RM/actions/runs/44990149504).
+
+| Job | Result | Evidence |
+|---|---|---|
+| `h2-smoke` | SUCCESS | CI job 137109206163 |
+| `postgres-integration` | SUCCESS | CI job 137109205850; Maven **331 tests / 0 failures / 0 errors / 18 skipped**, BUILD SUCCESS; least-privilege role step SUCCESS |
+| `postgres-pii-populated` | SUCCESS | CI job 137109206113; migration, populated data and synthetic dump/restore SUCCESS |
+
+**Named PostgreSQL suites, no skips:**
+- `OrganizationLocationLifecycleQualificationTest`: **9/9**; includes `postgresDeactivationFencesConcurrentReceipt`, new `postgresDeactivateBeforeTransferRejectsBothLedgerLegs`, `postgresTransferBeforeDeactivateCommitsAndPauseSeesDrainedStock`, CAS stale-version protection.
+- `SalesInventoryRbacQualificationTest`: **21/21**; includes new `postgresDeactivateBeforeConfirmRejectsReservationAndRollsBackOrder` and `postgresConfirmBeforeDeactivateFencesPauseAndLeavesActiveWarehouse`.
+- `InventoryQ123QualificationTest`: **9/9**; `InventoryTransferStocktakeQualificationTest`: **9/9**; `InventoryReservationQualificationTest`: **6/6**; `InventoryMovementQualificationTest`: **5/5**; `InventoryTenantSettingsQualificationTest`: **5/5**.
+
+**Disposition:** INV-R1.3/R1.4 quantity warehouse-lifecycle and selected rollback/race scenarios **QUALIFIED at service-only scope on the exact SHA above**. This includes commit-order fencing and no partial transfer/reservation, not blanket proof of deadlock-freedom under arbitrary load. In particular, new tests plus existing `OrganizationLocationR11ConcurrencyQualificationTest` (8/8) demonstrate tested concurrency cases, but production p95/p99/load remains HOLD. The source review also found ACTIVE→INACTIVE allowing positive on_hand (pause), but blocking active commitments; INACTIVE→CLOSED requires zero physical stock. No additional production code was needed for these qualified cases.
+
+**R1.5 START PERMITTED**, but not yet implemented or qualified. It must compare balance against posted immutable physical movements and active reservation facts; report discrepancies without auto-correcting financial/quantity history. Its own PostgreSQL exact-head qualification is mandatory. Production, public OIDC, FIN valuation and multi-warehouse split remain HOLD.
