@@ -64,6 +64,10 @@ public class SelfServiceTenantOnboardingService {
 
         // The membership check happens under the user's row lock so competing
         // create-first requests cannot each become a different first tenant.
+        int membershipCount = jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_org_membership
+                WHERE user_id=?
+                """,Integer.class,owner);
         var existing = myAccess.myTenants(actor);
         var requested = jdbc.query("""
                 SELECT w.organization_id, m.user_id, o.legal_name, o.display_name,
@@ -88,12 +92,12 @@ public class SelfServiceTenantOnboardingService {
                     return new OnboardedTenant(tenantId,rs.getObject(1,UUID.class),owner);
                 }, owner, tenantId);
         if (requested != null) {
-            if (existing.size() != 1 || !tenantId.equals(existing.getFirst().tenantId())) {
+            if (membershipCount != 1 || existing.size() != 1 || !tenantId.equals(existing.getFirst().tenantId())) {
                 throw new SecurityException("First tenant already exists");
             }
             return requested;
         }
-        if (!existing.isEmpty()) {
+        if (membershipCount != 0) {
             throw new SecurityException("First tenant already exists");
         }
         Timestamp now = Timestamp.from(Instant.now());
