@@ -36,7 +36,8 @@ public final class QrHandoverProcessWorker {
         Path ready=Path.of(args[7]),gate=Path.of(args[8]);
 
         try(var context=new SpringApplicationBuilder(RmApplication.class)
-                .web(WebApplicationType.NONE).profiles("test").run()) {
+                .web(WebApplicationType.SERVLET).profiles("test")
+                .properties("server.port=-1").run()) {
             JdbcTemplate jdbc=context.getBean(JdbcTemplate.class);
             String subject=jdbc.queryForObject(
                     "SELECT external_subject FROM public.iam_user_account WHERE id=?",
