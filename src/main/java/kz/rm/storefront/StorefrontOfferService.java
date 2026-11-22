@@ -97,11 +97,11 @@ public class StorefrontOfferService {
         return transition(actor, tenant, offerId, expectedVersion, State.HIDDEN);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Offer get(VerifiedActor actor, UUID tenant, UUID offerId) {
         if (actor == null || tenant == null)
             throw new SecurityException("Verified actor and selected tenant required");
-        authorization.require(actor.userId(), tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        authorization.requireForCommand(actor.userId(), tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
         return fetch(tenant, offerId, false);
     }
 
@@ -120,6 +120,11 @@ public class StorefrontOfferService {
         };
         if (!legal) throw new IllegalStateException("Invalid offer transition");
         if (target == State.PUBLISHED) {
+            String storeState=jdbc.query("""
+                    SELECT state FROM crm.store_front WHERE tenant_id=?
+                    """, rs -> rs.next() ? rs.getString(1) : null, tenant);
+            if (!"PUBLISHED".equals(storeState))
+                throw new IllegalStateException("STOREFRONT_UNAVAILABLE");
             validatePublishedProduct(tenant, current.catalogItemId());
         }
         int changed = jdbc.update("""
