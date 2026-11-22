@@ -2293,4 +2293,6 @@ ALTER TABLE crm.store_offer ADD CONSTRAINT ck_store_offer_version
  CHECK (row_version>=0);
 --rollback ALTER TABLE crm.store_offer DROP CONSTRAINT ck_store_offer_version;
 --rollback ALTER TABLE crm.store_offer DROP COLUMN row_version;
--- Do not downgrade the state constraint while DRAFT/PAUSED rows exist.
+--rollback ALTER TABLE crm.store_offer DROP CONSTRAINT ck_store_offer_state;
+--rollback ALTER TABLE crm.store_offer ADD CONSTRAINT ck_store_offer_state CHECK (state IN ('PUBLISHED','HIDDEN'));
+-- Downgrade intentionally fails closed while DRAFT/PAUSED rows exist.
