@@ -2146,9 +2146,13 @@ class QrWarehouseHandoverQualificationTest {
      * durable ledger correctness and recovery-phase completion.
      * This is not the full 120-300 seconds PER LEVEL capacity qualification.
      */
-    @org.junit.jupiter.api.Timeout(value=230,unit=TimeUnit.SECONDS)
+    @org.junit.jupiter.api.Timeout(value=1100,unit=TimeUnit.SECONDS)
     @Test void qr06bPgB35TwoJvmRateStepsAndRecoveryEntry() throws Exception {
         requirePostgres();
+        int levelSeconds=Integer.getInteger("rm.qr06b.b35.levelSeconds",20);
+        if(levelSeconds!=20&&levelSeconds!=120)
+            throw new IllegalArgumentException("B35 stages support 20/120 seconds");
+        boolean extended=levelSeconds==120;
         var tenants=List.of(context(),context());
         var all=new ArrayList<java.util.Map.Entry<Context,Order>>();
         var folder=java.nio.file.Files.createTempDirectory("qr06b-b35-");
@@ -2163,20 +2167,27 @@ class QrWarehouseHandoverQualificationTest {
                 roles.grant(c.owner(),c.tenant(),assignedRole(c),
                         DomainPermission.INVENTORY_RECEIVE);
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
-                        c.itemOne(),key(),new BigDecimal("300"));
+                        c.itemOne(),key(),BigDecimal.valueOf(extended?(tenantIndex==0?1400:1000):300));
                 inventoryCommands.receive(c.staff(),c.tenant(),c.warehouse(),
                         c.itemTwo(),key(),new BigDecimal("300"));
                 var rows=new ArrayList<String>();
-                for(int i=0;i<40;i++){
+                int[] phaseCounts=extended
+                        ?(tenantIndex==0?new int[]{30,60,120,30}:new int[]{20,40,80,20})
+                        :new int[]{5,10,20,5};
+                int ordersInTenant=java.util.Arrays.stream(phaseCounts).sum();
+                for(int i=0;i<ordersInTenant;i++){
                     var o=ready(c,true);
                     // QR proof is issued by worker at its scheduled request time.
                     all.add(java.util.Map.entry(c,o));
-                    String phase;
-                    long dueMs;
-                    if(i<5){phase="LOW";dueMs=i*4000L;}
-                    else if(i<15){phase="RAMP";dueMs=20000L+(i-5)*2000L;}
-                    else if(i<35){phase="STRESS";dueMs=40000L+(i-15)*1000L;}
-                    else {phase="RECOVERY";dueMs=60000L+(i-35)*4000L;}
+                    String[] phases={"LOW","RAMP","STRESS","RECOVERY"};
+                    int stage=0,prior=0;
+                    while(stage<phaseCounts.length-1&&i>=prior+phaseCounts[stage]){
+                        prior+=phaseCounts[stage];
+                        stage++;
+                    }
+                    String phase=phases[stage];
+                    long dueMs=stage*(levelSeconds*1000L)+
+                            (i-prior)*(levelSeconds*1000L)/phaseCounts[stage];
                     rows.add("-"+"|"+version(c,o)+"|"+key()+"|"+
                             dueMs+"|"+phase+"|"+c.buyer().userId()+"|"+o.publicRef());
                 }
@@ -2211,8 +2222,8 @@ class QrWarehouseHandoverQualificationTest {
                         """,Integer.class,c.tenant())).isZero();
             }
             java.nio.file.Files.writeString(release,"START");
-            assertThat(waitQr06bProcess(left,folder.resolve("left.log"),150)).isZero();
-            assertThat(waitQr06bProcess(right,folder.resolve("right.log"),150)).isZero();
+            assertThat(waitQr06bProcess(left,folder.resolve("left.log"),levelSeconds*4+150)).isZero();
+            assertThat(waitQr06bProcess(right,folder.resolve("right.log"),levelSeconds*4+150)).isZero();
             for(String filename:List.of("left.log","right.log")){
                 String log=java.nio.file.Files.readString(folder.resolve(filename));
                 var metrics=log.lines().filter(x->x.contains("QR06B_B35_"))
@@ -2230,16 +2241,21 @@ class QrWarehouseHandoverQualificationTest {
                         .isTrue();
                 metrics.forEach(System.out::println);
             }
-            assertThat(all).hasSize(80);
+            assertThat(all).hasSize(extended?400:80);
             for(var entry:all)assertExactlyOneHandover(entry.getKey(),entry.getValue(),2);
             for(var c:tenants){
-                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("120");
-                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("200");
+                int tenantIndex=tenants.indexOf(c);
+                int tenantOrders=extended?(tenantIndex==0?240:160):40;
+                long added=extended?(tenantIndex==0?1400:1000):300;
+                assertThat(stock(c,c.itemOne(),"on_hand"))
+                        .isEqualByComparingTo(BigDecimal.valueOf(20+added-5L*tenantOrders));
+                assertThat(stock(c,c.itemTwo(),"on_hand"))
+                        .isEqualByComparingTo(BigDecimal.valueOf(20+added-3L*tenantOrders));
                 assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
                 assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
                 assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=?
-                        """,Integer.class,c.tenant())).isEqualTo(40);
+                        """,Integer.class,c.tenant())).isEqualTo(tenantOrders);
                 assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM crm.sales_pickup_credential
                         WHERE tenant_id=? AND state='CONSUMED'
@@ -2249,8 +2265,8 @@ class QrWarehouseHandoverQualificationTest {
                     SELECT deadlocks FROM pg_stat_database WHERE datname=current_database()
                     """,Long.class);
             assertThat(deadlocksAfter-deadlocksBefore).isZero();
-            System.out.println("QR06B_B35_RESULT phases=4 jvms=2 tenants=2 completed=80 "+
-                    "recovery_completed=10 technical_failures=0 deadlocks=0");
+            System.out.printf("QR06B_B35_RESULT stage_seconds=%d phases=4 jvms=2 tenants=2 completed=%d recovery_completed=%d technical_failures=0 deadlocks=0%n",
+                    levelSeconds,extended?400:80,extended?50:10);
         }finally{
             if(left!=null&&left.isAlive())left.destroyForcibly();
             if(right!=null&&right.isAlive())right.destroyForcibly();
