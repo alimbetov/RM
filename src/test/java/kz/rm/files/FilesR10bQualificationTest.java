@@ -215,6 +215,39 @@ class FilesR10bQualificationTest {
         assertThat(retry.state()).isEqualTo("AVAILABLE");
     }
 
+    @Test void urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes() throws Exception {
+        scanner.next.set(FileScanPort.Verdict.CLEAN);
+        var a=setup();
+        var b=setup();
+        byte[] bytes=pdf();
+        var deniedIntent=draft(a,bytes);
+        var stream=new InputStream() {
+            @Override public int read() {
+                throw new AssertionError("Unauthorized command must not consume stream");
+            }
+        };
+        assertThatThrownBy(()->completion.acceptAndComplete(a.actor(),b.tenant(),
+                deniedIntent.fileId(),stream)).isInstanceOf(SecurityException.class);
+        assertThat(storageCount(a,deniedIntent.fileId())).isZero();
+        assertThat(storageCount(b,deniedIntent.fileId())).isZero();
+        jdbc.update("""
+                DELETE FROM public.iam_tenant_role_permission
+                WHERE tenant_id=? AND permission_code='FILES_UPLOAD'
+                """,a.tenant());
+        assertThatThrownBy(()->completion.acceptAndComplete(a.actor(),a.tenant(),
+                deniedIntent.fileId(),stream)).isInstanceOf(SecurityException.class);
+        assertThat(storageCount(a,deniedIntent.fileId())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.file_object WHERE tenant_id=? AND id=?
+                """,String.class,a.tenant(),deniedIntent.fileId())).isEqualTo("STAGED");
+
+        var allowed=setup();
+        var intent=draft(allowed,bytes);
+        assertThat(completion.acceptAndComplete(allowed.actor(),allowed.tenant(),
+                intent.fileId(),new ByteArrayInputStream(bytes)).state()).isEqualTo("AVAILABLE");
+        assertThat(storageCount(allowed,intent.fileId())).isEqualTo(1);
+    }
+
     @Test void wrongTenantAndRevokedPermissionNeverReadBinaryStream() throws Exception {
         scanner.next.set(FileScanPort.Verdict.CLEAN);
         var s=setup();
