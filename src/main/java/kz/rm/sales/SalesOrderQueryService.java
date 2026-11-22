@@ -3,6 +3,8 @@ package kz.rm.sales;
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.sales.dto.SalesOrderDto;
+import kz.rm.sales.dto.SalesOrderDetail;
+import java.util.List;
 import kz.rm.sales.dto.SalesOrderSearch;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +19,23 @@ import java.util.UUID;
 class SalesOrderQueryService {
     private final TenantAuthorization authorization;
     private final SalesOrderRepository orders;
+
+    @Transactional
+    public SalesOrderDetail detail(UUID user,UUID tenant,UUID orderId) {
+        authorization.requireForCommand(user,tenant,DomainPermission.SALES_ORDER_READ);
+        if(orderId==null) throw new IllegalArgumentException("Order required");
+        return orders.detail(tenant,orderId);
+    }
+
+    @Transactional
+    public List<SalesOrderDetail.StatusEvent> history(UUID user,UUID tenant,
+                                                       UUID orderId,int page,int size) {
+        authorization.requireForCommand(user,tenant,DomainPermission.SALES_ORDER_READ);
+        if(orderId==null||page<0||size<1||size>100)
+            throw new IllegalArgumentException("Invalid history page");
+        orders.detail(tenant,orderId); // reject missing or cross-tenant order
+        return orders.history(tenant,orderId,page,size);
+    }
 
     @Transactional // shared IAM row locks require a writable PostgreSQL transaction
     public Page<SalesOrderDto> search(UUID authenticatedActorId,UUID tenantId,
