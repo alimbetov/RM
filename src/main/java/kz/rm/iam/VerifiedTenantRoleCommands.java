@@ -46,6 +46,18 @@ public class VerifiedTenantRoleCommands {
         return roles.listRoles(actor(owner),tenantId);
     }
 
+    public void enable(VerifiedActor owner, UUID tenantId) {
+        roles.enable(actor(owner),tenantId);
+    }
+
+    public List<DomainPermission> listGrants(VerifiedActor owner, UUID tenantId, UUID roleId) {
+        return roles.listGrants(actor(owner),tenantId,roleId);
+    }
+
+    public List<TenantRoleService.RoleAssignment> listAssignments(VerifiedActor owner, UUID tenantId) {
+        return roles.listAssignments(actor(owner),tenantId);
+    }
+
     private UUID actor(VerifiedActor owner) {
         if (owner == null) throw new SecurityException("Verified organization owner required");
         return owner.userId();
