@@ -60,7 +60,9 @@ public final class QrHandoverProcessWorker {
             // B3.4: step-load arrival schedule provided by a private manifest.
             // One task per uniquely fulfillable order, stage-specific outcomes
             // and Hikari active/idle/waiting pool snapshots during workload.
-            if("B34_STEPPED".equals(mode)) {
+            if("B34_STEPPED".equals(mode)||"B35_RATES".equals(mode)) {
+                boolean b35="B35_RATES".equals(mode);
+                String prefix=b35?"QR06B_B35":"QR06B_B34";
                 record Case(String proof,long version,String key,long dueMs,String phase) {}
                 var cases=new java.util.ArrayList<Case>();
                 for(String line:Files.readAllLines(Path.of(args[5]))) {
@@ -69,11 +71,13 @@ public final class QrHandoverProcessWorker {
                     cases.add(new Case(fields[0],Long.parseLong(fields[1]),fields[2],
                             Long.parseLong(fields[3]),fields[4]));
                 }
-                if(cases.isEmpty()||cases.size()>250)
+                if(cases.isEmpty()||cases.size()>400)
                     throw new IllegalArgumentException("B34 workload size");
                 var hikari=context.getBean(com.zaxxer.hikari.HikariDataSource.class);
                 var bean=hikari.getHikariPoolMXBean();
                 var results=new java.util.concurrent.ConcurrentLinkedQueue<String>();
+                var completionTimes=new java.util.concurrent.ConcurrentLinkedQueue<String>();
+                var clock=new java.util.concurrent.atomic.AtomicLong();
                 var failures=new java.util.concurrent.atomic.AtomicInteger();
                 var readyToRun=new java.util.concurrent.CountDownLatch(cases.size());
                 var start=new java.util.concurrent.CountDownLatch(1);
@@ -87,7 +91,8 @@ public final class QrHandoverProcessWorker {
                         readyToRun.countDown();
                         if(!start.await(20,java.util.concurrent.TimeUnit.SECONDS))
                             throw new IllegalStateException("B34 worker barrier");
-                        long until=System.nanoTime()+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(item.dueMs());
+                        long until=(b35?clock.get():System.nanoTime())+
+                                java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(item.dueMs());
                         while(System.nanoTime()<until)
                             java.util.concurrent.locks.LockSupport.parkNanos(
                                     Math.min(5_000_000L,Math.max(1,until-System.nanoTime())));
@@ -104,13 +109,18 @@ public final class QrHandoverProcessWorker {
                             outcome="TECHNICAL_FAILURE";
                             failures.incrementAndGet();
                         }
+                        long completedAt=System.nanoTime();
                         results.add(item.phase()+","+outcome+","+
-                                java.util.concurrent.TimeUnit.NANOSECONDS.toMicros(System.nanoTime()-begin));
+                                java.util.concurrent.TimeUnit.NANOSECONDS.toMicros(completedAt-begin));
+                        if(b35)completionTimes.add(item.phase()+","+outcome+","+
+                                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(begin-clock.get())+","+
+                                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(completedAt-clock.get()));
                         return null;
                     }));
                     if(!readyToRun.await(30,java.util.concurrent.TimeUnit.SECONDS))
                         throw new IllegalStateException("B34 all clients not ready");
                     long begin=System.nanoTime();
+                    clock.set(begin);
                     start.countDown();
                     long lastDue=cases.stream().mapToLong(Case::dueMs).max().orElseThrow();
                     long monitorDeadline=begin+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(lastDue+2500);
@@ -139,14 +149,31 @@ public final class QrHandoverProcessWorker {
                     long p95=measured.get(Math.max(0,(int)Math.ceil(measured.size()*.95)-1));
                     long p99=measured.get(Math.max(0,(int)Math.ceil(measured.size()*.99)-1));
                     System.out.printf(java.util.Locale.ROOT,
-                            "QR06B_B34_CHILD tenant=%s phase_outcome=%s count=%d "+
+                            "%s_CHILD tenant=%s phase_outcome=%s count=%d "+
                             "p95_us=%d p99_us=%d%n",
-                            tenant,group.getKey(),measured.size(),p95,p99);
+                            prefix,tenant,group.getKey(),measured.size(),p95,p99);
+                }
+                if(b35) {
+                    var rateGroups=new java.util.TreeMap<String,java.util.List<long[]>>();
+                    for(String row:completionTimes){
+                        String[] parts=row.split(",",-1);
+                        rateGroups.computeIfAbsent(parts[0]+":"+parts[1],k->new java.util.ArrayList<>())
+                                .add(new long[]{Long.parseLong(parts[2]),Long.parseLong(parts[3])});
+                    }
+                    for(var group:rateGroups.entrySet()){
+                        long first=group.getValue().stream().mapToLong(v->v[0]).min().orElse(0);
+                        long last=group.getValue().stream().mapToLong(v->v[1]).max().orElse(0);
+                        System.out.printf(java.util.Locale.ROOT,
+                                "QR06B_B35_RATE tenant=%s phase_outcome=%s count=%d "+
+                                "completion_span_ms=%d completed_per_sec=%.3f%n",
+                                tenant,group.getKey(),group.getValue().size(),last-first,
+                                group.getValue().size()*1000.0/Math.max(1,last-first));
+                    }
                 }
                 System.out.printf(java.util.Locale.ROOT,
-                        "QR06B_B34_POOL tenant=%s total=%d technical_failures=%d "+
+                        "%s_POOL tenant=%s total=%d technical_failures=%d "+
                         "duration_ms=%d peak_active=%d peak_waiting=%d peak_connections=%d%n",
-                        tenant,results.size(),failures.get(),
+                        prefix,tenant,results.size(),failures.get(),
                         java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(wall),
                         peakActive.get(),peakWaiting.get(),peakConnections.get());
                 if(failures.get()!=0||results.size()!=cases.size())System.exit(93);
