@@ -48,3 +48,15 @@ Quarantine *intake*, segregated balances, and **append-only release/disposal exi
 The first full `mvn test` PostgreSQL 17 workflow ran **522 tests, 0 failed assertions, 1 test error, 18 skips** at an earlier candidate SHA. The one error was the test-only `Set.of(item,itemTwo)` fixture, which could contain duplicate randomly generated SKU; fixed by deduplicating with a mutable set. This historical result is a **FAIL**, not a current production gate. Follow-on candidates showed a failed negative IAM case caused by passing a malformed legacy `SCAN_004` string after the service started enforcing 43-character Base64URL. That fixture has been changed to pass a correctly shaped invalid proof so the intended IAM gate is actually reached.
 
 The current code SHA above adds independent quarantine restock/dispose exit and is the only source revision eligible for R2.5 admission. Its dedicated and full PostgreSQL jobs must both finish GREEN. Earlier failures and runs still underway never count toward that admission.
+
+## Latest QR-07 hardening continuation
+
+- Implemented concurrent quarantine `RESTOCK × DISPOSE` check: exactly one terminal decision and exactly one quarantine exit event, preserving stock conservation.
+- Added cross-tenant/warehouse resolution denial test.
+- Corrected lock order in `SalesReturnQuarantineResolutionService`: standard INVENTORY request-stripe and stock admission is performed ahead of the separate quarantine balance lock under the same atomic outer transaction. This prevents the obvious inventory-stripe/stock-row inversion risk.
+- Updated concurrency test to accept either a state-version conflict or an immutable-decision replay conflict as the loser, with the same exactly-once outcome invariant.
+- **Latest QR-07 code SHA:** `6a06f8119f0d7959b1f49e371a719dec352b42e7`.
+- **QR-07 exact-SHA verification:** https://github.com/alimbetov/RM/actions/runs/45049455205 . At the last inspection, dedicated and full PostgreSQL jobs were both queued, **not PASS**.
+- The repository branch has independent CRM commits after this SHA. Separate the QR-07 tested candidate from later branch HEAD and do not assert broader admission by ancestry alone.
+
+**QR-08 implementation deferred pending QR-07 PostgreSQL gate.** Specification exists, no QR-08 executable code committed in this step.
