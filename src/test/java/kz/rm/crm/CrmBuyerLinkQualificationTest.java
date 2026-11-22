@@ -23,6 +23,7 @@ class CrmBuyerLinkQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired TenantKeyService keys;
     @Autowired JdbcTemplate jdbc;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     record Seller(UUID tenant, UUID owner) {}
     Seller seller() {
@@ -256,6 +257,155 @@ class CrmBuyerLinkQualificationTest {
                 SELECT count(*) FROM crm.customer_buyer_link_event
                 WHERE tenant_id=? AND link_id=? AND action_code='CONFIRMED'
                 """,Integer.class,s.tenant(),link.id())).isEqualTo(1);
+    }
+
+
+    @Test void buyerRevocationStopsHistoryAndAllowsNewExplicitConsent() {
+        var s=seller();var owner=verified(s.owner());UUID first=buyer(),second=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Lifecycle customer",null);
+        var prior=links.propose(owner,s.tenant(),customer.id(),first,
+                "lifecycle-prior-"+UUID.randomUUID());
+        UUID order=seedSalesOrder(s.tenant(),first);
+        links.confirm(verified(first),s.tenant(),prior.id(),0);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10))
+                .extracting(CrmBuyerLinkService.BuyerOrder::orderId).containsExactly(order);
+        var revoked=links.revokeByBuyer(verified(first),s.tenant(),prior.id(),1);
+        assertThat(revoked.state()).isEqualTo(CrmBuyerLinkService.State.REVOKED);
+        assertThat(revoked.rowVersion()).isEqualTo(2);
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id())).isNull();
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThatThrownBy(()->links.confirm(verified(first),s.tenant(),prior.id(),2))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->links.revokeByBuyer(verified(first),s.tenant(),prior.id(),1))
+                .isInstanceOf(IllegalStateException.class);
+        var next=links.propose(owner,s.tenant(),customer.id(),second,
+                "lifecycle-next-"+UUID.randomUUID());
+        assertThat(next.id()).isNotEqualTo(prior.id());
+        assertThat(next.state()).isEqualTo(CrmBuyerLinkService.State.PENDING);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED","CONFIRMED","REVOKED","PROPOSED");
+    }
+
+    @Test void disputeFreezesSalesVisibilityAndSellerCanOnlyCloseFailClosed() {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Disputed identity",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "dispute-link-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        links.confirm(verified(b),s.tenant(),link.id(),0);
+        assertThatThrownBy(()->links.disputeByBuyer(owner,s.tenant(),link.id(),1))
+                .isInstanceOf(SecurityException.class);
+        var disputed=links.disputeByBuyer(verified(b),s.tenant(),link.id(),1);
+        assertThat(disputed.state()).isEqualTo(CrmBuyerLinkService.State.DISPUTED);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThatThrownBy(()->links.releaseBySeller(owner,s.tenant(),link.id(),2))
+                .isInstanceOf(IllegalStateException.class);
+        var closed=links.closeDispute(owner,s.tenant(),link.id(),2);
+        assertThat(closed.state()).isEqualTo(CrmBuyerLinkService.State.REVOKED);
+        assertThat(links.linkForCustomer(owner,s.tenant(),customer.id())).isNull();
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED","CONFIRMED","DISPUTED","DISPUTE_CLOSED");
+        assertThatThrownBy(()->links.closeDispute(owner,s.tenant(),link.id(),3))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test void sellerReleaseCannotForgeNewBuyerConsentAndHistoryStaysImmutable() {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Seller release",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "seller-release-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        links.confirm(verified(b),s.tenant(),link.id(),0);
+        var released=links.releaseBySeller(owner,s.tenant(),link.id(),1);
+        assertThat(released.state()).isEqualTo(CrmBuyerLinkService.State.REVOKED);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThatThrownBy(()->links.confirm(verified(b),s.tenant(),link.id(),2))
+                .isInstanceOf(IllegalStateException.class);
+        var fresh=links.propose(owner,s.tenant(),customer.id(),b,
+                "seller-reproposal-"+UUID.randomUUID());
+        assertThat(fresh.state()).isEqualTo(CrmBuyerLinkService.State.PENDING);
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10)).isEmpty();
+        assertThat(links.linkHistory(owner,s.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED","CONFIRMED","REVOKED","PROPOSED");
+    }
+
+    @Test void foreignTenantAndStaleRevisionCannotRevokeOrResolve() {
+        var a=seller();var b=seller();var sellerA=verified(a.owner());
+        UUID buyer=buyer();
+        var customer=customers.createCompany(sellerA,a.tenant(),"Protected link",null);
+        var link=links.propose(sellerA,a.tenant(),customer.id(),buyer,
+                "protected-link-"+UUID.randomUUID());
+        assertThatThrownBy(()->links.releaseBySeller(verified(b.owner()),
+                a.tenant(),link.id(),0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->links.revokeByBuyer(verified(buyer),
+                b.tenant(),link.id(),0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->links.revokeByBuyer(verified(buyer),
+                a.tenant(),link.id(),-1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->links.closeDispute(sellerA,
+                a.tenant(),link.id(),0)).isInstanceOf(IllegalStateException.class);
+        assertThat(links.linkForCustomer(sellerA,a.tenant(),customer.id()).rowVersion()).isZero();
+        assertThat(links.linkHistory(sellerA,a.tenant(),customer.id()))
+                .extracting(CrmBuyerLinkService.LinkEvent::action).containsExactly("PROPOSED");
+    }
+
+    @Test void postgresOrderedConfirmVersusRevokeAdmitsOneCoherentHistory() throws Exception {
+        requirePostgres();
+        assertOrderedConfirmRevoke(true);
+        assertOrderedConfirmRevoke(false);
+    }
+
+    private void assertOrderedConfirmRevoke(boolean confirmFirst) throws Exception {
+        var s=seller();var owner=verified(s.owner());UUID b=buyer();
+        var customer=customers.createCompany(owner,s.tenant(),"Ordered revoke",null);
+        var link=links.propose(owner,s.tenant(),customer.id(),b,
+                "ordered-link-"+UUID.randomUUID());
+        seedSalesOrder(s.tenant(),b);
+        var authenticatedBuyer=verified(b);
+        var changed=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var secondStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                if(confirmFirst) links.confirm(authenticatedBuyer,s.tenant(),link.id(),0);
+                else links.revokeByBuyer(authenticatedBuyer,s.tenant(),link.id(),0);
+                changed.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Commit barrier timeout");
+                } catch(InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(changed.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                secondStarted.countDown();
+                try {
+                    if(confirmFirst) links.revokeByBuyer(authenticatedBuyer,s.tenant(),link.id(),0);
+                    else links.confirm(authenticatedBuyer,s.tenant(),link.id(),0);
+                    return true;
+                } catch(IllegalStateException expected) {return false;}
+            });
+            assertThat(secondStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS)).isFalse();
+        }
+        var history=links.linkHistory(owner,s.tenant(),customer.id());
+        assertThat(history).hasSize(2);
+        assertThat(history).extracting(CrmBuyerLinkService.LinkEvent::action)
+                .containsExactly("PROPOSED",confirmFirst?"CONFIRMED":"REVOKED");
+        assertThat(links.orderHistory(owner,s.tenant(),customer.id(),10).isEmpty())
+                .isEqualTo(!confirmFirst);
     }
 
     private void requirePostgres() throws Exception {
