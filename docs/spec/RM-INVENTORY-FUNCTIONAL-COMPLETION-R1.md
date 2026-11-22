@@ -2,7 +2,7 @@
 
 **Тип:** специализированное детальное ТЗ + 12-проходный перекрёстный аудит одного домена.  
 **Дата / ветка / source SHA:** 2026-11-22 · `base_dev` · `c776baec5c82e0dfd4c7930aa6a68629202fa5fd`.  
-**Статус:** `REVIEWED / PROPOSED`, **код не реализован по этому документу**, business/security решения с пометкой `DECISION` требуют утверждения.  
+**Статус:** INV-Q1–Q3 `IMPLEMENTED / POSTGRESQL QUALIFIED` (см. §15, exact code SHA), INV-Q4–Q9 и INV-VAL остаются `PROPOSED/HOLD`. Прочие `DECISION` вне Q1–Q3 требуют отдельного согласования.  
 **Цель:** зрелый *количественный* складской сервис с завершённым сценарием кладовщика и безопасной интеграцией SALES, CATALOG, ORG, IAM — без общего CRUD-framework, новых микросервисов, HTTP-контроллеров и самодельного workflow-engine.  
 **Смежные документы:** `RM-PLATFORM-STANDARD-R2.md` (нормативный), `RM-SVC-FUNCTIONAL-DEPTH-AUDIT-2026-11-22.md` (обобщённый аудит), `RM-TENANT-SERVICES-COMPLETION-R1.md`, `RM-INVENTORY-VALUATION-R1.md`, `RM-SERVICE-FIRST-SALES-INVENTORY-R1.2.md`, `RM-SVC-R2-SERVICE-COMPLETION-CROSS-DOMAIN-CONSISTENCY.md`. Новый документ **не отменяет** иммутабельные согласованные механизмы reserve/fulfill, DDL 0022–0030 или dual-permission SALES+INVENTORY. При противоречии — нормативный стандарт R2 и принятое доменное решение выше проекта.
 
@@ -289,4 +289,6 @@ INVENTORY quantity-R1 может получить статус **FUNCTIONALLY MA
 
 **Не менялось:** прежние Liquibase changesets, SALES order status contract, valuation policy journal, transport/controllers, other domains. No migrations required for Q1–Q3; прежние исторические настройки остаются в схеме, но не обещаются как действующие. Этапы Q4–Q9, INV-VAL, per-location ACL и полный TCRUD-03 остаются OPEN.
 
-**Admission:** до точной GitHub CI evidence и особенно PostgreSQL concurrency нельзя выставлять Q1–Q3 статус QUALIFIED. Нужны H2, PostgreSQL integration, populated migration, RustFS regression и проверка двух конкурентных первых поступлений. Из-за row-lock owner metadata проверить p95/p99 под нагрузкой до production; не выводить производительность из synthetic single-row test.
+**Квалификация INV-Q1–Q3:** source/code SHA `d9819250089872ead3ddb869f821974041bd46a4`. GitHub Actions [RM Domain Security and PostgreSQL Qualification / run 44985067340](https://github.com/alimbetov/RM/actions/runs/44985067340): H2 smoke, PostgreSQL integration, populated IAM PII **SUCCESS**; обновлённый `InventoryQ123QualificationTest` **4 tests, 0 failures, 0 errors, 0 skipped** на PostgreSQL (включая 2-connection revoke/read race), `InventoryReservationQualificationTest` и `SalesInventoryRbacQualificationTest` — SUCCESS. Повторный run 44985071453 также SUCCESS. CRM populated upgrade run 44985067351 SUCCESS. RustFS E2E [run 44985067336](https://github.com/alimbetov/RM/actions/runs/44985067336) проверяется отдельно и не является предметной логикой INVENTORY.
+
+**Квалифицированная область:** Q1 authenticated settings + fenced read; Q2 первое поступление, новый ACTIVE WAREHOUSE/PRODUCT admission и конкурентная первая запись; Q3 mandatory reservation при старом FALSE и честный operational DTO. Не принимать это за закрытие Q4–Q9, FIN valuation, всех существующих TCRUD-00/03 методов или production deployment. Из-за row-lock owner metadata проверить p95/p99 под нагрузкой до production; не выводить производительность из synthetic single-row test.
