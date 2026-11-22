@@ -2903,8 +2903,8 @@ class QrWarehouseHandoverQualificationTest {
         var claim=qr07R2Approved(c,o,1);
         var first=returnProof.issue(c.buyer(),c.tenant(),claim.requestId(),key());
         assertThatThrownBy(()->returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
-                claim.requestId(),2,"FORGED_RETURN_PROOF",key()))
-                .hasMessageContaining("RETURN_PROOF_INVALID");
+                claim.requestId(),2,"A".repeat(43),key()))
+                .hasMessageContaining("RETURN_PROOF_UNAVAILABLE");
         var second=returnProof.issue(c.buyer(),c.tenant(),claim.requestId(),key());
         assertThat(second.generation()).isEqualTo(2);
         assertThatThrownBy(()->returnPhysical.receive(c.staff(),c.tenant(),c.warehouse(),
@@ -2985,7 +2985,7 @@ class QrWarehouseHandoverQualificationTest {
             assertThat(returnPhysical.post(c.staff(),c.tenant(),c.warehouse(),
                     claim.requestId(),5,key()).state()).isEqualTo("QUARANTINED");
         }
-        for(UUID sku:java.util.Set.of(item,itemTwo)){
+        for(UUID sku:new java.util.HashSet<>(java.util.List.of(item,itemTwo))){
             BigDecimal sum=jdbc.queryForObject("""
                     SELECT COALESCE(SUM(delta_quantity),0)
                     FROM crm.inv_return_quarantine_movement
