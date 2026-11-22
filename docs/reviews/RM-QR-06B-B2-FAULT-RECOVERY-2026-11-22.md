@@ -1,7 +1,7 @@
 # RM QR-06B/B2 — Transaction fault injection and recovery evidence
 
-**Branch:** `base_dev`; **candidate SHA:** `9044482f975c0c8c9e761a0f7aa1d5b9c27fc89c`  
-**Status:** SQL fault-injection tests committed; PostgreSQL exact-SHA CI evidence pending final verification. **Production:** HOLD.
+**Branch:** `base_dev`; **qualified test SHA:** `90813d8f09638d014b2358ebed9e9dee95af8ab9`  
+**Status:** SQL fault-injection subgate PASS on exact SHA; process/network/multi-JVM recovery still HOLD. **Production:** HOLD.
 
 ## Scope
 
@@ -30,3 +30,13 @@ These tests **do not terminate an application process**, bring down a database, 
 - Strict correctness criteria: zero duplicated debits, zero partial receipt, zero unauthorized completed orders, zero invalid balances.
 
 Only the exact-SHA real PostgreSQL job and its Surefire reports can promote the new tests to PASS. An H2 run or CI started status is insufficient. QR-07 and QR-08 must not be treated as production-ready on this basis.
+
+## PostgreSQL CI evidence and corrective action
+
+The first test candidate (`9044482f975c0c8c9e761a0f7aa1d5b9c27fc89c`) failed with two `BadSqlGrammar` errors because the injected PL/pgSQL trigger body was delimited by a single `$` instead of a valid tagged dollar quote. No business invariants were disproved by this syntax error. This was corrected in the test-only function DDL to `$qr06b$` in commit `90813d8f09638d014b2358ebed9e9dee95af8ab9`.
+
+**CI workflow:** https://github.com/alimbetov/RM/actions/runs/45033507151  
+**Job result:** SUCCESS (PostgreSQL 17; exact-SHA check; Surefire artifacts uploaded).  
+**Actual Maven log:** `QrWarehouseHandoverQualificationTest` 19 tests, 0 failures, 0 errors, 0 skipped; `TenantRbacRevocationQualificationTest` 11 tests, 0 failures, 0 errors, 0 skipped; TOTAL **30 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**.
+
+**Admission:** B2 deterministic SQL transactional failure/retry subgate = PASS for tested SHA. Physical process kill before/after COMMIT, real response loss, two JVM and load qualification are NOT RUN. Overall B2 and production admission remain HOLD.
