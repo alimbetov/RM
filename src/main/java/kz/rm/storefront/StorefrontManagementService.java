@@ -61,7 +61,7 @@ public class StorefrontManagementService {
                 StorefrontSettings.State.PAUSED);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Storefront get(VerifiedActor actor, UUID tenant, UUID storefront) {
         read(actor, tenant);
         return fetch(tenant, storefront, false);
@@ -117,7 +117,7 @@ public class StorefrontManagementService {
     private void read(VerifiedActor actor, UUID tenant) {
         if (actor == null || tenant == null)
             throw new SecurityException("Verified actor and selected tenant required");
-        authorization.require(actor.userId(), tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        authorization.requireForCommand(actor.userId(), tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
     }
 
     private void audit(UUID tenant, UUID actor, UUID entity, String action) {
