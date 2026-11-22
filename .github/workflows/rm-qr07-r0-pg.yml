@@ -1,10 +1,11 @@
-name: RM QR-07 R0/R1 Return Foundation and Review PostgreSQL Qualification
+name: RM QR-07 R0-R2 Physical Return PostgreSQL Qualification
 
 on:
   push:
     branches: [base_dev]
     paths:
       - 'src/main/java/kz/rm/sales/SalesReturn*.java'
+      - 'src/main/java/kz/rm/inventory/ReturnInventoryPostingPort.java'
       - 'src/main/java/kz/rm/iam/DomainPermission.java'
       - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
@@ -42,7 +43,7 @@ jobs:
           cache: maven
       - name: Verify exact SHA for QR-07
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Qualify R0/R1 migration buyer claims and reviewer transitions on PostgreSQL
+      - name: Qualify R0-R2 return lifecycle and atomic stock posting on PostgreSQL
         env:
           SPRING_PROFILES_ACTIVE: test
           RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
