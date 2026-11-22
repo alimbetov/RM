@@ -75,7 +75,7 @@ public class CrmHistoryService {
     public record ContactChange(UUID id, UUID contactId, UUID customerId, UUID actorId,
                                 String action, Long previousVersion, long newVersion, Instant occurredAt) {}
 
-    void contact(UUID tenant, UUID id, UUID customer, UUID actor, String action, long before, long after) {
+    void contact(UUID tenant, UUID id, UUID customer, UUID actor, String action, Long before, long after) {
         jdbc.update("""
           INSERT INTO crm.contact_change_event(tenant_id,id,contact_id,customer_id,actor_id,
               action_code,previous_version,new_version,occurred_at)
