@@ -33,7 +33,7 @@ public class InventoryAuthorizedCommandService {
             throw new IllegalArgumentException("Receipt quantity must be positive");
         // This is quantity-only receiving; accounting valuation awaits INV-VAL-R1.2.
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,quantity,
-                InventoryMovementService.Reason.RECEIPT);
+                InventoryMovementService.Reason.RECEIPT,actorId,null);
     }
 
     @Transactional
@@ -42,7 +42,18 @@ public class InventoryAuthorizedCommandService {
                                                        BigDecimal delta) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,delta,
-                InventoryMovementService.Reason.CORRECTION);
+                InventoryMovementService.Reason.CORRECTION,actorId,null);
+    }
+
+    @Transactional
+    InventoryMovementService.Movement writeOff(UUID actorId,UUID tenantId,UUID locationId,
+                UUID itemId,String requestKey,BigDecimal quantity,
+                InventoryMovementService.WriteOffCause cause) {
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        if(quantity==null || quantity.signum()<=0 || cause==null)
+            throw new IllegalArgumentException("Positive quantity and write-off cause required");
+        return movements.adjust(tenantId,locationId,itemId,requestKey,quantity.negate(),
+                InventoryMovementService.Reason.WRITE_OFF,actorId,cause);
     }
 
     // Order-linked reservation/release/fulfillment are intentionally NOT exposed here.
