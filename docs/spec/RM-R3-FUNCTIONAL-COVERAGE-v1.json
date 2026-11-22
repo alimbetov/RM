@@ -380,7 +380,11 @@
           "title": "Stock reservations and release invariants",
           "delivery": "IMPLEMENTED",
           "source": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
-          "proof": null
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "InventoryReservationQualificationTest",
+            "test": "reservationReleaseAndIdempotentReplay"
+          }
         },
         {
           "id": "INV-03",
@@ -488,7 +492,11 @@
           "title": "Real RustFS and scanner infrastructure validation",
           "delivery": "IMPLEMENTED",
           "source": "src/main/java/kz/rm/files/RustFsFileStorage.java",
-          "proof": null
+          "proof": {
+            "artifact": "rustfs-real-infra-e2e-surefire",
+            "suite": "RustFsRealClamAvE2ETest",
+            "test": "realClamdRespondsCleanInfectedAndFailClosedForUnavailableEndpoint"
+          }
         },
         {
           "id": "FIL-06",
@@ -541,7 +549,11 @@
           "title": "Tenant-scoped location search and read",
           "delivery": "IMPLEMENTED",
           "source": "src/main/java/kz/rm/organization/OrganizationLocationQueryService.java",
-          "proof": null
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "OrganizationLocationQueryQualificationTest",
+            "test": "paginationAndFiltersUseTenantBoundary"
+          }
         },
         {
           "id": "ORG-05",
@@ -596,7 +608,11 @@
           "title": "Tenant envelope encryption and wrapping",
           "delivery": "IMPLEMENTED",
           "source": "src/main/java/kz/rm/security/kms/KeyWrappingService.java",
-          "proof": null
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "KmsPersistedRoundTripTest",
+            "test": "persistedEnvelopeRestoresUsingFreshCryptoInstance"
+          }
         },
         {
           "id": "KMS-02",
@@ -614,7 +630,11 @@
           "title": "Encryption configuration deployment fail closed",
           "delivery": "IMPLEMENTED",
           "source": "src/main/java/kz/rm/security/kms/KmsDeploymentGuard.java",
-          "proof": null
+          "proof": {
+            "artifact": "kms-postgres-surefire",
+            "suite": "KmsDeploymentGuardTest",
+            "test": "urR34DeploymentConfigurationAcceptsOnlySafeImmutableKeyModes"
+          }
         },
         {
           "id": "KMS-04",
