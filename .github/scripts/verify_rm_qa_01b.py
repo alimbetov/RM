@@ -60,6 +60,8 @@ REQUIRED_CASES = {
         ("CrmInteractionQualificationTest", "crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"),
         ("CrmInteractionQualificationTest", "crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"),
         ("CrmInteractionQualificationTest", "crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline"),
+        ("CrmInteractionQualificationTest", "crm99ArchivedContactAndParentNeverRemainCommunicationEligible"),
+        ("CrmInteractionQualificationTest", "crm99ForeignAndSuspendedAssigneeProduceZeroInteractionSideEffects"),
         ("FilesR10bQualificationTest", "urR32FilesTenantAndRevocationNeverPromoteUnapprovedBytes"),
         ("OrganizationLocationLifecycleQualificationTest", "urR32OrganizationLocationGrantRevocationAndForeignTenantHaveZeroEffects"),
         ("TenantRbacRevocationQualificationTest", "activeCommandCompletesBeforeConcurrentRevocationCommits"),
