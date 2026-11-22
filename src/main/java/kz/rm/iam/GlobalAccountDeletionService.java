@@ -137,7 +137,7 @@ public class GlobalAccountDeletionService {
                     INSERT INTO public.iam_deletion_oidc_revocation_outbox
                     (deletion_event_id,target_user_id,provider_subject_envelope,state,created_at)
                     VALUES (?,?,?,'PENDING',?)
-                    """,deletionId,targetId,crypto.encrypt(externalSubject),now);
+                    """,deletionId,targetId,crypto.encryptOidcSubject(externalSubject),now);
         }
     }
 
