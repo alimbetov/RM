@@ -15,6 +15,7 @@ class RoleEvidenceContractTest(unittest.TestCase):
             "urR31AllFiveMembershipRolesHaveFallbackReadButNoImplicitWrite",
             "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand",
             "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites",
+            "urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal",
             "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant",
             "urR31UnassignedStaffAndMissingActorAreDeniedWithoutSideEffects",
         ]
@@ -22,11 +23,11 @@ class RoleEvidenceContractTest(unittest.TestCase):
             ("UserRoleMatrixR31QualificationTest", x) for x in methods
         }}
         result=assess_role_cases(ROOT,cases,"a"*40,True,write=False)
-        self.assertEqual(result["mandatory"],5)
-        self.assertEqual(result["verifiedInternal"],5)
+        self.assertEqual(result["mandatory"],6)
+        self.assertEqual(result["verifiedInternal"],6)
         self.assertEqual(result["gate"],"USER_ROLE_SERVICE_QUALIFIED")
         held=assess_role_cases(ROOT,cases,"a"*40,False,write=False)
-        self.assertEqual(held["executedPostgresql"],5)
+        self.assertEqual(held["executedPostgresql"],6)
         self.assertEqual(held["verifiedInternal"],0)
         self.assertEqual(held["gate"],"HOLD")
 
