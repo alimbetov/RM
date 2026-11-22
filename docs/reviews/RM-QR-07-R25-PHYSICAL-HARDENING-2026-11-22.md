@@ -1,6 +1,6 @@
 # RM QR-07/R2.5 — Physical Return Hardening
 
-**Date:** 2026-11-22. **Branch:** `base_dev`. **Latest code candidate:** `f40c8e1e6df8485e44f68b972ffc1fc1ead6e452`. **Admission:** HOLD pending exact-SHA PostgreSQL and full regression. Production HOLD.
+**Date:** 2026-11-22. **Branch:** `base_dev`. **Latest code candidate:** `77baf4c24d16cd98273a98874aca43074cba11ef`. **Admission:** HOLD pending exact-SHA PostgreSQL and full regression. Production HOLD.
 
 ## Added physical return controls
 
@@ -11,7 +11,7 @@
 
 ## Qualification plans
 
-**Current exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45048262597; two jobs, `qr07-r0-postgresql` and `qr07-full-postgresql-regression`. Both required for full R2.5 technical closure.
+**Current exact-SHA CI:** https://github.com/alimbetov/RM/actions/runs/45048617338; two jobs, `qr07-r0-postgresql` and `qr07-full-postgresql-regression`. Both required for full R2.5 technical closure.
 
 Tests: immutable RESTOCK and WRITE_OFF baseline, QUARANTINE exact quantity and zero sellable-stock delta, multiple returns aggregated by SKU, foreign staff/scope, revoke `SALES_RETURN_POST` and `INVENTORY_RECEIVE`, invalid/rotated/replayed physical proof, 2 JVM race, hard process crash before/after COMMIT.
 
@@ -31,4 +31,14 @@ All subsequent source changes require a **new exact-SHA** result. The old failed
 
 ## Out of R2.5 admission
 
-Quarantine *intake* and segregated balances are implemented. Releasing stock back out of quarantine to sellable inventory, permanent disposal from the quarantine position and dedicated quarantine reconciliation have **not** been implemented and will be a subsequent qualification. A one-time buyer QR is synthetic in service tests and is **not real scanner, external OIDC, or HTTPS proof**. QR-08 packaging work is specified in `docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md`, but not yet implemented.
+Quarantine *intake*, segregated balances, and **append-only release/disposal exits** are now implemented as a candidate. `SalesReturnQuarantineResolutionService.resolve` makes `QUARANTINED → RESTOCKED/DISPOSED` with exact return-linked quantities, row/version fencing, IAM and warehouse checks, atomic decrement of quarantined balance, optional authenticated stock restock, and immutable exit evidence. A dedicated independent quarantine reconciler and mixed real-device E2E remain open. None of these latest candidate claims is PASS before same-SHA CI. A one-time buyer QR is synthetic in service tests and is **not real scanner, external OIDC, or HTTPS proof**. QR-08 packaging work is specified in `docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md`, but not yet implemented.
+
+## R2.5 extended implementation candidate
+
+- Changeset `0103` and `0104`: immutable `sales_return_quarantine_resolution` with non-sellable before/after quantity, return-derived provenance and stock movement reference for restock exits.
+- `SalesReturnQuarantineResolutionService.resolve`: protected `INVENTORY_RECEIVE` on RESTOCK; `INVENTORY_ADJUST` on DISPOSE; locks source return, warehouse scope, stock and quarantine balance. Uses one Spring transaction for outgoing quarantine quantity, optional inbound sellable stock and return/event status.
+- New PostgreSQL service tests for exactly-once quarantine release/restock, disposal without sellable stock change, prior test of posting/revoke race, credential rotation, quarantine SKU aggregation.
+- Physical token validation uses exact URL-safe 43-character format including leading `-`/`_`; the prior first-phase CI failure exposed that real production bug.
+- **Latest source SHA above requires a fresh complete CI result.** The full-project PostgreSQL job can be slow; its status is independent of focused return tests.
+
+**QR-08** remains specification-only until QR-07/R2.5 full correctness qualification. See `docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md`.
