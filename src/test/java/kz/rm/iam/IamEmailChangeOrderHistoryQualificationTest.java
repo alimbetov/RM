@@ -42,6 +42,7 @@ class IamEmailChangeOrderHistoryQualificationTest {
         var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
                 "Mail Store LLP","Mail Store","KZ"));
         var workspace=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId()));
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         UUID offer=UUID.randomUUID(),item=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
