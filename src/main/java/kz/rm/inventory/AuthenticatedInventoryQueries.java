@@ -12,14 +12,35 @@ import java.util.UUID;
 @Service
 public class AuthenticatedInventoryQueries {
     private final StockBalanceQueryService queries;
+    private final InventoryHistoryQueryService history;
 
-    public AuthenticatedInventoryQueries(StockBalanceQueryService queries) {
+    public AuthenticatedInventoryQueries(StockBalanceQueryService queries,
+                                          InventoryHistoryQueryService history) {
         this.queries = queries;
+        this.history = history;
     }
 
     public Page<StockBalanceDto> search(VerifiedActor actor, UUID tenantId,
                                         StockSearch filter, int page, int size) {
         if (actor == null) throw new SecurityException("Verified actor required");
         return queries.search(actor.userId(), tenantId, filter, page, size);
+    }
+
+    public StockBalanceDto getPosition(VerifiedActor actor,UUID tenant,UUID location,UUID item){
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return history.getPosition(actor.userId(),tenant,location,item);
+    }
+
+    public Page<InventoryHistoryQueryService.MovementRow> searchMovements(
+            VerifiedActor actor,UUID tenant,InventoryHistoryQueryService.MovementSearch filter,
+            int page,int size) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return history.searchMovements(actor.userId(),tenant,filter,page,size);
+    }
+
+    public Page<InventoryHistoryQueryService.ReservationEvent> reservationHistory(
+            VerifiedActor actor,UUID tenant,UUID reservationId,int page,int size) {
+        if(actor==null)throw new SecurityException("Verified actor required");
+        return history.reservationHistory(actor.userId(),tenant,reservationId,page,size);
     }
 }
