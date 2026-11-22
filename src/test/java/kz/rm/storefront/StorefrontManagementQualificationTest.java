@@ -77,20 +77,23 @@ class StorefrontManagementQualificationTest {
                 .isEqualTo(slug);
 
         var published = storefronts.publish(staff, tenant.tenant(), draft.id(),
-                StorefrontSettings.State.DRAFT);
+                draft.rowVersion());
         assertThat(published.state()).isEqualTo(StorefrontSettings.State.PUBLISHED);
         assertThatThrownBy(() -> storefronts.pause(staff, tenant.tenant(), draft.id(),
-                StorefrontSettings.State.DRAFT))
+                draft.rowVersion()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("STALE");
 
-        storefronts.pause(staff, tenant.tenant(), draft.id(),
-                StorefrontSettings.State.PUBLISHED);
-        storefronts.publish(staff, tenant.tenant(), draft.id(),
-                StorefrontSettings.State.PAUSED);
+        var paused = storefronts.pause(staff, tenant.tenant(), draft.id(),
+                published.rowVersion());
+        var resumed = storefronts.publish(staff, tenant.tenant(), draft.id(),
+                paused.rowVersion());
         // Fresh same-state replay is a no-op: no extra audit entry.
         storefronts.publish(staff, tenant.tenant(), draft.id(),
-                StorefrontSettings.State.PUBLISHED);
+                resumed.rowVersion());
+        assertThatThrownBy(() -> storefronts.pause(staff, tenant.tenant(), draft.id(),
+                published.rowVersion())).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STALE");
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.audit_event
                 WHERE tenant_id=? AND entity_id=?
@@ -113,13 +116,13 @@ class StorefrontManagementQualificationTest {
         assertThatThrownBy(() -> storefronts.get(actorB, b.tenant(), own.id()))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> storefronts.publish(actorB, b.tenant(), own.id(),
-                StorefrontSettings.State.DRAFT))
+                0L))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(() -> storefronts.createDraft(actorB, a.tenant(),
                 "shop-" + UUID.randomUUID()))
                 .isInstanceOf(SecurityException.class);
         assertThatThrownBy(() -> storefronts.publish(actorA, a.tenant(), own.id(),
-                StorefrontSettings.State.PAUSED))
+                0L))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("""
                 SELECT state FROM crm.store_front WHERE tenant_id=? AND id=?
