@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED; PASS 07/12 SETTINGS SOURCE REVIEWED; PASS 08/12 CROSS-DOMAIN SOURCE REVIEWED / SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED; PASS 04/12 STATE MACHINE SOURCE VERIFIED; PASS 05/12 READ MODEL SOURCE REVIEWED; PASS 06/12 TRANSACTIONS SOURCE REVIEWED; PASS 07/12 SETTINGS SOURCE REVIEWED; PASS 08.1–08.3 IMMUTABLE SKU **IMPLEMENTED / POSTGRESQL QUALIFIED**, PASS 08.4 SELLER OFFER LIFECYCLE PROPOSED / NOT IMPLEMENTED; PASS 09–12 NOT COMPLETED; **PRODUCTION HOLD**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -276,3 +276,24 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 **Минимальное решение (предлагается к утверждению):** additive nullable `catalog_item_id_snapshot` с same-tenant FK; новый stock-backed checkout фиксирует SKU и цену в одном заказе, new confirm/reserve потребляет snapshot, legacy NULL fail-closed без подмены SKU задним числом; `CatalogItemService.publish` не равен seller `store_offer.publish`, цену из каталога не перезаписывать автоматически. Сопутствующие вопросы: PRODUCT vs SERVICE offers, offer publication/price CAS, статусы SKU и existing PLACED orders, email transport anti-abuse.
 
 **Evidence gates до реализации и перехода к PASS 09/12:** `SALE-08-01..12` exact tests из отдельного отчёта; PostgreSQL populated migration, concurrent price/SKU offer update vs checkout, mixed tenant + PII negative, immutable order snapshots, Q9 stock E2E and old legacy compatibility. **Production HOLD**, финансовые проводки/COGS не включать.
+
+
+## 20. PASS 08.1–08.3 — Реализация коммерческого и SKU snapshot
+
+**Реализовано в `base_dev` и квалифицировано PostgreSQL на SHA [`cb490556e56d74770ee86f839a849a354702673f`](https://github.com/alimbetov/RM/commit/cb490556e56d74770ee86f839a849a354702673f).** GitHub Actions [Domain Security & PostgreSQL 44989823109](https://github.com/alimbetov/RM/actions/runs/44989823109): H2 **SUCCESS**, PostgreSQL integration **SUCCESS** (326 тестов, 0 failure, 0 error, 18 skipped), populated IAM/PII **SUCCESS**. [CRM populated upgrade 44989823098](https://github.com/alimbetov/RM/actions/runs/44989823098): **SUCCESS**. RustFS E2E 44989823157 является отдельной нефункциональной регрессией (проверять результат перед общим signoff).
+
+| Компонент | Изменение | Правило |
+|---|---|---|
+| Liquibase `0076` | nullable `sales_order_line.catalog_item_id_snapshot`, composite same-tenant FK, обычный индекс H2+PG | Исторический NULL остаётся NULL, не восстанавливать из текущего offer |
+| Liquibase `0077` | PostgreSQL immutable trigger `BEFORE UPDATE OR DELETE` строки заказа | Зафиксированные title/price/qty/currency/offer/SKU нельзя редактировать |
+| `AutoOrderService.checkout` | `store_offer` + tenant `cat_item` `FOR UPDATE`, только `PUBLISHED PRODUCT` | Фиксирует одновременно SKU и цену; SERVICE/unmapped/ARCHIVED fail closed до IAM email identity/outbox |
+| `SalesInventoryCommandService.lines/confirm` | SKU читается только из `sales_order_line.catalog_item_id_snapshot` | Remap live offer после PLACED не влияет на reserve; legacy PLACED с NULL не подтверждать |
+| `InventoryReservationService.reserve` | Независимая проверка SKU по строке заказа, не JOIN live offer | Ошибочный SKU и старый NULL нельзя резервировать; dual-permission и атомарность сохранены |
+
+**Квалифицированные отрицательные сценарии:** unmapped, archived, SERVICE, cross-tenant composite FK, конкурентная пауза offer против checkout, обновление цены/названия после checkout, remap SKU S1→S2 до confirm, legacy NULL fail-closed, PG запрет UPDATE строки, idempotency retry, независимые проверки INVENTORY/Sales RBAC. Тесты `AutoOrderR1QualificationTest` **15/15**, `SalesInventoryRbacQualificationTest` **19/19**, `InventoryReservationQualificationTest` **6/6**, `SalesOrderQueryQualificationTest` **4/4**, `IamEmailChangeOrderHistoryQualificationTest` **1/1** на PostgreSQL (все без skipped). Параллельные прогоны в общей ветке имеют свои source SHA; квалификация утверждается только для указанной версии.
+
+**В ходе доводки:** исходный partial index миграции `0076` не поддерживался H2; заменён обычным. Старые тестовые фикстуры оффера без каталог-SKU и нового checkout после архивации исправлены под действующий контракт. Не обновляли уже существующие миграции 001–0075.
+
+**Области, остающиеся открытыми:** SELLER-offer owner CRUD (CAS price/state и storefront publish/pause), реальная автоматизированная связка CATALOG→STOREFRONT, качественная модель SERVICE продаж; transport anti-abuse/email delivery/OIDC E2E, tenant-wide TCRUD, performance gates 09–12. **PASS 08 частично закрыт, не весь 12-проходный SALES; PRODUCTION HOLD**.
+
+**Следующий практический слой:** `SALE-R1.7B` seller-authorized storefront + offer state/price edits с explicit permission; держать `store_offer` источником цены принятого оффера, `cat_price` — справочной историей, не объединять без утверждённых правил. Затем полноценный проход 09/12 security and tenant boundaries.
