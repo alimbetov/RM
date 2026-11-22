@@ -12,11 +12,11 @@
 
 ## Audit
 
-`crm.contact_change_event` is a new tenant-first immutable history table (Liquibase 0062), with action, actor, parent customer, contact, previous/new version and timestamp only. No plaintext PII, ciphertext copies or values are stored in the audit. The PostgreSQL immutability trigger is installed in 0063. A separate additive changeset 0064 enables RESTORED in the existing customer audit; prior changesets remain byte-for-byte compatible with the previously qualified schema.
+`crm.contact_change_event` is a new tenant-first immutable history table (Liquibase 0062), with action, actor, parent customer, contact, previous/new version and timestamp only. No plaintext PII, ciphertext copies or values are stored in the audit. The PostgreSQL immutability trigger is installed in 0063. A separate additive changeset 0064 enables RESTORED in the existing customer audit; 0065 enables CREATED for new contact audit events. Prior changesets remain byte-for-byte compatible with the previously qualified schema.
 
 ## Scope boundaries
 
-No hard deletion; no generalized multi-contact primary contact switching or bulk contact import. Contact creation retains its established R1A behavior; the R1.4 audit captures UPDATED, ARCHIVED and RESTORED (no fictitious CREATE events for legacy contacts). There are no controllers or DTO expansion for untrusted principals. `CrmContactRepository` remains package-private internal persistence and is not a security boundary by itself: all trusted entrypoints authorize tenant and permission first.
+No hard deletion; no generalized multi-contact primary contact switching or bulk contact import. Contact creation retains its established R1A behavior; the R1.4 audit captures CREATED, UPDATED, ARCHIVED and RESTORED for new operations (no fictitious CREATE events for legacy contacts). There are no controllers or DTO expansion for untrusted principals. `CrmContactRepository` remains package-private internal persistence and is not a security boundary by itself: all trusted entrypoints authorize tenant and permission first.
 
 ## Mandatory qualification
 
