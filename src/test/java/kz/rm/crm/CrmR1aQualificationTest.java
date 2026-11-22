@@ -1085,7 +1085,7 @@ class CrmR1aQualificationTest {
         assertThat(contactMetadata.findByTenantIdAndId(a.tenantId(),ca.id())
                 .orElseThrow().getRowVersion()).isEqualTo(1);
         assertThat(crmHistory.contactHistory(actorA,a.tenantId(),ca.id(),10))
-                .extracting(CrmHistoryService.ContactChange::action).containsExactly("UPDATED");
+                .extracting(CrmHistoryService.ContactChange::action).containsExactly("UPDATED","CREATED");
         assertThat(crmHistory.contactHistory(actorA,a.tenantId(),cb.id(),10)).isEmpty();
         assertThatThrownBy(()->crmHistory.contactHistory(actorA,b.tenantId(),cb.id(),10))
                 .isInstanceOf(SecurityException.class);
@@ -1106,7 +1106,7 @@ class CrmR1aQualificationTest {
         assertThat(secureQueries.getContact(actorA,a.tenantId(),ca.id()).name()).isEqualTo("New A");
         assertThat(crmHistory.contactHistory(actorA,a.tenantId(),ca.id(),10))
                 .extracting(CrmHistoryService.ContactChange::action)
-                .containsExactly("RESTORED","ARCHIVED","UPDATED");
+                .containsExactly("RESTORED","ARCHIVED","UPDATED","CREATED");
         var change=crmHistory.contactHistory(actorA,a.tenantId(),ca.id(),10).getFirst();
         assertThat(change.actorId()).isEqualTo(a.actorId());
         boolean pg;
@@ -1164,7 +1164,9 @@ class CrmR1aQualificationTest {
             assertThat((f1.get(30,TimeUnit.SECONDS)?1:0)+(f2.get(30,TimeUnit.SECONDS)?1:0))
                     .isEqualTo(1);
         }
-        assertThat(crmHistory.contactHistory(actor,t.tenantId(),contact.id(),10)).hasSize(1);
+        assertThat(crmHistory.contactHistory(actor,t.tenantId(),contact.id(),10))
+                .extracting(CrmHistoryService.ContactChange::action)
+                .containsExactly("UPDATED","CREATED");
         assertThat(contactMetadata.findByTenantIdAndId(t.tenantId(),contact.id())
                 .orElseThrow().getRowVersion()).isEqualTo(1);
     }
@@ -1198,7 +1200,7 @@ class CrmR1aQualificationTest {
         assertThatThrownBy(()->secureCommands.restoreContact(null,t.tenantId(),contact.id(),1))
                 .isInstanceOf(SecurityException.class);
         assertThat(crmHistory.contactHistory(readonly,t.tenantId(),contact.id(),10))
-                .extracting(CrmHistoryService.ContactChange::action).containsExactly("ARCHIVED");
+                .extracting(CrmHistoryService.ContactChange::action).containsExactly("ARCHIVED","CREATED");
     }
 
 }
