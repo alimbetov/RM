@@ -40,6 +40,12 @@ public class InventoryReservationService {
     @Transactional
     Reservation reserve(UUID tenantId, UUID orderId, UUID orderLineId,
                                UUID locationId, UUID itemId, BigDecimal quantity) {
+        return reserve(tenantId,orderId,orderLineId,locationId,itemId,quantity,null);
+    }
+
+    @Transactional
+    Reservation reserve(UUID tenantId, UUID orderId, UUID orderLineId,
+                    UUID locationId, UUID itemId, BigDecimal quantity, UUID actorId) {
         requireIds(tenantId,orderId,orderLineId,locationId,itemId);
         positiveQty(quantity);
         // The seller order FOR UPDATE protects this line from concurrent retries.
@@ -83,22 +89,31 @@ public class InventoryReservationService {
               (tenant_id,id,order_id,order_line_id,location_id,item_id,quantity,state,created_at,updated_at)
             VALUES (?,?,?,?,?,?,?,'ACTIVE',?,?)
             """,tenantId,id,orderId,orderLineId,locationId,itemId,quantity,now,now);
-        insertEvent(tenantId,id,"RESERVED",now);
+        insertEvent(tenantId,id,"RESERVED",now,actorId);
         return new Reservation(id,tenantId,orderId,orderLineId,locationId,itemId,quantity,State.ACTIVE);
     }
 
     @Transactional
     Reservation release(UUID tenantId, UUID reservationId) {
-        return transition(tenantId,reservationId,State.RELEASED);
+        return transition(tenantId,reservationId,State.RELEASED,null);
     }
 
     /** Fulfillment converts the reservation into a single immutable negative stock movement. */
     @Transactional
     Reservation fulfill(UUID tenantId, UUID reservationId) {
-        return transition(tenantId,reservationId,State.FULFILLED);
+        return transition(tenantId,reservationId,State.FULFILLED,null);
     }
 
-    private Reservation transition(UUID tenantId,UUID reservationId,State target) {
+    @Transactional
+    Reservation release(UUID tenantId, UUID reservationId,UUID actorId) {
+        return transition(tenantId,reservationId,State.RELEASED,actorId);
+    }
+    @Transactional
+    Reservation fulfill(UUID tenantId, UUID reservationId,UUID actorId) {
+        return transition(tenantId,reservationId,State.FULFILLED,actorId);
+    }
+
+    private Reservation transition(UUID tenantId,UUID reservationId,State target,UUID actorId) {
         if(tenantId==null || reservationId==null) throw new IllegalArgumentException("Reservation required");
         Reservation peek=loadById(tenantId,reservationId,false);
         String orderStatus=requireOrderStatus(tenantId,peek.orderId(),false);
@@ -131,17 +146,18 @@ public class InventoryReservationService {
             WHERE tenant_id=? AND id=? AND state='ACTIVE'
             """,target.name(),now,tenantId,reservationId);
         if(count!=1)throw new IllegalStateException("Reservation transition conflicted");
-        insertEvent(tenantId,reservationId,target==State.RELEASED?"RELEASED":"FULFILLED",now);
+        insertEvent(tenantId,reservationId,target==State.RELEASED?"RELEASED":"FULFILLED",now,actorId);
         if(target==State.FULFILLED) {
             jdbc.update("""
                 INSERT INTO crm.inv_stock_movement
                   (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                    balance_before,balance_after,occurred_at,recorded_at,
-                   movement_kind,reason_code,reservation_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,'FULFILLMENT','ORDER_FULFILLMENT',?)
+                   movement_kind,reason_code,reservation_id,actor_user_id,source_type,source_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,'FULFILLMENT','ORDER_FULFILLMENT',?,?,?,?)
                 """,tenantId,UUID.randomUUID(),current.locationId(),current.itemId(),
                     "fulfill-"+reservationId,current.quantity().negate(),
-                    stock.onHand(),afterOnHand,now,now,reservationId);
+                    stock.onHand(),afterOnHand,now,now,reservationId,
+                    actorId,"SALES_ORDER",current.orderId());
         }
         return new Reservation(current.id(),tenantId,current.orderId(),current.lineId(),
                 current.locationId(),current.itemId(),current.quantity(),target);
@@ -195,12 +211,12 @@ public class InventoryReservationService {
                 rs.getBigDecimal(6),State.valueOf(rs.getString(7)));
     }
 
-    private void insertEvent(UUID tenant,UUID id,String type,Timestamp now) {
+    private void insertEvent(UUID tenant,UUID id,String type,Timestamp now,UUID actorId) {
         jdbc.update("""
             INSERT INTO crm.inv_reservation_event
-              (tenant_id,id,reservation_id,event_type,occurred_at)
-            VALUES (?,?,?,?,?)
-            """,tenant,UUID.randomUUID(),id,type,now);
+              (tenant_id,id,reservation_id,event_type,occurred_at,actor_user_id)
+            VALUES (?,?,?,?,?,?)
+            """,tenant,UUID.randomUUID(),id,type,now,actorId);
     }
 
     private static void positiveQty(BigDecimal value) {
