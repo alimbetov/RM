@@ -52,6 +52,8 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired kz.rm.inventory.AuthenticatedInventoryCommands inventoryCommands;
+    @Autowired kz.rm.inventory.AuthenticatedInventoryReconciliation reconciliation;
     @Autowired PlatformTransactionManager transactionManager;
 
     private record Context(UUID tenant,UUID warehouse,UUID otherWarehouse,
@@ -1301,6 +1303,183 @@ class QrWarehouseHandoverQualificationTest {
         System.out.printf(java.util.Locale.ROOT,
                 "QR06B_B3_MIXED clients=%d completed=%d rejected=%d p50_ms=%d p95_ms=%d p99_ms=%d%n",
                 clients,completed,denied,b3Percentile(latencies,50),
+                b3Percentile(latencies,95),b3Percentile(latencies,99));
+    }
+
+
+    private record B31Target(Order order,SalesPickupHandoverService.Issued proof,long version) {}
+    private record B31Probe(boolean success, long nanos) {}
+
+    /** QR-06B/B3.1: three independently owned orders on shared stock positions,
+     * three repeatable rounds at each 100/250 client profile. Never translate
+     * expected business denials into infrastructure success metrics. */
+    @Test void qr06bPgB31RepeatedMultiOrder100And250() throws Exception {
+        requirePostgres();
+        for (int clients : new int[]{100,250}) {
+            for (int repetition=1;repetition<=3;repetition++) {
+                Context c=context();
+                List<B31Target> targets=new ArrayList<>();
+                for (int n=0;n<3;n++) {
+                    Order o=ready(c,true);
+                    var proof=pickup.issue(c.buyer(),o.publicRef(),key());
+                    targets.add(new B31Target(o,proof,version(c,o)));
+                }
+                var prepared=new CountDownLatch(clients);
+                var go=new CountDownLatch(1);
+                var responseTimes=new ArrayList<Long>();
+                int successes=0,conflicts=0;
+                long started=System.nanoTime();
+                try (var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+                    var futures=new ArrayList<java.util.concurrent.Future<B31Probe>>();
+                    for(int i=0;i<clients;i++) {
+                        B31Target target=targets.get(i%targets.size());
+                        futures.add(pool.submit(()->{
+                            prepared.countDown();
+                            if(!go.await(30,TimeUnit.SECONDS))
+                                throw new IllegalStateException("B31_START_BARRIER_TIMEOUT");
+                            long began=System.nanoTime();
+                            try {
+                                pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                                        target.proof().rawProof(),true,target.version(),key());
+                                return new B31Probe(true,System.nanoTime()-began);
+                            }catch(IllegalStateException | SecurityException expected) {
+                                return new B31Probe(false,System.nanoTime()-began);
+                            }
+                        }));
+                    }
+                    assertThat(prepared.await(30,TimeUnit.SECONDS)).isTrue();
+                    go.countDown();
+                    for(var future:futures) {
+                        B31Probe result=future.get(120,TimeUnit.SECONDS);
+                        responseTimes.add(result.nanos());
+                        if(result.success())successes++;else conflicts++;
+                    }
+                } finally {
+                    go.countDown();
+                }
+                long wallNanos=System.nanoTime()-started;
+                assertThat(successes).isEqualTo(targets.size());
+                assertThat(conflicts).isEqualTo(clients-targets.size());
+                for(B31Target target:targets)
+                    assertExactlyOneHandover(c,target.order(),2);
+                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("5");
+                assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("11");
+                assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+                assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+                System.out.printf(java.util.Locale.ROOT,
+                        "QR06B_B31_MULTI sha=%s clients=%d round=%d orders=3 completed=%d conflicts=%d "+
+                        "attempts_per_sec=%.2f p50_ms=%d p95_ms=%d p99_ms=%d%n",
+                        System.getenv().getOrDefault("GITHUB_SHA","local"),
+                        clients,repetition,successes,conflicts,
+                        clients*1.0/Math.max(1.0,wallNanos/1e9),
+                        b3Percentile(responseTimes,50),
+                        b3Percentile(responseTimes,95),
+                        b3Percentile(responseTimes,99));
+            }
+        }
+    }
+
+    /** B3.1 real authorized INV correction and consistent-read reconciliation
+     * overlap handover. Cancellation is deliberately a DIFFERENT CONFIRMED
+     * order, because READY_FOR_PICKUP cancellation is forbidden by policy. */
+    @Test void qr06bPgB31MixedCorrectionsReconciliationAndSeparateCancellation() throws Exception {
+        requirePostgres();
+        Context c=context();
+        UUID role=assignedRole(c);
+        for(DomainPermission permission:List.of(
+                DomainPermission.INVENTORY_ADJUST,
+                DomainPermission.INVENTORY_RELEASE,
+                DomainPermission.SALES_ORDER_CANCEL))
+            roles.grant(c.owner(),c.tenant(),role,permission);
+        List<B31Target> targets=new ArrayList<>();
+        for(int n=0;n<2;n++) {
+            Order order=ready(c,true);
+            targets.add(new B31Target(order,pickup.issue(c.buyer(),order.publicRef(),key()),
+                    version(c,order)));
+        }
+        Order cancellable=order(c,false);
+        sales.confirm(c.staff().userId(),c.tenant(),cancellable.id(),c.warehouse());
+
+        int contenders=40;
+        var readyToStart=new CountDownLatch(contenders+4);
+        var go=new CountDownLatch(1);
+        var latencies=new ArrayList<Long>();
+        int completed=0;
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var handovers=new ArrayList<java.util.concurrent.Future<B31Probe>>();
+            for(int i=0;i<contenders;i++) {
+                B31Target target=targets.get(i%targets.size());
+                handovers.add(pool.submit(()->{
+                    readyToStart.countDown();
+                    if(!go.await(30,TimeUnit.SECONDS))
+                        throw new IllegalStateException("B31_MIXED_BARRIER_TIMEOUT");
+                    long start=System.nanoTime();
+                    try {
+                        pickup.complete(c.staff(),c.tenant(),c.warehouse(),
+                                target.proof().rawProof(),true,target.version(),key());
+                        return new B31Probe(true,System.nanoTime()-start);
+                    }catch(IllegalStateException | SecurityException conflict) {
+                        return new B31Probe(false,System.nanoTime()-start);
+                    }
+                }));
+            }
+            var correctionOne=pool.submit(()->{
+                readyToStart.countDown();awaitQr06b(go);
+                return inventoryCommands.correct(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemOne(),key(),BigDecimal.ONE);
+            });
+            var correctionTwo=pool.submit(()->{
+                readyToStart.countDown();awaitQr06b(go);
+                return inventoryCommands.correct(c.staff(),c.tenant(),c.warehouse(),
+                        c.itemTwo(),key(),BigDecimal.ONE);
+            });
+            var inspect=pool.submit(()->{
+                readyToStart.countDown();awaitQr06b(go);
+                var first=reconciliation.inspect(c.staff(),c.tenant(),c.warehouse(),c.itemOne());
+                var second=reconciliation.inspect(c.staff(),c.tenant(),c.warehouse(),c.itemTwo());
+                return java.util.List.of(first,second);
+            });
+            var cancel=pool.submit(()->{
+                readyToStart.countDown();awaitQr06b(go);
+                return sales.cancel(c.staff().userId(),c.tenant(),cancellable.id());
+            });
+            assertThat(readyToStart.await(30,TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            for(var result:handovers) {
+                B31Probe p=result.get(120,TimeUnit.SECONDS);
+                latencies.add(p.nanos());
+                if(p.success())completed++;
+            }
+            assertThat(correctionOne.get(120,TimeUnit.SECONDS).delta())
+                    .isEqualByComparingTo(BigDecimal.ONE);
+            assertThat(correctionTwo.get(120,TimeUnit.SECONDS).delta())
+                    .isEqualByComparingTo(BigDecimal.ONE);
+            var readings=inspect.get(120,TimeUnit.SECONDS);
+            for(var reading:readings) {
+                assertThat(reading.finding())
+                        .isNotEqualTo(kz.rm.inventory.AuthenticatedInventoryReconciliation.Finding.RESERVED_MISMATCH)
+                        .isNotEqualTo(kz.rm.inventory.AuthenticatedInventoryReconciliation.Finding.MOVEMENT_BALANCE_MISMATCH);
+            }
+            assertThat(cancel.get(120,TimeUnit.SECONDS).status()).isEqualTo("CANCELLED");
+        }finally {
+            go.countDown();
+        }
+        assertThat(completed).isEqualTo(2);
+        for(B31Target target:targets)
+            assertExactlyOneHandover(c,target.order(),2);
+        assertThat(status(c,cancellable)).isEqualTo("CANCELLED");
+        assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("11");
+        assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("15");
+        assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("0");
+        assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_balance
+                WHERE tenant_id=? AND (reserved<0 OR on_hand<reserved)
+                """,Integer.class,c.tenant())).isZero();
+        System.out.printf(java.util.Locale.ROOT,
+                "QR06B_B31_MIXED clients=%d orders=2 completed=%d conflicts=%d "+
+                "corrections=2 reconciliation=2 cancellation=1 p50_ms=%d p95_ms=%d p99_ms=%d%n",
+                contenders,completed,contenders-completed,b3Percentile(latencies,50),
                 b3Percentile(latencies,95),b3Percentile(latencies,99));
     }
 
