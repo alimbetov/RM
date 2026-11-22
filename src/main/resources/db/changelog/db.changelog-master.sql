@@ -3243,3 +3243,51 @@ CREATE TABLE crm.sales_return_reception_proof (
  CONSTRAINT ck_qr07_proof_digest CHECK(LENGTH(digest_sha256)=64)
 );
 --rollback DROP TABLE crm.sales_return_reception_proof;
+
+
+--changeset rm:0103-crm-r22-buyer-link
+-- A seller-owned CRM customer can be linked to a global IAM buyer only after
+-- explicit verified buyer approval. No copied PII and no copied SALES rows.
+CREATE TABLE crm.customer_buyer_link (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ customer_id UUID NOT NULL,
+ buyer_user_id UUID NOT NULL,
+ proposed_by UUID NOT NULL,
+ confirmed_at TIMESTAMP WITH TIME ZONE,
+ status VARCHAR(16) NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ CONSTRAINT pk_crm_customer_buyer_link PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_crm_buyer_link_customer UNIQUE(tenant_id,customer_id),
+ CONSTRAINT uk_crm_buyer_link_buyer UNIQUE(tenant_id,buyer_user_id),
+ CONSTRAINT uk_crm_buyer_link_request UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_crm_buyer_link_customer FOREIGN KEY(tenant_id,customer_id)
+   REFERENCES crm.customer(tenant_id,id),
+ CONSTRAINT fk_crm_buyer_link_buyer FOREIGN KEY(buyer_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_crm_buyer_link_proposer FOREIGN KEY(proposed_by)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_buyer_link_state CHECK(status IN ('PENDING','CONFIRMED')),
+ CONSTRAINT ck_crm_buyer_link_confirmed CHECK(
+   (status='PENDING' AND confirmed_at IS NULL)
+   OR (status='CONFIRMED' AND confirmed_at IS NOT NULL))
+);
+CREATE TABLE crm.customer_buyer_link_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ link_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL,
+ action_code VARCHAR(24) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_crm_buyer_link_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT fk_crm_buyer_link_event FOREIGN KEY(tenant_id,link_id)
+   REFERENCES crm.customer_buyer_link(tenant_id,id),
+ CONSTRAINT fk_crm_buyer_link_event_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_crm_buyer_link_event_action CHECK(action_code IN ('PROPOSED','CONFIRMED')),
+ CONSTRAINT uk_crm_buyer_link_event_action UNIQUE(tenant_id,link_id,action_code)
+);
+--rollback DROP TABLE crm.customer_buyer_link_event;
+--rollback DROP TABLE crm.customer_buyer_link;
