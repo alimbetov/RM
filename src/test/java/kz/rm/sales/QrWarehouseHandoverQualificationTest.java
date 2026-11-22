@@ -2523,4 +2523,58 @@ class QrWarehouseHandoverQualificationTest {
         assertExactlyOneHandover(c,o,1);
     }
 
+
+    @Test void qr07R1RevokedReviewerGrantImmediatelyDeniesFurtherTransitions() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R1Claim(c,o,1);
+        UUID role=assignedRole(c);
+        roles.grant(c.owner(),c.tenant(),role,DomainPermission.SALES_RETURN_REVIEW);
+        var reviewed=returnReview.startReview(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key());
+        assertThat(reviewed.rowVersion()).isEqualTo(1);
+        roles.revoke(c.owner(),c.tenant(),role,DomainPermission.SALES_RETURN_REVIEW);
+        assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
+                claim.requestId(),1,"UAT_1",key()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),claim.requestId())).isEqualTo("UNDER_REVIEW");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=?
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(2);
+    }
+
+    @Test void qr07R1DecisionEventsRejectSqlTamperingAndConflictingReplays() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,false);
+        var claim=qr07R1Claim(c,o,2);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.SALES_RETURN_REVIEW);
+        String key=key();
+        var reviewed=returnReview.startReview(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key);
+        assertThatThrownBy(()->returnReview.startReview(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key+"X"))
+                .hasMessageContaining("RETURN_REVIEW_VERSION_CONFLICT");
+        assertThatThrownBy(()->returnReview.approve(c.staff(),c.tenant(),
+                claim.requestId(),0,"UAT_1",key))
+                .hasMessageContaining("RETURN_DECISION_IDEMPOTENCY_CONFLICT");
+        assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.sales_return_event SET event_type='REJECTED'
+                WHERE tenant_id=? AND id=?
+                """,c.tenant(),reviewed.decisionEventId()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("""
+                DELETE FROM crm.sales_return_event
+                WHERE tenant_id=? AND id=?
+                """,c.tenant(),reviewed.decisionEventId()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT event_type FROM crm.sales_return_event
+                WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),reviewed.decisionEventId()))
+                .isEqualTo("UNDER_REVIEW");
+    }
+
 }
