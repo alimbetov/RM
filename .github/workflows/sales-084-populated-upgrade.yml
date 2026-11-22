@@ -74,29 +74,32 @@ jobs:
           if comm -23 /tmp/offers-before.txt /tmp/offers-after.txt | grep -q .; then
             echo "Existing offer identity, SKU, price, currency, state or CAS version changed"; exit 1
           fi
-          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
-            DO \$\$ DECLARE t uuid; offer_id uuid; initial_sku uuid;
+          docker exec -i "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test <<'SQL'
+          DO $$
+          DECLARE t uuid; offer_id uuid; initial_sku uuid;
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_trigger
+              WHERE tgname='trg_sales_offer_identity_immutable' AND NOT tgisinternal
+            ) THEN RAISE EXCEPTION 'Offer identity trigger missing'; END IF;
+            SELECT tenant_id,id,catalog_item_id INTO t,offer_id,initial_sku
+              FROM crm.store_offer WHERE catalog_item_id IS NOT NULL LIMIT 1;
+            IF offer_id IS NULL THEN RAISE EXCEPTION 'No populated offer fixture'; END IF;
             BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM pg_trigger
-                WHERE tgname='trg_sales_offer_identity_immutable' AND NOT tgisinternal
-              ) THEN RAISE EXCEPTION 'Offer identity trigger missing'; END IF;
-              SELECT tenant_id,id,catalog_item_id INTO t,offer_id,initial_sku
-                FROM crm.store_offer WHERE catalog_item_id IS NOT NULL LIMIT 1;
-              IF offer_id IS NULL THEN RAISE EXCEPTION 'No populated offer fixture'; END IF;
-              BEGIN
-                UPDATE crm.store_offer SET catalog_item_id=NULL WHERE tenant_id=t AND id=offer_id;
-                RAISE EXCEPTION 'Offer SKU change incorrectly accepted';
-              EXCEPTION
-                WHEN raise_exception THEN
-                  IF SQLERRM <> 'Offer catalog mapping is immutable' THEN
-                    RAISE;
-                  END IF;
-                  IF (SELECT catalog_item_id FROM crm.store_offer WHERE tenant_id=t AND id=offer_id)
-                      IS DISTINCT FROM initial_sku
-                  THEN RAISE EXCEPTION 'Offer SKU changed'; END IF;
-              END;
-            END \$\$;"
+              UPDATE crm.store_offer SET catalog_item_id=NULL WHERE tenant_id=t AND id=offer_id;
+              RAISE EXCEPTION 'Offer SKU change incorrectly accepted';
+            EXCEPTION
+              WHEN raise_exception THEN
+                IF SQLERRM <> 'Offer catalog mapping is immutable' THEN
+                  RAISE;
+                END IF;
+            END;
+            IF (SELECT catalog_item_id FROM crm.store_offer WHERE tenant_id=t AND id=offer_id)
+                IS DISTINCT FROM initial_sku THEN
+              RAISE EXCEPTION 'Offer SKU changed';
+            END IF;
+          END $$;
+          SQL
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
