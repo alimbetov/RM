@@ -132,6 +132,32 @@ class InventoryTransferStocktakeQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test void transferAndReceiptCannotReuseTheSameTenantRequestKey() {
+        var f=fixture();
+        receive(f,f.source(),"namespaceSeed01",10);
+        var who=actor(f.actor());
+        var transfer=commands.transfer(who,f.tenant(),f.source(),f.destination(),
+                f.item(),BigDecimal.valueOf(3),"namespaceTransfer01");
+        assertThatThrownBy(()->commands.receive(who,f.tenant(),f.source(),f.item(),
+                "namespaceTransfer01",BigDecimal.ONE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("existing transfer");
+        receive(f,f.source(),"namespaceReceipt01",2);
+        assertThatThrownBy(()->commands.transfer(who,f.tenant(),f.source(),
+                f.destination(),f.item(),BigDecimal.ONE,"namespaceReceipt01"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("existing movement");
+        assertThat(commands.transfer(who,f.tenant(),f.source(),f.destination(),
+                f.item(),BigDecimal.valueOf(3),"namespaceTransfer01").id())
+                .isEqualTo(transfer.id());
+        assertThat(stock(f,f.source())).isEqualByComparingTo("9");
+        assertThat(stock(f,f.destination())).isEqualByComparingTo("3");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND request_key='namespaceTransfer01'
+                """,Integer.class,f.tenant())).isZero();
+    }
+
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
         var f=fixture();receive(f,f.source(),"stockQ7A0001",10);
         receive(f,f.destination(),"stockQ7B0001",10);
