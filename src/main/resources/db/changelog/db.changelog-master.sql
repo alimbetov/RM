@@ -2088,3 +2088,33 @@ CREATE TRIGGER trg_catalog_price_immutable
  FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_catalog_price_immutable ON crm.cat_price;
 --rollback DROP TRIGGER trg_catalog_item_event_immutable ON crm.cat_item_event;
+
+--changeset rm:0070-inventory-provenance
+-- Legacy evidence cannot truthfully acquire synthetic actor attribution.
+-- All new verified staff actions write actor; prior historical rows remain NULL.
+ALTER TABLE crm.inv_stock_movement ADD COLUMN actor_user_id UUID;
+ALTER TABLE crm.inv_stock_movement ADD COLUMN source_type VARCHAR(24);
+ALTER TABLE crm.inv_stock_movement ADD COLUMN source_id UUID;
+ALTER TABLE crm.inv_stock_movement ADD COLUMN business_reason_code VARCHAR(32);
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT fk_inv_movement_actor
+ FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id);
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT ck_inv_movement_source
+ CHECK(source_type IS NULL OR source_type IN ('STAFF','SALES_ORDER','TRANSFER','STOCKTAKE'));
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT ck_inv_movement_reason_detail
+ CHECK(business_reason_code IS NULL OR business_reason_code IN
+ ('DAMAGE','LOSS','EXPIRED','OTHER'));
+ALTER TABLE crm.inv_reservation_event ADD COLUMN actor_user_id UUID;
+ALTER TABLE crm.inv_reservation_event ADD CONSTRAINT fk_inv_reservation_event_actor
+ FOREIGN KEY(actor_user_id) REFERENCES public.iam_user_account(id);
+CREATE INDEX idx_inv_movement_tenant_item_history
+ ON crm.inv_stock_movement(tenant_id,item_id,recorded_at DESC,id DESC);
+--rollback DROP INDEX idx_inv_movement_tenant_item_history;
+--rollback ALTER TABLE crm.inv_reservation_event DROP CONSTRAINT fk_inv_reservation_event_actor;
+--rollback ALTER TABLE crm.inv_reservation_event DROP COLUMN actor_user_id;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_reason_detail;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT ck_inv_movement_source;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT fk_inv_movement_actor;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN business_reason_code;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN source_id;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN source_type;
+--rollback ALTER TABLE crm.inv_stock_movement DROP COLUMN actor_user_id;
