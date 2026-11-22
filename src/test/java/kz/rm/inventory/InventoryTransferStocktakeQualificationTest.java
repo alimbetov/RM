@@ -309,6 +309,10 @@ class InventoryTransferStocktakeQualificationTest {
         assertThat(second.run().inspectedPositions()).isEqualTo(2);
         assertThat(second.run().status()).isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
         assertThat(second.run().findingCount()).isEqualTo(1);
+        assertThat(reconciliationRuns.findings(who,f.tenant(),run.id(),0,10))
+                .hasSize(1);
+        assertThat(reconciliationRuns.findings(who,f.tenant(),run.id(),1,10))
+                .isEmpty();
         assertThat(reconciliationRuns.advance(who,f.tenant(),run.id(),1)
                 .run().inspectedPositions()).isEqualTo(2);
         assertThat(jdbc.queryForObject("""
@@ -328,6 +332,51 @@ class InventoryTransferStocktakeQualificationTest {
         var foreign=fixture();
         assertThatThrownBy(()->reconciliationRuns.get(who,foreign.tenant(),run.id()))
                 .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements() {
+        var f=fixture();
+        receive(f,f.source(),"ledgerBaselineR1501",1);
+        var at=java.sql.Timestamp.from(Instant.now());
+        // Synthetic append-only movements with exact arithmetic continuity.
+        jdbc.batchUpdate("""
+                INSERT INTO crm.inv_stock_movement
+                  (tenant_id,id,location_id,item_id,request_key,delta_quantity,
+                   balance_before,balance_after,occurred_at,recorded_at,reason_code)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                """,new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+                    @Override public int getBatchSize() { return 501; }
+                    @Override public void setValues(java.sql.PreparedStatement ps,int i)
+                            throws java.sql.SQLException {
+                        int before=i+1;
+                        ps.setObject(1,f.tenant());
+                        ps.setObject(2,UUID.randomUUID());
+                        ps.setObject(3,f.source());
+                        ps.setObject(4,f.item());
+                        ps.setString(5,"ledgerProofR15"+String.format("%04d",i));
+                        ps.setBigDecimal(6,BigDecimal.ONE);
+                        ps.setBigDecimal(7,BigDecimal.valueOf(before));
+                        ps.setBigDecimal(8,BigDecimal.valueOf(before+1));
+                        ps.setTimestamp(9,at);
+                        ps.setTimestamp(10,at);
+                        ps.setString(11,"RECEIPT");
+                    }
+                });
+        jdbc.update("""
+                UPDATE crm.inv_stock_balance SET on_hand=502,row_version=row_version+1
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,f.tenant(),f.source(),f.item());
+        var who=actor(f.actor());
+        var run=reconciliationRuns.start(who,f.tenant());
+        var step=reconciliationRuns.advance(who,f.tenant(),run.id(),20);
+        assertThat(step.run().status())
+                .isEqualTo(AuthenticatedInventoryReconciliationRuns.Status.COMPLETED);
+        assertThat(step.run().findingCount()).isZero();
+        assertThat(step.newFindings()).isEmpty();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement
+                WHERE tenant_id=? AND location_id=? AND item_id=?
+                """,Integer.class,f.tenant(),f.source(),f.item())).isEqualTo(502);
     }
 
     @Test void inverseConcurrentTransfersDoNotDeadlockAndConserveStock() throws Exception {
