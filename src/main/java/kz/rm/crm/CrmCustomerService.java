@@ -120,6 +120,7 @@ public class CrmCustomerService {
             INSERT INTO crm_pii.contact_secret(tenant_id,contact_id,name_envelope,email_envelope,phone_envelope)
             VALUES (?,?,?,?,?)
             """,tenantId,id,nameCipher,emailCipher,phoneCipher);
+        history.contact(tenantId,id,customerId,actorId,"CREATED",null,0);
         return new Contact(tenantId,id,customerId,name,email,phone);
     }
 
