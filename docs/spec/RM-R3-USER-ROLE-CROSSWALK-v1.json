@@ -283,8 +283,10 @@
         "test": "tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-CRM-WRITE"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -402,8 +404,10 @@
         "test": "crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-CRM-WRITE"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1044,8 +1048,10 @@
         "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-SALES-COMMAND"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1207,8 +1213,10 @@
         "test": "adjustmentIsAtomicAndIdempotent"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-INVENTORY-LEDGER"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1246,8 +1254,10 @@
       "serviceContractStatus": "REQUIRES_METHOD_REVIEW",
       "canonicalProof": null,
       "proofStatus": "MISSING_PROOF",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-SALES-COMMAND"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1285,8 +1295,10 @@
         "test": "transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-INVENTORY-LEDGER"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1464,8 +1476,10 @@
         "test": "verifiedMetadataBeginIsIdempotentAndTenantScoped"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-FILES-BYTES"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1502,8 +1516,10 @@
         "test": "scannerInfectedAndTimeoutFailClosedWithoutStoragePromotion"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-FILES-BYTES"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1676,8 +1692,10 @@
         "test": "typedCreateUpdateNoOpStaleAndUnicodeAreAuditedAtomically"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-ORG-LOCATION"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
@@ -1716,8 +1734,10 @@
         "test": "reservationsAndOpenStocktakeBlockDeactivation"
       },
       "proofStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
-      "userRoleCaseIds": [],
-      "userRoleCaseStatus": "NOT_RUN",
+      "userRoleCaseIds": [
+        "UR-R32-ORG-LOCATION"
+      ],
+      "userRoleCaseStatus": "DECLARED_NOT_EXECUTED_ON_THIS_SHA",
       "negativeDimensions": [
         "INACTIVE_ACTOR",
         "CROSS_TENANT",
