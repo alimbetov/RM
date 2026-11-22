@@ -69,14 +69,7 @@ class InventoryTransferService {
         UUID second=first.equals(from)?to:from;
         eligibility.requireTransferWarehouses(tenant,first,second,item);
         // Target zero position is opened inside the transaction; never for source.
-        jdbc.update("""
-                INSERT INTO crm.inv_stock_balance
-                  (tenant_id,location_id,item_id,on_hand,reserved,row_version)
-                SELECT ?,?,?,0,0,0 WHERE NOT EXISTS(
-                  SELECT 1 FROM crm.inv_stock_balance
-                  WHERE tenant_id=? AND location_id=? AND item_id=?
-                )
-                """,tenant,to,item,tenant,to,item);
+        eligibility.ensureZeroPosition(tenant,to,item);
         // Stable position lock order across opposite transfers.
         Position firstPosition=locked(tenant,first,item);
         Position secondPosition=locked(tenant,second,item);
