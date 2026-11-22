@@ -1,6 +1,6 @@
 # RM — SALES / AutoOrder Functional Depth R1: 12 проходов и ТЗ функциональной зрелости
 
-**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED / SPEC REFINED, **SPEC PROPOSED**, NOT IMPLEMENTED / NOT QUALIFIED. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
+**ID:** RM-SALES-AUTO-FUNC-R1. **Сервис:** SALES / AutoOrder (единый заказ продавца, не отдельные микросервисы). **Ветка:** `base_dev`. **Source-review baseline:** `169e4e2a0d641463984837ad76cea8aa70d9f265` (2026-11-22); перед реализацией обязательно повторно сверить HEAD. **Статус:** PASS 01/12 SOURCE REVIEWED; PASS 02/12 SOURCE TRACED; PASS 03/12 DDL SOURCE VERIFIED / MIGRATION SPEC PROPOSED, **NOT IMPLEMENTED / NOT QUALIFIED**. **Условия:** Feature Freeze, без REST-контроллеров, новых веток, merge `main`, production admission.
 
 ## 1. Бизнес-цель и конкретный результат
 
@@ -45,7 +45,7 @@
 |---:|---|---|---|
 | **01** | User journey + cross-domain source review | Разделы 1–4, gaps ниже, связанные реальные файлы/тесты | **SOURCE REVIEWED; SPEC PROPOSED** |
 | **02** | Каждый метод, DTO и пустые бизнес-ветви | [Подробный method trace pass 02](../reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md): method → SQL → actor → state → consumer → тест | **SOURCE TRACED / SPEC REFINED** |
-| 03 | Aggregate/schema/DDL | Existing populated PG + offer/SKU snapshot migration, hard FK constraints, legacy rows | OPEN |
+| **03** | Aggregate/schema/DDL | [Schema and populated-safe migration evidence](../reviews/RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03-2026-11-22.md): six actual tables, PK/FK/CHECK/index, legacy provenance | **DDL SOURCE VERIFIED / SPEC PROPOSED** |
 | 04 | Команды и state machine | confirm/cancel/fulfill + approved reject & status progression; legal transitions | OPEN |
 | 05 | Read model и история | seller detail/lines/events, buyer own detail, literal filters and stable paging | OPEN |
 | 06 | Idempotency/конкурентность | checkout same-key, cross-seller keys, revoke vs confirm, cancel vs fulfill, no double stock | OPEN |
@@ -188,3 +188,16 @@ New/extended typed adapter publishes a **qualified** offer only from `cat_item.s
 - **SA2-12 / read consistency:** отдельные запросы COUNT и page при конкуренции могут наблюдать разные состояния. Не выдавать stable ordering за атомарный snapshot.
 
 **Зафиксированы факты:** `AuthenticatedBuyerOrders.mine` защищён VerifiedActor, но список неограничен; seller `search` PII-free и page size 1..100, но нет get/lines/history; внутренние SALES команды не пустые и уже имеют негативные/конкурентные тесты. Pass 02 не добавляет нового рабочего кода и не меняет уровень 2/5.
+
+
+## 14. PASS 03 — PostgreSQL integrity / безопасный immutable SKU snapshot (2026-11-22)
+
+**Source SHA:** `1cc19715e82551ec22dd451427ea34b2a8b0c86d`. Полная проверка: [RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03](../reviews/RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03-2026-11-22.md). Изучены фактические changesets rm:0014/0019/0025/0026/0027/0028/0068/0069 для `store_offer`, `sales_order`, `sales_order_line`, `sales_checkout_receipt`, `sales_order_status_event`, `inv_stock_reservation`, включая соседние `store_front`, `cat_item`, stock balance, reservation evidence и их индексы.
+
+**Принято как проектное требование к следующей реализации (не действующий код):** добавить nullable `catalog_item_id_snapshot` на `sales_order_line` с tenant-composite FK; новый checkout должен записывать непустой SKU из PUBLISHED PRODUCT catalog и immutable price/title; SALES confirm и INVENTORY reserve обязаны читать snapshot, а не живой `store_offer.catalog_item_id`. Нельзя автоматически backfill исторические PLACED по текущему offer; значение reservation.item_id доказательно характеризует фактический резерв, но не автоматически SKU в момент checkout.
+
+**Принцип миграции:** read-only preflight/pg_catalog → additive nullable schema → writer/consumer cutover с запретом старых NULL writers → строго доказательный backfill либо исторический NULL → independent populated-DB qualification → только затем решение о DB NOT NULL. Не редактировать старые Liquibase changesets, не удалять historical orders, не использовать COALESCE(snapshot,current offer).
+
+**Гарантии БД:** tenant-composite FK, CHECK quantity/price/status, unique receipt и unique reservation per line, linked reservation/stock, допустимая иммутабельность событий. **Гарантии Java:** active warehouse/catalog state, VerifiedActor/RBAC, single currency, total math, state machine, whole-line reserves, transaction lock order, idempotency. Существующий `sales_order_status_event` пока без immutable PG trigger, а `reservation.item_id` не связан FK с SKU заказа — оба пробела отмечены.
+
+**Новые тестовые требования:** SALE-DB03-01..10 в evidence report. Нельзя считать их существующими или GREEN: это проектируемые квалификационные проверки. **Статус PASS 03 = SOURCE VERIFIED/SPEC PROPOSED; runtime не менялся, зрелость остаётся 2/5.** Следующий проход **04/12 — команды и state transitions**.
