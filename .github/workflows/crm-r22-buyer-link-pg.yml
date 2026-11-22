@@ -54,7 +54,7 @@ jobs:
           cache: maven
       - name: Qualify buyer link and CRM regressions on PostgreSQL
         run: mvn -B -ntp -Dtest=CrmBuyerLinkQualificationTest,CrmInteractionQualificationTest,CrmR1aQualificationTest,IamInitialEmailRegistrationQualificationTest,IamEmailChangeQualificationTest,IamEmailChangeOrderHistoryQualificationTest test
-      - name: Require all twenty-three buyer deletion and email admission race tests with no errors or skips
+      - name: Require all twenty-five buyer and deletion admission tests with no errors or skips
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET,pathlib,json
@@ -81,7 +81,9 @@ jobs:
                     'postgresBothCommitOrdersForDeleteVersusConfirm',
                     'postgresDeletionOutboxFailureRollsBackIdentityScrubAndCanRetry',
                     'postgresBothCommitOrdersForDeleteVersusEmailConfirmation',
-                    'postgresBothCommitOrdersForDeleteVersusCheckoutEmailProof'}
+                    'postgresBothCommitOrdersForDeleteVersusCheckoutEmailProof',
+                    'deletedEmailAddressCannotRestoreOldBuyerIdentity',
+                    'postgresBothCommitOrdersForDeleteVersusEmailDeliveryAdmission'}
           assert files,'No CRM Surefire reports'
           cases=[c for f in files for c in ET.parse(f).getroot().iter('testcase')]
           names={c.get('name') for c in cases}
