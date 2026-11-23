@@ -67,7 +67,7 @@ class SkuFxSellerApprovalQualificationTest {
     @AfterEach void resetFxClock() { clock.reset(); }
 
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,
-                           VerifiedActor actor,UUID buyer) {}
+                           VerifiedActor actor,UUID buyer,VerifiedActor ownerActor) {}
     private Fixture fixture() {
         var owner=users.saveAndFlush(new UserAccountEntity(
                 UUID.randomUUID(),"fxowner-"+UUID.randomUUID(),"FX owner"));
@@ -137,7 +137,7 @@ class SkuFxSellerApprovalQualificationTest {
                 .subject(sellerSubject).issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(600)).build();
         VerifiedActor actor=new OidcActorResolver(sellerDecoder,users).resolve("fx-staff");
-        return new Fixture(tenant,offer,item,slug,actor,buyer.getId());
+        return new Fixture(tenant,offer,item,slug,actor,buyer.getId(),ownerActor);
     }
 
     private LocalDate effectiveDate() {
@@ -766,7 +766,7 @@ class SkuFxSellerApprovalQualificationTest {
         var c=candidate(f,rate(effectiveDate(),"580"));
         UUID sourceId=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,
                 effectiveDate());
-        calendarEvidence.enableForTenant(f.actor(),f.tenant(),sourceId,0);
+        calendarEvidence.enableForTenant(f.ownerActor(),f.tenant(),sourceId,0);
         assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
                 "r2b-calendar-missing-001"))
                 .hasMessage("CUR_R2B_CALENDAR_EVIDENCE_MISSING");
