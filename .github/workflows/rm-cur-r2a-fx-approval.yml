@@ -95,7 +95,7 @@ jobs:
       - name: Exact-SHA checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: PostgreSQL seller FX evidence and snapshot qualification
-        run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest test
+        run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest,NbrkTradingCalendarPolicyTest test
       - name: Require 36 executed cases without skips
         run: |
           python3 - <<'PY'
