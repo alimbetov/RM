@@ -1424,6 +1424,27 @@ class TaskServiceQualificationTest {
                 WHERE tenant_id=? AND snapshot_id=?
                 """,Integer.class,t.id(),unsealed)).isZero();
         }finally{release.countDown();}
+
+        // Another 0153 invariant: a header cannot be sealed with a count
+        // different from the actual immutable item membership.
+        UUID wrongCount=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.task_reconciliation_snapshot
+              (tenant_id,id,interaction_id,created_by,request_key,captured_at,item_count)
+            VALUES (?,?,?,?,?,CURRENT_TIMESTAMP,1)
+            """,t.id(),wrongCount,source,t.manager().userId(),
+            "task-r32-invalid-count-001");
+        assertThatThrownBy(()->jdbc.update("""
+            INSERT INTO crm.task_reconciliation_snapshot_seal
+              (tenant_id,snapshot_id,sealed_at,items_sha256)
+            VALUES (?,?,CURRENT_TIMESTAMP,?)
+            """,t.id(),wrongCount,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
+            .isInstanceOf(Exception.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot_seal
+            WHERE tenant_id=? AND snapshot_id=?
+            """,Integer.class,t.id(),wrongCount)).isZero();
     }
 
     @Test void t47PostgresqlConcurrentSnapshotSameRequestCommitsSingleSealedManifest()
