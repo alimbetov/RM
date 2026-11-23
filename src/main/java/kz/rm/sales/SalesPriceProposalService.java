@@ -2,6 +2,7 @@ package kz.rm.sales;
 
 import jakarta.annotation.PostConstruct;
 import kz.rm.iam.DomainPermission;
+import kz.rm.organization.CommerceCurrencyAdmission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -50,9 +51,16 @@ public class SalesPriceProposalService {
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
+    private final CommerceCurrencyAdmission currencyAdmission;
     private String userLockSql;
     public SalesPriceProposalService(JdbcTemplate jdbc,TenantAuthorization authorization){
+        this(jdbc,authorization,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public SalesPriceProposalService(JdbcTemplate jdbc,TenantAuthorization authorization,
+                                     CommerceCurrencyAdmission currencyAdmission){
         this.jdbc=jdbc;this.authorization=authorization;
+        this.currencyAdmission=currencyAdmission;
     }
     @PostConstruct
     void configureUserLock() {
@@ -292,6 +300,7 @@ public class SalesPriceProposalService {
                 (sellerAlreadyFenced?"":"FOR UPDATE");
         String status=jdbc.query(sql,rs->rs.next()?rs.getString(1):null,tenant);
         if(!"ACTIVE".equals(status))throw new IllegalStateException("SELLER_INACTIVE");
+        if(currencyAdmission!=null)currencyAdmission.lockKzMarket(tenant);
         String storefront=jdbc.query("""
                 SELECT state FROM crm.store_front WHERE tenant_id=? FOR UPDATE
                 """,rs->rs.next()?rs.getString(1):null,tenant);
@@ -309,6 +318,7 @@ public class SalesPriceProposalService {
         return o;
     }
     private void published(UUID tenant,UUID offerId,Offer offer) {
+        if(currencyAdmission!=null)currencyAdmission.assertKzt(offer.currency());
         String storefront=jdbc.queryForObject("""
                 SELECT state FROM crm.store_front WHERE tenant_id=?
                 """,String.class,tenant);
