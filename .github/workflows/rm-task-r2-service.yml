@@ -94,7 +94,7 @@ jobs:
           p=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskServiceQualificationTest.xml')
           assert p.is_file(),p
           cases=list(E.parse(p).getroot().iter('testcase'))
-          assert len(cases)==5,len(cases)
+          assert len(cases)==8,len(cases)
           assert not any(c.find(x) is not None for c in cases
                          for x in ('failure','error','skipped'))
           PY
