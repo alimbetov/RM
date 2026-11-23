@@ -28,6 +28,9 @@ class CommerceCurrencyAdmissionQualificationTest {
     @Autowired CommerceCurrencyAdmission admission;
     @Autowired kz.rm.storefront.PublishedOfferCardQuery cards;
     @Autowired kz.rm.iam.UserAccountRepository users;
+    @Autowired kz.rm.iam.OrganizationMembershipRepository memberships;
+    @Autowired kz.rm.iam.VerifiedTenantRoleCommands roles;
+    @Autowired kz.rm.storefront.StorefrontOfferService sellerOffers;
     @Autowired PlatformTransactionManager txManager;
     @Autowired DataSource dataSource;
     @Autowired kz.rm.iam.OrganizationRepository organizations;
@@ -71,6 +74,40 @@ class CommerceCurrencyAdmissionQualificationTest {
                 """,tenant,now,now);
         }
         return new Store(tenant,offer,slug);
+    }
+
+    private kz.rm.iam.VerifiedActor actor(UUID user) {
+        String subject=jdbc.queryForObject("""
+            SELECT external_subject FROM public.iam_user_account WHERE id=?
+            """,String.class,user);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600)).build();
+        return new kz.rm.iam.OidcActorResolver(decoder,users).resolve("cur-r1c-synthetic");
+    }
+
+    private kz.rm.iam.VerifiedActor seller(Store store) {
+        UUID org=jdbc.queryForObject("""
+            SELECT organization_id FROM public.iam_workspace WHERE id=?
+            """,UUID.class,store.tenant());
+        UUID owner=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(
+                UUID.randomUUID(),"cur-r1c-owner-"+UUID.randomUUID(),"Owner")).getId();
+        UUID staff=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(
+                UUID.randomUUID(),"cur-r1c-staff-"+UUID.randomUUID(),"Staff")).getId();
+        memberships.saveAndFlush(new kz.rm.iam.OrganizationMembershipEntity(
+                UUID.randomUUID(),org,owner,kz.rm.iam.OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new kz.rm.iam.OrganizationMembershipEntity(
+                UUID.randomUUID(),org,staff,kz.rm.iam.OrganizationMembershipEntity.Role.MEMBER));
+        var ownerActor=actor(owner);
+        var role=roles.createRole(ownerActor,store.tenant(),
+                "CURR1C"+UUID.randomUUID().toString().replace("-","").substring(0,12),
+                "Currency qualification");
+        roles.grant(ownerActor,store.tenant(),role.id(),
+                kz.rm.iam.DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.assign(ownerActor,store.tenant(),staff,role.id());
+        roles.enable(ownerActor,store.tenant());
+        return actor(staff);
     }
 
     private String qr(Store store) {
@@ -187,6 +224,75 @@ class CommerceCurrencyAdmissionQualificationTest {
         });
         assertThatThrownBy(()->admission.assertKzt("USD"))
                 .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+    }
+
+    @Test void curc10PostgresThreeWayCheckoutPriceAndPolicyRaceIsAtomic() throws Exception {
+        try(var db=dataSource.getConnection()) {
+            Assumptions.assumeTrue(db.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Store store=setup("KZT",true);
+        var seller=seller(store);
+        var barrier=new CountDownLatch(1);
+        var tx=new TransactionTemplate(txManager);
+        try(var pool=Executors.newFixedThreadPool(3)) {
+            var checkout=pool.submit(()->{
+                barrier.await();
+                try { return checkout(store).order().orderId(); }
+                catch(IllegalStateException declined) {
+                    if(!"CUR_PUBLIC_POLICY_NOT_ACTIVE".equals(declined.getMessage()))
+                        throw declined;
+                    return (UUID)null;
+                }
+            });
+            var price=pool.submit(()->{
+                barrier.await();
+                try {
+                    return sellerOffers.approveSuggestedKzt(seller,store.tenant(),store.offer(),
+                            new BigDecimal("130.0000"),0).rowVersion();
+                } catch(IllegalStateException declined) {
+                    if(!"CUR_PUBLIC_POLICY_NOT_ACTIVE".equals(declined.getMessage()))
+                        throw declined;
+                    return -1L;
+                }
+            });
+            var policy=pool.submit(()->{
+                barrier.await();
+                return tx.execute(status->{
+                    jdbc.queryForObject("""
+                        SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE
+                        """,UUID.class,store.tenant());
+                    jdbc.update("""
+                        UPDATE public.tenant_currency_policy
+                        SET status='REVIEW_REQUIRED',row_version=row_version+1
+                        WHERE tenant_id=?
+                        """,store.tenant());
+                    return 1;
+                });
+            });
+            barrier.countDown();
+            UUID orderId=checkout.get(12,TimeUnit.SECONDS);
+            long priceVersion=price.get(12,TimeUnit.SECONDS);
+            assertThat(policy.get(12,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.tenant_currency_policy WHERE tenant_id=?
+                """,String.class,store.tenant())).isEqualTo("REVIEW_REQUIRED");
+            assertThat(priceVersion).isIn(-1L,1L);
+            Integer revisions=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,store.tenant(),store.offer());
+            assertThat(revisions).isIn(0,1);
+            assertThat(revisions).isEqualTo(priceVersion==1 ? 1 : 0);
+            assertThat(orderCount(store)).isIn(0,1);
+            if(orderId!=null) {
+                BigDecimal snap=jdbc.queryForObject("""
+                    SELECT unit_price_snapshot FROM crm.sales_order_line
+                    WHERE tenant_id=? AND order_id=?
+                    """,BigDecimal.class,store.tenant(),orderId);
+                assertThat(snap).isIn(new BigDecimal("125.2500"),new BigDecimal("130.0000"));
+            }
+        }
     }
 
     @Test void curc06PostgresPolicyChangeVsCheckoutLinearizes() throws Exception {
