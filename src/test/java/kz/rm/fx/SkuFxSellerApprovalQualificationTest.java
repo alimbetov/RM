@@ -53,6 +53,7 @@ class SkuFxSellerApprovalQualificationTest {
         private final AtomicReference<Instant> current=new AtomicReference<>(Instant.now());
         void advance(Duration duration) { current.updateAndGet(t->t.plus(duration)); }
         void reset() { current.set(Instant.now()); }
+        void set(Instant at) { current.set(at); }
         @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
         @Override public Clock withZone(java.time.ZoneId zone) { return Clock.fixed(instant(),zone); }
         @Override public Instant instant() { return current.get(); }
@@ -610,6 +611,23 @@ class SkuFxSellerApprovalQualificationTest {
         } finally {
             release.countDown();
         }
+    }
+
+    @Test void r2b09WeekendGraceUsesPublishedValidDateAndInjectedAlmatyClock() {
+        // This verifies a configured calendar-day allowance, NOT an invented
+        // official holiday schedule or inferred NBRK publication date.
+        clock.set(Instant.parse("2026-11-22T08:00:00Z")); // Sunday in Almaty
+        var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("1000"),new BigDecimal("100"),
+                new BigDecimal("1"),new BigDecimal("100000"),2,604800,0);
+        UUID rate=rate(LocalDate.of(2026,11,20),"565");
+        var c=candidate(f,rate);
+        clock.advance(Duration.ofDays(1)); // Monday; same immutable evidence now 3 days old
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
+                "r2b-weekend-001")).hasMessage("CUR_R2B_RATE_TOO_OLD");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
     }
 
 }
