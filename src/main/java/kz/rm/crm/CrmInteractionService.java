@@ -35,10 +35,13 @@ public class CrmInteractionService {
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
+    private final CrmCancellationReviewIntentPort cancellationIntentPort;
 
-    public CrmInteractionService(JdbcTemplate jdbc, TenantAuthorization authorization) {
+    public CrmInteractionService(JdbcTemplate jdbc, TenantAuthorization authorization,
+                                 CrmCancellationReviewIntentPort cancellationIntentPort) {
         this.jdbc=jdbc;
         this.authorization=authorization;
+        this.cancellationIntentPort=cancellationIntentPort;
     }
 
     private UUID admit(VerifiedActor actor, UUID tenant, DomainPermission permission) {
@@ -195,7 +198,9 @@ public class CrmInteractionService {
                 "=?,row_version=row_version+1,updated_at=? WHERE tenant_id=? AND id=? AND row_version=?",
                 value,Timestamp.from(Instant.now()),tenant,id,expectedVersion);
         if(updated!=1) throw new IllegalStateException("Concurrent interaction update");
-        event(tenant,id,actorId,action,expectedVersion,expectedVersion+1);
+        CrmCancellationEventRef cancellationEvent =
+                event(tenant,id,actorId,action,expectedVersion,expectedVersion+1);
+        if(cancellationEvent!=null) cancellationIntentPort.onCancelled(cancellationEvent);
         return load(tenant,id);
     }
 
@@ -253,14 +258,19 @@ public class CrmInteractionService {
             throw new SecurityException("Responsible must be active member of selected tenant");
     }
 
-    private void event(UUID tenant,UUID id,UUID actor,String action,Long previous,long next) {
+    private CrmCancellationEventRef event(UUID tenant,UUID id,UUID actor,
+                                          String action,Long previous,long next) {
+        UUID eventId=UUID.randomUUID();
+        Timestamp timestamp=Timestamp.from(Instant.now());
         jdbc.update("""
                 INSERT INTO crm.customer_interaction_event
                   (tenant_id,id,interaction_id,actor_id,action_code,
                    previous_version,new_version,occurred_at)
                 VALUES (?,?,?,?,?,?,?,?)
-                """,tenant,UUID.randomUUID(),id,actor,action,previous,next,
-                Timestamp.from(Instant.now()));
+                """,tenant,eventId,id,actor,action,previous,next,timestamp);
+        return "CANCELLED".equals(action)
+                ? new CrmCancellationEventRef(tenant,id,eventId,timestamp.toInstant(),next)
+                : null;
     }
 
     private static byte[] digest(String value) {
