@@ -621,4 +621,25 @@ class TaskServiceQualificationTest {
             .isEqualTo(interaction);
     }
 
+    @Test void t22CrmFollowupRetryAfterSourceClosureReturnsOriginalTask() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var original=followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-crm-closed-retry-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction
+            SET status='COMPLETED',row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var retried=followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-crm-closed-retry-001");
+        assertThat(retried.id()).isEqualTo(original.id());
+        assertThatThrownBy(()->followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-crm-closed-new-001"))
+            .hasMessage("TASK_CRM_INTERACTION_NOT_ACTIVE");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_crm_followup
+            WHERE tenant_id=? AND interaction_id=?
+            """,Integer.class,t.id(),source)).isEqualTo(1);
+    }
+
 }
