@@ -4279,3 +4279,31 @@ CREATE UNIQUE INDEX uq_task_event_command_request
 --rollback DROP INDEX crm.uq_task_event_command_request;
 --rollback ALTER TABLE crm.task_event DROP COLUMN request_sha256;
 --rollback ALTER TABLE crm.task_event DROP COLUMN request_key;
+
+
+--changeset rm:0144-task-r2-crm-followup
+-- One task root. CRM interaction linkage is tenant-qualified and immutable.
+CREATE TABLE crm.task_crm_followup (
+ tenant_id UUID NOT NULL,
+ task_id UUID NOT NULL,
+ interaction_id UUID NOT NULL,
+ created_by UUID NOT NULL,
+ linked_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_task_crm_followup PRIMARY KEY(tenant_id,task_id),
+ CONSTRAINT fk_task_followup_task FOREIGN KEY(tenant_id,task_id)
+  REFERENCES crm.task_item(tenant_id,id),
+ CONSTRAINT fk_task_followup_interaction FOREIGN KEY(tenant_id,interaction_id)
+  REFERENCES crm.customer_interaction(tenant_id,id),
+ CONSTRAINT fk_task_followup_actor FOREIGN KEY(created_by)
+  REFERENCES public.iam_user_account(id)
+);
+CREATE INDEX idx_task_crm_followup_interaction
+ ON crm.task_crm_followup(tenant_id,interaction_id,task_id);
+--rollback DROP INDEX crm.idx_task_crm_followup_interaction;
+--rollback DROP TABLE crm.task_crm_followup;
+
+--changeset rm:0145-task-r2-crm-followup-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_task_crm_followup_immutable
+ BEFORE UPDATE OR DELETE ON crm.task_crm_followup
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_task_crm_followup_immutable ON crm.task_crm_followup;
