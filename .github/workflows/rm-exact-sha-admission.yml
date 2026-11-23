@@ -53,7 +53,8 @@ jobs:
               {name:'CRM R1.2 Populated PostgreSQL Upgrade Qualification',artifacts:['crm-r12-populated-upgrade-surefire']},
               {name:'INVENTORY 0081 Populated PostgreSQL Upgrade Qualification',artifacts:['inventory-0081-populated-postgresql']},
               {name:'SALES 08.4 Populated PostgreSQL Upgrade Qualification',artifacts:['sales-084-populated-postgresql']},
-              {name:'RustFS Real Infrastructure E2E',artifacts:['rustfs-real-infra-e2e-surefire']}
+              {name:'RustFS Real Infrastructure E2E',artifacts:['rustfs-real-infra-e2e-surefire']},
+              {name:'RM TASK R2 Service Qualification',artifacts:['rm-task-h2-'+sha,'rm-task-postgresql-'+sha]}
             ];
             const manifest = {
               schema:'RM-QA-01B/v2',repository:owner+'/'+repo,branch,sha,
