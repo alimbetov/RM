@@ -4175,3 +4175,38 @@ ALTER TABLE crm.sku_fx_seller_decision ADD CONSTRAINT fk_fx_decision_calendar_so
  FOREIGN KEY(calendar_source_id) REFERENCES crm.fx_calendar_source_evidence(id);
 --rollback ALTER TABLE crm.sku_fx_seller_decision DROP CONSTRAINT fk_fx_decision_calendar_source;
 --rollback ALTER TABLE crm.sku_fx_seller_decision DROP COLUMN calendar_source_id;
+
+
+--changeset rm:0138-cur-r2b4-calendar-source-seal
+-- One immutable manifest commits exact day set; source-day additions after seal forbidden.
+CREATE TABLE crm.fx_calendar_source_seal (
+ source_id UUID NOT NULL PRIMARY KEY,
+ day_count INTEGER NOT NULL,
+ days_sha256 CHAR(64) NOT NULL,
+ sealed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_fx_calendar_seal_source FOREIGN KEY(source_id)
+  REFERENCES crm.fx_calendar_source_evidence(id),
+ CONSTRAINT ck_fx_calendar_seal_count CHECK(day_count BETWEEN 1 AND 366),
+ CONSTRAINT ck_fx_calendar_seal_sha CHECK(length(days_sha256)=64)
+);
+--rollback DROP TABLE crm.fx_calendar_source_seal;
+
+--changeset rm:0139-cur-r2b4-sealed-day-protection dbms:postgresql splitStatements:false
+CREATE OR REPLACE FUNCTION crm.fx_calendar_reject_late_day_insert()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF EXISTS (SELECT 1 FROM crm.fx_calendar_source_seal WHERE source_id=NEW.source_id) THEN
+  RAISE EXCEPTION 'CUR_R2B_CALENDAR_SOURCE_SEALED';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_cur_r2b4_sealed_day_insert
+ BEFORE INSERT ON crm.fx_calendar_day_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_calendar_reject_late_day_insert();
+CREATE TRIGGER trg_cur_r2b4_calendar_seal_immutable
+ BEFORE UPDATE OR DELETE ON crm.fx_calendar_source_seal
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_cur_r2b4_calendar_seal_immutable ON crm.fx_calendar_source_seal;
+--rollback DROP TRIGGER trg_cur_r2b4_sealed_day_insert ON crm.fx_calendar_day_evidence;
+--rollback DROP FUNCTION crm.fx_calendar_reject_late_day_insert();
