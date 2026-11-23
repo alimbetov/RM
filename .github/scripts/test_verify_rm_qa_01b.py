@@ -64,9 +64,9 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                             "durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements",
                         ],
                     }
-                else:
+                elif artifact != "kms-postgres-surefire":
                     for suite in gate.SUITES.get(workflow, ()):
-                        suite_cases[suite] = ["qualified"]
+                        suite_cases.setdefault(suite, ["qualified"])
                 for suite in gate.SUITES.get(workflow, ()):
                     suite_cases.setdefault(suite, ["qualified"])
                 # Positive fixtures must include every named mandatory case.
