@@ -121,22 +121,42 @@ public class TaskService {
 
     @Transactional
     public Task start(VerifiedActor actor,UUID tenant,UUID id,long version) {
-        return move(actor,tenant,id,version,TaskState.OPEN,TaskState.IN_PROGRESS,"STARTED");
+        return start(actor,tenant,id,version,null);
+    }
+
+    @Transactional
+    public Task start(VerifiedActor actor,UUID tenant,UUID id,long version,String requestKey) {
+        return move(actor,tenant,id,version,TaskState.OPEN,TaskState.IN_PROGRESS,"STARTED",requestKey);
     }
 
     @Transactional
     public Task block(VerifiedActor actor,UUID tenant,UUID id,long version) {
-        return move(actor,tenant,id,version,TaskState.IN_PROGRESS,TaskState.BLOCKED,"BLOCKED");
+        return block(actor,tenant,id,version,null);
+    }
+
+    @Transactional
+    public Task block(VerifiedActor actor,UUID tenant,UUID id,long version,String requestKey) {
+        return move(actor,tenant,id,version,TaskState.IN_PROGRESS,TaskState.BLOCKED,"BLOCKED",requestKey);
     }
 
     @Transactional
     public Task resume(VerifiedActor actor,UUID tenant,UUID id,long version) {
-        return move(actor,tenant,id,version,TaskState.BLOCKED,TaskState.IN_PROGRESS,"RESUMED");
+        return resume(actor,tenant,id,version,null);
+    }
+
+    @Transactional
+    public Task resume(VerifiedActor actor,UUID tenant,UUID id,long version,String requestKey) {
+        return move(actor,tenant,id,version,TaskState.BLOCKED,TaskState.IN_PROGRESS,"RESUMED",requestKey);
     }
 
     @Transactional
     public Task complete(VerifiedActor actor,UUID tenant,UUID id,long version) {
-        return move(actor,tenant,id,version,TaskState.IN_PROGRESS,TaskState.COMPLETED,"COMPLETED");
+        return complete(actor,tenant,id,version,null);
+    }
+
+    @Transactional
+    public Task complete(VerifiedActor actor,UUID tenant,UUID id,long version,String requestKey) {
+        return move(actor,tenant,id,version,TaskState.IN_PROGRESS,TaskState.COMPLETED,"COMPLETED",requestKey);
     }
 
     @Transactional
@@ -151,17 +171,41 @@ public class TaskService {
         return load(tenant,id);
     }
 
+    private record CommandReceipt(UUID taskId,String fingerprint,long version) {}
+
     private Task move(VerifiedActor actor,UUID tenant,UUID id,long version,
-                      TaskState from,TaskState to,String action) {
+                      TaskState from,TaskState to,String action,String requestKey) {
         UUID employee=admit(actor,tenant,DomainPermission.TASK_EXECUTE);
-        Task before=lockTask(tenant,id,version);
+        if(version<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        if(requestKey!=null && !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
+            throw new IllegalArgumentException("TASK_REQUEST_KEY_INVALID");
+        String fingerprint=requestKey==null?null:
+            sha(tenant+"|"+id+"|"+action+"|"+version+"|"+from+"|"+to);
+        // Lock canonical task before looking up the receipt. Concurrent same-task
+        // retries therefore observe the first transaction's committed event.
+        Task before=lockTaskCurrent(tenant,id);
+        if(requestKey!=null) {
+            CommandReceipt receipt=jdbc.query("""
+                SELECT task_id,request_sha256,new_version FROM crm.task_event
+                WHERE tenant_id=? AND actor_user_id=? AND request_key=?
+                """,rs->rs.next()?new CommandReceipt(rs.getObject(1,UUID.class),
+                    rs.getString(2),rs.getLong(3)):null,tenant,employee,requestKey);
+            if(receipt!=null) {
+                if(!id.equals(receipt.taskId())||!fingerprint.equals(receipt.fingerprint()))
+                    throw new IllegalStateException("TASK_REQUEST_REPLAY_CONFLICT");
+                if(before.version()!=receipt.version())
+                    throw new IllegalStateException("TASK_RECEIPT_SUPERSEDED");
+                return before;
+            }
+        }
+        if(before.version()!=version)throw new IllegalStateException("TASK_STALE_VERSION");
         if(!employee.equals(before.assigneeUserId()))
             throw new SecurityException("TASK_ASSIGNEE_ONLY");
         if(before.state()!=from)
             throw new IllegalStateException("TASK_TRANSITION_INVALID");
         update(tenant,id,version,"status",to.name());
         event(tenant,id,employee,action,from,to,version,version+1,
-            before.assigneeUserId(),before.assigneeUserId());
+            before.assigneeUserId(),before.assigneeUserId(),requestKey,fingerprint);
         return load(tenant,id);
     }
 
@@ -213,14 +257,19 @@ public class TaskService {
     }
 
     private Task lockTask(UUID tenant,UUID id,long version) {
-        if(id==null||version<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        if(version<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        Task task=lockTaskCurrent(tenant,id);
+        if(task.version()!=version)throw new IllegalStateException("TASK_STALE_VERSION");
+        return task;
+    }
+
+    private Task lockTaskCurrent(UUID tenant,UUID id) {
+        if(id==null)throw new IllegalArgumentException("TASK_ID_REQUIRED");
         List<UUID> ids=jdbc.query("""
             SELECT id FROM crm.task_item WHERE tenant_id=? AND id=? FOR UPDATE
             """,(rs,n)->rs.getObject(1,UUID.class),tenant,id);
         if(ids.isEmpty())throw new SecurityException("TASK_NOT_ACCESSIBLE");
-        Task task=load(tenant,id);
-        if(task.version()!=version)throw new IllegalStateException("TASK_STALE_VERSION");
-        return task;
+        return load(tenant,id);
     }
 
     private Task load(UUID tenant,UUID id) {
@@ -272,15 +321,24 @@ public class TaskService {
     private void event(UUID tenant,UUID id,UUID user,String action,
                        TaskState before,TaskState after,Long version,long next,
                        UUID previousAssignee,UUID nextAssignee) {
+        event(tenant,id,user,action,before,after,version,next,
+              previousAssignee,nextAssignee,null,null);
+    }
+
+    private void event(UUID tenant,UUID id,UUID user,String action,
+                       TaskState before,TaskState after,Long version,long next,
+                       UUID previousAssignee,UUID nextAssignee,
+                       String requestKey,String fingerprint) {
         jdbc.update("""
             INSERT INTO crm.task_event
               (tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
                previous_version,new_version,occurred_at,
-               previous_assignee_user_id,next_assignee_user_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+               previous_assignee_user_id,next_assignee_user_id,request_key,request_sha256)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,tenant,UUID.randomUUID(),id,user,action,
             before==null?null:before.name(),after.name(),version,next,
-            Timestamp.from(clock.instant()),previousAssignee,nextAssignee);
+            Timestamp.from(clock.instant()),previousAssignee,nextAssignee,
+            requestKey,fingerprint);
     }
 
     private static String sha(String input) {
