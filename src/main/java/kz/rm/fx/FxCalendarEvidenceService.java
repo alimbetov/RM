@@ -125,8 +125,10 @@ public class FxCalendarEvidenceService {
             jdbc.query("""
                 SELECT instrument,trading_date,trading_status
                 FROM crm.fx_calendar_day_evidence WHERE source_id=?
-                """,rs->stored.put(rs.getString(1)+"|"+rs.getDate(2).toLocalDate(),
-                        rs.getString(3)),previous);
+                """,rs->{
+                stored.put(rs.getString(1)+"|"+rs.getDate(2).toLocalDate(),
+                        rs.getString(3));
+            },previous);
             if(!stored.equals(reviewed))
                 throw new IllegalStateException("CUR_R2B_CALENDAR_REPLAY_CONFLICT");
             return previous;
