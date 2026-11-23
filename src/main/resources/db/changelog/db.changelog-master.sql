@@ -4315,3 +4315,22 @@ ALTER TABLE crm.task_event ADD COLUMN previous_due_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE crm.task_event ADD COLUMN next_due_at TIMESTAMP WITH TIME ZONE;
 --rollback ALTER TABLE crm.task_event DROP COLUMN next_due_at;
 --rollback ALTER TABLE crm.task_event DROP COLUMN previous_due_at;
+
+
+--changeset rm:0147-task-r3-cancellation-queue-lifecycle
+-- Extend the single canonical task aggregate; never delete or overwrite task evidence.
+ALTER TABLE crm.task_item DROP CONSTRAINT ck_task_status;
+ALTER TABLE crm.task_item ADD CONSTRAINT ck_task_status CHECK
+ (status IN ('OPEN','IN_PROGRESS','BLOCKED','COMPLETED','ARCHIVED','QUEUED','CANCELLED'));
+ALTER TABLE crm.task_event ADD COLUMN reason_code VARCHAR(32);
+ALTER TABLE crm.task_event ADD CONSTRAINT ck_task_event_reason CHECK
+ (reason_code IS NULL OR reason_code IN
+  ('MANAGER_CANCELLED','SOURCE_CANCELLED','RETURNED_TO_QUEUE'));
+CREATE INDEX idx_task_queue ON crm.task_item(tenant_id,status,due_at,id);
+--rollback DROP INDEX crm.idx_task_queue;
+--rollback ALTER TABLE crm.task_event DROP CONSTRAINT ck_task_event_reason;
+--rollback ALTER TABLE crm.task_event DROP COLUMN reason_code;
+--rollback ALTER TABLE crm.task_item DROP CONSTRAINT ck_task_status;
+-- NOTE: downgrade of the status constraint requires zero QUEUED/CANCELLED rows.
+--rollback ALTER TABLE crm.task_item ADD CONSTRAINT ck_task_status CHECK
+--rollback  (status IN ('OPEN','IN_PROGRESS','BLOCKED','COMPLETED','ARCHIVED'));
