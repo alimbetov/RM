@@ -12,7 +12,7 @@ A CRM employee creates an OPEN customer interaction. An authorized manager with 
 - Additive Liquibase 0144: `crm.task_crm_followup(tenant_id, task_id, interaction_id, created_by, linked_at)`. Composite FKs `(tenant_id,task_id)` and `(tenant_id,interaction_id)`, unique `(tenant_id,task_id)`; one task has at most one originating interaction but one interaction may have many tasks.
 - Liquibase 0145: PostgreSQL immutable source link trigger. No update/delete of linked history.
 - `TaskCrmFollowupService.create` requires verified actor, current `TASK_MANAGE` and `CRM_READ`; locks OPEN CRM interaction with ACTIVE customer `FOR UPDATE`, invokes existing `TaskService.create` in the **same transaction**, then writes the immutable link. CRM completion/cancellation cannot interleave after the business admission and before commit.
-- A retry with the same task request key and same interaction returns the existing canonical task/link without new event; request key reused for another interaction rejects `TASK_CRM_LINK_REPLAY_CONFLICT`.
+- A retry with the same task request key and same interaction returns the existing canonical task/link without new event, **even if the interaction has since been completed/cancelled**; a new request on a terminal interaction fails. A request key reused for another interaction rejects `TASK_CRM_LINK_REPLAY_CONFLICT`.
 - `getMine` requires both `TASK_READ` (owner or current assignee) and `CRM_READ`. It does not expose the interaction identifier to employees without CRM authorization.
 - Only fixed generic `TaskTitlePolicy` labels allowed; no arbitrary PII-bearing task text.
 
@@ -22,7 +22,8 @@ A CRM employee creates an OPEN customer interaction. An authorized manager with 
 - 19: foreign-tenant or terminal interaction rejects, zero task rows or links.
 - 20: replay of the same request key against a different CRM interaction rejects without overwriting origin.
 - 21: PostgreSQL source link immutable; composite tenant FK blocks unrelated tenants and orphan task IDs.
-- Specialized TASKS suite: **21 PostgreSQL executed / zero skipped**; H2: **21 discovered, six PostgreSQL-only skipped**. The mandatory exact-SHA admission verifier must check that same evidence.
+- 22: replay after CRM source interaction closes returns the original linked task without duplicate inserts; a fresh key on the terminal source rejects.
+- Specialized TASKS suite: **22 PostgreSQL executed / zero skipped**; H2: **22 discovered, six PostgreSQL-only skipped**. The mandatory exact-SHA admission verifier must check that same evidence.
 
 ## Explicitly deferred
 
