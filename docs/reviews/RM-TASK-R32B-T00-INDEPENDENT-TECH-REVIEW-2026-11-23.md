@@ -20,6 +20,8 @@
 - **Regression:** T46 now tests a **committed unsealed header**, two concurrent transactions with an uncommitted seal, blocking item insertion, post-commit rejection, and separate mismatched-count sealing. The exact 53-method TASKS matrix stays unchanged.
 - **CI:** R3.2A populated-upgrade workflow checks presence of the 0153 trigger and publishes synthetic original/restore evidence in the same artifact as Surefire reports. The final run is not yet verified.
 
+**Second confirmed test/CI defect fixed — R32A-QA-02 (P1):** the original T46 malformed-count negative test would persist an unsealed header and then cause the separate populated-upgrade integrity scan to fail on a test-generated fixture. The invalid header/seal attempt now runs inside an explicitly rollback-only transaction, followed by a query asserting the malformed header is absent. This preserves the validity of the independent all-snapshot SHA/restore check.
+
 ## Contract and architecture consistency
 
 | Concern | Decision / verified state |
