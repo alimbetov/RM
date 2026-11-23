@@ -6,6 +6,8 @@
 **Статус:** **R1.2 DEEP SOURCE-REVIEWED / CONTRACT-ALIGNED / IMPLEMENTATION VIA SEPARATE APPROVED TASKS**. Создание этого документа не доказывает выполнение кодовых задач или прохождение CI.  
 **Delivery boundary:** Java/Spring application/domain services + JDBC/JPA + PostgreSQL/Liquibase + H2 smoke + JUnit/Testcontainers; новые REST controllers/BFF/UI — **STOP**, public HTTP/OIDC admission — **HOLD**, production — **HOLD**, merge to `main` — **HOLD**.
 
+> **MVP delivery cutline (2026-11-23):** [RM-MVP-CLOSURE-FREEZE-R1](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) определяет первую пользовательскую поставку, G0–G4 и POST-MVP backlog. Этот подробный source-level документ сохраняет security/inventory/transaction QA contracts, но его раннее утверждение «TASKS AFTER P0/P1» устарело: базовые TASKS R2/R3 уже реализованы и входят в минимальный Business journey; дополнительные R3.2B SLA/outbox и R3.2C notifications **PAUSE**. Положение «controllers/UI STOP» действует только до G1 и **не блокирует** необходимый real OIDC/API/UI на G2. Не трактовать 120 extended scenarios или optional functional proposals как обязательный объём MVP.
+
 ## 0. Продуктовое решение и исключения
 
 Активные целевые направления **только два**:
