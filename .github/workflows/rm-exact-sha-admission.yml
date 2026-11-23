@@ -16,7 +16,7 @@ permissions:
 jobs:
   exact-sha-manifest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 95
     steps:
       - name: Checkout exact SHA before generating evidence
         uses: actions/checkout@v4
@@ -66,7 +66,7 @@ jobs:
             let allGreen=false;
             // Workflows run concurrently. Wait for all exact-SHA evidence rather
             // than turning early queued jobs into an artificial admission failure.
-            for(let attempt=0;attempt<40;attempt++) {
+            for(let attempt=0;attempt<170;attempt++) {
               const {data: current} = await github.rest.repos.getBranch({
                 owner,repo,branch
               });
@@ -122,7 +122,7 @@ jobs:
               if(manifest.required.some(r=>
                   r.status==='completed' &&
                   r.conclusion!=='success' && r.conclusion!==null)) break;
-              if(attempt<39) await new Promise(resolve=>setTimeout(resolve,30000));
+              if(attempt<169) await new Promise(resolve=>setTimeout(resolve,30000));
             }
             // Workflow execution proof is not a full release qualification.
             manifest.workflowGate = allGreen?'PASS':'FAIL';
