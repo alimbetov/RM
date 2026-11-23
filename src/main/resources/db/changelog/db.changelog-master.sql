@@ -4254,3 +4254,17 @@ CREATE TRIGGER trg_task_event_immutable
  BEFORE UPDATE OR DELETE ON crm.task_event
  FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_task_event_immutable ON crm.task_event;
+
+
+--changeset rm:0142-task-r2-assignment-evidence
+-- Preserve immutable before/after assignee identity without changing existing event rows.
+ALTER TABLE crm.task_event ADD COLUMN previous_assignee_user_id UUID;
+ALTER TABLE crm.task_event ADD COLUMN next_assignee_user_id UUID;
+ALTER TABLE crm.task_event ADD CONSTRAINT fk_task_event_prev_assignee
+ FOREIGN KEY(previous_assignee_user_id) REFERENCES public.iam_user_account(id);
+ALTER TABLE crm.task_event ADD CONSTRAINT fk_task_event_next_assignee
+ FOREIGN KEY(next_assignee_user_id) REFERENCES public.iam_user_account(id);
+--rollback ALTER TABLE crm.task_event DROP CONSTRAINT fk_task_event_next_assignee;
+--rollback ALTER TABLE crm.task_event DROP CONSTRAINT fk_task_event_prev_assignee;
+--rollback ALTER TABLE crm.task_event DROP COLUMN next_assignee_user_id;
+--rollback ALTER TABLE crm.task_event DROP COLUMN previous_assignee_user_id;
