@@ -2,26 +2,6 @@ name: RM TASK R2 Service Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/tasks/**'
-      - 'src/main/java/kz/rm/iam/DomainPermission.java'
-      - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
-      - 'src/main/resources/db/changelog/db.changelog-master.sql'
-      - 'src/test/java/kz/rm/tasks/**'
-      - '.github/workflows/rm-task-r2-service.yml'
-      - 'docs/spec/RM-TASK-R2-SERVICE-FOUNDATION.md'
-      - 'docs/spec/RM-TASK-01B-CRM-INTERACTION-FOLLOWUP-R1.md'
-      - 'docs/reviews/RM-TASK-R2-01A1-TECHNICAL-REVIEW-2026-11-23.md'
-      - '.github/workflows/rm-exact-sha-admission.yml'
-      - '.github/scripts/verify_rm_qa_01b.py'
-      - '.github/scripts/test_verify_rm_qa_01b.py'
-      - 'docs/reviews/RM-TASK-R2-01A2-SECOND-TECHNICAL-REVIEW-2026-11-23.md'
-      - 'docs/spec/RM-TASK-01B-R2-LIFECYCLE-HARDENING.md'
-      - 'docs/spec/RM-TASK-01B-R3-CANCELLATION-RECONCILIATION.md'
-      - 'docs/spec/RM-TASK-01B-R3.1-QUEUE-RECONCILIATION-HARDENING.md'
-      - 'docs/spec/RM-TASK-01B-R3.2-OPERATIONAL-RECONCILIATION.md'
-      - 'docs/reviews/RM-TASK-R3.2A-TECHNICAL-AUDIT-2026-11-23.md'
-      - 'docs/reviews/RM-TASK-R2-R3-CONSISTENCY-TECH-REVIEW-2026-11-23.md'
   workflow_dispatch:
 permissions:
   contents: read
