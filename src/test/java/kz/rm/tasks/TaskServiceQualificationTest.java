@@ -1538,4 +1538,62 @@ class TaskServiceQualificationTest {
         assertThat(count).isEqualTo(10000);
     }
 
+    @Test void t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture()
+            throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-source-race-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var locked=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var captureStarted=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var statusChange=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.customer_interaction
+                    WHERE tenant_id=? AND id=? FOR UPDATE
+                    """,UUID.class,t.id(),source);
+                jdbc.update("""
+                    UPDATE crm.customer_interaction SET status='OPEN',
+                    row_version=row_version+1 WHERE tenant_id=? AND id=?
+                    """,t.id(),source);
+                locked.countDown();
+                try {
+                    if(!release.await(20,TimeUnit.SECONDS))
+                        throw new IllegalStateException("TASK_SNAPSHOT_RACE_TIMEOUT");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(locked.await(20,TimeUnit.SECONDS)).isTrue();
+            var capture=pool.submit(()->{
+                captureStarted.countDown();
+                try {
+                    snapshots.capture(t.manager(),t.id(),source,"task-r32-race-denied-001");
+                    return "UNEXPECTED_SUCCESS";
+                }catch(IllegalStateException e){return e.getMessage();}
+            });
+            assertThat(captureStarted.await(10,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(statusChange.get(30,TimeUnit.SECONDS)).isTrue();
+            assertThat(capture.get(30,TimeUnit.SECONDS))
+                .isEqualTo("TASK_SNAPSHOT_SOURCE_NOT_CANCELLED");
+        } finally {release.countDown();}
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot
+            WHERE tenant_id=?
+            """,Integer.class,t.id())).isZero();
+    }
+
 }
