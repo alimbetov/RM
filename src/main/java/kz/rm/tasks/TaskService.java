@@ -69,7 +69,7 @@ public class TaskService {
                 || assignee==null || dueAt==null
                 || requestKey==null || !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
             throw new IllegalArgumentException("TASK_CREATE_INVALID");
-        String cleanTitle=title.strip();
+        String cleanTitle=TaskTitlePolicy.requireApproved(title);
         String fingerprint=sha(tenant+"|"+cleanTitle+"|"+assignee+"|"+dueAt);
         int bucket=Math.floorMod(Arrays.hashCode(sha(requestKey).getBytes(StandardCharsets.UTF_8)),32);
         Integer locked=jdbc.queryForObject("""
