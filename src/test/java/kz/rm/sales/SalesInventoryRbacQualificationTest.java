@@ -177,7 +177,8 @@ class SalesInventoryRbacQualificationTest {
         Context c=context(10);
         UUID id=order(c,3);
         allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
-                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE);
+                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
         commands.confirm(c.staff(),c.tenant(),id,c.location());
         jdbc.update("""
             UPDATE crm.sales_order SET status='PREPARING',row_version=row_version+1
@@ -200,6 +201,9 @@ class SalesInventoryRbacQualificationTest {
         assertThatThrownBy(()->commands.cancel(c.staff(),c.tenant(),id))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("ORDER_CANCEL_REQUIRES_REVERSE_PICK");
+        assertThatThrownBy(()->commands.fulfill(c.staff(),c.tenant(),id))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         assertThat(status(c,id)).isEqualTo("PREPARING");
         assertThat(scalar(c,"on_hand")).isEqualByComparingTo("10");
         assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
