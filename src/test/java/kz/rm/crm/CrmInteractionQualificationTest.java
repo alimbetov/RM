@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.*;
 @TestPropertySource(properties={"RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 class CrmInteractionQualificationTest {
     @Autowired CrmInteractionService interactions;
+    @Autowired CrmCancellationReviewIntentPort cancellationIntentPort;
     @Autowired AuthenticatedCrmCommands customers;
     @Autowired AuthenticatedCrmQueries queries;
     @Autowired CrmContractService contracts;
@@ -1035,6 +1036,13 @@ class CrmInteractionQualificationTest {
                 """,Integer.class,t.tenantId(),interaction.id())).isZero();
         assertThat(interactions.cancel(actor,t.tenantId(),interaction.id(),0).status())
                 .isEqualTo(CrmInteractionService.Status.CANCELLED);
+    }
+
+    @Test void t00CancellationIntentPortCannotRunOutsideCrmTransaction() {
+        var event=new CrmCancellationEventRef(UUID.randomUUID(),UUID.randomUUID(),
+                UUID.randomUUID(),Instant.parse("2026-11-23T09:00:00Z"),1);
+        assertThatThrownBy(()->cancellationIntentPort.onCancelled(event))
+                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
     }
 
 }
