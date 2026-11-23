@@ -261,6 +261,16 @@ def verify():
                         problems.append(f"{artifact_name}: expected 52 executed cases without skips")
                 if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 52 or counts["skipped"] != 17):
                     problems.append(f"{artifact_name}: expected 52 discovered cases with 17 PG-only skips")
+                if artifact_name.startswith("rm-task-r32a-populated-pg-"):
+                    if counts["tests"] != 52 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: populated migration must execute 52 PostgreSQL cases without skips")
+                    required_cases = {
+                        ("TaskServiceQualificationTest", "t46PostgresqlSnapshotManifestAndEntriesAreImmutable"),
+                        ("TaskServiceQualificationTest", "t49CommittedSnapshotReplaysAfterStatusChangeAndLostResponse"),
+                        ("TaskServiceQualificationTest", "t50SnapshotIntegrityVerifiesPersistedRowsAndDeniesForeignActor"),
+                        ("TaskServiceQualificationTest", "t51PostgresqlExactlyTenThousandTasksCaptureAndPageWithoutLoss"),
+                        ("TaskServiceQualificationTest", "t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture"),
+                    }
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
