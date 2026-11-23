@@ -102,7 +102,7 @@ class CommerceCurrencyAdmissionQualificationTest {
                 UUID.randomUUID(),org,staff,kz.rm.iam.OrganizationMembershipEntity.Role.MEMBER));
         var ownerActor=actor(owner);
         var role=roles.createRole(ownerActor,store.tenant(),
-                "CURR1C"+UUID.randomUUID().toString().replace("-","").substring(0,12),
+                "CUR_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "Currency qualification");
         roles.grant(ownerActor,store.tenant(),role.id(),
                 kz.rm.iam.DomainPermission.STOREFRONT_OFFER_MANAGE);
