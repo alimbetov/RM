@@ -37,6 +37,7 @@ class SkuFxSellerApprovalQualificationTest {
     @Autowired StorefrontOfferService offers;
     @Autowired AutoOrderService orders;
     @Autowired DataSource dataSource;
+    @Autowired VerifiedTenantRoleCommands roleCommands;
 
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,
                            VerifiedActor actor,UUID buyer) {}
@@ -91,6 +92,12 @@ class SkuFxSellerApprovalQualificationTest {
                 .subject(subject).issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(600)).build();
         VerifiedActor actor=new OidcActorResolver(decoder,users).resolve("fx-synthetic");
+        var role=roleCommands.createRole(actor,tenant,
+                "FX_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "FX seller test role");
+        roleCommands.grant(actor,tenant,role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roleCommands.assign(actor,tenant,owner.getId(),role.id());
+        roleCommands.enable(actor,tenant);
         return new Fixture(tenant,offer,item,slug,actor,buyer.getId());
     }
 
