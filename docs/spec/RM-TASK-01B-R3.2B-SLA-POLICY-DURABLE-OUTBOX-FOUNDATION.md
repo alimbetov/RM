@@ -8,6 +8,8 @@
 
 > **R32B-T00 source review (2026-11-23):** [Contract & Dependency Qualification](../reviews/RM-TASK-R32B-T00-CONTRACT-DEPENDENCY-QUALIFICATION-2026-11-23.md). Проверено: CRM `cancel()` записывает immutable `CANCELLED` event в той же транзакции. **Source contract corrected:** введены canonical `eventId/occurredAt` и transaction-mandatory порт с отключённым sink; PostgreSQL и IAM/SLA admission ещё не подтверждены. **До T00 gate нельзя начинать B1/B2 код или DDL на предположениях.** R3.2A independent gates по-прежнему обязательны. 
 
+> **POST-MVP PAUSE (2026-11-23):** согласно [RM-MVP-CLOSURE-FREEZE-R1](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md), **R3.2B B1–B4 и R3.2C не входят в первый пользовательский MVP**. Продолжать разрешено только уже введённые обязательные R3.2A/T00 exact-SHA PostgreSQL квалификации и минимальные P0 fixes; не начинать SLA migrations, durable notification outbox или external workers без нового product decision после MVP. Содержание ниже сохранено как post-MVP backlog / техническое ТЗ, а не действующая задача к немедленному исполнению.
+
 ## 0. Цель, инженерное решение и смежные документы
 
 **Проблема:** R3.1 `pendingPage` предоставляет живую пагинацию, R3.2A `TaskReconciliationSnapshotService.capture/page` фиксирует неизменяемый набор задач с SHA-256 и ограничением 10 000. Но пока отсутствуют **версионированные правила срока управленческого рассмотрения после отмены CRM Interaction**, аудит обязательства по рассмотрению и **надёжное, дедуплицируемое намерение уведомить ответственного**. Снимок — evidence, не уведомление и не команда на отмену.
