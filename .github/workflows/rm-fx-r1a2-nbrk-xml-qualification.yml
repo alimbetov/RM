@@ -1,0 +1,45 @@
+name: RM FX R1A.2 NBRK XML Qualification
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/kz/rm/fx/NbrkRssXmlParser.java'
+      - 'src/test/java/kz/rm/fx/NbrkRssXmlParserQualificationTest.java'
+      - '.github/workflows/rm-fx-r1a2-nbrk-xml-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nbrk-offline-xml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Exact SHA checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Execute NBRK offline XML contract
+        run: mvn -B -ntp -Dtest=NbrkRssXmlParserQualificationTest test
+      - name: Verify eight executed test cases
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as E
+          f=Path('target/surefire-reports/TEST-kz.rm.fx.NbrkRssXmlParserQualificationTest.xml')
+          assert f.is_file()
+          cases=list(E.parse(f).getroot().iter('testcase'))
+          assert len(cases)==8, len(cases)
+          assert not any(c.find(tag) is not None for c in cases
+                         for tag in ('skipped','failure','error'))
+          PY
+      - name: Preserve XML qualification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fx-r1a2-nbrk-offline-${{ github.sha }}
+          path: target/surefire-reports/TEST-kz.rm.fx.NbrkRssXmlParserQualificationTest.xml
+          if-no-files-found: warn
