@@ -54,10 +54,14 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t15PostgresqlMembershipRevocationWaitsForTaskAssignmentCommit",
                         "t16LostResponseAssignmentRetryUsesOneImmutableEvent",
                         "t17ArchiveRetryAndCrossTaskKeyCollisionFailClosed",
+                        "t18CrmFollowupCreationRetryAndScopedLinkRead",
+                        "t19CrmFollowupRejectsForeignAndClosedInteractionWithNoTasks",
+                        "t20CrmFollowupCannotReuseTaskRequestForAnotherInteraction",
+                        "t21PostgresqlCrmLinkIsImmutableAndCompositeTenantFkIsEnforced",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
-                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15"))}
+                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21"))}
                 if artifact == "kms-postgres-surefire":
                     suite_cases = {
                         "CommercialCoreE2EQualificationTest": [
