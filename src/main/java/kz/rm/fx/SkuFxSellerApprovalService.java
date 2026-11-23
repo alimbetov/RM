@@ -56,7 +56,7 @@ public class SkuFxSellerApprovalService {
         requireActor(actor,tenant,offerId);
         if(expectedPolicyRevision<0 || anchorCurrency==null)
             throw new IllegalArgumentException("CUR_R2A_POLICY_INVALID");
-        var authorized=offers.get(actor,tenant,offerId);
+        offers.get(actor,tenant,offerId);
         currencies.requireCurrencyForPurpose(tenant,anchorCurrency,"SALES_INTERNAL");
         lockStorefront(tenant);
         var current=offer(tenant,offerId);
@@ -153,11 +153,14 @@ public class SkuFxSellerApprovalService {
         Decision existing=decision(tenant,calculationId);
         if(existing!=null) {
             // A receipt is the immutable result of the first decision.
-            String boundKey=jdbc.queryForObject("""
-                SELECT request_key FROM crm.sku_fx_seller_decision
+            record Receipt(String key,UUID actorId) {}
+            Receipt receipt=jdbc.query("""
+                SELECT request_key,actor_user_id FROM crm.sku_fx_seller_decision
                 WHERE tenant_id=? AND calculation_id=?
-                """,String.class,tenant,calculationId);
-            if(!action.equals(existing.action())||!requestKey.equals(boundKey))
+                """,rs->rs.next()?new Receipt(rs.getString(1),rs.getObject(2,UUID.class)):null,
+                    tenant,calculationId);
+            if(receipt==null || !actor.userId().equals(receipt.actorId())
+                    || !action.equals(existing.action())||!requestKey.equals(receipt.key()))
                 throw new IllegalStateException("CUR_R2A_DECISION_CONFLICT");
             return existing;
         }
