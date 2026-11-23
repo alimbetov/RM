@@ -35,7 +35,19 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                 artifact_name=artifact.replace("{sha}","f"*40)
                 suite_cases = {"SmokeQualificationTest": ["smokePasses"]}
                 skipped = set()
-                if artifact_name.startswith("rm-task-"):
+                if artifact_name.startswith("rm-task-t00-postgresql-"):
+                    suite_cases={"CrmInteractionQualificationTest": [
+                        "t00CancellationEventHasCanonicalIdentityAndSingleRevision",
+                        "t00OuterTransactionRollbackRemovesCancellationAndSourceEvent",
+                        "t00CancellationIntentPortCannotRunOutsideCrmTransaction",
+                        "t00PgConcurrentCancellationCreatesExactlyOneCanonicalEvent",
+                        "t00PgActorSuspensionCommitsBeforeCancellationDeniesWithoutEvent",
+                        "t00PgCancellationCommitsBeforeActorSuspensionPreservesOneEvent",
+                        "t00PgCanonicalEventIdentityAndPrecisionAreStoredExactly",
+                        "t00PgTransactionPortReceivesPersistedCanonicalEvent",
+                        "t00PgPortFailureRollsBackCancellationAndEvent",
+                    ]}
+                elif artifact_name.startswith("rm-task-"):
                     names = [
                         "t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory",
                         "t02TenantIsolationAndEmployeeCannotManageOrArchive",
