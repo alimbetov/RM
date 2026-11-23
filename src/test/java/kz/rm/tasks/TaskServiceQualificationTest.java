@@ -84,7 +84,7 @@ class TaskServiceQualificationTest {
         assertThatThrownBy(()->tasks.create(t.owner(),t.id(),"Other task",
             t.staff().userId(),DUE,"task-create-001"))
             .hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
-        assertThat(tasks.listMine(t.staff(),t.id(),null,10,0()))
+        assertThat(tasks.listMine(t.staff(),t.id(),null,10,0))
             .extracting(TaskService.Task::id).contains(created.id());
         var started=tasks.start(t.staff(),t.id(),created.id(),0);
         assertThat(started.state()).isEqualTo(TaskState.IN_PROGRESS);
