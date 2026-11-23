@@ -88,10 +88,13 @@ public class SalesPriceProposalService {
                 """,rs->rs.next()?new OfferLookup(rs.getObject(1,UUID.class),
                 rs.getObject(2,UUID.class)):null,offerPublicRef);
         if(locator==null)throw new IllegalArgumentException("QR_UNAVAILABLE");
-        lockSeller(locator.tenant(),false);
-        Offer offer=lockOffer(locator.tenant(),locator.offer());
         String fingerprint=fingerprint(actor,"SUBMIT",locator.offer(),
                 offerPublicRef,0,quantity,proposed,currency);
+        // Existing immutable receipts remain replayable during policy HOLD.
+        Result earlier=receipt(locator.tenant(),requestKey,actor,"SUBMIT",fingerprint);
+        if(earlier!=null)return earlier;
+        lockSeller(locator.tenant(),false);
+        Offer offer=lockOffer(locator.tenant(),locator.offer());
         Result replay=receipt(locator.tenant(),requestKey,actor,"SUBMIT",fingerprint);
         if(replay!=null)return replay;
         published(locator.tenant(),locator.offer(),offer);
@@ -156,11 +159,13 @@ public class SalesPriceProposalService {
                 WHERE tenant_id=? AND id=?
                 """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant,proposalId);
         if(offerId==null)throw new SecurityException("PROPOSAL_NOT_ACCESSIBLE");
-        lockSeller(tenant,seller);
-        Offer offer=lockOffer(tenant,offerId);
         String actionCode=(seller?"SELLER_":"BUYER_")+action.name();
         String fingerprint=fingerprint(actor,actionCode,proposalId,
                 null,expectedRevision,0,newPrice,null);
+        Result earlier=receipt(tenant,requestKey,actor,actionCode,fingerprint);
+        if(earlier!=null)return earlier;
+        lockSeller(tenant,seller);
+        Offer offer=lockOffer(tenant,offerId);
         Result replay=receipt(tenant,requestKey,actor,actionCode,fingerprint);
         if(replay!=null)return replay;
         Proposal p=lockProposal(tenant,proposalId);
