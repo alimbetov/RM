@@ -1,6 +1,6 @@
 # RM FX-R1A.3 — Trusted NBRK Ingestion
 
-**Status:** implementation contract / qualification pending (not evidence of working code)  
+**Status:** code staged on base_dev; exact-SHA CI qualification pending (not production admission)  
 **Date:** 2026-11-23  
 **Branch:** `base_dev` (single active development branch)  
 **Architecture:** RM-PLATFORM-STANDARD-R2; preserves DEC-FUL-01.  
@@ -91,3 +91,17 @@ Testing must include local deterministic HTTP fixtures, TLS verification scenari
 - What is the approved correction/rollback process and operational notification threshold?
 - Which retention period applies to raw response bytes (digest and parsed immutable revisions must remain)?
 - Who owns the trusted scheduler identity and network egress restrictions?
+
+## 10. Implementation traceability (2026-11-23)
+- Fixed HTTPS transport: `kz.rm.fx.TrustedNbrkHttpClient`
+- XML admission: existing `NbrkRssXmlParser`
+- Fetch/validation orchestration: `TrustedNbrkIngestionService`
+- Existing rate tables, append-only corrections and per-provider row lock: `NbrkRateRevisionWriter`
+- Exact-date latest and historical revisions: `NbrkRateSnapshotReader`
+- Liquibase additive changesets: `0127` / `0128`
+- Deterministic scenarios: `TrustedNbrkIngestionQualificationTest` (15) plus `NbrkRssXmlParserQualificationTest` (8), existing FX-R1A persistence (6).
+- CI workflow: `.github/workflows/rm-fx-r1a3-trusted-nbrk.yml` (H2 and PostgreSQL 17, exact checkout SHA, Surefire evidence).
+
+**Evidence qualification:** initial intermediate SHA `d0f55b98` executed all 15 new tests on both databases with no failures, but the overall job failed because old FX-R1A test `fxR1a06` expected the database to ban all NBRK rows. Additive changeset 0128 now requires new NBRK snapshots to reference an originating immutable import run; only an exact-head successful CI may close this regression. The latest changes remain unqualified until successful run artifacts are checked.
+
+**Residual security/operational gate:** transport-level simulated TLS failure/redirect/egress hardening in a hermetic environment; NBRK business-day policy; live-feed contract test against approved test environment; lease/retry policy; full exact-SHA common workflow. H2 and PG fixtures do not prove real network authenticity or production fitness.
