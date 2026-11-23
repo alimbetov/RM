@@ -87,3 +87,15 @@ PostgreSQL R2B.4 scenarios:
 Additional P0 work before full calendar closure: trusted KASE schedule ingestion with source fetch/digest verification, source history and immutable per-instrument day rows; explicit decision on publication lag and active-rate as-of semantics; service admission gate for selected UAT tenants; opposite IAM/quote ordering, failure/retry and no deadlocks.
 
 Never interpret these synthetic calendar tests as official 2026 holiday schedule verification. `DEC-FUL-01`, `main`, public KZT owner and production HOLD unchanged.
+
+## 10. CUR-R2B.4A — staged calendar evidence and opt-in approval gate (2026-11-23)
+
+**Implemented:** Liquibase 0134/0135 adds `crm.fx_calendar_source_evidence`, `crm.fx_calendar_day_evidence` and `crm.fx_calendar_tenant_gate`. Source/day records are PostgreSQL-trigger immutable. `FxCalendarEvidenceService` verifies SHA-256 of received bytes, checks exact allowlisted HTTPS hosts, records reviewed per-instrument day status, and permits explicit tenant admission after IAM seller permission and storefront lock. The default is OFF. During `SkuFxSellerApprovalService.decide`, opted tenants require complete dated evidence in the same approval transaction; missing evidence and too many observed trading days prevent public price change.
+
+**Assurance boundary:** `stageSource` takes bytes and *reviewed day assertions* from a trusted caller; it does not download KASE over pinned HTTPS or parse statuses out of fetched official documents. The source SHA proves integrity of supplied bytes, **not authenticity of the transport or correctness of the asserted trading dates**. This staged facility is UAT-only. Do not enable source/day admissions in production from synthetic, manually fabricated, or unverified assertions.
+
+**Follow-up P0 before full official integration:** auditable HTTPS transport and redirect/host/TLS controls; parser with independent source-to-day verification and instrument-specific KASE exception news; reconciliation of corrected publications, source precedence and exact active calendar snapshot at decision; independent security review and real-source PostgreSQL E2E; full two-order IAM/accepted-quote race proofs. General production HOLD remains unchanged.
+
+**Tests:** missing calendar day (no price mutation), closed day with zero allowed trading days (approval), observed trading day with zero allowance (refusal), changed bytes SHA (reject at staging). Prior PostgreSQL race tests for quote-first and IAM-suspend-first continue in the suite.
+
+`main`, `DEC-FUL-01`, controllers, auto FX repricing and the canonical STOREFRONT KZT price owner remain unchanged.
