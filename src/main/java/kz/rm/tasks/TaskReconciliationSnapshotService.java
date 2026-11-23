@@ -145,7 +145,7 @@ public class TaskReconciliationSnapshotService {
      * This is a diagnostic integrity admission, not a task-state read or
      * authorization for an automatic reconciliation command.
      */
-    @Transactional(readOnly=true)
+    @Transactional
     public boolean verifyIntegrity(VerifiedActor actor, UUID tenant, UUID snapshotId) {
         UUID manager=admit(actor,tenant);
         if(snapshotId==null)throw new IllegalArgumentException("TASK_SNAPSHOT_PAGE_INVALID");
