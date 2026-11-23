@@ -165,6 +165,30 @@ class CommerceCurrencyAdmissionQualificationTest {
                 .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
     }
 
+    @Test void curc09ForeignDraftRequiresSalesInternalPurpose() {
+        Store store=setup("KZT",true);
+        var tx=new TransactionTemplate(txManager);
+        assertThatThrownBy(()->tx.execute(status->{
+            admission.lockKzMarket(store.tenant());
+            admission.assertDraftCurrency(store.tenant(),"USD");
+            return null;
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessage("CUR_INTERNAL_CURRENCY_NOT_ALLOWED");
+        Timestamp now=Timestamp.from(Instant.now());
+        jdbc.update("""
+            INSERT INTO public.tenant_allowed_currency
+             (tenant_id,currency_code,purpose,state,row_version,created_at,updated_at)
+            VALUES (?,'USD','SALES_INTERNAL','ENABLED',0,?,?)
+            """,store.tenant(),now,now);
+        tx.execute(status->{
+            admission.lockKzMarket(store.tenant());
+            admission.assertDraftCurrency(store.tenant(),"USD");
+            return null;
+        });
+        assertThatThrownBy(()->admission.assertKzt("USD"))
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+    }
+
     @Test void curc06PostgresPolicyChangeVsCheckoutLinearizes() throws Exception {
         try(var connection=dataSource.getConnection()) {
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
