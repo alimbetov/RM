@@ -4332,5 +4332,4 @@ CREATE INDEX idx_task_queue ON crm.task_item(tenant_id,status,due_at,id);
 --rollback ALTER TABLE crm.task_event DROP COLUMN reason_code;
 --rollback ALTER TABLE crm.task_item DROP CONSTRAINT ck_task_status;
 -- NOTE: downgrade of the status constraint requires zero QUEUED/CANCELLED rows.
---rollback ALTER TABLE crm.task_item ADD CONSTRAINT ck_task_status CHECK
---rollback  (status IN ('OPEN','IN_PROGRESS','BLOCKED','COMPLETED','ARCHIVED'));
+--rollback ALTER TABLE crm.task_item ADD CONSTRAINT ck_task_status CHECK (status IN ('OPEN','IN_PROGRESS','BLOCKED','COMPLETED','ARCHIVED'));
