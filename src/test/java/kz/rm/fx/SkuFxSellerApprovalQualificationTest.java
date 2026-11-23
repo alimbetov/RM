@@ -395,4 +395,53 @@ class SkuFxSellerApprovalQualificationTest {
             """,f.tenant(),c.id())).isInstanceOf(Exception.class);
         assertThat(decisions(f)).isEqualTo(1);
     }
+    @Test void r2b01PostgresqlConcurrentIdenticalCalculationsShareOneReceipt() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture(); var p=policy(f); UUID rate=rate(effectiveDate(),"540");
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return fx.calculate(f.actor(),f.tenant(),p.id(),rate);
+            });
+            var second=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return fx.calculate(f.actor(),f.tenant(),p.id(),rate);
+            });
+            start.countDown();
+            assertThat(first.get(12,TimeUnit.SECONDS).id())
+                    .isEqualTo(second.get(12,TimeUnit.SECONDS).id());
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sku_fx_calculation WHERE tenant_id=?
+                """,Integer.class,f.tenant())).isEqualTo(1);
+        }
+    }
+
+    @Test void r2b02GuardrailRejectsOutOfBoundsIncreaseWithoutPriceMutation() {
+        var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("10"),new BigDecimal("10"),
+                new BigDecimal("50"),new BigDecimal("1000"),7,3600,0);
+        var c=candidate(f,rate(effectiveDate(),"550"));
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-bound-001"))
+                .hasMessage("CUR_R2B_PRICE_DELTA_EXCEEDED");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
+    @Test void r2b03GuardrailRejectsStaleRateWithoutPriceMutation() {
+        var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("1000"),new BigDecimal("100"),
+                new BigDecimal("1"),new BigDecimal("100000"),1,3600,0);
+        var c=candidate(f,rate(effectiveDate().minusDays(10),"550"));
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-rate-001"))
+                .hasMessage("CUR_R2B_RATE_TOO_OLD");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
 }
