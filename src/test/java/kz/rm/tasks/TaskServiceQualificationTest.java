@@ -1034,4 +1034,88 @@ class TaskServiceQualificationTest {
             """,Integer.class,t.id(),task.id())).isEqualTo(2);
     }
 
+    @Test void t37ReconciliationRejectsUnrelatedSourceAndForeignTenantWithoutTaskMutation() {
+        var a=tenant();var b=tenant();
+        UUID aSource=crmInteraction(a,"OPEN");
+        UUID otherSource=crmInteraction(a,"OPEN");
+        UUID foreignSource=crmInteraction(b,"OPEN");
+        var task=followups.create(a.manager(),a.id(),aSource,"Review order",
+            a.staff().userId(),DUE,"task-review-reconcile-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,a.id(),aSource);
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,a.id(),otherSource);
+        assertThatThrownBy(()->reconciliation.reconcileCancelled(a.manager(),a.id(),
+            otherSource,task.id(),0,"task-review-wrong-source-001"))
+            .hasMessage("TASK_CRM_SOURCE_NOT_CANCELLED");
+        assertThatThrownBy(()->reconciliation.reconcileCancelled(a.manager(),a.id(),
+            foreignSource,task.id(),0,"task-review-foreign-source-001"))
+            .hasMessage("TASK_CRM_SOURCE_NOT_CANCELLED");
+        assertThatThrownBy(()->reconciliation.reconcileCancelled(b.manager(),b.id(),
+            foreignSource,task.id(),0,"task-review-foreign-tenant-001"))
+            .hasMessage("TASK_CRM_SOURCE_NOT_CANCELLED");
+        assertThat(tasks.getMine(a.manager(),a.id(),task.id()).state())
+            .isEqualTo(TaskState.OPEN);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,a.id(),task.id())).isEqualTo(1);
+    }
+
+    @Test void t38PostgresqlSourceCancellationSerializesAgainstFollowupCreation()
+             throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var created=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var closureStarted=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                var task=followups.create(t.manager(),t.id(),source,"Review order",
+                    t.staff().userId(),DUE,"task-review-source-race-001");
+                created.countDown();
+                try {
+                    if(!release.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("TASK_SOURCE_RACE_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return task;
+            }));
+            assertThat(created.await(15,TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                closureStarted.countDown();
+                return jdbc.update("""
+                    UPDATE crm.customer_interaction SET status='CANCELLED',
+                    row_version=row_version+1 WHERE tenant_id=? AND id=?
+                    """,t.id(),source);
+            });
+            assertThat(closureStarted.await(10,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            var task=first.get(25,TimeUnit.SECONDS);
+            assertThat(second.get(25,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(followups.getMine(t.manager(),t.id(),task.id()).interactionId())
+                .isEqualTo(source);
+            assertThatThrownBy(()->followups.create(t.manager(),t.id(),source,
+                "Review order",t.staff().userId(),DUE,"task-review-source-race-new-001"))
+                .hasMessage("TASK_CRM_INTERACTION_NOT_ACTIVE");
+            assertThat(followups.create(t.manager(),t.id(),source,"Review order",
+                t.staff().userId(),DUE,"task-review-source-race-001").id())
+                .isEqualTo(task.id());
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_crm_followup
+                WHERE tenant_id=? AND interaction_id=?
+                """,Integer.class,t.id(),source)).isEqualTo(1);
+        } finally {release.countDown();}
+    }
+
 }
