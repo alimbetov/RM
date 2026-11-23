@@ -33,7 +33,7 @@ public class TaskService {
                         TaskState from, TaskState to, Long previousVersion,
                         long newVersion, Instant occurredAt,
                         UUID previousAssigneeUserId, UUID nextAssigneeUserId,
-                        Instant previousDueAt, Instant nextDueAt) {}
+                        Instant previousDueAt, Instant nextDueAt, String reasonCode) {}
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
@@ -120,11 +120,23 @@ public class TaskService {
         // Lock target IAM actor before task row, retaining the established lock order.
         requireMember(tenant,assignee);
         Task before=lockTask(tenant,id,expectedVersion);
-        if(before.state()!=TaskState.OPEN && before.state()!=TaskState.BLOCKED)
+        if(before.state()!=TaskState.OPEN && before.state()!=TaskState.BLOCKED
+                && before.state()!=TaskState.QUEUED)
             throw new IllegalStateException("TASK_REASSIGN_STATE_INVALID");
-        if(java.util.Objects.equals(before.assigneeUserId(),assignee))return before;
-        update(tenant,id,expectedVersion,"assignee_user_id",assignee);
-        event(tenant,id,manager,"ASSIGNED",before.state(),before.state(),
+        if(before.state()!=TaskState.QUEUED
+                && java.util.Objects.equals(before.assigneeUserId(),assignee))return before;
+        if(before.state()==TaskState.QUEUED) {
+            int updated=jdbc.update("""
+                UPDATE crm.task_item SET assignee_user_id=?,status='OPEN',
+                    row_version=row_version+1,updated_at=?
+                WHERE tenant_id=? AND id=? AND row_version=?
+                """,assignee,Timestamp.from(clock.instant()),tenant,id,expectedVersion);
+            if(updated!=1)throw new IllegalStateException("TASK_CONCURRENT_MODIFICATION");
+        } else {
+            update(tenant,id,expectedVersion,"assignee_user_id",assignee);
+        }
+        event(tenant,id,manager,"ASSIGNED",before.state(),
+                before.state()==TaskState.QUEUED?TaskState.OPEN:before.state(),
                 expectedVersion,expectedVersion+1,before.assigneeUserId(),assignee,
                 requestKey,fingerprint);
         return load(tenant,id);
@@ -182,6 +194,111 @@ public class TaskService {
             previous.assigneeUserId(),requestKey,fingerprint,
             previous.dueAt()==null?null:Timestamp.from(previous.dueAt()),
             Timestamp.from(nextDue));
+    }
+
+    /**
+     * Return an unstarted or blocked task to the manager-owned queue.  The
+     * assignee is explicitly cleared, so a previous employee cannot execute it.
+     * An IN_PROGRESS task must be blocked before it can be requeued.
+     */
+    @Transactional
+    public Task requeue(VerifiedActor actor,UUID tenant,UUID id,long expectedVersion,
+                        String requestKey) {
+        UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
+        if(id==null||expectedVersion<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        if(requestKey!=null)lockRequestStripe(requestKey);
+        String fingerprint=requestKey==null?null:
+            sha(tenant+"|"+id+"|RETURNED_TO_QUEUE|"+expectedVersion);
+        Task before=lockTaskCurrent(tenant,id);
+        if(requestKey!=null) {
+            Task replay=loadReplayed(tenant,manager,id,requestKey,fingerprint);
+            if(replay!=null)return replay;
+        }
+        if(before.version()!=expectedVersion)throw new IllegalStateException("TASK_STALE_VERSION");
+        if(before.state()!=TaskState.OPEN && before.state()!=TaskState.BLOCKED)
+            throw new IllegalStateException("TASK_REQUEUE_STATE_INVALID");
+        int updated=jdbc.update("""
+            UPDATE crm.task_item SET assignee_user_id=NULL,status='QUEUED',
+                row_version=row_version+1,updated_at=?
+            WHERE tenant_id=? AND id=? AND row_version=?
+            """,Timestamp.from(clock.instant()),tenant,id,expectedVersion);
+        if(updated!=1)throw new IllegalStateException("TASK_CONCURRENT_MODIFICATION");
+        eventWithReason(tenant,id,manager,"REQUEUED",before.state(),TaskState.QUEUED,
+            expectedVersion,expectedVersion+1,before.assigneeUserId(),null,
+            requestKey,fingerprint,"RETURNED_TO_QUEUE");
+        return load(tenant,id);
+    }
+
+    /**
+     * Explicit manager cancellation: not the same operation as archiving.
+     * A completed or archived task retains its original completion evidence.
+     */
+    @Transactional
+    public Task cancel(VerifiedActor actor,UUID tenant,UUID id,long expectedVersion,
+                       String requestKey) {
+        UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
+        return cancelAdmitted(tenant,id,manager,expectedVersion,requestKey,"MANAGER_CANCELLED");
+    }
+
+    /**
+     * A cancellation due to its CRM source requires an actually CANCELLED,
+     * tenant-owned interaction and both TASK_MANAGE and CRM_READ.  The CRM row
+     * is locked before the task row to serialize with interaction transitions.
+     */
+    @Transactional
+    public Task cancelForSource(VerifiedActor actor,UUID tenant,UUID interactionId,
+                                UUID id,long expectedVersion,String requestKey) {
+        UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
+        authorization.requireForCommand(manager,tenant,DomainPermission.CRM_READ);
+        if(interactionId==null||id==null)
+            throw new IllegalArgumentException("TASK_CRM_RECONCILE_INVALID");
+        List<UUID> rows=jdbc.query("""
+            SELECT i.id FROM crm.customer_interaction i
+            JOIN crm.task_crm_followup l ON l.tenant_id=i.tenant_id
+              AND l.interaction_id=i.id
+            WHERE i.tenant_id=? AND i.id=? AND l.task_id=?
+                AND i.status='CANCELLED'
+            FOR UPDATE OF i
+            """,(rs,n)->rs.getObject(1,UUID.class),tenant,interactionId,id);
+        if(rows.isEmpty())throw new IllegalStateException("TASK_CRM_SOURCE_NOT_CANCELLED");
+        return cancelAdmitted(tenant,id,manager,expectedVersion,requestKey,"SOURCE_CANCELLED");
+    }
+
+    private Task cancelAdmitted(UUID tenant,UUID id,UUID manager,long expectedVersion,
+                                String requestKey,String reason) {
+        if(id==null||expectedVersion<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        if(requestKey!=null)lockRequestStripe(requestKey);
+        String fingerprint=requestKey==null?null:
+            sha(tenant+"|"+id+"|CANCELLED|"+reason+"|"+expectedVersion);
+        Task before=lockTaskCurrent(tenant,id);
+        if(requestKey!=null) {
+            Task replay=loadReplayed(tenant,manager,id,requestKey,fingerprint);
+            if(replay!=null)return replay;
+        }
+        if(before.version()!=expectedVersion)throw new IllegalStateException("TASK_STALE_VERSION");
+        if(before.state()==TaskState.COMPLETED||before.state()==TaskState.ARCHIVED
+                ||before.state()==TaskState.CANCELLED)
+            throw new IllegalStateException("TASK_CANCEL_TERMINAL");
+        update(tenant,id,expectedVersion,"status",TaskState.CANCELLED.name());
+        eventWithReason(tenant,id,manager,"CANCELLED",before.state(),TaskState.CANCELLED,
+            expectedVersion,expectedVersion+1,before.assigneeUserId(),
+            before.assigneeUserId(),requestKey,fingerprint,reason);
+        return load(tenant,id);
+    }
+
+    private void eventWithReason(UUID tenant,UUID id,UUID actor,String action,
+                                 TaskState from,TaskState to,long previous,long next,
+                                 UUID formerAssignee,UUID currentAssignee,
+                                 String requestKey,String fingerprint,String reason) {
+        jdbc.update("""
+            INSERT INTO crm.task_event
+             (tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
+              previous_version,new_version,occurred_at,previous_assignee_user_id,
+              next_assignee_user_id,request_key,request_sha256,reason_code)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,tenant,UUID.randomUUID(),id,actor,action,from.name(),to.name(),
+            previous,next,Timestamp.from(clock.instant()),formerAssignee,currentAssignee,
+            requestKey,fingerprint,reason);
     }
 
     @Transactional
@@ -314,7 +431,7 @@ public class TaskService {
             SELECT id,task_id,actor_user_id,action_code,from_state,to_state,
                    previous_version,new_version,occurred_at,
                    previous_assignee_user_id,next_assignee_user_id,
-                   previous_due_at,next_due_at
+                   previous_due_at,next_due_at,reason_code
             FROM crm.task_event WHERE tenant_id=? AND task_id=?
             ORDER BY new_version DESC LIMIT ?
             """,(rs,n)->new Event(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
@@ -325,7 +442,8 @@ public class TaskService {
                 rs.getTimestamp(9).toInstant(),
                 rs.getObject(10,UUID.class),rs.getObject(11,UUID.class),
                 rs.getTimestamp(12)==null?null:rs.getTimestamp(12).toInstant(),
-                rs.getTimestamp(13)==null?null:rs.getTimestamp(13).toInstant()),tenant,id,limit);
+                rs.getTimestamp(13)==null?null:rs.getTimestamp(13).toInstant(),
+                rs.getString(14)),tenant,id,limit);
     }
 
     private void lockRequestStripe(String requestKey) {
