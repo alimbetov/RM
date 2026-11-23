@@ -230,11 +230,19 @@ def verify():
                         ("TaskServiceQualificationTest", "t26RollbackBeforeFollowupCommitAllowsExactRequestRetry"),
                         ("TaskServiceQualificationTest", "t27PostgresqlConcurrentRescheduleAndReassignmentHaveSingleWinner"),
                         ("TaskServiceQualificationTest", "t28PostgresqlTwoManagersConcurrentReassignmentExactlyOneWins"),
+                        ("TaskServiceQualificationTest", "t29ManagerCancellationIsIdempotentAndNotArchival"),
+                        ("TaskServiceQualificationTest", "t30InProgressCancellationForbidsCompletionAndPreservesEvidence"),
+                        ("TaskServiceQualificationTest", "t31RequeueRemovesAssignmentAndManagerMayClaimForNewStaff"),
+                        ("TaskServiceQualificationTest", "t32RequeueRequiresStoppedWorkAndCannotBeStartedUnassigned"),
+                        ("TaskServiceQualificationTest", "t33CancelledCrmInteractionRequiresExplicitScopedReconciliation"),
+                        ("TaskServiceQualificationTest", "t34ReconciliationAndQueueRollbackLeaveNoPartialEvents"),
+                        ("TaskServiceQualificationTest", "t35PostgresqlCancelRacesWithEmployeeCompletionExactlyOneWins"),
+                        ("TaskServiceQualificationTest", "t36PostgresqlRequeueRacesWithReassignmentExactlyOneWins"),
                     }
-                    if counts["tests"] != 28 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 28 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 28 or counts["skipped"] != 8):
-                    problems.append(f"{artifact_name}: expected 28 discovered cases with 8 PG-only skips")
+                    if counts["tests"] != 36 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 36 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 36 or counts["skipped"] != 10):
+                    problems.append(f"{artifact_name}: expected 36 discovered cases with 10 PG-only skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
