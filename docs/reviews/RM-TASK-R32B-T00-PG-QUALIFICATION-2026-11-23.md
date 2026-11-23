@@ -30,7 +30,7 @@ The original `CrmInteractionQualificationTest` now contains **nine explicitly na
 | --- | --- | --- |
 | 53 PostgreSQL TASKS tests / 0 skipped | mandatory workflow and verifier present | final HEAD PASS not retrieved |
 | 53 H2 discovered / 18 PG-only skipped | mandatory workflow present | final HEAD PASS not retrieved |
-| 0149–0152 applied to populated PostgreSQL | `rm-task-r32a-populated-upgrade.yml` defined | actual migration transcript not retrieved |
+| 0149–0153 applied to populated PostgreSQL | `rm-task-r32a-populated-upgrade.yml` defined | actual migration transcript not retrieved |
 | preserved legacy IDs, count, immutable seal SHA | CI assertions defined | actual PostgreSQL output not retrieved |
 | post-backup/restore digest recomputation | CI assertion defined | actual PostgreSQL output not retrieved |
 | concurrent capture / IAM role revocation / 10k boundary | T47..T53 added | final HEAD PG run not retrieved |
@@ -38,6 +38,21 @@ The original `CrmInteractionQualificationTest` now contains **nine explicitly na
 | security/legal retention and real OIDC | no production security acceptance available | HOLD |
 
 **Evidence limitation:** the available GitHub connector commit-workflow lookup exposes only PR-triggered runs; current push-run status and Surefire artifact checksums could not be verified from it. No Maven/PostgreSQL runtime is mounted here. Consequently **no PASS is claimed** for new tests, R3.2A, T00-PG or global exact-SHA.
+
+## Follow-up review: R3.2A sealed snapshot race (2026-11-23)
+
+A real concurrency vulnerability was found in PostgreSQL changeset **0152**: `BEFORE INSERT` on snapshot items checked whether a seal was visible, but did not serialize against an **uncommitted seal** inserted by another connection. For a previously committed unsealed header, a concurrent item insert could pass the MVCC visibility check before the seal committed and leave a mutable manifest after the seal.
+
+**Source fix:** additive PostgreSQL changeset **0153**:
+- item INSERT locks `crm.task_reconciliation_snapshot` header `FOR UPDATE`, then rechecks for the seal after acquiring the lock;
+- seal INSERT locks the same header and rejects `item_count` different from actual child-row count;
+- previously committed snapshot records and 0149–0152 migration identifiers remain unchanged.
+
+**Regression:** T46 now explicitly constructs a committed unsealed header, holds a concurrent seal transaction, races an item INSERT, and asserts it blocks until the seal commits and is rejected. T46 also rejects malformed header-count sealing. The 53 TASKS test-method matrix is unchanged.
+
+**Evidence:** `rm-task-r32a-populated-upgrade.yml` now asserts the 0153 trigger exists on the upgraded database and publishes a synthetic PostgreSQL migration/restore evidence file. This is a code-level repair, **not** a claimed PostgreSQL CI PASS.
+
+**IAM qualification limit:** T00 actor suspension interleavings currently use PostgreSQL UPDATE as a deterministic lock harness. They prove row-lock ordering but **do not substitute for** end-to-end trusted IAM suspension/revoke service admission. Include that separate gate before B1 security approval.
 
 ## Release and sequencing
 
