@@ -16,11 +16,13 @@ import java.util.UUID;
 @Service
 public class CommerceCurrencyAdmission {
     private final JdbcTemplate jdbc;
+    private final TenantCurrencyPolicyService policies;
     private final boolean enabled;
 
-    public CommerceCurrencyAdmission(JdbcTemplate jdbc,
+    public CommerceCurrencyAdmission(JdbcTemplate jdbc, TenantCurrencyPolicyService policies,
             @Value("${rm.currency.commerce-admission.enabled:false}") boolean enabled) {
         this.jdbc=jdbc;
+        this.policies=policies;
         this.enabled=enabled;
     }
 
@@ -28,19 +30,13 @@ public class CommerceCurrencyAdmission {
     public void lockKzMarket(UUID tenant) {
         if (!enabled) return;
         if (tenant==null) throw new IllegalArgumentException("CUR_TENANT_REQUIRED");
-        String status=jdbc.query("""
-            SELECT market_country || ':' || public_price_currency || ':' || status
-            FROM public.tenant_currency_policy WHERE tenant_id=? FOR UPDATE
-            """, rs->rs.next()?rs.getString(1):null,tenant);
-        if (!"KZ:KZT:ACTIVE".equals(status))
-            throw new IllegalStateException("CUR_PUBLIC_POLICY_NOT_ACTIVE");
-        Integer n=jdbc.queryForObject("""
-            SELECT count(*) FROM public.tenant_allowed_currency
-            WHERE tenant_id=? AND currency_code='KZT' AND purpose='PUBLIC_PRICE'
-              AND state='ENABLED'
-            """,Integer.class,tenant);
-        if(n==null || n!=1)
-            throw new IllegalStateException("CUR_PUBLIC_KZT_NOT_ENABLED");
+        // Reuse the canonical organization currency policy and its FOR UPDATE
+        // lock; commerce never defines a second source of public KZT rules.
+        try {
+            policies.requirePublicKzCurrency(tenant,"KZT");
+        } catch (IllegalStateException rejected) {
+            throw new IllegalStateException("CUR_PUBLIC_POLICY_NOT_ACTIVE",rejected);
+        }
     }
 
     /**
@@ -53,13 +49,11 @@ public class CommerceCurrencyAdmission {
         if (!enabled || "KZT".equals(currency)) return;
         if (tenant==null || currency==null || !currency.matches("[A-Z]{3}"))
             throw new IllegalArgumentException("CUR_INTERNAL_CURRENCY_INVALID");
-        Integer n=jdbc.queryForObject("""
-            SELECT count(*) FROM public.tenant_allowed_currency
-            WHERE tenant_id=? AND currency_code=? AND purpose='SALES_INTERNAL'
-              AND state='ENABLED'
-            """,Integer.class,tenant,currency);
-        if(n==null || n!=1)
-            throw new IllegalStateException("CUR_INTERNAL_CURRENCY_NOT_ALLOWED");
+        try {
+            policies.requireCurrencyForPurpose(tenant,currency,"SALES_INTERNAL");
+        } catch (IllegalStateException rejected) {
+            throw new IllegalStateException("CUR_INTERNAL_CURRENCY_NOT_ALLOWED",rejected);
+        }
     }
 
     public void assertKzt(String currency) {
