@@ -61,6 +61,7 @@ public class PublishedOfferQrService {
     public Reference issueOrGet(VerifiedActor actor, UUID tenant, UUID offerId,
                                 long expectedOfferVersion) {
         UUID user = admit(actor, tenant);
+        lockCurrencyForIssue(tenant);
         String storeState = lockStore(tenant);
         OfferState offer = lockOffer(tenant, offerId);
         if (offer.version() != expectedOfferVersion)
@@ -110,6 +111,7 @@ public class PublishedOfferQrService {
     public Reference reissue(VerifiedActor actor, UUID tenant, UUID offerId,
                              long expectedOfferVersion) {
         UUID user = admit(actor, tenant);
+        lockCurrencyForIssue(tenant);
         String storeState = lockStore(tenant);
         OfferState offer = lockOffer(tenant, offerId);
         if (offer.version() != expectedOfferVersion)
@@ -256,8 +258,11 @@ public class PublishedOfferQrService {
         return actor.userId();
     }
 
-    private String lockStore(UUID tenant) {
+    private void lockCurrencyForIssue(UUID tenant) {
         if (currencyAdmission != null) currencyAdmission.lockKzMarket(tenant);
+    }
+
+    private String lockStore(UUID tenant) {
         String state = jdbc.query("""
                 SELECT state FROM crm.store_front WHERE tenant_id=? FOR UPDATE
                 """, rs -> rs.next() ? rs.getString(1) : null, tenant);
