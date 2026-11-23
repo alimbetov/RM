@@ -630,4 +630,115 @@ class SkuFxSellerApprovalQualificationTest {
         assertThat(decisions(f)).isZero();
     }
 
+    @Test void r2b10PostgresqlAvailableQuoteCommitsBeforeFxAndBlocksPriceChange() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"570"));
+        var locked=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var quoteWriter=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,f.tenant());
+                Timestamp now=Timestamp.from(Instant.now());
+                UUID proposal=UUID.randomUUID();
+                jdbc.update("""
+                    INSERT INTO crm.sales_price_proposal
+                      (tenant_id,id,offer_id,catalog_item_id,buyer_user_id,quantity,
+                       list_price_at_submit,current_unit_price,currency,state,revision,
+                       next_actor,round_count,expires_at,created_at,updated_at,row_version)
+                    VALUES (?,?,?,?,?,1,100,95,'KZT','AGREED',1,'NONE',0,?,?,?,0)
+                    """,f.tenant(),proposal,f.offer(),f.item(),f.buyer(),
+                    Timestamp.from(Instant.now().plusSeconds(7200)),now,now);
+                jdbc.update("""
+                    INSERT INTO crm.sales_accepted_quote
+                      (tenant_id,id,proposal_id,agreed_revision,offer_id,buyer_user_id,
+                       quantity,agreed_unit_price,currency,state,expires_at,created_at)
+                    VALUES (?,?,?,1,?,?,1,95,'KZT','AVAILABLE',?,?)
+                    """,f.tenant(),UUID.randomUUID(),proposal,f.offer(),f.buyer(),
+                    Timestamp.from(Instant.now().plusSeconds(3600)),now);
+                locked.countDown();
+                try {
+                    if(!release.await(8,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2B_QUOTE_WAIT_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(locked.await(8,TimeUnit.SECONDS)).isTrue();
+            var approval=pool.submit(()->{
+                try {
+                    fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-quote-race-001");
+                    return "APPROVED";
+                } catch(IllegalStateException expected) {
+                    return expected.getMessage();
+                }
+            });
+            release.countDown();
+            assertThat(quoteWriter.get(12,TimeUnit.SECONDS)).isTrue();
+            assertThat(approval.get(12,TimeUnit.SECONDS))
+                    .isEqualTo("CUR_R2A_ACTIVE_NEGOTIATION");
+            assertThat(revisions(f)).isZero();
+            assertThat(decisions(f)).isZero();
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_accepted_quote
+                WHERE tenant_id=? AND offer_id=? AND state='AVAILABLE'
+                """,Integer.class,f.tenant(),f.offer())).isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test void r2b11PostgresqlSellerSuspensionCommitsBeforeFxApproval() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"571"));
+        var suspended=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var disable=pool.submit(()->tx.execute(status->{
+                jdbc.update("""
+                    UPDATE public.iam_user_account SET status='SUSPENDED'
+                    WHERE id=?
+                    """,f.actor().userId());
+                suspended.countDown();
+                try {
+                    if(!release.await(8,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2B_IAM_WAIT_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(suspended.await(8,TimeUnit.SECONDS)).isTrue();
+            var approval=pool.submit(()->{
+                try {
+                    fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-suspend-race-001");
+                    return "APPROVED";
+                } catch(SecurityException expected) {
+                    return "DENIED";
+                }
+            });
+            release.countDown();
+            assertThat(disable.get(12,TimeUnit.SECONDS)).isTrue();
+            assertThat(approval.get(12,TimeUnit.SECONDS)).isEqualTo("DENIED");
+            assertThat(revisions(f)).isZero();
+            assertThat(decisions(f)).isZero();
+        } finally {
+            release.countDown();
+        }
+    }
+
 }
