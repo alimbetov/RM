@@ -168,11 +168,23 @@ public class PublishedOfferQrService {
         if (offerId == null || expectedVersion < 0)
             throw new IllegalArgumentException("QR_REQUEST_INVALID");
         UUID user = admit(actor, tenant);
-        // All QR mutations of this seller already serialize on this row.
-        // Lock BEFORE checking a receipt, BEFORE locking an offer, and BEFORE
-        // any alias insertion; no second lock order is introduced.
-        lockStore(tenant);
         String fingerprint = fingerprint(tenant, user, offerId, action, expectedVersion);
+        // An immutable receipt is safe to replay even when policy is on HOLD.
+        // A new ISSUE/REISSUE must lock currency BEFORE storefront/offer.
+        Recorded earlier = recorded(tenant, requestKey);
+        if (earlier != null) {
+            if (!fingerprint.equals(earlier.hash())
+                    || !offerId.equals(earlier.offerId())
+                    || !user.equals(earlier.actorId())
+                    || !action.equals(earlier.action()))
+                throw new IllegalStateException("QR_IDEMPOTENCY_CONFLICT");
+            return earlier.reference();
+        }
+        if ("ISSUE".equals(action) || "REISSUE".equals(action))
+            lockCurrencyForIssue(tenant);
+        lockStore(tenant);
+        // Recheck after the seller-wide serialization lock, since a concurrent
+        // issuer could have committed a receipt between the two reads.
         Recorded receipt = recorded(tenant, requestKey);
         if (receipt != null) {
             if (!fingerprint.equals(receipt.hash())
