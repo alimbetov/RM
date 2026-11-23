@@ -38,3 +38,19 @@ H2: 5 discovered, 2 PG-only skipped. PostgreSQL: 5 discovered, zero skipped/fail
 After 01A passes: owner-scoped CRM interaction follow-up linkage with composite tenant FK and authenticated CRM permission; accept/reject/return-to-queue behavior and reassignment policy must be decided, plus due-date filters, employee portfolio, notification outbox, IAM revoke/suspension race and crash/retry tests. Do not widen employee rights to CRM_WRITE simply to execute tasks.
 
 **Core constraints:** one branch `base_dev`, no controllers or main merge, no Redis or microservices, production HOLD.
+
+
+## RM-TASK-01A.1 — targeted technical review and hardening (2026-11-23)
+
+Initial exact-SHA admission completed successfully at `adebcefad4729c443c542af320e14dce78ff0359`, but that qualification did not yet prove concurrent IAM suspension of a *different* task assignee or reconstruct full responsibility changes from immutable history.
+
+**P0 corrections implemented:**
+- Before assignment or creation, lock the target assignee's global `iam_user_account` row until transaction commit: PostgreSQL `FOR SHARE` (allowing concurrent admitted employee reads), H2 `FOR UPDATE` compatibility. Require `ACTIVE`, then tenant-scoped `ACTIVE` membership. For reassignment the target account is locked **before** the task row, preserving lock-order discipline; any later IAM account suspension must serialize after the command or the task command rejects if suspension committed first.
+- Add Liquibase `0142` nullable assignee-before/assignee-after UUID FK columns to append-only `crm.task_event`. `CREATED` captures the initial assignee, `ASSIGNED` captures both actors; subsequent state events capture the same assignee on both sides. No rewriting old event history or synthesizing prior data.
+- A former assignee loses `getMine` task access after reassignment; creator can inspect the history.
+- Negative tests for suspended assignee, changed assignee historical evidence, and PostgreSQL `task create -> concurrent account suspend` ordering. Complementary suspension-first path denies creation or reassignment without side effects.
+- The expected dedicated matrix is **8 scenarios**, with **3 PostgreSQL-only skips on H2** and no skips in PostgreSQL.
+
+**Remaining non-blocking decisions before RM-TASK-01B:** confidential free-text titles are currently not encrypted or classified by server-side business semantics; callers must restrict their contents to non-sensitive operational descriptions. Do not place CRM PII in task titles. Establish an encrypted task description or closed business-coded task template contract before enabling arbitrary user-entered text. Further PostgreSQL IAM membership-revocation races, cross-tenant performance, two-manager reassign contention and crash/retry require separate qualification. Real external identity, REST and production admission remain HOLD.
+
+The implementation and updated test matrix are **not** considered qualified until the *same latest SHA* GitHub Actions complete successfully.
