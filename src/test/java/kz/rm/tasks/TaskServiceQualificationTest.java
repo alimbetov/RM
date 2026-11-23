@@ -470,4 +470,51 @@ class TaskServiceQualificationTest {
         } finally {release.countDown();}
     }
 
+    @Test void t16LostResponseAssignmentRetryUsesOneImmutableEvent() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-assign-create-001");
+        UUID replacement=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-retry-target-"+UUID.randomUUID(),"Replacement")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),replacement,OrganizationMembershipEntity.Role.MEMBER));
+        var first=tasks.assign(t.manager(),t.id(),task.id(),replacement,0,
+            "task-assignment-key-001");
+        var retry=tasks.assign(t.manager(),t.id(),task.id(),replacement,0,
+            "task-assignment-key-001");
+        assertThat(retry).isEqualTo(first);
+        assertThatThrownBy(()->tasks.assign(t.manager(),t.id(),task.id(),
+            t.staff().userId(),0,"task-assignment-key-001"))
+            .hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(2);
+    }
+
+    @Test void t17ArchiveRetryAndCrossTaskKeyCollisionFailClosed() {
+        var t=tenant();
+        var first=tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-archive-create-001");
+        var second=tasks.create(t.manager(),t.id(),"Check inventory",
+            t.staff().userId(),DUE,"task-archive-create-002");
+        tasks.start(t.staff(),t.id(),first.id(),0,"task-first-start-001");
+        tasks.complete(t.staff(),t.id(),first.id(),1,"task-first-done-001");
+        tasks.start(t.staff(),t.id(),second.id(),0,"task-second-start-001");
+        tasks.complete(t.staff(),t.id(),second.id(),1,"task-second-done-001");
+        var archived=tasks.archive(t.manager(),t.id(),first.id(),2,
+            "task-archive-key-001");
+        assertThat(tasks.archive(t.manager(),t.id(),first.id(),2,
+            "task-archive-key-001")).isEqualTo(archived);
+        assertThatThrownBy(()->tasks.archive(t.manager(),t.id(),second.id(),2,
+            "task-archive-key-001")).hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event
+            WHERE tenant_id=? AND task_id=? AND action_code='ARCHIVED'
+            """,Integer.class,t.id(),first.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event
+            WHERE tenant_id=? AND task_id=? AND action_code='ARCHIVED'
+            """,Integer.class,t.id(),second.id())).isZero();
+    }
+
 }
