@@ -64,10 +64,11 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t25ClosedCrmSourcePreservesLinkedTaskAndHistoryButRejectsNewLink",
                         "t26RollbackBeforeFollowupCommitAllowsExactRequestRetry",
                         "t27PostgresqlConcurrentRescheduleAndReassignmentHaveSingleWinner",
+                        "t28PostgresqlTwoManagersConcurrentReassignmentExactlyOneWins",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
-                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21","t27"))}
+                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21","t27","t28"))}
                 if artifact == "kms-postgres-surefire":
                     suite_cases = {
                         "CommercialCoreE2EQualificationTest": [
