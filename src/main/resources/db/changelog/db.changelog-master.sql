@@ -4156,3 +4156,22 @@ CREATE TRIGGER trg_cur_r2b4_calendar_day_immutable
  FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_cur_r2b4_calendar_day_immutable ON crm.fx_calendar_day_evidence;
 --rollback DROP TRIGGER trg_cur_r2b4_calendar_source_immutable ON crm.fx_calendar_source_evidence;
+
+
+--changeset rm:0136-cur-r2b4-calendar-source-serialization
+-- Serialize source import/replay without changing immutable source/day records.
+CREATE TABLE crm.fx_calendar_source_lock (
+ provider_code VARCHAR(12) NOT NULL PRIMARY KEY,
+ CONSTRAINT ck_fx_calendar_lock_provider CHECK(provider_code='KASE')
+);
+INSERT INTO crm.fx_calendar_source_lock(provider_code) VALUES ('KASE');
+--rollback DROP TABLE crm.fx_calendar_source_lock;
+
+--changeset rm:0137-cur-r2b4-seller-calendar-source-receipt
+-- A newly approved seller decision captures the exact calendar source ID used.
+-- Historical decisions remain valid with NULL; no backfill or evidence rewrite.
+ALTER TABLE crm.sku_fx_seller_decision ADD COLUMN calendar_source_id UUID;
+ALTER TABLE crm.sku_fx_seller_decision ADD CONSTRAINT fk_fx_decision_calendar_source
+ FOREIGN KEY(calendar_source_id) REFERENCES crm.fx_calendar_source_evidence(id);
+--rollback ALTER TABLE crm.sku_fx_seller_decision DROP CONSTRAINT fk_fx_decision_calendar_source;
+--rollback ALTER TABLE crm.sku_fx_seller_decision DROP COLUMN calendar_source_id;
