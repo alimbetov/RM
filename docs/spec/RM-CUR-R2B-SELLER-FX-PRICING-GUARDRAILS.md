@@ -115,3 +115,12 @@ New requirements added to the H2/PostgreSQL qualification: four `TrustedKaseCale
 - The complementary `r2b10/r2b11` tests (quote-first and suspension-first) remain mandatory.
 
 The specialized CI matrix now requires **29 FX integration cases**, nine FX mathematics, four calendar evidence and four KASE HTTPS transport tests = **46 PostgreSQL cases**, and **19 executed H2 integration cases** plus ten intentionally PostgreSQL-only skips. No production claims are made until exact-SHA CI succeeds.
+
+## 13. Calendar source manifest hardening and exact seller evidence
+
+- Liquibase 0136 adds a PostgreSQL/H2 calendar writer serialization row; imports with the same KASE source URL + SHA return one immutable source ID when every date/status assertion matches. Conflicting assertions using identical source bytes reject deterministically.
+- Liquibase 0137 adds a nullable `calendar_source_id` FK to immutable `sku_fx_seller_decision`. Opted-in FX approvals record the exact source they evaluated; prior decisions stay intact and legacy approval policies remain opt-out.
+- Liquibase 0138/0139 introduces a canonical SHA-256 manifest of the full day set, an immutable seal, and PostgreSQL rejection of additional day inserts after sealing. Record creation/sealing occur in one transaction. HTTPS network fetch happens before this transaction.
+- New PostgreSQL test attempts to append a calendar day after sealing and verifies that the attempt is rejected. Repeated imports and attempts to reclassify an already sealed source are also tested.
+
+Updated mandatory matrix: **32 FX service integration tests** (11 PostgreSQL-only), **9 FX calculator**, **4 calendar evaluator**, **4 KASE transport** = **49 PostgreSQL tests**. H2 executes 21 FX service scenarios and skips the 11 PostgreSQL-only ones. Admission remains unconfirmed until the latest SHA workflows succeed. Trusted automatic date extraction from KASE pages and instrument-specific exception notices still requires independent qualification before production.
