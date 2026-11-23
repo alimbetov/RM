@@ -4423,3 +4423,51 @@ CREATE TRIGGER trg_task_snapshot_seal_immutable
 --rollback DROP TRIGGER trg_task_snapshot_seal_immutable ON crm.task_reconciliation_snapshot_seal;
 --rollback DROP TRIGGER trg_task_snapshot_no_late_insert ON crm.task_reconciliation_snapshot_item;
 --rollback DROP FUNCTION crm.task_snapshot_reject_insert_after_seal();
+
+
+--changeset rm:0153-task-r32-snapshot-seal-transaction-fence dbms:postgresql splitStatements:false
+-- Harden R3.2A immutability against a concurrent item INSERT that starts
+-- before the seal transaction commits: both operations must lock the same
+-- canonical snapshot header, then re-evaluate seal visibility after waiting.
+CREATE OR REPLACE FUNCTION crm.task_snapshot_reject_insert_after_seal()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM 1 FROM crm.task_reconciliation_snapshot
+  WHERE tenant_id=NEW.tenant_id AND id=NEW.snapshot_id FOR UPDATE;
+ IF NOT FOUND THEN
+  RAISE EXCEPTION 'TASK_SNAPSHOT_MISSING';
+ END IF;
+ IF EXISTS (
+  SELECT 1 FROM crm.task_reconciliation_snapshot_seal
+   WHERE tenant_id=NEW.tenant_id AND snapshot_id=NEW.snapshot_id
+ ) THEN
+  RAISE EXCEPTION 'TASK_SNAPSHOT_ALREADY_SEALED';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE FUNCTION crm.task_snapshot_lock_before_seal()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE expected_count integer; actual_count bigint;
+BEGIN
+ SELECT s.item_count INTO expected_count
+ FROM crm.task_reconciliation_snapshot s
+ WHERE s.tenant_id=NEW.tenant_id AND s.id=NEW.snapshot_id FOR UPDATE;
+ IF NOT FOUND THEN
+  RAISE EXCEPTION 'TASK_SNAPSHOT_MISSING';
+ END IF;
+ SELECT count(*) INTO actual_count
+ FROM crm.task_reconciliation_snapshot_item
+ WHERE tenant_id=NEW.tenant_id AND snapshot_id=NEW.snapshot_id;
+ IF actual_count<>expected_count THEN
+  RAISE EXCEPTION 'TASK_SNAPSHOT_COUNT_MISMATCH';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_task_snapshot_seal_transaction_fence
+ BEFORE INSERT ON crm.task_reconciliation_snapshot_seal
+ FOR EACH ROW EXECUTE FUNCTION crm.task_snapshot_lock_before_seal();
+--rollback DROP TRIGGER trg_task_snapshot_seal_transaction_fence ON crm.task_reconciliation_snapshot_seal;
+--rollback DROP FUNCTION crm.task_snapshot_lock_before_seal();
+--rollback CREATE OR REPLACE FUNCTION crm.task_snapshot_reject_insert_after_seal() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF EXISTS (SELECT 1 FROM crm.task_reconciliation_snapshot_seal WHERE tenant_id=NEW.tenant_id AND snapshot_id=NEW.snapshot_id) THEN RAISE EXCEPTION 'TASK_SNAPSHOT_ALREADY_SEALED'; END IF; RETURN NEW; END; $$;
