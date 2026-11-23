@@ -21,8 +21,9 @@ Liquibase `0146` adds `previous_due_at` and `next_due_at` as nullable columns of
 - T25: a cancelled CRM Interaction leaves prior task and history available; new follow-up creation denies.
 - T26: synthetic abort before transaction commit rolls back both canonical task and CRM link; retry creates exactly one.
 - T27 (PostgreSQL): concurrent reschedule × reassign with same version has exactly one winner and one additional event.
+- T28 (PostgreSQL): two distinct authorized managers concurrently reassign to different active employees; exactly one wins, version advances once and only one ASSIGNED event commits.
 
-Full TASKS matrix: **27 discovered tests**, **20 H2 executed / 7 PostgreSQL-only skipped**, **27 PostgreSQL executed / 0 skipped**. Exact-SHA CI must include TASKS evidence and all mandatory domain workflows. A green targeted suite is not production admission.
+Full TASKS matrix: **28 discovered tests**, **20 H2 executed / 8 PostgreSQL-only skipped**, **28 PostgreSQL executed / 0 skipped**. Exact-SHA CI must include TASKS evidence and all mandatory domain workflows. A green targeted suite is not production admission.
 
 ## QA process repair
 
