@@ -27,6 +27,7 @@ public final class TrustedNbrkHttpClient {
     private static final URI ORIGIN = URI.create("https://nationalbank.kz");
     private final HttpClient client;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public TrustedNbrkHttpClient() {
         this(HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER)
