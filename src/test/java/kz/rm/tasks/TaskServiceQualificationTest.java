@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.*;
 class TaskServiceQualificationTest {
     @Autowired TaskService tasks;
     @Autowired TaskCrmFollowupService followups;
+    @Autowired TaskCrmReconciliationService reconciliation;
     @Autowired UserAccountRepository users;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -826,6 +827,211 @@ class TaskServiceQualificationTest {
             SELECT count(*) FROM crm.task_event
             WHERE tenant_id=? AND task_id=? AND action_code='ASSIGNED'
             """,Integer.class,t.id(),task.id())).isEqualTo(1);
+    }
+
+    @Test void t29ManagerCancellationIsIdempotentAndNotArchival() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Review order",t.staff().userId(),
+            DUE,"task-r3-cancel-create-001");
+        var cancelled=tasks.cancel(t.manager(),t.id(),task.id(),0,"task-r3-cancel-key-001");
+        assertThat(cancelled.state()).isEqualTo(TaskState.CANCELLED);
+        assertThat(cancelled.version()).isEqualTo(1);
+        assertThat(tasks.cancel(t.manager(),t.id(),task.id(),0,
+            "task-r3-cancel-key-001")).isEqualTo(cancelled);
+        assertThatThrownBy(()->tasks.archive(t.manager(),t.id(),task.id(),1))
+            .hasMessage("TASK_ARCHIVE_REQUIRES_COMPLETED");
+        assertThatThrownBy(()->tasks.start(t.staff(),t.id(),task.id(),1))
+            .hasMessage("TASK_TRANSITION_INVALID");
+        assertThat(tasks.historyMine(t.manager(),t.id(),task.id(),10).getFirst()
+            .reasonCode()).isEqualTo("MANAGER_CANCELLED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(2);
+    }
+
+    @Test void t30InProgressCancellationForbidsCompletionAndPreservesEvidence() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Review order",t.staff().userId(),
+            DUE,"task-r3-progress-create");
+        tasks.start(t.staff(),t.id(),task.id(),0,"task-r3-progress-start");
+        var cancelled=tasks.cancel(t.manager(),t.id(),task.id(),1,"task-r3-progress-cancel");
+        assertThat(cancelled.state()).isEqualTo(TaskState.CANCELLED);
+        assertThatThrownBy(()->tasks.complete(t.staff(),t.id(),task.id(),2))
+            .hasMessage("TASK_TRANSITION_INVALID");
+        assertThatThrownBy(()->tasks.requeue(t.manager(),t.id(),task.id(),2,
+            "task-r3-progress-requeue")).hasMessage("TASK_REQUEUE_STATE_INVALID");
+        assertThat(tasks.historyMine(t.manager(),t.id(),task.id(),10))
+            .extracting(TaskService.Event::action)
+            .containsExactly("CANCELLED","STARTED","CREATED");
+    }
+
+    @Test void t31RequeueRemovesAssignmentAndManagerMayClaimForNewStaff() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"General operations",t.staff().userId(),
+            DUE,"task-r3-queue-create-001");
+        var queued=tasks.requeue(t.manager(),t.id(),task.id(),0,"task-r3-queue-key-001");
+        assertThat(queued.state()).isEqualTo(TaskState.QUEUED);
+        assertThat(queued.assigneeUserId()).isNull();
+        assertThat(tasks.requeue(t.manager(),t.id(),task.id(),0,
+            "task-r3-queue-key-001")).isEqualTo(queued);
+        assertThatThrownBy(()->tasks.getMine(t.staff(),t.id(),task.id()))
+            .hasMessage("TASK_NOT_ACCESSIBLE");
+        UUID replacement=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "r3-replacement-"+UUID.randomUUID(),"Replacement")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),replacement,OrganizationMembershipEntity.Role.MEMBER));
+        var assigned=tasks.assign(t.manager(),t.id(),task.id(),replacement,1,
+            "task-r3-queue-assign-001");
+        assertThat(assigned.state()).isEqualTo(TaskState.OPEN);
+        assertThat(assigned.assigneeUserId()).isEqualTo(replacement);
+        assertThat(tasks.historyMine(t.manager(),t.id(),task.id(),10).getFirst()
+            .from()).isEqualTo(TaskState.QUEUED);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(3);
+    }
+
+    @Test void t32RequeueRequiresStoppedWorkAndCannotBeStartedUnassigned() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Review document",t.staff().userId(),
+            DUE,"task-r3-block-create-001");
+        tasks.start(t.staff(),t.id(),task.id(),0,"task-r3-block-start-001");
+        assertThatThrownBy(()->tasks.requeue(t.manager(),t.id(),task.id(),1,
+            "task-r3-not-blocked-001")).hasMessage("TASK_REQUEUE_STATE_INVALID");
+        tasks.block(t.staff(),t.id(),task.id(),1,"task-r3-block-now-001");
+        var queued=tasks.requeue(t.manager(),t.id(),task.id(),2,
+            "task-r3-block-to-queue");
+        assertThat(queued.state()).isEqualTo(TaskState.QUEUED);
+        assertThatThrownBy(()->tasks.start(t.staff(),t.id(),task.id(),3))
+            .hasMessage("TASK_ASSIGNEE_ONLY");
+        assertThatThrownBy(()->tasks.reschedule(t.staff(),t.id(),task.id(),DUE,3,
+            "task-r3-staff-edit-001")).isInstanceOf(SecurityException.class);
+    }
+
+    @Test void t33CancelledCrmInteractionRequiresExplicitScopedReconciliation() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var open=followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r3-crm-open-001");
+        var done=followups.create(t.manager(),t.id(),source,"Check inventory",
+            t.staff().userId(),DUE,"task-r3-crm-done-001");
+        tasks.start(t.staff(),t.id(),done.id(),0,"task-r3-done-start-001");
+        tasks.complete(t.staff(),t.id(),done.id(),1,"task-r3-done-complete-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var pending=reconciliation.pending(t.manager(),t.id(),source,100);
+        assertThat(pending).extracting(TaskCrmReconciliationService.Pending::taskId)
+            .containsExactly(open.id());
+        assertThat(tasks.getMine(t.manager(),t.id(),open.id()).state())
+            .isEqualTo(TaskState.OPEN);
+        var cancelled=reconciliation.reconcileCancelled(t.manager(),t.id(),source,open.id(),
+            0,"task-r3-reconcile-001");
+        assertThat(cancelled.state()).isEqualTo(TaskState.CANCELLED);
+        assertThat(reconciliation.reconcileCancelled(t.manager(),t.id(),source,open.id(),
+            0,"task-r3-reconcile-001")).isEqualTo(cancelled);
+        assertThat(reconciliation.pending(t.manager(),t.id(),source,100)).isEmpty();
+        assertThat(tasks.getMine(t.manager(),t.id(),done.id()).state())
+            .isEqualTo(TaskState.COMPLETED);
+        assertThat(tasks.historyMine(t.manager(),t.id(),open.id(),10).getFirst()
+            .reasonCode()).isEqualTo("SOURCE_CANCELLED");
+    }
+
+    @Test void t34ReconciliationAndQueueRollbackLeaveNoPartialEvents() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var task=followups.create(t.manager(),t.id(),source,"General operations",
+            t.staff().userId(),DUE,"task-r3-rollback-create");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        assertThatThrownBy(()->tx.execute(status->{
+            reconciliation.reconcileCancelled(t.manager(),t.id(),source,task.id(),0,
+                "task-r3-rollback-key");
+            throw new IllegalStateException("TASK_TEST_CRASH_BEFORE_COMMIT");
+        })).hasMessage("TASK_TEST_CRASH_BEFORE_COMMIT");
+        assertThat(tasks.getMine(t.manager(),t.id(),task.id()).state())
+            .isEqualTo(TaskState.OPEN);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(1);
+        assertThat(reconciliation.reconcileCancelled(t.manager(),t.id(),source,task.id(),0,
+            "task-r3-rollback-key").state()).isEqualTo(TaskState.CANCELLED);
+    }
+
+    @Test void t35PostgresqlCancelRacesWithEmployeeCompletionExactlyOneWins() throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Review order",t.staff().userId(),
+            DUE,"task-r3-cancel-race-create");
+        tasks.start(t.staff(),t.id(),task.id(),0,"task-r3-cancel-race-start");
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var a=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.cancel(t.manager(),t.id(),task.id(),1,
+                    "task-r3-cancel-race-key");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            var b=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.complete(t.staff(),t.id(),task.id(),1,
+                    "task-r3-complete-race-key");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            gate.countDown();
+            assertThat(java.util.List.of(a.get(20,TimeUnit.SECONDS),
+                b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(
+                    "OK","TASK_STALE_VERSION");
+        }
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(3);
+    }
+
+    @Test void t36PostgresqlRequeueRacesWithReassignmentExactlyOneWins() throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID target=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "r3-race-target-"+UUID.randomUUID(),"Replacement")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),target,OrganizationMembershipEntity.Role.MEMBER));
+        var task=tasks.create(t.manager(),t.id(),"General operations",t.staff().userId(),
+            DUE,"task-r3-queue-race-create");
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var a=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.requeue(t.manager(),t.id(),task.id(),0,
+                    "task-r3-queue-race-key");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            var b=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.assign(t.manager(),t.id(),task.id(),target,0,
+                    "task-r3-assign-race-key");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            gate.countDown();
+            assertThat(java.util.List.of(a.get(20,TimeUnit.SECONDS),
+                b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(
+                    "OK","TASK_STALE_VERSION");
+        }
+        assertThat(jdbc.queryForObject("""
+            SELECT row_version FROM crm.task_item WHERE tenant_id=? AND id=?
+            """,Long.class,t.id(),task.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(2);
     }
 
 }
