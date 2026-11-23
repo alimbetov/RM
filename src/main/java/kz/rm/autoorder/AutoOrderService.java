@@ -1,6 +1,7 @@
 package kz.rm.autoorder;
 
 import kz.rm.iam.EmailIdentityService;
+import kz.rm.organization.CommerceCurrencyAdmission;
 import kz.rm.sales.SalesOrderQrReferenceService;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -28,13 +29,29 @@ public class AutoOrderService {
     private final JdbcTemplate jdbc;
     private final EmailIdentityService emailIdentities;
     private final SalesOrderQrReferenceService orderQrReferences;
+    private final CommerceCurrencyAdmission currencyAdmission;
     private String verifiedBuyerLockSql;
 
     public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
                             SalesOrderQrReferenceService orderQrReferences) {
+        this(jdbc,emailIdentities,orderQrReferences,null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
+                            SalesOrderQrReferenceService orderQrReferences,
+                            CommerceCurrencyAdmission currencyAdmission) {
         this.jdbc=jdbc;
         this.emailIdentities=emailIdentities;
         this.orderQrReferences=orderQrReferences;
+        this.currencyAdmission=currencyAdmission;
+    }
+
+    private void lockCurrencyMarket(UUID tenant) {
+        if(currencyAdmission!=null)currencyAdmission.lockKzMarket(tenant);
+    }
+    private void requireCurrency(String currency) {
+        if(currencyAdmission!=null)currencyAdmission.assertKzt(currency);
     }
 
     public record Line(UUID offerId,int quantity){}
@@ -131,6 +148,7 @@ public class AutoOrderService {
             """,rs->rs.next()?rs.getString(1):null,tenant);
         if(!"ACTIVE".equals(workspaceStatus))
             throw new IllegalArgumentException("Store not accepting orders");
+        lockCurrencyMarket(tenant);
         String storefrontState=jdbc.query("""
             SELECT state FROM crm.store_front WHERE tenant_id=? AND slug=? FOR UPDATE
             """,rs->rs.next()?rs.getString(1):null,tenant,slug);
@@ -158,6 +176,7 @@ public class AutoOrderService {
         String currency=offers.getFirst().currency();
         if(offers.stream().anyMatch(o->!currency.equals(o.currency())))
             throw new IllegalArgumentException("Mixed currencies not supported");
+        requireCurrency(currency);
         if(acknowledged!=null) {
             // The storefront/offer rows are already locked. A QR revoke or a
             // seller price update MUST wait for this checkout, or commit before
@@ -304,6 +323,7 @@ public class AutoOrderService {
                 """,rs->rs.next()?rs.getString(1):null,tenant);
         if(!"ACTIVE".equals(workspace))
             throw new IllegalStateException("SELLER_INACTIVE");
+        lockCurrencyMarket(tenant);
         String storefront=jdbc.query("""
                 SELECT state FROM crm.store_front WHERE tenant_id=? FOR UPDATE
                 """,rs->rs.next()?rs.getString(1):null,tenant);
@@ -358,6 +378,7 @@ public class AutoOrderService {
         // A negotiated price is immutable in this quote, never a client override.
         if(!quote.currency().equals(offer.currency()))
             throw new IllegalStateException("QUOTE_CURRENCY_CHANGED");
+        requireCurrency(quote.currency());
         Integer agreed=jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_price_proposal
                 WHERE tenant_id=? AND id=? AND state='AGREED' AND offer_id=?
