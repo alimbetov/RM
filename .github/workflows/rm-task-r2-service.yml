@@ -38,7 +38,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: H2 task service behavioral tests
         run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
-      - name: Require sixteen H2 cases and five expected database skips
+      - name: Require fifteen H2 cases and six expected database skips
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -47,7 +47,7 @@ jobs:
           assert p.is_file(),p
           cases=list(E.parse(p).getroot().iter('testcase'))
           assert len(cases)==21,len(cases)
-          assert sum(c.find('skipped') is not None for c in cases)==5
+          assert sum(c.find('skipped') is not None for c in cases)==6
           assert not any(c.find(x) is not None for c in cases for x in ('failure','error'))
           PY
       - uses: actions/upload-artifact@v4
