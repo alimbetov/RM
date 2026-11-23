@@ -4,6 +4,8 @@ import kz.rm.iam.VerifiedActor;
 import kz.rm.organization.TenantCurrencyPolicyService;
 import kz.rm.storefront.StorefrontOfferService;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,30 @@ public class SkuFxSellerApprovalService {
     private final StorefrontOfferService offers;
     private final TenantCurrencyPolicyService currencies;
     private final SkuFxCandidateCalculator calculator;
+    private String officialRateReadLockSql;
+
+    @PostConstruct
+    void configureSourceLock() {
+        String db=jdbc.execute((ConnectionCallback<String>)
+                connection->connection.getMetaData().getDatabaseProductName());
+        officialRateReadLockSql="""
+            SELECT provider_code FROM crm.fx_rate_provider_lock
+            WHERE provider_code='NBRK'
+            """+(db!=null && db.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
+                    ?" FOR SHARE":" FOR UPDATE");
+    }
+
+    /**
+     * The trusted writer holds NBRK FOR UPDATE until its whole revision batch
+     * commits. This shared lock guarantees that a new correction cannot cross
+     * the calculation/approval's latest-revision check before commit.
+     */
+    private void lockOfficialRateSource() {
+        String row=jdbc.query(officialRateReadLockSql,
+                rs->rs.next()?rs.getString(1):null);
+        if(!"NBRK".equals(row))
+            throw new IllegalStateException("CUR_R2A_TRUSTED_RATE_SOURCE_UNAVAILABLE");
+    }
 
     public SkuFxSellerApprovalService(JdbcTemplate jdbc, StorefrontOfferService offers,
                  TenantCurrencyPolicyService currencies, SkuFxCandidateCalculator calculator) {
@@ -92,6 +118,7 @@ public class SkuFxSellerApprovalService {
             throw new IllegalArgumentException("CUR_R2A_CALC_INPUT_INVALID");
         Policy policy=policy(tenant,policyId);
         offers.get(actor,tenant,policy.offer());
+        lockOfficialRateSource();
         currencies.requireCurrencyForPurpose(tenant,policy.currency(),"SALES_INTERNAL");
         lockStorefront(tenant);
         Offer offer=offer(tenant,policy.offer());
@@ -176,6 +203,7 @@ public class SkuFxSellerApprovalService {
         // -> storefront -> offer in the established order.
         UUID priceRevision=null;
         if(approve) {
+            lockOfficialRateSource();
             // Recheck latest policy/rate and block negotiation while holding
             // seller storefront lock acquired by the following price mutation.
             if(!"KZT".equals(offer(tenant,calculation.offer()).currency()))
