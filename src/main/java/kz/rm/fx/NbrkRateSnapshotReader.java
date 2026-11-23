@@ -16,7 +16,7 @@ import java.util.UUID;
  * order repricing operation; callers must explicitly select NBRK policy.
  */
 @Service
-public final class NbrkRateSnapshotReader {
+public class NbrkRateSnapshotReader {
     public record Revision(UUID snapshotId, UUID importRunId,
                            String currency, BigDecimal nominal, BigDecimal rateKzt,
                            LocalDate validDate, int revision, String semanticSha256,
