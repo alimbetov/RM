@@ -1,6 +1,5 @@
 package kz.rm.tasks;
 
-import kz.rm.crm.CrmInteractionService;
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
@@ -25,15 +24,13 @@ public class TaskCrmFollowupService {
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
-    private final CrmInteractionService crm;
     private final TaskService tasks;
     private final Clock clock;
 
     public TaskCrmFollowupService(JdbcTemplate jdbc,TenantAuthorization authorization,
-                                  CrmInteractionService crm,TaskService tasks,Clock clock) {
+                                  TaskService tasks,Clock clock) {
         this.jdbc=jdbc;
         this.authorization=authorization;
-        this.crm=crm;
         this.tasks=tasks;
         this.clock=clock;
     }
