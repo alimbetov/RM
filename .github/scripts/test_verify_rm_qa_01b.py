@@ -32,7 +32,24 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                 "artifacts": [],
             }
             for artifact in artifacts:
+                artifact_name=artifact.replace("{sha}","f"*40)
                 suite_cases = {"SmokeQualificationTest": ["smokePasses"]}
+                skipped = set()
+                if artifact_name.startswith("rm-task-"):
+                    names = [
+                        "t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory",
+                        "t02TenantIsolationAndEmployeeCannotManageOrArchive",
+                        "t03StaleVersionAndInvalidTransitionLeaveNoEvent",
+                        "t04PostgresqlConcurrentStartAllowsExactlyOneTransition",
+                        "t05PostgresqlImmutableTaskHistoryRejectsTampering",
+                        "t06ReassignmentHistoryCapturesBothEmployeesAndRevokesOldVisibility",
+                        "t07SuspendedAssigneeCannotReceiveNewTaskOrReassignment",
+                        "t08PostgresqlSuspensionWaitsUntilAdmittedCreationCommits",
+                        "t09LegacyNullAssigneeCanBeAssignedWithoutLosingAudit",
+                    ]
+                    suite_cases={"TaskServiceQualificationTest":names}
+                    if artifact_name.startswith("rm-task-h2-"):
+                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08"))}
                 if artifact == "kms-postgres-surefire":
                     suite_cases = {
                         "CommercialCoreE2EQualificationTest": [
@@ -58,8 +75,8 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                     suite_cases.setdefault(required_suite, [])
                     if required_method not in suite_cases[required_suite]:
                         suite_cases[required_suite].append(required_method)
-                self.artifact_bytes[artifact_id] = self.make_zip(suite_cases)
-                group["artifacts"].append({"name": artifact, "id": artifact_id})
+                self.artifact_bytes[artifact_id] = self.make_zip(suite_cases, skipped)
+                group["artifacts"].append({"name": artifact_name, "id": artifact_id})
                 artifact_id += 1
             gates.append(group)
         self.manifest = {
