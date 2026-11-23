@@ -1,6 +1,7 @@
 package kz.rm.storefront;
 
 import kz.rm.iam.DomainPermission;
+import kz.rm.organization.CommerceCurrencyAdmission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,16 +32,33 @@ public class StorefrontOfferService {
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
+    private final CommerceCurrencyAdmission currencyAdmission;
 
     public StorefrontOfferService(JdbcTemplate jdbc, TenantAuthorization authorization) {
+        this(jdbc, authorization, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public StorefrontOfferService(JdbcTemplate jdbc, TenantAuthorization authorization,
+                                 CommerceCurrencyAdmission currencyAdmission) {
         this.jdbc = jdbc;
         this.authorization = authorization;
+        this.currencyAdmission = currencyAdmission;
+    }
+
+    private void lockCurrency(UUID tenant) {
+        if (currencyAdmission != null) currencyAdmission.lockKzMarket(tenant);
+    }
+
+    private void requirePublicCurrency(String currency) {
+        if (currencyAdmission != null) currencyAdmission.assertKzt(currency);
     }
 
     @Transactional
     public Offer createDraft(VerifiedActor actor, UUID tenant, UUID catalogItemId,
                              String title, BigDecimal amount, String currency) {
         UUID user = admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        lockCurrency(tenant);
         lockStorefront(tenant);
         validatePrice(title, amount, currency);
         validateCatalogProduct(tenant, catalogItemId, false);
@@ -61,9 +79,11 @@ public class StorefrontOfferService {
                              String title, BigDecimal amount, String currency,
                              long expectedVersion) {
         UUID user = admit(actor, tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        lockCurrency(tenant);
         lockStorefront(tenant);
         validatePrice(title, amount, currency);
         Offer current = locked(tenant, offerId, expectedVersion);
+        if (current.state() == State.PUBLISHED) requirePublicCurrency(currency);
         if (current.state() != State.DRAFT && current.state() != State.PAUSED
                 && current.state() != State.HIDDEN && current.state() != State.PUBLISHED)
             throw new IllegalStateException("Invalid offer state");
@@ -84,6 +104,24 @@ public class StorefrontOfferService {
         audit(tenant, user, offerId, "STOREFRONT_OFFER_PRICE_UPDATED");
         return new Offer(tenant, offerId, current.catalogItemId(), normalized,
                 amount, currency, current.state(), expectedVersion + 1);
+    }
+
+    /**
+     * Explicit seller decision: delegates to the canonical offer CAS and
+     * immutable price revision. Never uses an FX rate during checkout.
+     */
+    @Transactional
+    public Offer approveSuggestedKzt(VerifiedActor actor, UUID tenant, UUID offerId,
+                                     BigDecimal approvedKzt, long expectedVersion) {
+        Offer current=get(actor,tenant,offerId);
+        if(current.state()!=State.PUBLISHED)
+            throw new IllegalStateException("FX_SELLER_APPROVAL_PUBLISHED_ONLY");
+        if(current.rowVersion()!=expectedVersion)
+            throw new IllegalStateException("STALE_OFFER_VERSION");
+        if(!"KZT".equals(current.currency()))
+            throw new IllegalStateException("FX_SELLER_APPROVAL_KZT_ONLY");
+        return updatePrice(actor,tenant,offerId,current.title(),
+                approvedKzt,"KZT",expectedVersion);
     }
 
     @Transactional
@@ -114,6 +152,7 @@ public class StorefrontOfferService {
         UUID user = admit(actor, tenant, target == State.PUBLISHED
                 ? DomainPermission.STOREFRONT_OFFER_PUBLISH
                 : DomainPermission.STOREFRONT_OFFER_MANAGE);
+        lockCurrency(tenant);
         lockStorefront(tenant);
         Offer current = locked(tenant, offerId, expectedVersion);
         if (current.state() == target)
@@ -132,6 +171,7 @@ public class StorefrontOfferService {
                     """, rs -> rs.next() ? rs.getString(1) : null, tenant);
             if (!"PUBLISHED".equals(storeState))
                 throw new IllegalStateException("STOREFRONT_UNAVAILABLE");
+            requirePublicCurrency(current.currency());
             validateCatalogProduct(tenant, current.catalogItemId(), true);
         }
         int changed = jdbc.update("""
