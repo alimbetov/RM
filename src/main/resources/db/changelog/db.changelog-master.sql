@@ -4019,3 +4019,31 @@ CREATE TRIGGER trg_cur_r2a_decision_immutable
 --rollback DROP TRIGGER trg_cur_r2a_calc_immutable ON crm.sku_fx_calculation;
 --rollback DROP TRIGGER trg_cur_r2a_policy_immutable ON crm.sku_fx_policy_version;
 --rollback DROP FUNCTION crm.cur_r2a_reject_evidence_mutation();
+
+
+--changeset rm:0131-cur-r2a-cross-reference-context-constraints
+-- Defend provenance against cross-policy-revision and wrong-offer references.
+ALTER TABLE crm.sku_fx_policy_version
+ ADD CONSTRAINT uq_sku_fx_policy_revision_ref UNIQUE(tenant_id,id,revision);
+ALTER TABLE crm.sku_fx_calculation
+ ADD CONSTRAINT fk_sku_fx_calc_policy_revision
+ FOREIGN KEY (tenant_id,policy_id,policy_revision)
+ REFERENCES crm.sku_fx_policy_version(tenant_id,id,revision);
+ALTER TABLE crm.sku_fx_calculation
+ ADD CONSTRAINT uq_sku_fx_calc_offer_ref UNIQUE(tenant_id,id,offer_id);
+ALTER TABLE crm.sku_fx_seller_decision
+ ADD CONSTRAINT fk_sku_fx_decision_calc_offer
+ FOREIGN KEY (tenant_id,calculation_id,offer_id)
+ REFERENCES crm.sku_fx_calculation(tenant_id,id,offer_id);
+ALTER TABLE crm.store_offer_price_revision
+ ADD CONSTRAINT uq_sku_fx_price_offer_ref UNIQUE(tenant_id,id,offer_id);
+ALTER TABLE crm.sku_fx_seller_decision
+ ADD CONSTRAINT fk_sku_fx_decision_price_offer
+ FOREIGN KEY (tenant_id,price_revision_id,offer_id)
+ REFERENCES crm.store_offer_price_revision(tenant_id,id,offer_id);
+--rollback ALTER TABLE crm.sku_fx_seller_decision DROP CONSTRAINT fk_sku_fx_decision_price_offer;
+--rollback ALTER TABLE crm.store_offer_price_revision DROP CONSTRAINT uq_sku_fx_price_offer_ref;
+--rollback ALTER TABLE crm.sku_fx_seller_decision DROP CONSTRAINT fk_sku_fx_decision_calc_offer;
+--rollback ALTER TABLE crm.sku_fx_calculation DROP CONSTRAINT uq_sku_fx_calc_offer_ref;
+--rollback ALTER TABLE crm.sku_fx_calculation DROP CONSTRAINT fk_sku_fx_calc_policy_revision;
+--rollback ALTER TABLE crm.sku_fx_policy_version DROP CONSTRAINT uq_sku_fx_policy_revision_ref;
