@@ -48,7 +48,7 @@ public class SkuFxSellerApprovalService {
     private final TenantCurrencyPolicyService currencies;
     private final SkuFxCandidateCalculator calculator;
     private String officialRateReadLockSql;
-    private Clock clock=Clock.systemUTC();
+    private final Clock clock;
 
     @PostConstruct
     void configureSourceLock() {
@@ -74,8 +74,10 @@ public class SkuFxSellerApprovalService {
     }
 
     public SkuFxSellerApprovalService(JdbcTemplate jdbc, StorefrontOfferService offers,
-                 TenantCurrencyPolicyService currencies, SkuFxCandidateCalculator calculator) {
+                 TenantCurrencyPolicyService currencies, SkuFxCandidateCalculator calculator,
+                 Clock clock) {
         this.jdbc=jdbc;this.offers=offers;this.currencies=currencies;this.calculator=calculator;
+        this.clock=java.util.Objects.requireNonNull(clock,"FX evaluation clock required");
     }
 
     /**
@@ -111,7 +113,7 @@ public class SkuFxSellerApprovalService {
                buffer_pct,markup_pct,rounding_step_kzt,approved_by,created_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """,tenant,id,offerId,revision+1,anchorCurrency,anchor,buffer,markup,
-                roundingStep,actor.userId(),Timestamp.from(Instant.now()));
+                roundingStep,actor.userId(),Timestamp.from(clock.instant()));
         return new Policy(id,tenant,offerId,revision+1,anchorCurrency,anchor,buffer,
                 markup,roundingStep);
     }
@@ -168,7 +170,7 @@ public class SkuFxSellerApprovalService {
         if(policy.revision()!=latestPolicyRevision(tenant,policy.offer()))
             throw new IllegalStateException("CUR_R2A_POLICY_STALE");
         Rate rate=rate(rateId,policy.currency());
-        if(rate.date().isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Almaty"))))
+        if(rate.date().isAfter(LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")))))
             throw new IllegalStateException("CUR_R2A_FUTURE_RATE_FORBIDDEN");
         if(rate.revision()!=latestRateRevision(rate))
             throw new IllegalStateException("CUR_R2A_RATE_SUPERSEDED");
@@ -298,7 +300,7 @@ public class SkuFxSellerApprovalService {
                action,price_revision_id,decided_at)
             VALUES (?,?,?,?,?,?,?,?,?)
             """,tenant,id,calculationId,calculation.offer(),actor.userId(),
-                requestKey,action,priceRevision,Timestamp.from(Instant.now()));
+                requestKey,action,priceRevision,Timestamp.from(clock.instant()));
         return new Decision(id,calculationId,action,priceRevision);
     }
 
