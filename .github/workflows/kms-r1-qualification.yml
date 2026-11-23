@@ -17,6 +17,8 @@ permissions:
   contents: read
 
 jobs:
+  # Synthetic CI keys only, never production credentials.
+  # Required by full CRM deletion/email suites in both H2 and PostgreSQL.
   h2-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -30,6 +32,9 @@ jobs:
       - name: Maven test (H2 / dev profile)
         env:
           SPRING_PROFILES_ACTIVE: dev
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
         run: mvn -B -ntp clean verify
       - name: Upload H2 test results
         if: always()
@@ -69,6 +74,11 @@ jobs:
           RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
           RM_TEST_DB_USERNAME: rm
           RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: '4'
+          SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: '1'
         run: |
           # Generic PG qualification runs the dedicated QR-06B multi-JVM
           # scenarios too. Supply the same real dependency classpath instead
@@ -123,6 +133,9 @@ jobs:
           RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
           RM_TEST_DB_USERNAME: rm
           RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
         run: >-
           mvn -B -ntp clean verify
           -Dtest=IamPiiPopulatedDatabaseQualificationTest
