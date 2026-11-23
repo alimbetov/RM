@@ -5,6 +5,9 @@ on:
     branches: [base_dev]
     paths:
       - 'src/main/java/kz/rm/sales/SalesInventoryCommandService.java'
+      - 'src/main/java/kz/rm/autoorder/AutoOrderService.java'
+      - 'src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java'
       - 'src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - '.github/workflows/rm-fc40-order-execution-pg.yml'
@@ -47,20 +50,29 @@ jobs:
           cache: maven
       - name: Verify exact SHA
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Verify FC-40 picked-order cancellation and generic fulfill denial
+      - name: Verify FC-40 lifecycle, QR provenance and immutable channel admission
         run: |
           set -o pipefail
           mkdir -p target/fc40-evidence
-          mvn -B -ntp '-Dtest=SalesInventoryRbacQualificationTest#fc40PickedOrderCannotCancelAndReservationStaysIntact' test 2>&1 | tee target/fc40-evidence/console.log
+          mvn -B -ntp '-Dtest=SalesInventoryRbacQualificationTest#fc40PickedOrderCannotCancelAndReservationStaysIntact+decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing,PublishedQrCheckoutQualificationTest,QrNegotiatedCheckoutQualificationTest' test 2>&1 | tee target/fc40-evidence/console.log
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          p=Path('target/surefire-reports/TEST-kz.rm.sales.SalesInventoryRbacQualificationTest.xml')
-          assert p.is_file(), 'FC40_MISSING_SUREFIRE_XML'
-          root=ET.parse(p).getroot()
-          cases=list(root.iter('testcase'))
-          assert len(cases)==1 and cases[0].get('name')=='fc40PickedOrderCannotCancelAndReservationStaysIntact'
-          assert not any(c.find(k) is not None for c in cases for k in ('error','failure','skipped'))
+          root=Path('target/surefire-reports')
+          paths=list(root.glob('TEST-*.xml'))
+          assert paths, 'FC40_MISSING_SUREFIRE_XML'
+          cases=[c for p in paths for c in ET.parse(p).getroot().iter('testcase')]
+          required={'fc40PickedOrderCannotCancelAndReservationStaysIntact',
+                    'decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing',
+                    'decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation',
+                    'decFul01RegularCheckoutRetainsHistoricalStandardChannel',
+                    'decFul01PostgresRejectsDowngradingQrOrderFulfillmentMode',
+                    'qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource'}
+          names={c.get('name') for c in cases}
+          assert required <= names, 'FC40_MISSING_CASES: '+str(sorted(required-names))
+          assert not any(c.find(k) is not None for c in cases
+                         for k in ('error','failure','skipped')), 'FC40_SUREFIRE_NOT_GREEN'
+          assert len(cases)>=6, 'FC40_TOO_FEW_TESTS'
           PY
           printf '%s\n' "$GITHUB_SHA" > target/fc40-evidence/exact-sha.txt
       - name: Preserve FC40 PostgreSQL evidence
