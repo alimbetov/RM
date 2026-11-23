@@ -21,6 +21,7 @@ public final class TrustedNbrkIngestionService {
     private final NbrkRssXmlParser parser;
     private final NbrkRateRevisionWriter writer;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public TrustedNbrkIngestionService(TrustedNbrkHttpClient client,
                                        NbrkRssXmlParser parser,
                                        NbrkRateRevisionWriter writer) {
