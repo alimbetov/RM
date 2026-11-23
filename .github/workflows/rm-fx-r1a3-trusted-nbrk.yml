@@ -30,7 +30,7 @@ jobs:
       - name: Exact SHA
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Execute H2 and offline parser qualification
-        run: mvn -B -ntp -Dtest=TrustedNbrkIngestionQualificationTest,TrustedNbrkHttpClientTransportQualificationTest,NbrkRssXmlParserQualificationTest,FxRateSnapshotQualificationTest test
+        run: mvn -B -ntp -Dtest=TrustedNbrkIngestionQualificationTest,TrustedNbrkHttpClientTransportQualificationTest,SkuFxCandidateCalculatorTest,NbrkRssXmlParserQualificationTest,FxRateSnapshotQualificationTest test
       - name: Validate exact case counts and H2 expected PG-only skips
         run: |
           python3 - <<'PY'
@@ -39,6 +39,7 @@ jobs:
           cases = {
             'TrustedNbrkIngestionQualificationTest': (15,1),
             'TrustedNbrkHttpClientTransportQualificationTest': (7,0),
+            'SkuFxCandidateCalculatorTest': (9,0),
             'NbrkRssXmlParserQualificationTest': (8,0),
             'FxRateSnapshotQualificationTest': (6,1),
           }
@@ -91,14 +92,15 @@ jobs:
       - name: Exact SHA
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Execute PostgreSQL immutable and concurrent qualifications
-        run: mvn -B -ntp -Dtest=TrustedNbrkIngestionQualificationTest,TrustedNbrkHttpClientTransportQualificationTest,NbrkRssXmlParserQualificationTest,FxRateSnapshotQualificationTest test
-      - name: Require 36 executed cases (no skips)
+        run: mvn -B -ntp -Dtest=TrustedNbrkIngestionQualificationTest,TrustedNbrkHttpClientTransportQualificationTest,SkuFxCandidateCalculatorTest,NbrkRssXmlParserQualificationTest,FxRateSnapshotQualificationTest test
+      - name: Require 45 executed cases (no skips)
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
           for name,count in [('TrustedNbrkIngestionQualificationTest',15),
                              ('TrustedNbrkHttpClientTransportQualificationTest',7),
+                             ('SkuFxCandidateCalculatorTest',9),
                              ('NbrkRssXmlParserQualificationTest',8),
                              ('FxRateSnapshotQualificationTest',6)]:
             files=list(Path('target/surefire-reports').glob(f'TEST-*{name}.xml'))
