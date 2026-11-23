@@ -2,6 +2,7 @@ package kz.rm.storefront;
 
 import kz.rm.files.CatalogPublicProductMedia;
 import kz.rm.inventory.RegionalPublicAvailabilityPort;
+import kz.rm.organization.CommerceCurrencyAdmission;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,13 +29,23 @@ public class PublishedOfferCardQuery {
     private final JdbcTemplate jdbc;
     private final CatalogPublicProductMedia publicMedia;
     private final RegionalPublicAvailabilityPort regional;
+    private final CommerceCurrencyAdmission currencyAdmission;
 
     public PublishedOfferCardQuery(JdbcTemplate jdbc,
                                    CatalogPublicProductMedia publicMedia,
                                    RegionalPublicAvailabilityPort regional) {
-        this.jdbc = jdbc;
-        this.publicMedia = publicMedia;
-        this.regional = regional;
+        this(jdbc,publicMedia,regional,null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PublishedOfferCardQuery(JdbcTemplate jdbc,
+                                   CatalogPublicProductMedia publicMedia,
+                                   RegionalPublicAvailabilityPort regional,
+                                   CommerceCurrencyAdmission currencyAdmission) {
+        this.jdbc=jdbc;
+        this.publicMedia=publicMedia;
+        this.regional=regional;
+        this.currencyAdmission=currencyAdmission;
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +86,13 @@ public class PublishedOfferCardQuery {
                 rs.getLong(11),"UNKNOWN",List.of()), locale, publicRef);
         if (rows.isEmpty()) throw new IllegalArgumentException("QR_UNAVAILABLE");
         var card = rows.getFirst();
+        if (currencyAdmission != null && currencyAdmission.enabled()) {
+            java.util.UUID tenant=jdbc.query("""
+                SELECT tenant_id FROM crm.store_offer_qr_ref
+                WHERE public_ref=? AND state='ACTIVE'
+                """,rs->rs.next()?rs.getObject(1,java.util.UUID.class):null,publicRef);
+            currencyAdmission.assertPublicRead(tenant,card.currency());
+        }
         // Second SQL statement is admission-checked again by FILES, never
         // returns detached, infected or previously-private original bytes.
         var images = List.copyOf(publicMedia.listPublished(publicRef,20));
