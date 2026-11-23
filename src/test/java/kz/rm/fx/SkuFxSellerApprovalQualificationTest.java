@@ -783,6 +783,10 @@ class SkuFxSellerApprovalQualificationTest {
         var receipt=fx.decide(f.actor(),f.tenant(),c.id(),true,
                 "r2b-calendar-closed-001");
         assertThat(receipt.action()).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject("""
+            SELECT calendar_source_id FROM crm.sku_fx_seller_decision
+            WHERE tenant_id=? AND id=?
+            """,UUID.class,f.tenant(),receipt.id())).isEqualTo(sourceId);
         assertThat(revisions(f)).isEqualTo(1);
         assertThat(decisions(f)).isEqualTo(1);
     }
@@ -911,6 +915,35 @@ class SkuFxSellerApprovalQualificationTest {
         } finally {
             release.countDown();
         }
+    }
+
+    @Test void r2b18IdenticalCalendarSourceReplayReturnsSameImmutableIdentity() {
+        byte[] raw="KASE trusted-replay synthetic evidence".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        String sha=calendarDigest(raw);
+        String url="https://kase.kz/ru/members/trading-and-clearing-regulation";
+        var day=new NbrkTradingCalendarPolicy.Day(effectiveDate(),"USD/KZT",
+                NbrkTradingCalendarPolicy.TradingStatus.CLOSED,url,sha);
+        UUID original=calendarEvidence.stageSource(url,raw,sha,List.of(day));
+        UUID replay=calendarEvidence.stageSource(url,raw,sha,List.of(day));
+        assertThat(replay).isEqualTo(original);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.fx_calendar_source_evidence WHERE id=?
+            """,Integer.class,original)).isEqualTo(1);
+    }
+
+    @Test void r2b19ReplayedSameSourceCannotChangeTradingStatus() {
+        byte[] raw="KASE immutable-assertion synthetic evidence".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        String sha=calendarDigest(raw);
+        String url="https://kase.kz/ru/members/trading-and-clearing-regulation";
+        var first=new NbrkTradingCalendarPolicy.Day(effectiveDate(),"USD/KZT",
+                NbrkTradingCalendarPolicy.TradingStatus.CLOSED,url,sha);
+        calendarEvidence.stageSource(url,raw,sha,List.of(first));
+        var altered=new NbrkTradingCalendarPolicy.Day(effectiveDate(),"USD/KZT",
+                NbrkTradingCalendarPolicy.TradingStatus.TRADING,url,sha);
+        assertThatThrownBy(()->calendarEvidence.stageSource(url,raw,sha,List.of(altered)))
+                .hasMessage("CUR_R2B_CALENDAR_REPLAY_CONFLICT");
     }
 
 }
