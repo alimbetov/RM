@@ -753,7 +753,7 @@ class SkuFxSellerApprovalQualificationTest {
 
     private UUID stageCalendar(NbrkTradingCalendarPolicy.TradingStatus status,
                                LocalDate date) {
-        byte[] source="RM synthetic calendar qualification fixture".getBytes(
+        byte[] source=("RM synthetic calendar qualification fixture "+UUID.randomUUID()).getBytes(
                 java.nio.charset.StandardCharsets.UTF_8);
         String sha=calendarDigest(source);
         String url="https://kase.kz/ru/members/trading-and-clearing-regulation";
