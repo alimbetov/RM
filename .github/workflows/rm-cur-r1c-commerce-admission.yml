@@ -32,7 +32,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify currency checkout admission H2
         run: mvn -B -ntp -Dtest=CommerceCurrencyAdmissionQualificationTest test
-      - name: Assert nine tests, one PG-only skip
+      - name: Assert ten tests, two PG-only skips
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as E
@@ -40,8 +40,8 @@ jobs:
           p=Path('target/surefire-reports/TEST-kz.rm.organization.CommerceCurrencyAdmissionQualificationTest.xml')
           assert p.is_file()
           cs=list(E.parse(p).getroot().iter('testcase'))
-          assert len(cs)==9,len(cs)
-          assert sum(c.find('skipped') is not None for c in cs)==1
+          assert len(cs)==10,len(cs)
+          assert sum(c.find('skipped') is not None for c in cs)==2
           assert not any(c.find(t) is not None for c in cs for t in ('failure','error'))
           PY
       - uses: actions/upload-artifact@v4
@@ -85,7 +85,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify currency checkout and policy race PostgreSQL
         run: mvn -B -ntp -Dtest=CommerceCurrencyAdmissionQualificationTest test
-      - name: Assert nine PostgreSQL cases without skips
+      - name: Assert ten PostgreSQL cases without skips
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as E
@@ -93,7 +93,7 @@ jobs:
           p=Path('target/surefire-reports/TEST-kz.rm.organization.CommerceCurrencyAdmissionQualificationTest.xml')
           assert p.is_file()
           cs=list(E.parse(p).getroot().iter('testcase'))
-          assert len(cs)==9,len(cs)
+          assert len(cs)==10,len(cs)
           assert not any(c.find(t) is not None for c in cs for t in ('failure','error','skipped'))
           PY
       - uses: actions/upload-artifact@v4
