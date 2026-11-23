@@ -29,15 +29,15 @@
 
 Seller policy configuration: verified IAM/workspace admission -> tenant currency policy -> storefront lock -> read offer / policy revision -> immutable insert.
 
-Calculation: verified IAM -> tenant currency -> storefront lock -> read offer and NBRK immutable snapshot -> pure BigDecimal calculation -> immutable insert.
+Calculation: verified IAM -> NBRK shared source lock -> tenant currency -> storefront lock -> read offer and NBRK immutable snapshot -> pure BigDecimal calculation -> immutable insert.
 
-Seller approval: actor's existing offer authorization -> canonical STOREFRONT price change (IAM -> currency -> storefront -> offer) -> validate latest policy/rate and active negotiations **while storefront lock remains held** -> insert linked immutable decision. Any validation failure aborts the same transaction and rolls back the price change. Concurrent checkout and negotiation also lock storefront before offer to provide a serial order.
+Seller approval: actor's existing offer authorization -> NBRK shared source lock -> canonical STOREFRONT price change (IAM -> currency -> storefront -> offer) -> validate latest policy/rate and active negotiations **while storefront lock remains held** -> insert linked immutable decision. Any validation failure aborts the same transaction and rolls back the price change. Concurrent checkout and negotiation also lock storefront before offer to provide a serial order.
 
-Important unresolved concern: same-date NBRK correction may commit concurrently with approval. Approval checks the latest known revision during its transaction. Further linearization on the provider row or explicit captured-rate-as-of policy must be separately qualified before production.
+NBRK source revision consistency: CUR-R2A takes a transaction-scoped shared lock on the provider row (PostgreSQL `FOR SHARE`, H2 `FOR UPDATE`). The trusted import writer uses `FOR UPDATE` on that same row; therefore an official correction cannot commit across a calculator or approval latest-revision check. A PostgreSQL race test must prove correction-first denial and rollback.
 
 ## 4. Qualification
 
-`SkuFxSellerApprovalQualificationTest` (10 scenarios):
+`SkuFxSellerApprovalQualificationTest` (12 scenarios):
 - CUR-R2A-01 policy revision history and CAS;
 - CUR-R2A-02 trusted immutable calculation and idempotent same-input replay;
 - CUR-R2A-03 approval chain: policy/rate/calculation/decision/canonical offer price revision; exact retry;
@@ -47,7 +47,9 @@ Important unresolved concern: same-date NBRK correction may commit concurrently 
 - CUR-R2A-07 active negotiation prevents approval and rolls back all price changes;
 - CUR-R2A-08 pre-existing placed order KZT snapshot survives seller FX price approval;
 - CUR-R2A-09 tenant isolation and denied cross-tenant commands;
-- CUR-R2A-10 PostgreSQL rejects mutation of evidence via UPDATE/DELETE.
+- CUR-R2A-10 PostgreSQL rejects mutation of evidence via UPDATE/DELETE;
+- CUR-R2A-11 PostgreSQL negotiation commit before seller approval denies price mutation;
+- CUR-R2A-12 PostgreSQL trusted NBRK correction commits before seller approval, causing stale-rate rejection without price mutation.
 
 Also qualify 9 pure `SkuFxCandidateCalculatorTest` scenarios for BigDecimal precision, nominal and rounding. Run H2 and real PostgreSQL 17 with exact checkout SHA, Surefire manifests and full RM exact-SHA release gate. **PASS may only be recorded after checking the final committed SHA and run conclusions.**
 
