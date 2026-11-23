@@ -969,4 +969,16 @@ class SkuFxSellerApprovalQualificationTest {
             """,Integer.class,source)).isEqualTo(1);
     }
 
+    @Test void r2b21NonOwnerCannotEnableOfficialCalendarAdmission() {
+        var f=fixture();
+        UUID source=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,
+                effectiveDate());
+        assertThatThrownBy(()->calendarEvidence.enableForTenant(
+                f.actor(),f.tenant(),source,0))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.fx_calendar_tenant_gate WHERE tenant_id=?
+            """,Integer.class,f.tenant())).isZero();
+    }
+
 }
