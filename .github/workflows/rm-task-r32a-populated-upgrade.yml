@@ -142,6 +142,34 @@ jobs:
           docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
             SELECT count(*) FROM crm.task_reconciliation_snapshot" > /tmp/task-original-count.txt
           diff -u /tmp/task-original-count.txt /tmp/task-restore-count.txt
+          for db in rm_test rm_restore; do
+            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
+              SELECT s.tenant_id::text || '/' || s.id::text || '/' || z.items_sha256
+              FROM crm.task_reconciliation_snapshot s
+              JOIN crm.task_reconciliation_snapshot_seal z
+                ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+              ORDER BY 1" > "/tmp/task-$db-seals.txt"
+          done
+          diff -u /tmp/task-rm_test-seals.txt /tmp/task-rm_restore-seals.txt
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_restore -c "
+            DO \$\$ DECLARE invalid_count bigint;
+            BEGIN
+              SELECT count(*) INTO invalid_count
+              FROM crm.task_reconciliation_snapshot s
+              JOIN crm.task_reconciliation_snapshot_seal z
+                ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+              JOIN LATERAL (
+                SELECT count(*) AS item_count,
+                  encode(digest(coalesce(string_agg(
+                    i.task_id::text || '|' || i.captured_state || '|' ||
+                    i.captured_version::text || chr(10), ''
+                    ORDER BY i.task_id),''), 'sha256'),'hex') AS recomputed
+                FROM crm.task_reconciliation_snapshot_item i
+                WHERE i.tenant_id=s.tenant_id AND i.snapshot_id=s.id
+              ) d ON true
+              WHERE s.item_count<>d.item_count OR z.items_sha256<>d.recomputed;
+              IF invalid_count<>0 THEN RAISE EXCEPTION 'restored snapshot digest mismatch'; END IF;
+            END \$\$;"
       - name: Publish populated migration and restore Surefire evidence
         if: always()
         uses: actions/upload-artifact@v4
