@@ -30,7 +30,8 @@ R3.1 `pendingPage(afterTaskId)` provides bounded incremental traversal, NOT a st
 - T50: authorized manager recomputes digest and count from persisted immutable rows; foreign actors are denied.
 - T51 (PostgreSQL): exactly 10,000 tasks capture and traverse without loss.
 - T52 (PostgreSQL): CRM status transition wins the source lock and subsequent capture rejects without any manifest writes.
-- Mandatory gate: **52 PostgreSQL tests (0 skipped)** and **52 discovered H2 (17 PostgreSQL-only skipped)**; a dedicated populated PostgreSQL R3.1 → R3.2A migration/restore workflow and seven required domain/workflow families with exact SHA and matching checksums.
+- T53 (PostgreSQL): an admitted capture commits before concurrent IAM manager revocation, then subsequent page/capture requests are denied.
+- Mandatory gate: **53 PostgreSQL tests (0 skipped)** and **53 discovered H2 (18 PostgreSQL-only skipped)**; a dedicated populated PostgreSQL R3.1 → R3.2A migration/restore workflow and seven required domain/workflow families with exact SHA and matching checksums.
 - Post-commit `verifyIntegrity` validates persisted count and canonical SHA-256 under fresh authorization; a separate populated-upgrade workflow checks historical keys, full PostgreSQL recomputation and a restored database. **These are code/configuration obligations, not evidence of a completed CI run until the final SHA succeeds.**
 
 ## Следующий инженерный этап — R3.2B (актуальное исполняемое ТЗ)
@@ -73,7 +74,7 @@ Dispatcher contract for a later slice:
 
 - At scale: snapshot >10k requires partitioned snapshot/streaming design; the current cap is intentional and prevents false claims of completeness.
 - PostgreSQL populated upgrade, source-status races, post-commit replay and digest validation now have new qualification code/CI; **mark qualified only after final-head exact-SHA PASS**. Genuine external notification worker delivery/recovery remains R3.2B and is not implemented.
-- Actual lock contention p95/p99, large-tenant query plans, IAM membership-revocation interleaving during snapshot capture and full tenant retention review remain separate operational gates.
+- Actual lock contention p95/p99, large-tenant query plans, full account/membership suspension interleaving during snapshot capture and full tenant retention review remain separate operational gates.
 - Snapshot retention, encryption for historical plaintext title and sensitive notes, KMS/AAD, tenant data deletion and legal review.
 - Real OIDC/JWKS, production auth and external notifications: **STOP**.
 - No controllers/UI, no `main` merge, production **HOLD**.
