@@ -94,6 +94,15 @@ public class SalesInventoryCommandService {
         if("COMPLETED".equals(state) || "OUT_FOR_DELIVERY".equals(state)
                 || "READY_FOR_PICKUP".equals(state) || "REJECTED".equals(state))
             throw new IllegalStateException("Order cannot be cancelled");
+        // FC-40/DEC-SAL-02 conservative policy: physical pick evidence is append-only.
+        // Do not release stock or cancel an order after any line has been picked.
+        // A future audited reverse-pick workflow requires independent approval.
+        Integer picked=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_pick_confirmation
+            WHERE tenant_id=? AND order_id=?
+            """,Integer.class,tenantId,orderId);
+        if(picked!=null && picked>0)
+            throw new IllegalStateException("ORDER_CANCEL_REQUIRES_REVERSE_PICK");
         List<UUID> active=jdbc.query("""
             SELECT id FROM crm.inv_stock_reservation
             WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
