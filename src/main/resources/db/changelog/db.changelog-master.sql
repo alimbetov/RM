@@ -4047,3 +4047,53 @@ ALTER TABLE crm.sku_fx_seller_decision
 --rollback ALTER TABLE crm.sku_fx_calculation DROP CONSTRAINT uq_sku_fx_calc_offer_ref;
 --rollback ALTER TABLE crm.sku_fx_calculation DROP CONSTRAINT fk_sku_fx_calc_policy_revision;
 --rollback ALTER TABLE crm.sku_fx_policy_version DROP CONSTRAINT uq_sku_fx_policy_revision_ref;
+
+
+--changeset rm:0132-cur-r2b-immutable-seller-fx-guardrails
+-- Opt-in tenant/offer seller guardrail revisions; existing R2A evidence untouched.
+CREATE TABLE crm.sku_fx_guardrail_version (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ revision BIGINT NOT NULL,
+ max_increase_pct NUMERIC(8,4) NOT NULL,
+ max_decrease_pct NUMERIC(8,4) NOT NULL,
+ min_price_kzt NUMERIC(19,4) NOT NULL,
+ max_price_kzt NUMERIC(19,4) NOT NULL,
+ max_rate_calendar_days INTEGER NOT NULL,
+ calculation_ttl_seconds INTEGER NOT NULL,
+ approved_by UUID NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sku_fx_guardrail PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_sku_fx_guardrail_offer_revision UNIQUE(tenant_id,offer_id,revision),
+ CONSTRAINT uq_sku_fx_guardrail_ref UNIQUE(tenant_id,id,revision),
+ CONSTRAINT fk_sku_fx_guardrail_offer FOREIGN KEY(tenant_id,offer_id)
+  REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_sku_fx_guardrail_actor FOREIGN KEY(approved_by)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_sku_fx_guardrail_values CHECK (
+  revision>0 AND max_increase_pct>=0 AND max_increase_pct<=1000
+  AND max_decrease_pct>=0 AND max_decrease_pct<=100
+  AND min_price_kzt>0 AND max_price_kzt>=min_price_kzt
+  AND max_rate_calendar_days BETWEEN 0 AND 365
+  AND calculation_ttl_seconds BETWEEN 1 AND 604800)
+);
+ALTER TABLE crm.sku_fx_calculation ADD COLUMN guardrail_id UUID;
+ALTER TABLE crm.sku_fx_calculation ADD COLUMN guardrail_revision BIGINT;
+ALTER TABLE crm.sku_fx_calculation ADD CONSTRAINT ck_sku_fx_calc_guardrail_ref
+ CHECK ((guardrail_id IS NULL AND guardrail_revision IS NULL)
+     OR (guardrail_id IS NOT NULL AND guardrail_revision>0));
+ALTER TABLE crm.sku_fx_calculation ADD CONSTRAINT fk_sku_fx_calc_guardrail
+ FOREIGN KEY (tenant_id,guardrail_id,guardrail_revision)
+ REFERENCES crm.sku_fx_guardrail_version(tenant_id,id,revision);
+--rollback ALTER TABLE crm.sku_fx_calculation DROP CONSTRAINT fk_sku_fx_calc_guardrail;
+--rollback ALTER TABLE crm.sku_fx_calculation DROP CONSTRAINT ck_sku_fx_calc_guardrail_ref;
+--rollback ALTER TABLE crm.sku_fx_calculation DROP COLUMN guardrail_revision;
+--rollback ALTER TABLE crm.sku_fx_calculation DROP COLUMN guardrail_id;
+--rollback DROP TABLE crm.sku_fx_guardrail_version;
+
+--changeset rm:0133-cur-r2b-guardrail-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_cur_r2b_guardrail_immutable
+ BEFORE UPDATE OR DELETE ON crm.sku_fx_guardrail_version
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_cur_r2b_guardrail_immutable ON crm.sku_fx_guardrail_version;
