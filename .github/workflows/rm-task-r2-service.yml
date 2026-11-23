@@ -19,6 +19,7 @@ on:
       - 'docs/spec/RM-TASK-01B-R2-LIFECYCLE-HARDENING.md'
       - 'docs/spec/RM-TASK-01B-R3-CANCELLATION-RECONCILIATION.md'
       - 'docs/spec/RM-TASK-01B-R3.1-QUEUE-RECONCILIATION-HARDENING.md'
+      - 'docs/spec/RM-TASK-01B-R3.2-OPERATIONAL-RECONCILIATION.md'
       - 'docs/reviews/RM-TASK-R2-R3-CONSISTENCY-TECH-REVIEW-2026-11-23.md'
   workflow_dispatch:
 permissions:
