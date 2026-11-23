@@ -411,7 +411,7 @@ public class TaskService {
      */
     public record QueuePage(List<Task> items, UUID nextAfterId) {}
 
-    @Transactional(readOnly=true)
+    @Transactional
     public QueuePage managerQueue(VerifiedActor actor,UUID tenant,int limit,UUID afterId) {
         UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
         authorization.requireForCommand(manager,tenant,DomainPermission.TASK_READ);
