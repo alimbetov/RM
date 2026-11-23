@@ -217,11 +217,13 @@ def verify():
                         ("TaskServiceQualificationTest", "t13EarlierMembershipRevocationDeniesAssigneeCreation"),
                         ("TaskServiceQualificationTest", "t14PostgresqlRoleRevocationWaitsForAdmittedExecutionCommit"),
                         ("TaskServiceQualificationTest", "t15PostgresqlMembershipRevocationWaitsForTaskAssignmentCommit"),
+                        ("TaskServiceQualificationTest", "t16LostResponseAssignmentRetryUsesOneImmutableEvent"),
+                        ("TaskServiceQualificationTest", "t17ArchiveRetryAndCrossTaskKeyCollisionFailClosed"),
                     }
-                    if counts["tests"] != 15 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 15 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 15 or counts["skipped"] != 5):
-                    problems.append(f"{artifact_name}: expected 15 discovered cases with 5 PG-only skips")
+                    if counts["tests"] != 17 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 17 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 17 or counts["skipped"] != 5):
+                    problems.append(f"{artifact_name}: expected 17 discovered cases with 5 PG-only skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
