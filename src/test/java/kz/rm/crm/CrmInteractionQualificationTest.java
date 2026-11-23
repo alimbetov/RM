@@ -988,4 +988,53 @@ class CrmInteractionQualificationTest {
         }
     }
 
+    @Test void t00CancellationEventHasCanonicalIdentityAndSingleRevision() {
+        var t=tenant();
+        var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 Customer",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,"t00-create-single-001");
+        var changed=interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+        assertThat(changed.status()).isEqualTo(CrmInteractionService.Status.CANCELLED);
+        var row=jdbc.queryForMap("""
+                SELECT id, interaction_id, action_code, new_version, occurred_at
+                FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+                """,t.tenantId(),interaction.id());
+        assertThat(row.get("id")).isInstanceOf(UUID.class);
+        assertThat(row.get("interaction_id")).isEqualTo(interaction.id());
+        assertThat(((Number)row.get("new_version")).longValue()).isEqualTo(1L);
+        assertThat(((java.sql.Timestamp)row.get("occurred_at")).toInstant())
+                .isAfter(Instant.parse("2026-11-20T12:00:00Z"));
+        assertThatThrownBy(()->interactions.cancel(actor,t.tenantId(),interaction.id(),0))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+                """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+    }
+
+    @Test void t00OuterTransactionRollbackRemovesCancellationAndSourceEvent() {
+        var t=tenant();
+        var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 Rollback",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.NOTE,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,"t00-create-rollback-001");
+        var transaction=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        assertThatThrownBy(()->transaction.execute(status->{
+            interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+            throw new IllegalStateException("T00_ROLLBACK_AFTER_EVENT");
+        })).hasMessage("T00_ROLLBACK_AFTER_EVENT");
+        assertThat(interactions.get(actor,t.tenantId(),interaction.id()).status())
+                .isEqualTo(CrmInteractionService.Status.OPEN);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+                """,Integer.class,t.tenantId(),interaction.id())).isZero();
+        assertThat(interactions.cancel(actor,t.tenantId(),interaction.id(),0).status())
+                .isEqualTo(CrmInteractionService.Status.CANCELLED);
+    }
+
 }
