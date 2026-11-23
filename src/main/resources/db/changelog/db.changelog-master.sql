@@ -3667,7 +3667,7 @@ ALTER TABLE crm.sales_order
 --rollback ALTER TABLE crm.sales_order DROP COLUMN fulfillment_mode;
 
 
---changeset rm:0122-fc40-fulfillment-mode-immutable dbms:postgresql
+--changeset rm:0122-fc40-fulfillment-mode-immutable dbms:postgresql splitStatements:false
 -- The execution channel is immutable after order creation; a generic service
 -- cannot downgrade an already proof-required order via direct SQL.
 CREATE OR REPLACE FUNCTION crm.reject_sales_fulfillment_mode_change()
