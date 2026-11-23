@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.*;
 @TestPropertySource(properties={"RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 class CrmInteractionQualificationTest {
     @Autowired CrmInteractionService interactions;
+    @Autowired TenantAuthorization t00TenantAuthorization;
     @Autowired CrmCancellationReviewIntentPort cancellationIntentPort;
     @Autowired AuthenticatedCrmCommands customers;
     @Autowired AuthenticatedCrmQueries queries;
@@ -1234,6 +1235,79 @@ class CrmInteractionQualificationTest {
             SELECT count(*) FROM crm.customer_interaction_event
             WHERE tenant_id=? AND interaction_id=? AND new_version=1 AND action_code='CANCELLED'
             """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+    }
+
+    /**
+     * T00-PG/C05: a transaction-local probe reads the exact event generated
+     * by CRM, proving ID, tenant, revision and timestamp without a second
+     * event or a synthetic delivery worker.
+     */
+    @Test void t00PgTransactionPortReceivesPersistedCanonicalEvent() throws Exception {
+        requirePostgresR21b();
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 Handoff",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "t00-port-probe-"+UUID.randomUUID());
+        var observed=new java.util.concurrent.atomic.AtomicReference<CrmCancellationEventRef>();
+        CrmCancellationReviewIntentPort probe=event->{
+            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
+                    .isActualTransactionActive()).isTrue();
+            assertThat(observed.compareAndSet(null,event)).isTrue();
+            var actual=jdbc.queryForMap("""
+                SELECT tenant_id,interaction_id,action_code,new_version,occurred_at
+                FROM crm.customer_interaction_event WHERE tenant_id=? AND id=?
+                """,event.tenantId(),event.eventId());
+            assertThat(actual.get("tenant_id")).isEqualTo(event.tenantId());
+            assertThat(actual.get("interaction_id")).isEqualTo(event.interactionId());
+            assertThat(actual.get("action_code")).isEqualTo("CANCELLED");
+            assertThat(((Number)actual.get("new_version")).longValue())
+                    .isEqualTo(event.newVersion());
+            assertThat(((java.sql.Timestamp)actual.get("occurred_at")).toInstant())
+                    .isEqualTo(event.occurredAt());
+        };
+        var service=new CrmInteractionService(jdbc,t00TenantAuthorization,probe);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        var changed=tx.execute(status->service.cancel(actor,t.tenantId(),interaction.id(),0));
+        assertThat(changed.status()).isEqualTo(CrmInteractionService.Status.CANCELLED);
+        assertThat(observed.get()).isNotNull();
+        assertThat(observed.get().newVersion()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+            """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+    }
+
+    /** T00-PG/C10: a failed transaction-local sink rolls back source + event. */
+    @Test void t00PgPortFailureRollsBackCancellationAndEvent() throws Exception {
+        requirePostgresR21b();
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 Sink Failure",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "t00-port-fail-"+UUID.randomUUID());
+        CrmCancellationReviewIntentPort failure=event->{
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND id=?
+                """,Integer.class,event.tenantId(),event.eventId())).isEqualTo(1);
+            throw new IllegalStateException("T00_INJECTED_SINK_FAILURE");
+        };
+        var service=new CrmInteractionService(jdbc,t00TenantAuthorization,failure);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        assertThatThrownBy(()->tx.execute(status->service.cancel(actor,t.tenantId(),
+                interaction.id(),0))).hasMessage("T00_INJECTED_SINK_FAILURE");
+        assertThat(jdbc.queryForObject("""
+            SELECT status FROM crm.customer_interaction WHERE tenant_id=? AND id=?
+            """,String.class,t.tenantId(),interaction.id())).isEqualTo("OPEN");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+            """,Integer.class,t.tenantId(),interaction.id())).isZero();
+        assertThat(interactions.cancel(actor,t.tenantId(),interaction.id(),0).status())
+                .isEqualTo(CrmInteractionService.Status.CANCELLED);
     }
 
 }
