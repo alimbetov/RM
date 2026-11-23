@@ -1045,4 +1045,195 @@ class CrmInteractionQualificationTest {
                 .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
     }
 
+    /**
+     * T00-PG/C04: two cancellation callers using the same CRM row_version
+     * cannot manufacture two canonical source events. The first transaction
+     * holds its CRM lock until a separate caller has started.
+     */
+    @Test void t00PgConcurrentCancellationCreatesExactlyOneCanonicalEvent() throws Exception {
+        requirePostgresR21b();
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 Concurrent",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "t00-concurrent-create-"+UUID.randomUUID());
+        var committed=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var secondStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                var result=interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+                committed.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("T00_CANCEL_RELEASE_TIMEOUT");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            assertThat(committed.await(15,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                secondStarted.countDown();
+                try {
+                    interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+                    return "UNEXPECTED_COMMIT";
+                }catch(IllegalStateException e){return "REJECTED";}
+            });
+            assertThat(secondStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally{release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS).status())
+                    .isEqualTo(CrmInteractionService.Status.CANCELLED);
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo("REJECTED");
+        }finally{release.countDown();}
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+            """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT new_version FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+            """,Long.class,t.tenantId(),interaction.id())).isEqualTo(1);
+    }
+
+    /** T00-PG/C09: IAM account suspension must serialize with CRM cancellation. */
+    @Test void t00PgActorSuspensionCommitsBeforeCancellationDeniesWithoutEvent()
+            throws Exception {
+        requirePostgresR21b();
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 IAM First",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.CALL,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "t00-iam-first-"+UUID.randomUUID());
+        var suspended=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var cancelStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                jdbc.update("""
+                    UPDATE public.iam_user_account SET status='SUSPENDED'
+                    WHERE id=?
+                    """,t.actorId());
+                suspended.countDown();
+                try {
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("T00_IAM_RELEASE_TIMEOUT");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(suspended.await(15,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                cancelStarted.countDown();
+                try {
+                    interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+                    return "UNEXPECTED_COMMIT";
+                }catch(SecurityException e){return "DENIED";}
+            });
+            assertThat(cancelStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try{
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally{release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo("DENIED");
+        }finally{release.countDown();}
+        assertThat(jdbc.queryForObject("""
+            SELECT status FROM crm.customer_interaction WHERE tenant_id=? AND id=?
+            """,String.class,t.tenantId(),interaction.id())).isEqualTo("OPEN");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+            """,Integer.class,t.tenantId(),interaction.id())).isZero();
+    }
+
+    /** T00-PG/C09: admitted cancellation completes before later IAM suspension. */
+    @Test void t00PgCancellationCommitsBeforeActorSuspensionPreservesOneEvent()
+            throws Exception {
+        requirePostgresR21b();
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 CRM First",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.NOTE,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "t00-crm-first-"+UUID.randomUUID());
+        var admitted=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var suspendStarted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                var result=interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+                admitted.countDown();
+                try{
+                    if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("T00_CRM_RELEASE_TIMEOUT");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            assertThat(admitted.await(15,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=pool.submit(()->{
+                suspendStarted.countDown();
+                return jdbc.update("""
+                    UPDATE public.iam_user_account SET status='SUSPENDED'
+                    WHERE id=?
+                    """,t.actorId());
+            });
+            assertThat(suspendStarted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->second.get(300,java.util.concurrent.TimeUnit.MILLISECONDS))
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }finally{release.countDown();}
+            assertThat(first.get(20,java.util.concurrent.TimeUnit.SECONDS).status())
+                    .isEqualTo(CrmInteractionService.Status.CANCELLED);
+            assertThat(second.get(20,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(1);
+        }finally{release.countDown();}
+        assertThat(jdbc.queryForObject("""
+            SELECT status FROM crm.customer_interaction WHERE tenant_id=? AND id=?
+            """,String.class,t.tenantId(),interaction.id())).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND action_code='CANCELLED'
+            """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+    }
+
+    @Test void t00PgCanonicalEventIdentityAndPrecisionAreStoredExactly() throws Exception {
+        requirePostgresR21b();
+        var t=tenant();var actor=verified(t.actorId());
+        var customer=customers.createCompany(actor,t.tenantId(),"T00 Event Source",null);
+        var interaction=interactions.record(actor,t.tenantId(),customer.id(),null,
+                CrmInteractionService.Kind.NOTE,null,
+                Instant.parse("2026-11-20T12:00:00Z"),null,
+                "t00-precision-"+UUID.randomUUID());
+        interactions.cancel(actor,t.tenantId(),interaction.id(),0);
+        var event=interactions.history(actor,t.tenantId(),interaction.id(),10)
+                .stream().filter(e->e.action().equals("CANCELLED")).findFirst().orElseThrow();
+        assertThat(event.id()).isNotNull();
+        assertThat(event.newVersion()).isEqualTo(1);
+        assertThat(event.occurredAt().getNano()%1000).isZero();
+        assertThat(jdbc.queryForObject("""
+            SELECT occurred_at FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND id=?
+            """,java.sql.Timestamp.class,t.tenantId(),event.id()).toInstant())
+                .isEqualTo(event.occurredAt());
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.customer_interaction_event
+            WHERE tenant_id=? AND interaction_id=? AND new_version=1 AND action_code='CANCELLED'
+            """,Integer.class,t.tenantId(),interaction.id())).isEqualTo(1);
+    }
+
 }
