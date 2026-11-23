@@ -68,3 +68,22 @@ All tests run against actual PostgreSQL and assert row counts, actual amounts, s
 **Audit-only constraints:** migrations 0129–0131 and DEC-FUL-01 unchanged; public KZT price remains exclusively STOREFRONT-owned. No new FX controller or automatic FX repricing.
 
 **CI:** final test results must be separately confirmed by exact-SHA action runs. This section does not assert admission.
+
+## 9. CUR-R2B.4: calendar evidence and real PostgreSQL inverse safety (2026-11-23)
+
+Source-of-truth split: NBRK published FX `valid_date`/snapshot/revision remains the only rate input; KASE publishes a trading and clearing calendar and instrument-specific exceptions. Official references:
+- https://nationalbank.kz/ru/exchangerates/ezhednevnye-oficialnye-rynochnye-kursy-valyut/
+- https://kase.kz/ru/members/trading-and-clearing-regulation?calendar=2026
+- https://kase.kz/ru/information/news/show/1576861 (October 2026 exceptions)
+
+**R2B.4 implementation scope:** `NbrkTradingCalendarPolicy` is an independent pure evaluator of dated, instrument-bound `TRADING`/`CLOSED` evidence. It rejects missing dates, instrument mismatch and disallowed source URL/invalid SHA format. It **does not download KASE sources, verify the claimed hash against downloaded documents, own a canonical calendar repository, or enforce a calendar at seller approval**. Its test dates are synthetic qualification inputs, not attested source extracts. These remaining items are explicitly production HOLD prerequisites. The existing configured calendar-day guardrail in `SkuFxSellerApprovalService` is unchanged.
+
+PostgreSQL R2B.4 scenarios:
+- `r2b10`: actual two-transaction quote writer commits `AVAILABLE` quote first; FX approval must fail and append zero price revisions/decisions.
+- `r2b11`: account suspension commits before FX approval admission; existing IAM fencing must deny FX with zero changes.
+- Four pure calendar evidence tests cover 2026 holiday-like synthetic dates, missing coverage, currency/instrument mismatch, rejected source.
+- CI manifest requires **23 service integration tests** plus **9 candidate calculator tests** plus **4 calendar tests** in PostgreSQL. H2 expects 23 tests with 8 PG-only skips, plus 9+4 pure tests.
+
+Additional P0 work before full calendar closure: trusted KASE schedule ingestion with source fetch/digest verification, source history and immutable per-instrument day rows; explicit decision on publication lag and active-rate as-of semantics; service admission gate for selected UAT tenants; opposite IAM/quote ordering, failure/retry and no deadlocks.
+
+Never interpret these synthetic calendar tests as official 2026 holiday schedule verification. `DEC-FUL-01`, `main`, public KZT owner and production HOLD unchanged.
