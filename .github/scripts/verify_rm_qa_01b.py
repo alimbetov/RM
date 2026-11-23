@@ -244,11 +244,15 @@ def verify():
                         ("TaskServiceQualificationTest", "t40ManagerQueueCannotExposeAnotherTenantOrUnauthorizedRole"),
                         ("TaskServiceQualificationTest", "t41CancelledCrmReconciliationPageAdvancesWithoutRepeatingTasks"),
                         ("TaskServiceQualificationTest", "t42PostgresqlQueuePageDoesNotResurrectConcurrentlyClaimedTask"),
+                        ("TaskServiceQualificationTest", "t43FrozenReconciliationTraversalSurvivesConcurrentTaskCancellation"),
+                        ("TaskServiceQualificationTest", "t44SnapshotTenantAndActorPrivacyRequestReplayAndInvalidSource"),
+                        ("TaskServiceQualificationTest", "t45SnapshotRollbackBeforeCommitKeepsNoManifestAndRetryWorks"),
+                        ("TaskServiceQualificationTest", "t46PostgresqlSnapshotManifestAndEntriesAreImmutable"),
                     }
-                    if counts["tests"] != 42 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 42 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 42 or counts["skipped"] != 12):
-                    problems.append(f"{artifact_name}: expected 42 discovered cases with 12 PG-only skips")
+                    if counts["tests"] != 46 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 46 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 46 or counts["skipped"] != 13):
+                    problems.append(f"{artifact_name}: expected 46 discovered cases with 13 PG-only skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
