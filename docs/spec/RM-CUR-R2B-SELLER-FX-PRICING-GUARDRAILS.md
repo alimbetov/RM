@@ -6,7 +6,7 @@
 CUR-R2A exact-SHA, specialized CUR-R2A, security, module, SALES, INVENTORY, CRM and RustFS workflow runs all concluded success on baseline SHA. Only STOREFRONT may publish a KZT offer price via canonical `store_offer_price_revision`; FX snapshots/policies/calculations/decisions remain immutable. No controllers, auto repricing, changes to DEC-FUL-01 or checkout FX conversion.
 
 ## 2. Review findings (must address)
-- **CUR-R2B-P0-01:** `SkuFxSellerApprovalService.calculate` uses SELECT-then-INSERT for semantic SHA idempotency. In parallel identical calculations, the DB unique key prevents duplicate evidence but may return a unique-constraint exception to one caller. Implement PostgreSQL atomic insert/conflict-read, or a well-defined transaction-retry boundary; ensure identical calls return the same persisted calculation ID, conflicting semantics never collide, and no rollback-only transaction is reused. Demonstrate with two independent PostgreSQL transactions.
+- **CUR-R2B-P0-01:** `SkuFxSellerApprovalService.calculate` uses SELECT-then-INSERT for semantic SHA idempotency **after acquiring the tenant `store_front FOR UPDATE` lock**. This may already serialize identical calls correctly. Verify in two actual PostgreSQL transactions (and audit all other calculation writers); **do not change to ON CONFLICT unless a failing race proves the locking contract insufficient**. Exact replay must return the same persisted calculation ID and no duplicate evidence. Retain existing unique constraint as defense in depth.
 - **CUR-R2B-P0-02:** No quote/calculation freshness TTL is enforced in `decide`; stale-but-latest historical rate dates can be approved. Introduce explicit tenant policy and evaluation timestamp from an injected `Clock`, with an official NBRK business-day/holiday treatment. Never assume a universally fixed 24-hour rate TTL.
 - **CUR-R2B-P0-03:** No explicit max candidate KZT price delta versus captured offer price at approval. Add explicit guardrail configuration (per-tenant and/or per-policy immutable version) and fail closed when absent in admitted UAT tenants. Check both upward and downward deviations using BigDecimal ratio, rounded candidate and absolute price bounds.
 - **CUR-R2B-P0-04:** `decide` rechecks active negotiation states only after invoking STOREFRONT mutation; same-transaction rollback works but ensure **every** quote/proposal writer follows the same storefront serialization point. Prove with both lock orderings rather than relying on test scheduling.
@@ -42,8 +42,8 @@ Enforce source provider FOR SHARE/UPDATE, organization currency policy admission
 All tests run against actual PostgreSQL and assert row counts, actual amounts, statuses, locks and snapshots, not just thrown exceptions. H2 is supplementary.
 
 ## 7. Delivery and gates
-1. Write failing PG tests for P0-01 through P0-04.
-2. Implement atomic idempotent calculation and configurable immutable guardrails with additive Liquibase migration after 0131; avoid editing earlier migrations.
+1. Write PG race characterization tests for P0-01 and failing guardrail tests for P0-02 through P0-04.
+2. Preserve existing lock-based calculation idempotency if proven; fix only demonstrated defects. Implement configurable immutable guardrails with additive Liquibase migration after 0131; avoid editing earlier migrations.
 3. Add deterministic injected-clock checks and business-calendar coverage.
 4. Implement seller decision receipt/retry semantics without changing public price owner.
 5. Execute targeted PG qualification, full H2/PG regression, security, SALES/INVENTORY, then full exact-SHA CI. Record final SHA/run IDs in this document only after confirmed.
