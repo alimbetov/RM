@@ -810,4 +810,107 @@ class SkuFxSellerApprovalQualificationTest {
                 .hasMessage("CUR_R2B_CALENDAR_SOURCE_HASH_MISMATCH");
     }
 
+    @Test void r2b16PostgresqlFxApprovalCommitsBeforeSellerSuspension() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"583"));
+        var approved=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var approval=pool.submit(()->tx.execute(status->{
+                var d=fx.decide(f.actor(),f.tenant(),c.id(),true,
+                    "r2b-approved-before-suspend-001");
+                approved.countDown();
+                try {
+                    if(!release.await(8,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2B_IAM_APPROVAL_WAIT_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return d;
+            }));
+            assertThat(approved.await(8,TimeUnit.SECONDS)).isTrue();
+            var suspend=pool.submit(()->tx.execute(status->jdbc.update("""
+                UPDATE public.iam_user_account SET status='SUSPENDED'
+                WHERE id=?
+                """,f.actor().userId())));
+            release.countDown();
+            assertThat(approval.get(12,TimeUnit.SECONDS).action()).isEqualTo("APPROVED");
+            assertThat(suspend.get(12,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(revisions(f)).isEqualTo(1);
+            assertThat(decisions(f)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,f.actor().userId())).isEqualTo("SUSPENDED");
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test void r2b17PostgresqlFxApprovalCommitsBeforeAvailableQuote() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"584"));
+        var approved=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var approval=pool.submit(()->tx.execute(status->{
+                fx.decide(f.actor(),f.tenant(),c.id(),true,
+                    "r2b-approved-before-quote-001");
+                approved.countDown();
+                try {
+                    if(!release.await(8,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2B_QUOTE_APPROVAL_WAIT_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(approved.await(8,TimeUnit.SECONDS)).isTrue();
+            var quote=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,f.tenant());
+                BigDecimal current=jdbc.queryForObject("""
+                    SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?
+                    """,BigDecimal.class,f.tenant(),f.offer());
+                Timestamp now=Timestamp.from(Instant.now());
+                UUID proposal=UUID.randomUUID();
+                jdbc.update("""
+                    INSERT INTO crm.sales_price_proposal
+                      (tenant_id,id,offer_id,catalog_item_id,buyer_user_id,quantity,
+                       list_price_at_submit,current_unit_price,currency,state,revision,
+                       next_actor,round_count,expires_at,created_at,updated_at,row_version)
+                    VALUES (?,?,?,?,?,1,?,?,'KZT','AGREED',1,'NONE',0,?,?,?,0)
+                    """,f.tenant(),proposal,f.offer(),f.item(),f.buyer(),
+                    current,current,Timestamp.from(Instant.now().plusSeconds(7200)),now,now);
+                jdbc.update("""
+                    INSERT INTO crm.sales_accepted_quote
+                      (tenant_id,id,proposal_id,agreed_revision,offer_id,buyer_user_id,
+                       quantity,agreed_unit_price,currency,state,expires_at,created_at)
+                    VALUES (?,?,?,1,?,?,1,?,'KZT','AVAILABLE',?,?)
+                    """,f.tenant(),UUID.randomUUID(),proposal,f.offer(),f.buyer(),
+                    current,Timestamp.from(Instant.now().plusSeconds(3600)),now);
+                return current;
+            }));
+            release.countDown();
+            assertThat(approval.get(12,TimeUnit.SECONDS)).isTrue();
+            assertThat(quote.get(12,TimeUnit.SECONDS)).isEqualByComparingTo("584");
+            assertThat(revisions(f)).isEqualTo(1);
+            assertThat(decisions(f)).isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+    }
+
 }
