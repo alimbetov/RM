@@ -137,6 +137,15 @@ public class SalesInventoryCommandService {
         }
         if(!"CONFIRMED".equals(state) && !"PREPARING".equals(state))
             throw new IllegalStateException("Order not ready for fulfillment");
+        // FC-40 interim safety fence: once physical picking has begun,
+        // the generic completion path cannot bypass the secure handover.
+        // Full channel classification (DEC-FUL-01) remains a separate admission.
+        Integer picked=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_pick_confirmation
+            WHERE tenant_id=? AND order_id=?
+            """,Integer.class,tenantId,orderId);
+        if(picked!=null && picked>0)
+            throw new IllegalStateException("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         int lineCount=lines(tenantId,orderId).size();
         List<UUID> active=jdbc.query("""
             SELECT id FROM crm.inv_stock_reservation
