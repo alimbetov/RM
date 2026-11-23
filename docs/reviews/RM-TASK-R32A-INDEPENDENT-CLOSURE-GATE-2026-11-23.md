@@ -33,6 +33,12 @@ This review inspected repository contents, not a local PostgreSQL instance or fu
 | TASK-R32A-07 | P2, confirm contract | `capture` checks source `CANCELLED` before looking up existing requestKey. If CRM status may reopen, a lost-response retry may not return the immutable existing snapshot. | Explicit decision on whether CANCELLED is terminal; if nonterminal, idempotent replay must return original committed receipt safely, without allowing new captures on active source. Cover both same-source and mismatched-source requestKey. |
 | TASK-R32A-08 | Policy hold | Retention, task-title plaintext remediation, snapshot backup/deletion and notification consent / responsibility are undecided. | Approved tenant policy and legal/security retention criteria before background dispatch. |
 
+## R3.2B transition contract (2026-11-23)
+
+The next stage is defined in [RM-TASK-01B/R3.2B — SLA Policy & Durable Outbox Foundation](../spec/RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md). It separates (a) a tenant-approved immutable SLA policy revision, (b) an operational manual-review obligation tied to the canonical CRM `CANCELLED` event, and (c) an atomic durable notification intent with independently tested lease/fencing/recovery. A real notification executor and external delivery remain **R3.2C only**. No automatic task cancellation.
+
+**Gate rule:** this cross-link does not close the unresolved R3.2A source, migration, exact-SHA, replay or digest findings above. R3.2B architecture planning may proceed, but R3.2B foundation PASS requires the independent prerequisites and a new exact-SHA qualification on implementation HEAD.
+
 ## Order of implementation
 **Gate A — QA evidence:** exact head SHA; populated PostgreSQL migration; restore and digest verification.  
 **Gate B — concurrency/recovery:** source status and IAM races; lost-response retry; 10k boundary/performance.  
