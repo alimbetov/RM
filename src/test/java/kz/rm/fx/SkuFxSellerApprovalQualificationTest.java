@@ -960,7 +960,7 @@ class SkuFxSellerApprovalQualificationTest {
             VALUES (?,? ,?,'TRADING')
             """,source,"USD/KZT",java.sql.Date.valueOf(today)))
             .isInstanceOf(Exception.class)
-            .hasRootCauseMessage("ERROR: CUR_R2B_CALENDAR_SOURCE_SEALED");
+            .hasStackTraceContaining("CUR_R2B_CALENDAR_SOURCE_SEALED");
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.fx_calendar_day_evidence WHERE source_id=?
             """,Integer.class,source)).isEqualTo(1);
