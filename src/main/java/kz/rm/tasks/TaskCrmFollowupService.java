@@ -50,6 +50,25 @@ public class TaskCrmFollowupService {
             throw new IllegalArgumentException("TASK_CRM_LINK_INVALID");
         authorization.requireForCommand(actor.userId(),tenant,DomainPermission.TASK_MANAGE);
         authorization.requireForCommand(actor.userId(),tenant,DomainPermission.CRM_READ);
+        // A committed linked task must remain recoverable with its original
+        // request key even when the CRM interaction subsequently becomes terminal.
+        // TaskService.create rechecks actor authority and validates the full
+        // creation fingerprint before returning any replay result.
+        Link previousByKey=jdbc.query("""
+            SELECT l.tenant_id,l.task_id,l.interaction_id,l.created_by,l.linked_at
+            FROM crm.task_item t JOIN crm.task_crm_followup l
+              ON l.tenant_id=t.tenant_id AND l.task_id=t.id
+            WHERE t.tenant_id=? AND t.created_request_key=?
+              AND t.created_by=?
+            """,rs->rs.next()?new Link(rs.getObject(1,UUID.class),
+                 rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
+                 rs.getObject(4,UUID.class),rs.getTimestamp(5).toInstant()):null,
+            tenant,requestKey,actor.userId());
+        if(previousByKey!=null) {
+            if(!previousByKey.interactionId().equals(interactionId))
+                throw new IllegalStateException("TASK_CRM_LINK_REPLAY_CONFLICT");
+            return tasks.create(actor,tenant,approvedTitle,assignee,dueAt,requestKey);
+        }
         List<UUID> locked=jdbc.query("""
             SELECT i.id FROM crm.customer_interaction i
             JOIN crm.customer c ON c.tenant_id=i.tenant_id AND c.id=i.customer_id
