@@ -28,7 +28,7 @@ R3 cancellation, requeue, queue-to-assignment and manual per-task CRM reconcilia
 - Snapshot-isolated cross-page queue/reconciliation reports and admission of SLA-based background reconciliation.
 - Role-scoped manager teams/sub-organizations if RM later enables narrower ownership than current tenant-wide `TASK_MANAGE`.
 - Historical PII inventory/remediation, KMS-encrypted task notes, legacy title migration and retention policies.
-- Populated-schema upgrade and performance for large tenant task populations; keyset query planning/index qualification and database backup restore.
+- Liquibase `0148` adds the non-destructive `idx_task_queue_keyset(tenant_id,status,id)` to support the manager queue's UUID ordering. Large-tenant EXPLAIN ANALYZE, populated-schema upgrade, planner qualification and database backup restore remain separate gates.
 - External OIDC/JWKS, controller/UI, production admission. **HOLD**.
 
 No `main` change, no automatic CRM-to-task state propagation, no task/CRM data duplication.
