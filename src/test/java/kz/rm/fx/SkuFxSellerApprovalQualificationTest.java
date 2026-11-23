@@ -332,6 +332,53 @@ class SkuFxSellerApprovalQualificationTest {
         }
     }
 
+    @Test void r2a12PostgresqlRateCorrectionVsApprovalUsesOneSourceRevision()
+            throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        LocalDate day=effectiveDate();
+        var c=candidate(f,rate(day,"520"));
+        var correctionLocked=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var correction=pool.submit(()->tx.execute(status->{
+                writer.persist(day,List.of(new FxRateProvider.Rate(
+                        "USD","KZT",new BigDecimal("521"),BigDecimal.ONE,day,"NBRK")),
+                        "e".repeat(64));
+                correctionLocked.countDown();
+                try {
+                    if(!release.await(5,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2A_SOURCE_RACE_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(correctionLocked.await(5,TimeUnit.SECONDS)).isTrue();
+            var approval=pool.submit(()->{
+                try {
+                    fx.decide(f.actor(),f.tenant(),c.id(),true,"fx-correct-race-001");
+                    return "APPROVED";
+                } catch(IllegalStateException expected) {
+                    return expected.getMessage();
+                }
+            });
+            release.countDown();
+            assertThat(correction.get(8,TimeUnit.SECONDS)).isTrue();
+            assertThat(approval.get(8,TimeUnit.SECONDS))
+                    .isEqualTo("CUR_R2A_RATE_SUPERSEDED");
+            assertThat(revisions(f)).isZero();
+            assertThat(decisions(f)).isZero();
+        } finally {
+            release.countDown();
+        }
+    }
+
     @Test void r2a10PostgresqlEvidenceRejectsUpdateOrDelete() throws Exception {
         try(var connection=dataSource.getConnection()) {
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
