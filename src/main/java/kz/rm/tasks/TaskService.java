@@ -404,6 +404,34 @@ public class TaskService {
         return task;
     }
 
+    /**
+     * Manager-only operational queue. Task owner/assignee lookup remains separate.
+     * Keyset paging avoids OFFSET drift when tasks are claimed concurrently;
+     * results are not a cross-request repeatable-read snapshot.
+     */
+    public record QueuePage(List<Task> items, UUID nextAfterId) {}
+
+    @Transactional(readOnly=true)
+    public QueuePage managerQueue(VerifiedActor actor,UUID tenant,int limit,UUID afterId) {
+        UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
+        authorization.requireForCommand(manager,tenant,DomainPermission.TASK_READ);
+        if(limit<1||limit>100)throw new IllegalArgumentException("TASK_QUEUE_PAGE_INVALID");
+        String sql="""
+            SELECT tenant_id,id,title,assignee_user_id,created_by,status,due_at,row_version
+            FROM crm.task_item
+            WHERE tenant_id=? AND status='QUEUED'
+            """+(afterId==null?"":" AND id>? ")
+            +" ORDER BY id ASC LIMIT ?";
+        var args=new ArrayList<Object>();
+        args.add(tenant);
+        if(afterId!=null)args.add(afterId);
+        args.add(limit+1);
+        List<Task> rows=jdbc.query(sql,(rs,n)->map(rs),args.toArray());
+        boolean hasMore=rows.size()>limit;
+        List<Task> page=List.copyOf(rows.subList(0,Math.min(rows.size(),limit)));
+        return new QueuePage(page,hasMore?page.getLast().id():null);
+    }
+
     @Transactional
     public List<Task> listMine(VerifiedActor actor,UUID tenant,TaskState state,
                                int limit,int offset) {
