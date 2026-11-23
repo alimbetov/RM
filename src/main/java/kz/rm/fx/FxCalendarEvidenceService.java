@@ -10,6 +10,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Date;
@@ -122,6 +123,9 @@ public class FxCalendarEvidenceService {
             if(reviewed.putIfAbsent(key,day.status().name())!=null)
                 throw new IllegalArgumentException("CUR_R2B_CALENDAR_DUPLICATE_DAY");
         }
+        String dayManifest=reviewed.entrySet().stream().sorted(Map.Entry.comparingByKey())
+            .map(e->e.getKey()+"="+e.getValue()).collect(java.util.stream.Collectors.joining("\\n"));
+        String daysSha=digest(dayManifest.getBytes(StandardCharsets.UTF_8));
         UUID previous=jdbc.query("""
             SELECT id FROM crm.fx_calendar_source_evidence
             WHERE source_url=? AND raw_sha256=?
@@ -137,6 +141,12 @@ public class FxCalendarEvidenceService {
             },previous);
             if(!stored.equals(reviewed))
                 throw new IllegalStateException("CUR_R2B_CALENDAR_REPLAY_CONFLICT");
+            Integer sealed=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.fx_calendar_source_seal
+                WHERE source_id=? AND day_count=? AND days_sha256=?
+                """,Integer.class,previous,reviewed.size(),daysSha);
+            if(sealed==null||sealed!=1)
+                throw new IllegalStateException("CUR_R2B_CALENDAR_MANIFEST_INCONSISTENT");
             return previous;
         }
         UUID id=UUID.randomUUID();
@@ -153,6 +163,10 @@ public class FxCalendarEvidenceService {
                 """,id,day.instrument(),Date.valueOf(day.date()),day.status().name());
             if(count!=1)throw new IllegalStateException("CUR_R2B_CALENDAR_DAY_NOT_RECORDED");
         }
+        jdbc.update("""
+            INSERT INTO crm.fx_calendar_source_seal
+              (source_id,day_count,days_sha256,sealed_at) VALUES (?,?,?,?)
+            """,id,reviewed.size(),daysSha,Timestamp.from(clock.instant()));
         return id;
     }
 
@@ -168,7 +182,9 @@ public class FxCalendarEvidenceService {
             """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
         if(locked==null)throw new IllegalStateException("CUR_R2B_STOREFRONT_MISSING");
         Integer exists=jdbc.queryForObject("""
-            SELECT count(*) FROM crm.fx_calendar_source_evidence WHERE id=?
+            SELECT count(*) FROM crm.fx_calendar_source_evidence s
+            JOIN crm.fx_calendar_source_seal m ON m.source_id=s.id
+            WHERE s.id=?
             """,Integer.class,sourceId);
         if(exists==null||exists!=1)throw new IllegalStateException("CUR_R2B_CALENDAR_SOURCE_MISSING");
         Integer existing=jdbc.queryForObject("""
@@ -195,8 +211,9 @@ public class FxCalendarEvidenceService {
                                         LocalDate validDate, LocalDate evaluationDate) {
         record Gate(UUID sourceId,int limit) {}
         Gate gate=jdbc.query("""
-            SELECT source_id,max_trading_days FROM crm.fx_calendar_tenant_gate
-            WHERE tenant_id=? AND enabled=TRUE
+            SELECT g.source_id,g.max_trading_days FROM crm.fx_calendar_tenant_gate g
+            JOIN crm.fx_calendar_source_seal m ON m.source_id=g.source_id
+            WHERE g.tenant_id=? AND g.enabled=TRUE
             """,rs->rs.next()?new Gate(rs.getObject(1,UUID.class),rs.getInt(2)):null,tenant);
         if(gate==null)return null; // Existing tenants remain under their R2B calendar-day guardrail.
         String instrument=baseCurrency+"/KZT";
