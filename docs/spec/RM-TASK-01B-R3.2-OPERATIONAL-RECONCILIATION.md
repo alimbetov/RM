@@ -12,7 +12,7 @@ R3.1 `pendingPage(afterTaskId)` provides bounded incremental traversal, NOT a st
 
 ## R3.2 implemented snapshot boundary
 
-- Additive Liquibase 0149 creates `crm.task_reconciliation_snapshot` and `crm.task_reconciliation_snapshot_item`. Both use `tenant_id` and composite tenant-qualified FKs to canonical CRM interaction/task; only IDs and closed state/version data, actor ID, request key, timestamp and item count are retained. PostgreSQL migration 0150 rejects UPDATE/DELETE on both tables.
+- Additive Liquibase 0149 creates `crm.task_reconciliation_snapshot` and `crm.task_reconciliation_snapshot_item`. Liquibase 0151 adds `crm.task_reconciliation_snapshot_seal` with canonical SHA-256 of sorted item UUID/state/version. PostgreSQL 0152 prevents late item inserts after the seal, and protects the seal from update/delete. Both use `tenant_id` and composite tenant-qualified FKs to canonical CRM interaction/task; only IDs and closed state/version data, actor ID, request key, timestamp and item count are retained. PostgreSQL migration 0150 rejects UPDATE/DELETE on both snapshot tables. Capture inserts items and seal in one transaction, then exposes the snapshot only when the seal exists.
 - `TaskReconciliationSnapshotService.capture(actor,tenant,source,requestKey)` requires verified actor with `TASK_MANAGE + CRM_READ`. It locks the tenant's CANCELLED CRM Interaction before capturing all currently pending linked task IDs in a single SQL statement. Max 10,000 tasks per snapshot: above cap **fail closed** rather than silently truncate. Same actor+tenant+requestKey returns exactly the existing snapshot for the same source; different source conflicts; schema unique key protects simultaneous requests.
 - `page(actor,tenant,snapshotId,afterTaskId,limit)` reads the immutable captured set ordered by task UUID, with bounds 1..100. Only the manager who created that snapshot and still has both current grants may retrieve it; cross-tenant and other actors fail closed. Page cursor is exclusive and stable because manifest membership cannot be changed.
 - A snapshot is **evidence, not a command**. Captured task state/version may be stale. Reconciliation must call existing `TaskService.cancelForSource` with fresh current IAM and row-version CAS; no bypass of `TASK_MANAGE`, `CRM_READ` or source-status check. No implicit cancellation, notification, transfer or deletion occurs on capture/page.
@@ -23,7 +23,7 @@ R3.1 `pendingPage(afterTaskId)` provides bounded incremental traversal, NOT a st
 - T43: 5 task IDs, immutable pagination with status change between page reads, no duplicates/omissions; live stale version fails CAS.
 - T44: invalid source, cross-tenant and employee read denial, invalid page, actor-scoped replay conflicts.
 - T45: injected rollback before snapshot commit leaves no manifest/items, exact request succeeds on retry.
-- T46 (PostgreSQL): snapshot header and entries reject update/delete through immutable triggers.
+- T46 (PostgreSQL): snapshot header, entries and seal reject update/delete, and item inserts after seal fail; SHA-256 seal exists for the exact captured item set.
 - Mandatory gate: 46 PostgreSQL tests (0 skipped) and 46 discovered H2 (13 PostgreSQL-only skipped); all six required domain/workflow artifacts with exact SHA and matching checksums.
 
 ## Proposed SLA — **not yet approved for execution**
