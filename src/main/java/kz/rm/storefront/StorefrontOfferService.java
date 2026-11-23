@@ -61,6 +61,7 @@ public class StorefrontOfferService {
         lockCurrency(tenant);
         lockStorefront(tenant);
         validatePrice(title, amount, currency);
+        if (currencyAdmission != null) currencyAdmission.assertDraftCurrency(tenant,currency);
         validateCatalogProduct(tenant, catalogItemId, false);
         UUID id = UUID.randomUUID();
         jdbc.update("""
@@ -84,6 +85,7 @@ public class StorefrontOfferService {
         validatePrice(title, amount, currency);
         Offer current = locked(tenant, offerId, expectedVersion);
         if (current.state() == State.PUBLISHED) requirePublicCurrency(currency);
+        else if (currencyAdmission != null) currencyAdmission.assertDraftCurrency(tenant,currency);
         if (current.state() != State.DRAFT && current.state() != State.PAUSED
                 && current.state() != State.HIDDEN && current.state() != State.PUBLISHED)
             throw new IllegalStateException("Invalid offer state");
