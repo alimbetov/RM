@@ -32,7 +32,8 @@ public class TaskService {
     public record Event(UUID id, UUID taskId, UUID actorUserId, String action,
                         TaskState from, TaskState to, Long previousVersion,
                         long newVersion, Instant occurredAt,
-                        UUID previousAssigneeUserId, UUID nextAssigneeUserId) {}
+                        UUID previousAssigneeUserId, UUID nextAssigneeUserId,
+                        Instant previousDueAt, Instant nextDueAt) {}
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
@@ -127,6 +128,60 @@ public class TaskService {
                 expectedVersion,expectedVersion+1,before.assigneeUserId(),assignee,
                 requestKey,fingerprint);
         return load(tenant,id);
+    }
+
+    /**
+     * Manager changes operational due date without mutating the originating CRM
+     * interaction. Only OPEN, IN_PROGRESS or BLOCKED tasks may be rescheduled.
+     * A keyed retry is authorized anew and must match the exact command.
+     */
+    @Transactional
+    public Task reschedule(VerifiedActor actor,UUID tenant,UUID id,Instant newDue,
+                           long expectedVersion,String requestKey) {
+        UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
+        if(id==null||newDue==null||expectedVersion<0)
+            throw new IllegalArgumentException("TASK_DUE_DATE_INVALID");
+        if(requestKey!=null)lockRequestStripe(requestKey);
+        String fingerprint=requestKey==null?null:
+            sha(tenant+"|"+id+"|DUE_DATE_CHANGED|"+newDue+"|"+expectedVersion);
+        Task before=lockTaskCurrent(tenant,id);
+        if(requestKey!=null) {
+            Task replay=loadReplayed(tenant,manager,id,requestKey,fingerprint);
+            if(replay!=null)return replay;
+        }
+        if(before.version()!=expectedVersion)
+            throw new IllegalStateException("TASK_STALE_VERSION");
+        if(before.state()!=TaskState.OPEN && before.state()!=TaskState.IN_PROGRESS
+                && before.state()!=TaskState.BLOCKED)
+            throw new IllegalStateException("TASK_RESCHEDULE_TERMINAL");
+        if(newDue.equals(before.dueAt()))return before;
+        int n=jdbc.update("""
+            UPDATE crm.task_item
+            SET due_at=?,row_version=row_version+1,updated_at=?
+            WHERE tenant_id=? AND id=? AND row_version=?
+            """,Timestamp.from(newDue),Timestamp.from(clock.instant()),
+            tenant,id,expectedVersion);
+        if(n!=1)throw new IllegalStateException("TASK_CONCURRENT_MODIFICATION");
+        eventDue(tenant,id,manager,before,expectedVersion,requestKey,
+                 fingerprint,newDue);
+        return load(tenant,id);
+    }
+
+    private void eventDue(UUID tenant,UUID id,UUID actor,Task previous,long version,
+                          String requestKey,String fingerprint,Instant nextDue) {
+        jdbc.update("""
+            INSERT INTO crm.task_event
+             (tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
+              previous_version,new_version,occurred_at,
+              previous_assignee_user_id,next_assignee_user_id,
+              request_key,request_sha256,previous_due_at,next_due_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,tenant,UUID.randomUUID(),id,actor,"DUE_DATE_CHANGED",
+            previous.state().name(),previous.state().name(),version,version+1,
+            Timestamp.from(clock.instant()),previous.assigneeUserId(),
+            previous.assigneeUserId(),requestKey,fingerprint,
+            previous.dueAt()==null?null:Timestamp.from(previous.dueAt()),
+            Timestamp.from(nextDue));
     }
 
     @Transactional
@@ -258,7 +313,8 @@ public class TaskService {
         return jdbc.query("""
             SELECT id,task_id,actor_user_id,action_code,from_state,to_state,
                    previous_version,new_version,occurred_at,
-                   previous_assignee_user_id,next_assignee_user_id
+                   previous_assignee_user_id,next_assignee_user_id,
+                   previous_due_at,next_due_at
             FROM crm.task_event WHERE tenant_id=? AND task_id=?
             ORDER BY new_version DESC LIMIT ?
             """,(rs,n)->new Event(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
@@ -267,7 +323,9 @@ public class TaskService {
                 TaskState.valueOf(rs.getString(6)),
                 rs.getObject(7)==null?null:rs.getLong(7),rs.getLong(8),
                 rs.getTimestamp(9).toInstant(),
-                rs.getObject(10,UUID.class),rs.getObject(11,UUID.class)),tenant,id,limit);
+                rs.getObject(10,UUID.class),rs.getObject(11,UUID.class),
+                rs.getTimestamp(12)==null?null:rs.getTimestamp(12).toInstant(),
+                rs.getTimestamp(13)==null?null:rs.getTimestamp(13).toInstant()),tenant,id,limit);
     }
 
     private void lockRequestStripe(String requestKey) {
