@@ -6,6 +6,8 @@
 **Product:** RM Business → TASKS / CRM Interaction. **Scope:** Java 21 / Spring Boot modular monolith, существующие application services, PostgreSQL/Liquibase, H2 diagnostics, JUnit and exact-SHA CI.  
 **STOP:** новые REST-контроллеры/UI, автоматическая отмена задач, реальные отправки, планировщик, почтовый/SMS/push-провайдер, Redis/Kafka/второй TASKS aggregate, новый branch, merge `main`. **Production: HOLD.**
 
+> **R32B-T00 source review (2026-11-23):** [Contract & Dependency Qualification](../reviews/RM-TASK-R32B-T00-CONTRACT-DEPENDENCY-QUALIFICATION-2026-11-23.md). Проверено: CRM `cancel()` записывает immutable `CANCELLED` event в той же транзакции, но приватный `void event()` не возвращает canonical `eventId/occurredAt` для TASKS. Типизированный transaction-mandatory порт, правила IAM/policy и конкурентные PostgreSQL доказательства ещё не квалифицированы. **До T00 gate нельзя начинать B1/B2 код или DDL на предположениях.** R3.2A independent gates по-прежнему обязательны. 
+
 ## 0. Цель, инженерное решение и смежные документы
 
 **Проблема:** R3.1 `pendingPage` предоставляет живую пагинацию, R3.2A `TaskReconciliationSnapshotService.capture/page` фиксирует неизменяемый набор задач с SHA-256 и ограничением 10 000. Но пока отсутствуют **версионированные правила срока управленческого рассмотрения после отмены CRM Interaction**, аудит обязательства по рассмотрению и **надёжное, дедуплицируемое намерение уведомить ответственного**. Снимок — evidence, не уведомление и не команда на отмену.
