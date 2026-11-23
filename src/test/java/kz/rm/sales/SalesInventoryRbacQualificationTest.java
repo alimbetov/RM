@@ -175,14 +175,33 @@ class SalesInventoryRbacQualificationTest {
 
     @Test void decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing() {
         Context c=context(10);
-        UUID id=order(c,3);
+        UUID original=order(c,3);
+        UUID id=UUID.randomUUID();
+        // Independent SQL fixture inserts its immutable fulfillment mode at birth.
+        // Never disable PostgreSQL immutable-mode triggers to make a test pass.
+        jdbc.update("""
+            INSERT INTO crm.sales_order
+             (tenant_id,id,pending_email_identity_id,buyer_user_id,status,
+              total_amount,currency,created_at,fulfillment_mode)
+            SELECT tenant_id,?,pending_email_identity_id,buyer_user_id,status,
+                   total_amount,currency,created_at,'PICKUP_PROOF_REQUIRED'
+            FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,id,c.tenant(),original);
+        jdbc.update("""
+            INSERT INTO crm.sales_order_line
+             (tenant_id,id,order_id,offer_id,title_snapshot,quantity,
+              unit_price_snapshot,currency,catalog_item_id_snapshot)
+            SELECT tenant_id,?,?,offer_id,title_snapshot,quantity,
+                   unit_price_snapshot,currency,catalog_item_id_snapshot
+            FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+            """,UUID.randomUUID(),id,c.tenant(),original);
+        jdbc.update("""
+            INSERT INTO crm.sales_order_status_event
+             (tenant_id,id,order_id,event_type,occurred_at)
+            VALUES (?,?,?,'PLACED',CURRENT_TIMESTAMP)
+            """,c.tenant(),UUID.randomUUID(),id);
         allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
                 DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
-        // Simulates the persistent checkout provenance independently of QR transport.
-        jdbc.update("""
-            UPDATE crm.sales_order SET fulfillment_mode='PICKUP_PROOF_REQUIRED'
-            WHERE tenant_id=? AND id=? AND status='PLACED'
-            """,c.tenant(),id);
         commands.confirm(c.staff(),c.tenant(),id,c.location());
         long before=jdbc.queryForObject("""
             SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
