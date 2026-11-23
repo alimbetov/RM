@@ -173,6 +173,48 @@ class SalesInventoryRbacQualificationTest {
             """,Integer.class,c.tenant(),id)).isEqualTo(3);
     }
 
+    @Test void fc40PickedOrderCannotCancelAndReservationStaysIntact() {
+        Context c=context(10);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE);
+        commands.confirm(c.staff(),c.tenant(),id,c.location());
+        jdbc.update("""
+            UPDATE crm.sales_order SET status='PREPARING',row_version=row_version+1
+            WHERE tenant_id=? AND id=?
+            """,c.tenant(),id);
+        UUID orderLine=jdbc.queryForObject("""
+            SELECT id FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+            """,UUID.class,c.tenant(),id);
+        jdbc.update("""
+            INSERT INTO crm.sales_order_pick_confirmation
+             (tenant_id,id,order_id,order_line_id,warehouse_id,item_id,quantity,picked_by,picked_at)
+            VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            """,c.tenant(),UUID.randomUUID(),id,orderLine,c.location(),c.item(),3,c.staff());
+        long movementsBefore=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+            """,Long.class,c.tenant());
+        long eventsBefore=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=?
+            """,Long.class,c.tenant(),id);
+        assertThatThrownBy(()->commands.cancel(c.staff(),c.tenant(),id))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("ORDER_CANCEL_REQUIRES_REVERSE_PICK");
+        assertThat(status(c,id)).isEqualTo("PREPARING");
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("10");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_reservation
+            WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+            """,Long.class,c.tenant(),id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+            """,Long.class,c.tenant())).isEqualTo(movementsBefore);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=?
+            """,Long.class,c.tenant(),id)).isEqualTo(eventsBefore);
+    }
+
     @Test void q123LegacyAutoReserveFalseCannotDisableRequiredSalesConfirmationReserve() {
         Context c=context(10);
         allow(c,DomainPermission.INVENTORY_SETTINGS_MANAGE,
