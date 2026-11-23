@@ -40,7 +40,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: H2 task service behavioral tests
         run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
-      - name: Require twenty H2 cases and seven expected database skips
+      - name: Require twenty H2 cases and eight expected database skips
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -48,8 +48,8 @@ jobs:
           p=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskServiceQualificationTest.xml')
           assert p.is_file(),p
           cases=list(E.parse(p).getroot().iter('testcase'))
-          assert len(cases)==27,len(cases)
-          assert sum(c.find('skipped') is not None for c in cases)==7
+          assert len(cases)==28,len(cases)
+          assert sum(c.find('skipped') is not None for c in cases)==8
           assert not any(c.find(x) is not None for c in cases for x in ('failure','error'))
           PY
       - uses: actions/upload-artifact@v4
@@ -93,7 +93,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: PostgreSQL task lifecycle and concurrency
         run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
-      - name: Require all twenty-seven PostgreSQL cases without skips
+      - name: Require all twenty-eight PostgreSQL cases without skips
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -101,7 +101,7 @@ jobs:
           p=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskServiceQualificationTest.xml')
           assert p.is_file(),p
           cases=list(E.parse(p).getroot().iter('testcase'))
-          assert len(cases)==27,len(cases)
+          assert len(cases)==28,len(cases)
           assert not any(c.find(x) is not None for c in cases
                          for x in ('failure','error','skipped'))
           PY
