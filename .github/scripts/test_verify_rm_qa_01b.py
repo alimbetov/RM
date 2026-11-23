@@ -65,10 +65,18 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t26RollbackBeforeFollowupCommitAllowsExactRequestRetry",
                         "t27PostgresqlConcurrentRescheduleAndReassignmentHaveSingleWinner",
                         "t28PostgresqlTwoManagersConcurrentReassignmentExactlyOneWins",
+                        "t29ManagerCancellationIsIdempotentAndNotArchival",
+                        "t30InProgressCancellationForbidsCompletionAndPreservesEvidence",
+                        "t31RequeueRemovesAssignmentAndManagerMayClaimForNewStaff",
+                        "t32RequeueRequiresStoppedWorkAndCannotBeStartedUnassigned",
+                        "t33CancelledCrmInteractionRequiresExplicitScopedReconciliation",
+                        "t34ReconciliationAndQueueRollbackLeaveNoPartialEvents",
+                        "t35PostgresqlCancelRacesWithEmployeeCompletionExactlyOneWins",
+                        "t36PostgresqlRequeueRacesWithReassignmentExactlyOneWins",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
-                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21","t27","t28"))}
+                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21","t27","t28","t35","t36"))}
                 if artifact == "kms-postgres-surefire":
                     suite_cases = {
                         "CommercialCoreE2EQualificationTest": [
