@@ -148,3 +148,12 @@ Minimum qualification is **22 scenario IDs**, not 22 assumed JUnit tests. Each I
 - **CUR-R1E:** exact-SHA admission, legal confirmation, operational readiness and documented exceptions; never mark production PASS from service UAT alone.
 
 **No new controllers, UI, TASKS, FX-provider, external finance payments, second order aggregate, new stock engine, runtime Redis or settlement subsystem. `main` untouched. Production HOLD.**
+
+
+### 10. Follow-on product contract: Smart FX Pricing (separate scope)
+
+Валютная привязка SKU/offer к USD/CNY, загрузка официального курса НБРК и расчёт новой публичной **KZT** цены вынесены в **[RM-FX-PRICING-R1](RM-FX-PRICING-R1-SMART-FX-SELLING-PRICE.md)**. Валютная настройка CUR-R1 определяет **разрешение/назначение** валют, но не является FX-калькулятором или отдельным owner текущих продажных цен.
+
+Для FX якоря запланирован отдельный purpose `PRICING_ANCHOR` в новой миграции после стабильной приёмки CUR-R1. Не расширять роль `PUBLIC_PRICE` на иностранные валюты и не подменять `PURCHASE` этим назначением. Для рынка KZ публичная цена остаётся `KZT`; `InventoryTenantSettingsService` и уже существующие финансовые snapshots не изменяются автоматически.
+
+**Порядок:** CUR-R1 qualified → FX-R1A ingestion → FX-R1B suggestions → FX-R1C guarded publication → FX-R1D conditional auto → FX-R1E admission. Создание follow-on ТЗ не означает реализацию FX, не снимает текущие HOLD и не затрагивает `main`.
