@@ -315,6 +315,9 @@ class QrNegotiatedCheckoutQualificationTest {
         assertThat(placed.order().status()).isEqualTo("PLACED");
         UUID id=placed.order().orderId();
         assertThat(jdbc.queryForObject("""
+                SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,String.class,f.tenant(),id)).isEqualTo("PICKUP_PROOF_REQUIRED");
+        assertThat(jdbc.queryForObject("""
                 SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
                 """,BigDecimal.class,f.tenant(),id)).isEqualByComparingTo("7500");
         assertThat(jdbc.queryForObject("""
