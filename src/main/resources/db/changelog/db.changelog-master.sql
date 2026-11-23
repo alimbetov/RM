@@ -4340,3 +4340,48 @@ CREATE INDEX idx_task_queue ON crm.task_item(tenant_id,status,due_at,id);
 CREATE INDEX idx_task_queue_keyset
  ON crm.task_item(tenant_id,status,id);
 --rollback DROP INDEX crm.idx_task_queue_keyset;
+
+
+--changeset rm:0149-task-r32-reconciliation-snapshot
+-- Persistent immutable enumeration; task state remains canonical in task_item.
+CREATE TABLE crm.task_reconciliation_snapshot (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ interaction_id UUID NOT NULL,
+ created_by UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ captured_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ item_count INTEGER NOT NULL,
+ CONSTRAINT pk_task_reconciliation_snapshot PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_task_reconciliation_snapshot_request UNIQUE(tenant_id,created_by,request_key),
+ CONSTRAINT fk_task_reconciliation_snapshot_source FOREIGN KEY(tenant_id,interaction_id)
+  REFERENCES crm.customer_interaction(tenant_id,id),
+ CONSTRAINT fk_task_reconciliation_snapshot_actor FOREIGN KEY(created_by)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_task_reconciliation_snapshot_count CHECK(item_count BETWEEN 0 AND 10000)
+);
+CREATE TABLE crm.task_reconciliation_snapshot_item (
+ tenant_id UUID NOT NULL,
+ snapshot_id UUID NOT NULL,
+ task_id UUID NOT NULL,
+ captured_state VARCHAR(20) NOT NULL,
+ captured_version BIGINT NOT NULL,
+ CONSTRAINT pk_task_reconciliation_snapshot_item PRIMARY KEY(tenant_id,snapshot_id,task_id),
+ CONSTRAINT fk_task_snapshot_item_snapshot FOREIGN KEY(tenant_id,snapshot_id)
+  REFERENCES crm.task_reconciliation_snapshot(tenant_id,id),
+ CONSTRAINT fk_task_snapshot_item_task FOREIGN KEY(tenant_id,task_id)
+  REFERENCES crm.task_item(tenant_id,id),
+ CONSTRAINT ck_task_snapshot_version CHECK(captured_version>=0)
+);
+--rollback DROP TABLE crm.task_reconciliation_snapshot_item;
+--rollback DROP TABLE crm.task_reconciliation_snapshot;
+
+--changeset rm:0150-task-r32-reconciliation-snapshot-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_task_reconciliation_snapshot_immutable
+ BEFORE UPDATE OR DELETE ON crm.task_reconciliation_snapshot
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_task_reconciliation_snapshot_item_immutable
+ BEFORE UPDATE OR DELETE ON crm.task_reconciliation_snapshot_item
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_task_reconciliation_snapshot_item_immutable ON crm.task_reconciliation_snapshot_item;
+--rollback DROP TRIGGER trg_task_reconciliation_snapshot_immutable ON crm.task_reconciliation_snapshot;
