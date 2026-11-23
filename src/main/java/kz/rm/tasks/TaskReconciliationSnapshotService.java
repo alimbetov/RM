@@ -8,6 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -93,6 +97,12 @@ public class TaskReconciliationSnapshotService {
                 VALUES (?,?,?,?,?)
                 """,params);
         }
+        String digest=snapshotDigest(items);
+        jdbc.update("""
+            INSERT INTO crm.task_reconciliation_snapshot_seal
+              (tenant_id,snapshot_id,sealed_at,items_sha256)
+            VALUES (?,?,?,?)
+            """,tenant,id,Timestamp.from(clock.instant()),digest);
         return new Snapshot(id,tenant,interactionId,manager,now,items.size());
     }
 
@@ -103,8 +113,10 @@ public class TaskReconciliationSnapshotService {
         if(snapshotId==null||limit<1||limit>100)
             throw new IllegalArgumentException("TASK_SNAPSHOT_PAGE_INVALID");
         List<UUID> owners=jdbc.query("""
-            SELECT created_by FROM crm.task_reconciliation_snapshot
-            WHERE tenant_id=? AND id=?
+            SELECT s.created_by FROM crm.task_reconciliation_snapshot s
+            JOIN crm.task_reconciliation_snapshot_seal z
+              ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+            WHERE s.tenant_id=? AND s.id=?
             """,(rs,n)->rs.getObject(1,UUID.class),tenant,snapshotId);
         if(owners.isEmpty()||!manager.equals(owners.getFirst()))
             throw new SecurityException("TASK_SNAPSHOT_NOT_ACCESSIBLE");
@@ -126,11 +138,27 @@ public class TaskReconciliationSnapshotService {
         return new Page(page,hasMore?page.getLast().taskId():null);
     }
 
+    private static String snapshotDigest(List<Item> items) {
+        StringBuilder canonical=new StringBuilder();
+        for(Item item:items)
+            canonical.append(item.taskId()).append('|')
+                .append(item.capturedState()).append('|')
+                .append(item.capturedVersion()).append('\n');
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
+        }catch(NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private Snapshot findByKey(UUID tenant,UUID manager,String requestKey) {
         List<Snapshot> rows=jdbc.query("""
-            SELECT id,tenant_id,interaction_id,created_by,captured_at,item_count
-            FROM crm.task_reconciliation_snapshot
-            WHERE tenant_id=? AND created_by=? AND request_key=?
+            SELECT s.id,s.tenant_id,s.interaction_id,s.created_by,s.captured_at,s.item_count
+            FROM crm.task_reconciliation_snapshot s
+            JOIN crm.task_reconciliation_snapshot_seal z
+              ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+            WHERE s.tenant_id=? AND s.created_by=? AND s.request_key=?
             """,(rs,n)->new Snapshot(rs.getObject(1,UUID.class),
                 rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
                 rs.getObject(4,UUID.class),rs.getTimestamp(5).toInstant(),
