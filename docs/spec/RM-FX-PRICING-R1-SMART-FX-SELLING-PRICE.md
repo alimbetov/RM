@@ -2,7 +2,7 @@
 
 **Тип:** самостоятельное функциональное ТЗ / service-first contract / architecture decision proposal.  
 **Дата:** 2026-11-23. **Репозиторий:** `alimbetov/RM`; **ветка:** `base_dev`.  
-**Статус:** **SPEC APPROVED FOR PLANNING / IMPLEMENTATION NOT STARTED / PRODUCTION HOLD**.  
+**Статус:** **R0M/R1A MOCK PERSISTENCE IMPLEMENTED AND TARGETED PG/H2 QUALIFIED; REMAINING FX CONTRACT NOT IMPLEMENTED / PRODUCTION HOLD**.  
 **Последовательность:** **только после квалификации RM-CURRENCY-R1 (CUR-R1A..R1E)** и открытых FC-00/FC-40 admission gates. Новый контракт **не** превращает FX в обязательную зависимость уже существующих QR-08/R0 работ.  
 **Scope:** Java 21 / Spring services, PostgreSQL, Liquibase, H2 smoke, JUnit/Testcontainers, официальные курсы НБРК, immutable snapshots и проверяемые бизнес-переходы. **Controllers/UI/TASKS/Redis/ledger/COGS/payment/FIN — STOP** до отдельного решения. `main` не затрагивать.
 
@@ -221,3 +221,14 @@ Append-only журнал `(tenant_id, event_id, aggregate_id, action, actor, fro
 **Selection policy:** never silently fall back from official NBRK to market/bank rate; provider identity, valid date, nominal, observed timestamps and source lineage must survive snapshots. If approved official feed unavailable, keep the existing published KZT price. `FX_AUTO` remains disabled until explicitly accepted in its later independent release gate.
 
 Reference providers: https://nationalbank.kz/ru/news/tehnicheskie-resursy/7469 and https://kurs24.kz/developers ; open data https://data.nationalbank.kz/api-docs . This document is a design record, not a claim about third-party SLA, no-key status or legal entitlement.
+
+
+## 13. FX-R1A evidence — synthetic rate persistence (2026-11-23)
+
+**Implementation source SHA:** `b1074ef58f2778c62362a850de071d0f0fa66906`. **Qualification:** [RM FX R1A Rate Persistence Qualification #45109891293](https://github.com/alimbetov/RM/actions/runs/45109891293), both `fx-r1a-h2` and `fx-r1a-postgresql` **SUCCESS**; 6 testcases on PG (0 skipped) and 6 H2 (1 expected PG-only skip), zero failures/errors. GitHub artifacts include the exact-SHA Surefire XML. This only qualifies the **mock-persistence slice**.
+
+Implemented append-only Liquibase changesets `0125-fx-r1a-rate-snapshot-and-refresh-history` and PG `0126-fx-r1a-immutable-snapshots`; `crm.fx_official_rate_snapshot` (explicit `synthetic=TRUE`, `provider_code=MOCK`, nominal, valid date, source revision, SHA-256 over canonical versioned rate payload), `crm.fx_rate_import_run` (one immutable row per completed refresh, inserted/replayed counts), `crm.fx_rate_provider_lock` (serializes mock imports), and `FxRateSnapshotService.importMock`.
+
+**Limitations:** Real NBRK/KURS24 adapters, provider source payload retention, source corrections beyond revision 1, parallel importer race on independent JVMs, crash/recovery stress, populated-DB exact-checksum admission, provider authenticity, live schedules, FX-based SKU calculations, public KZT repricing and auto mode **remain NOT IMPLEMENTED/NOT QUALIFIED**. The `fx_official_rate_snapshot` name is a future-capable schema convention; its R1A rows are unambiguously **MOCK synthetic**, never official evidence. Production remains HOLD, `main` unchanged.
+
+**Next step:** after CUR-R1 gates, add the trusted NBRK adapter with safe XML parsing, full provider-sourced metadata and revised-rate append-only semantics. KURS24 remains a distinct optional non-authoritative/qualified adapter; no silent provider fallback.
