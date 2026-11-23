@@ -1597,4 +1597,67 @@ class TaskServiceQualificationTest {
             """,Integer.class,t.id())).isZero();
     }
 
+    @Test void t53PostgresqlManagerRevocationRacesWithSnapshotCapture()
+            throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-revoke-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        UUID managerRole=jdbc.queryForObject("""
+            SELECT a.role_id FROM public.iam_tenant_user_role a
+            JOIN public.iam_tenant_role_permission p
+              ON p.tenant_id=a.tenant_id AND p.role_id=a.role_id
+            WHERE a.tenant_id=? AND a.user_id=?
+              AND p.permission_code='TASK_MANAGE'
+            """,UUID.class,t.id(),t.manager().userId());
+        var captured=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var revokeStarted=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->tx.execute(status->{
+                var snap=snapshots.capture(t.manager(),t.id(),source,
+                    "task-r32-revoke-capture-001");
+                captured.countDown();
+                try {
+                    if(!release.await(20,TimeUnit.SECONDS))
+                        throw new IllegalStateException("TASK_REVOKE_RACE_TIMEOUT");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return snap;
+            }));
+            assertThat(captured.await(20,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                revokeStarted.countDown();
+                roles.revoke(t.owner(),t.id(),managerRole,DomainPermission.TASK_MANAGE);
+                return true;
+            });
+            assertThat(revokeStarted.await(10,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            var snap=first.get(30,TimeUnit.SECONDS);
+            assertThat(revoke.get(30,TimeUnit.SECONDS)).isTrue();
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_reconciliation_snapshot_seal
+                WHERE tenant_id=? AND snapshot_id=?
+                """,Integer.class,t.id(),snap.id())).isEqualTo(1);
+            assertThatThrownBy(()->snapshots.page(t.manager(),t.id(),snap.id(),null,10))
+                .isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->snapshots.capture(t.manager(),t.id(),source,
+                "task-r32-revoke-deny-001")).isInstanceOf(SecurityException.class);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_reconciliation_snapshot WHERE tenant_id=?
+                """,Integer.class,t.id())).isEqualTo(1);
+        } finally {release.countDown();}
+    }
+
 }
