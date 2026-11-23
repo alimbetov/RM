@@ -46,10 +46,16 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t07SuspendedAssigneeCannotReceiveNewTaskOrReassignment",
                         "t08PostgresqlSuspensionWaitsUntilAdmittedCreationCommits",
                         "t09LegacyNullAssigneeCanBeAssignedWithoutLosingAudit",
+                        "t10TitleVocabularyRejectsSensitiveFreeTextWithoutWrites",
+                        "t11LostResponseRetryReturnsSameTaskWithoutDuplicateTransition",
+                        "t12EarlierTaskPermissionRevocationDeniesExecutionWithoutWrites",
+                        "t13EarlierMembershipRevocationDeniesAssigneeCreation",
+                        "t14PostgresqlRoleRevocationWaitsForAdmittedExecutionCommit",
+                        "t15PostgresqlMembershipRevocationWaitsForTaskAssignmentCommit",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
-                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08"))}
+                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15"))}
                 if artifact == "kms-postgres-surefire":
                     suite_cases = {
                         "CommercialCoreE2EQualificationTest": [
