@@ -58,6 +58,7 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t19CrmFollowupRejectsForeignAndClosedInteractionWithNoTasks",
                         "t20CrmFollowupCannotReuseTaskRequestForAnotherInteraction",
                         "t21PostgresqlCrmLinkIsImmutableAndCompositeTenantFkIsEnforced",
+                        "t22CrmFollowupRetryAfterSourceClosureReturnsOriginalTask",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
