@@ -9,6 +9,7 @@ on:
       - 'src/main/java/kz/rm/sales/SalesPriceProposalService.java'
       - 'src/test/java/kz/rm/organization/CommerceCurrencyAdmissionQualificationTest.java'
       - '.github/workflows/rm-cur-r1c-commerce-admission.yml'
+      - 'docs/spec/RM-CUR-R1C-COMMERCE-ADMISSION.md'
   workflow_dispatch:
 permissions:
   contents: read
