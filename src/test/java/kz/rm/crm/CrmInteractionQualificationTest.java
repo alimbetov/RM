@@ -1007,8 +1007,15 @@ class CrmInteractionQualificationTest {
         assertThat(row.get("id")).isInstanceOf(UUID.class);
         assertThat(row.get("interaction_id")).isEqualTo(interaction.id());
         assertThat(((Number)row.get("new_version")).longValue()).isEqualTo(1L);
-        assertThat(((java.sql.Timestamp)row.get("occurred_at")).toInstant())
-                .isAfter(Instant.parse("2026-11-20T12:00:00Z"));
+        // H2 returns OffsetDateTime from queryForMap() for TIMESTAMP WITH
+        // TIME ZONE, while PostgreSQL may return Timestamp. Use the stable
+        // JDBC ResultSet conversion instead of casting a Map value.
+        Instant cancelledAt=jdbc.queryForObject("""
+                SELECT occurred_at FROM crm.customer_interaction_event
+                WHERE tenant_id=? AND id=?
+                """,(rs,n)->rs.getTimestamp(1).toInstant(),
+                t.tenantId(),row.get("id"));
+        assertThat(cancelledAt).isAfter(Instant.parse("2026-11-20T12:00:00Z"));
         assertThatThrownBy(()->interactions.cancel(actor,t.tenantId(),interaction.id(),0))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("""
