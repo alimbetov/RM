@@ -12,6 +12,7 @@ on:
       - 'src/test/java/kz/rm/fx/SkuFxSellerApprovalQualificationTest.java'
       - '.github/workflows/rm-cur-r2a-fx-approval.yml'
       - 'docs/spec/RM-CUR-R2A-IMMUTABLE-SKU-FX-APPROVAL.md'
+      - 'docs/spec/RM-CUR-R2B-SELLER-FX-PRICING-GUARDRAILS.md'
   workflow_dispatch:
 permissions:
   contents: read
