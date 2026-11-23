@@ -31,6 +31,7 @@ class CommerceCurrencyAdmissionQualificationTest {
     @Autowired kz.rm.iam.OrganizationMembershipRepository memberships;
     @Autowired kz.rm.iam.VerifiedTenantRoleCommands roles;
     @Autowired kz.rm.storefront.StorefrontOfferService sellerOffers;
+    @Autowired kz.rm.storefront.PublishedOfferQrService qrCommands;
     @Autowired PlatformTransactionManager txManager;
     @Autowired DataSource dataSource;
     @Autowired kz.rm.iam.OrganizationRepository organizations;
@@ -224,6 +225,36 @@ class CommerceCurrencyAdmissionQualificationTest {
         });
         assertThatThrownBy(()->admission.assertKzt("USD"))
                 .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+    }
+
+    @Test void curc11QrRevokeAndImmutableReceiptReplayRemainAvailableOnPolicyHold() {
+        Store store=setup("KZT",true);
+        var seller=seller(store);
+        String issueKey="cur-issue-"+UUID.randomUUID().toString().substring(0,15);
+        var issued=qrCommands.issueOrGet(seller,store.tenant(),store.offer(),0L,issueKey);
+        assertThat(issued.state()).isEqualTo(
+                kz.rm.storefront.PublishedOfferQrService.State.ACTIVE);
+        jdbc.update("""
+            UPDATE public.tenant_currency_policy SET status='REVIEW_REQUIRED'
+            WHERE tenant_id=?
+            """,store.tenant());
+        String revokeKey="cur-revoke-"+UUID.randomUUID().toString().substring(0,15);
+        var revoked=qrCommands.revoke(seller,store.tenant(),store.offer(),
+                issued.rowVersion(),revokeKey);
+        assertThat(revoked.state()).isEqualTo(
+                kz.rm.storefront.PublishedOfferQrService.State.REVOKED);
+        // This returns the immutable original receipt, not a newly active QR.
+        var replay=qrCommands.issueOrGet(seller,store.tenant(),store.offer(),0L,issueKey);
+        assertThat(replay.publicRef()).isEqualTo(issued.publicRef());
+        assertThat(replay.state()).isEqualTo(
+                kz.rm.storefront.PublishedOfferQrService.State.ACTIVE);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.store_offer_qr_ref
+            WHERE tenant_id=? AND offer_id=? AND state='ACTIVE'
+            """,Integer.class,store.tenant(),store.offer())).isZero();
+        assertThatThrownBy(()->qrCommands.reissue(seller,store.tenant(),store.offer(),0L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("CUR_PUBLIC_POLICY_NOT_ACTIVE");
     }
 
     @Test void curc10PostgresThreeWayCheckoutPriceAndPolicyRaceIsAtomic() throws Exception {
