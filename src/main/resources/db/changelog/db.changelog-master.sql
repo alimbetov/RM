@@ -4210,3 +4210,47 @@ CREATE TRIGGER trg_cur_r2b4_calendar_seal_immutable
 --rollback DROP TRIGGER trg_cur_r2b4_calendar_seal_immutable ON crm.fx_calendar_source_seal;
 --rollback DROP TRIGGER trg_cur_r2b4_sealed_day_insert ON crm.fx_calendar_day_evidence;
 --rollback DROP FUNCTION crm.fx_calendar_reject_late_day_insert();
+
+
+--changeset rm:0140-task-r2-service-foundation
+-- Extends the original tenant-owned task stub, no duplicate task aggregate.
+ALTER TABLE crm.task_item ADD COLUMN title VARCHAR(180);
+ALTER TABLE crm.task_item ADD COLUMN created_by UUID;
+ALTER TABLE crm.task_item ADD COLUMN created_request_key VARCHAR(100);
+ALTER TABLE crm.task_item ADD COLUMN request_sha256 CHAR(64);
+ALTER TABLE crm.task_item ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE crm.task_item ADD CONSTRAINT fk_task_creator FOREIGN KEY(created_by)
+ REFERENCES public.iam_user_account(id);
+CREATE UNIQUE INDEX uq_task_create_request ON crm.task_item(tenant_id,created_request_key);
+CREATE TABLE crm.task_event (
+ tenant_id UUID NOT NULL, id UUID NOT NULL, task_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL, action_code VARCHAR(24) NOT NULL,
+ from_state VARCHAR(20), to_state VARCHAR(20) NOT NULL,
+ previous_version BIGINT, new_version BIGINT NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_task_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_task_event_version UNIQUE(tenant_id,task_id,new_version),
+ CONSTRAINT fk_task_event_task FOREIGN KEY(tenant_id,task_id)
+  REFERENCES crm.task_item(tenant_id,id),
+ CONSTRAINT fk_task_event_actor FOREIGN KEY(actor_user_id)
+  REFERENCES public.iam_user_account(id)
+);
+CREATE INDEX idx_task_event_order ON crm.task_event(tenant_id,task_id,new_version);
+CREATE TABLE crm.task_request_lock (bucket INTEGER NOT NULL PRIMARY KEY);
+INSERT INTO crm.task_request_lock(bucket)
+ SELECT bucket FROM crm.interaction_request_lock;
+--rollback DROP TABLE crm.task_request_lock;
+--rollback DROP TABLE crm.task_event;
+--rollback DROP INDEX crm.uq_task_create_request;
+--rollback ALTER TABLE crm.task_item DROP CONSTRAINT fk_task_creator;
+--rollback ALTER TABLE crm.task_item DROP COLUMN updated_at;
+--rollback ALTER TABLE crm.task_item DROP COLUMN request_sha256;
+--rollback ALTER TABLE crm.task_item DROP COLUMN created_request_key;
+--rollback ALTER TABLE crm.task_item DROP COLUMN created_by;
+--rollback ALTER TABLE crm.task_item DROP COLUMN title;
+
+--changeset rm:0141-task-r2-event-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_task_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.task_event
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_task_event_immutable ON crm.task_event;
