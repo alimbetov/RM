@@ -40,7 +40,10 @@ public enum DomainPermission {
     CATALOG_PRICE_MANAGE(DomainModule.CATALOG),
     CATALOG_PUBLISH(DomainModule.CATALOG),
     STOREFRONT_OFFER_MANAGE(DomainModule.SALES),
-    STOREFRONT_OFFER_PUBLISH(DomainModule.SALES);
+    STOREFRONT_OFFER_PUBLISH(DomainModule.SALES),
+    TASK_READ(DomainModule.TASKS),
+    TASK_MANAGE(DomainModule.TASKS),
+    TASK_EXECUTE(DomainModule.TASKS);
 
     private final DomainModule module;
     DomainPermission(DomainModule module) { this.module = module; }
