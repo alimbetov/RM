@@ -54,10 +54,10 @@ class MaturityReportContractTest(unittest.TestCase):
             },
             "testCounts": {"tests": 886, "failures": 0, "errors": 0, "skipped": 116},
             "required": [{
-                "name": "synthetic-required-" + str(i),
+                "name": name,
                 "sha": SHA, "status": "completed", "conclusion": "success",
                 "verifiedArtifacts": [{"sha256": "c" * 64}]
-            } for i in range(6)]
+            } for name in maturity.REQUIRED_WORKFLOWS]
         }
         self.save_inputs()
 
@@ -107,6 +107,21 @@ class MaturityReportContractTest(unittest.TestCase):
         self.roles["mandatory"] = 18
         self.save_inputs()
         with self.assertRaisesRegex(ValueError, "Missing or duplicate"):
+            maturity.render(self.root)
+
+    def test_missing_or_duplicate_mandatory_workflow_fails_closed(self):
+        self.manifest["required"].pop()
+        self.save_inputs()
+        with self.assertRaisesRegex(ValueError, "Missing same-SHA mandatory workflow"):
+            maturity.render(self.root)
+        self.manifest["required"] = [
+            {"name": name, "sha": SHA, "status": "completed",
+             "conclusion": "success", "verifiedArtifacts": [{"sha256": "c" * 64}]}
+            for name in maturity.REQUIRED_WORKFLOWS
+        ]
+        self.manifest["required"][0]["name"] = self.manifest["required"][1]["name"]
+        self.save_inputs()
+        with self.assertRaisesRegex(ValueError, "Missing same-SHA mandatory workflow"):
             maturity.render(self.root)
 
     def test_source_hash_fingerprint_and_artifact_provenance_fail_closed(self):
