@@ -48,6 +48,7 @@ class SkuFxSellerApprovalQualificationTest {
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired VerifiedTenantRoleCommands roleCommands;
     @Autowired MutableClock clock;
+    @Autowired FxCalendarEvidenceService calendarEvidence;
 
     static final class MutableClock extends Clock {
         private final AtomicReference<Instant> current=new AtomicReference<>(Instant.now());
@@ -739,6 +740,74 @@ class SkuFxSellerApprovalQualificationTest {
         } finally {
             release.countDown();
         }
+    }
+
+    private String calendarDigest(byte[] source) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(source));
+        } catch(java.security.NoSuchAlgorithmException failure) {
+            throw new IllegalStateException(failure);
+        }
+    }
+
+    private UUID stageCalendar(NbrkTradingCalendarPolicy.TradingStatus status,
+                               LocalDate date) {
+        byte[] source="RM synthetic calendar qualification fixture".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        String sha=calendarDigest(source);
+        String url="https://kase.kz/ru/members/trading-and-clearing-regulation";
+        return calendarEvidence.stageSource(url,source,sha,List.of(
+                new NbrkTradingCalendarPolicy.Day(date,"USD/KZT",status,url,sha)));
+    }
+
+    @Test void r2b12CalendarGateFailsClosedOnMissingDateWithoutPriceChange() {
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"580"));
+        UUID sourceId=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,
+                effectiveDate());
+        calendarEvidence.enableForTenant(f.actor(),f.tenant(),sourceId,0);
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
+                "r2b-calendar-missing-001"))
+                .hasMessage("CUR_R2B_CALENDAR_EVIDENCE_MISSING");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
+    @Test void r2b13ClosedSessionAllowsApprovalWhenCalendarGateEnabled() {
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"581"));
+        LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
+        UUID sourceId=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,today);
+        calendarEvidence.enableForTenant(f.actor(),f.tenant(),sourceId,0);
+        var receipt=fx.decide(f.actor(),f.tenant(),c.id(),true,
+                "r2b-calendar-closed-001");
+        assertThat(receipt.action()).isEqualTo("APPROVED");
+        assertThat(revisions(f)).isEqualTo(1);
+        assertThat(decisions(f)).isEqualTo(1);
+    }
+
+    @Test void r2b14TradingSessionAgeFailsClosedWithZeroAllowance() {
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"582"));
+        LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
+        UUID sourceId=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.TRADING,today);
+        calendarEvidence.enableForTenant(f.actor(),f.tenant(),sourceId,0);
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
+                "r2b-calendar-trading-001"))
+                .hasMessage("CUR_R2B_TRADING_DAY_AGE_EXCEEDED");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
+    @Test void r2b15AlteredCalendarSourceBytesCannotBeStaged() {
+        byte[] source="verified sample".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String url="https://kase.kz/ru/members/trading-and-clearing-regulation";
+        String claimed="f".repeat(64);
+        assertThatThrownBy(()->calendarEvidence.stageSource(url,source,claimed,List.of(
+                new NbrkTradingCalendarPolicy.Day(effectiveDate(),"USD/KZT",
+                    NbrkTradingCalendarPolicy.TradingStatus.CLOSED,url,claimed))))
+                .hasMessage("CUR_R2B_CALENDAR_SOURCE_HASH_MISMATCH");
     }
 
 }
