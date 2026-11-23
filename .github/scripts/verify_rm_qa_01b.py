@@ -256,13 +256,14 @@ def verify():
                         ("TaskServiceQualificationTest", "t50SnapshotIntegrityVerifiesPersistedRowsAndDeniesForeignActor"),
                         ("TaskServiceQualificationTest", "t51PostgresqlExactlyTenThousandTasksCaptureAndPageWithoutLoss"),
                         ("TaskServiceQualificationTest", "t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture"),
+                        ("TaskServiceQualificationTest", "t53PostgresqlManagerRevocationRacesWithSnapshotCapture"),
                     }
-                    if counts["tests"] != 52 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 52 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 52 or counts["skipped"] != 17):
-                    problems.append(f"{artifact_name}: expected 52 discovered cases with 17 PG-only skips")
+                    if counts["tests"] != 53 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 53 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 53 or counts["skipped"] != 18):
+                    problems.append(f"{artifact_name}: expected 53 discovered cases with 18 PG-only skips")
                 if artifact_name.startswith("rm-task-r32a-populated-pg-"):
-                    if counts["tests"] != 52 or counts["skipped"] != 0:
+                    if counts["tests"] != 53 or counts["skipped"] != 0:
                         problems.append(f"{artifact_name}: populated migration must execute 52 PostgreSQL cases without skips")
                     required_cases = {
                         ("TaskServiceQualificationTest", "t46PostgresqlSnapshotManifestAndEntriesAreImmutable"),
@@ -270,6 +271,7 @@ def verify():
                         ("TaskServiceQualificationTest", "t50SnapshotIntegrityVerifiesPersistedRowsAndDeniesForeignActor"),
                         ("TaskServiceQualificationTest", "t51PostgresqlExactlyTenThousandTasksCaptureAndPageWithoutLoss"),
                         ("TaskServiceQualificationTest", "t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture"),
+                        ("TaskServiceQualificationTest", "t53PostgresqlManagerRevocationRacesWithSnapshotCapture"),
                     }
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
