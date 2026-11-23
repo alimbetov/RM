@@ -981,4 +981,28 @@ class SkuFxSellerApprovalQualificationTest {
             """,Integer.class,f.tenant())).isZero();
     }
 
+    @Test void r2b22EnabledCalendarWithMissingSealFailsClosed() {
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"585"));
+        UUID invalidSource=UUID.randomUUID();
+        Timestamp now=Timestamp.from(clock.instant());
+        jdbc.update("""
+            INSERT INTO crm.fx_calendar_source_evidence
+              (id,source_url,raw_sha256,source_byte_count,verified_at,verification_method)
+            VALUES (?,?,?,?,?,'SOURCE_SHA_VERIFIED')
+            """,invalidSource,"https://kase.kz/ru/members/trading-and-clearing-regulation",
+                java.util.UUID.randomUUID().toString().replace("-","")
+                    +java.util.UUID.randomUUID().toString().replace("-",""),12,now);
+        jdbc.update("""
+            INSERT INTO crm.fx_calendar_tenant_gate
+              (tenant_id,enabled,max_trading_days,source_id,approved_by,approved_at)
+            VALUES (?,TRUE,0,?,?,?)
+            """,f.tenant(),invalidSource,f.ownerActor().userId(),now);
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
+                "r2b-manifest-missing-001"))
+                .hasMessage("CUR_R2B_CALENDAR_MANIFEST_MISSING");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
 }
