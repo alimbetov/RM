@@ -124,3 +124,11 @@ The specialized CI matrix now requires **29 FX integration cases**, nine FX math
 - New PostgreSQL test attempts to append a calendar day after sealing and verifies that the attempt is rejected. Repeated imports and attempts to reclassify an already sealed source are also tested.
 
 Updated mandatory matrix: **32 FX service integration tests** (11 PostgreSQL-only), **9 FX calculator**, **4 calendar evaluator**, **4 KASE transport** = **49 PostgreSQL tests**. H2 executes 21 FX service scenarios and skips the 11 PostgreSQL-only ones. Admission remains unconfirmed until the latest SHA workflows succeed. Trusted automatic date extraction from KASE pages and instrument-specific exception notices still requires independent qualification before production.
+
+## 14. Tenant-owner trust boundary (P0 hardening)
+
+Only `TENANT_RBAC_MANAGE` (non-delegable organization OWNER) can enable or replace an opt-in FX calendar source for that tenant. A normal seller with `STOREFRONT_OFFER_MANAGE` can still approve a commercial KZT price but cannot switch official calendar evidence. H2/PostgreSQL verify seller denial and absence of an admission row. This must remain independent of other seller discount or markup permissions.
+
+Final target qualification matrix: **33 FX integration scenarios**, including **11 PostgreSQL-only**, plus 9 FX calculator + 4 calendar evaluator + 4 KASE transport tests = **50 PostgreSQL tests**. H2 runs 22 FX integration scenarios (11 PG-only skips), plus the same 17 unit scenarios. Exact-SHA confirmation requires the workflow's final success on the same branch SHA.
+
+Full official KASE calendar *classification* remains HOLD: the presently reviewed day assertions are not automatically reconciled with KASE instrument-specific notices or signed by an independent verifier; no synthetic source is entitled to a production calendar activation.
