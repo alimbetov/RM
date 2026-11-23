@@ -8,6 +8,7 @@ on:
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - '.github/workflows/rm-fx-r1a3-trusted-nbrk.yml'
       - 'docs/spec/RM-FX-R1A3-TRUSTED-NBRK-INGESTION.md'
+      - 'docs/reviews/RM-FX-CUR-TECH-REVIEW-2026-11-23.md'
   workflow_dispatch:
 permissions:
   contents: read
