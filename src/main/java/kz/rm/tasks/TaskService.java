@@ -71,12 +71,7 @@ public class TaskService {
             throw new IllegalArgumentException("TASK_CREATE_INVALID");
         String cleanTitle=TaskTitlePolicy.requireApproved(title);
         String fingerprint=sha(tenant+"|"+cleanTitle+"|"+assignee+"|"+dueAt);
-        int bucket=Math.floorMod(Arrays.hashCode(sha(requestKey).getBytes(StandardCharsets.UTF_8)),32);
-        Integer locked=jdbc.queryForObject("""
-            SELECT bucket FROM crm.task_request_lock WHERE bucket=? FOR UPDATE
-            """,Integer.class,bucket);
-        if(locked==null||locked!=bucket)
-            throw new IllegalStateException("TASK_CREATE_LOCK_MISSING");
+        lockRequestStripe(requestKey);
         record Existing(UUID id,String fingerprint,UUID creator) {}
         Existing old=jdbc.query("""
             SELECT id,request_sha256,created_by FROM crm.task_item
@@ -105,9 +100,23 @@ public class TaskService {
     @Transactional
     public Task assign(VerifiedActor actor, UUID tenant, UUID id, UUID assignee,
                        long expectedVersion) {
+        return assign(actor,tenant,id,assignee,expectedVersion,null);
+    }
+
+    @Transactional
+    public Task assign(VerifiedActor actor, UUID tenant, UUID id, UUID assignee,
+                       long expectedVersion,String requestKey) {
         UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
         if(assignee==null)throw new IllegalArgumentException("TASK_ASSIGNEE_REQUIRED");
-        // Lock the target actor BEFORE the task row to avoid task-vs-IAM cycles.
+        if(expectedVersion<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        String fingerprint=requestKey==null?null:
+            sha(tenant+"|"+id+"|ASSIGNED|"+assignee+"|"+expectedVersion);
+        if(requestKey!=null) {
+            lockRequestStripe(requestKey);
+            Task replay=loadReplayed(tenant,manager,id,requestKey,fingerprint);
+            if(replay!=null)return replay;
+        }
+        // Lock target IAM actor before task row, retaining the established lock order.
         requireMember(tenant,assignee);
         Task before=lockTask(tenant,id,expectedVersion);
         if(before.state()!=TaskState.OPEN && before.state()!=TaskState.BLOCKED)
@@ -115,7 +124,8 @@ public class TaskService {
         if(java.util.Objects.equals(before.assigneeUserId(),assignee))return before;
         update(tenant,id,expectedVersion,"assignee_user_id",assignee);
         event(tenant,id,manager,"ASSIGNED",before.state(),before.state(),
-                expectedVersion,expectedVersion+1,before.assigneeUserId(),assignee);
+                expectedVersion,expectedVersion+1,before.assigneeUserId(),assignee,
+                requestKey,fingerprint);
         return load(tenant,id);
     }
 
@@ -161,13 +171,28 @@ public class TaskService {
 
     @Transactional
     public Task archive(VerifiedActor actor,UUID tenant,UUID id,long expectedVersion) {
+        return archive(actor,tenant,id,expectedVersion,null);
+    }
+
+    @Transactional
+    public Task archive(VerifiedActor actor,UUID tenant,UUID id,long expectedVersion,
+                        String requestKey) {
         UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
+        if(expectedVersion<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
+        String fingerprint=requestKey==null?null:
+            sha(tenant+"|"+id+"|ARCHIVED|"+expectedVersion);
+        if(requestKey!=null) {
+            lockRequestStripe(requestKey);
+            Task replay=loadReplayed(tenant,manager,id,requestKey,fingerprint);
+            if(replay!=null)return replay;
+        }
         Task before=lockTask(tenant,id,expectedVersion);
         if(before.state()!=TaskState.COMPLETED)
             throw new IllegalStateException("TASK_ARCHIVE_REQUIRES_COMPLETED");
         update(tenant,id,expectedVersion,"status",TaskState.ARCHIVED.name());
         event(tenant,id,manager,"ARCHIVED",before.state(),TaskState.ARCHIVED,
-                expectedVersion,expectedVersion+1,before.assigneeUserId(),before.assigneeUserId());
+                expectedVersion,expectedVersion+1,before.assigneeUserId(),before.assigneeUserId(),
+                requestKey,fingerprint);
         return load(tenant,id);
     }
 
@@ -177,26 +202,15 @@ public class TaskService {
                       TaskState from,TaskState to,String action,String requestKey) {
         UUID employee=admit(actor,tenant,DomainPermission.TASK_EXECUTE);
         if(version<0)throw new IllegalArgumentException("TASK_VERSION_INVALID");
-        if(requestKey!=null && !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
-            throw new IllegalArgumentException("TASK_REQUEST_KEY_INVALID");
+        if(requestKey!=null)lockRequestStripe(requestKey);
         String fingerprint=requestKey==null?null:
             sha(tenant+"|"+id+"|"+action+"|"+version+"|"+from+"|"+to);
         // Lock canonical task before looking up the receipt. Concurrent same-task
         // retries therefore observe the first transaction's committed event.
         Task before=lockTaskCurrent(tenant,id);
         if(requestKey!=null) {
-            CommandReceipt receipt=jdbc.query("""
-                SELECT task_id,request_sha256,new_version FROM crm.task_event
-                WHERE tenant_id=? AND actor_user_id=? AND request_key=?
-                """,rs->rs.next()?new CommandReceipt(rs.getObject(1,UUID.class),
-                    rs.getString(2),rs.getLong(3)):null,tenant,employee,requestKey);
-            if(receipt!=null) {
-                if(!id.equals(receipt.taskId())||!fingerprint.equals(receipt.fingerprint()))
-                    throw new IllegalStateException("TASK_REQUEST_REPLAY_CONFLICT");
-                if(before.version()!=receipt.version())
-                    throw new IllegalStateException("TASK_RECEIPT_SUPERSEDED");
-                return before;
-            }
+            Task replay=loadReplayed(tenant,employee,id,requestKey,fingerprint);
+            if(replay!=null)return replay;
         }
         if(before.version()!=version)throw new IllegalStateException("TASK_STALE_VERSION");
         if(!employee.equals(before.assigneeUserId()))
@@ -254,6 +268,34 @@ public class TaskService {
                 rs.getObject(7)==null?null:rs.getLong(7),rs.getLong(8),
                 rs.getTimestamp(9).toInstant(),
                 rs.getObject(10,UUID.class),rs.getObject(11,UUID.class)),tenant,id,limit);
+    }
+
+    private void lockRequestStripe(String requestKey) {
+        if(requestKey==null||!requestKey.matches("[A-Za-z0-9_-]{8,100}"))
+            throw new IllegalArgumentException("TASK_REQUEST_KEY_INVALID");
+        int bucket=Math.floorMod(Arrays.hashCode(
+            sha(requestKey).getBytes(StandardCharsets.UTF_8)),32);
+        Integer locked=jdbc.queryForObject("""
+            SELECT bucket FROM crm.task_request_lock WHERE bucket=? FOR UPDATE
+            """,Integer.class,bucket);
+        if(locked==null||locked!=bucket)
+            throw new IllegalStateException("TASK_REQUEST_LOCK_MISSING");
+    }
+
+    private Task loadReplayed(UUID tenant,UUID actor,UUID taskId,
+                              String requestKey,String fingerprint) {
+        CommandReceipt receipt=jdbc.query("""
+            SELECT task_id,request_sha256,new_version FROM crm.task_event
+            WHERE tenant_id=? AND actor_user_id=? AND request_key=?
+            """,rs->rs.next()?new CommandReceipt(rs.getObject(1,UUID.class),
+                rs.getString(2),rs.getLong(3)):null,tenant,actor,requestKey);
+        if(receipt==null)return null;
+        if(!taskId.equals(receipt.taskId())||!fingerprint.equals(receipt.fingerprint()))
+            throw new IllegalStateException("TASK_REQUEST_REPLAY_CONFLICT");
+        Task current=load(tenant,taskId);
+        if(current.version()!=receipt.version())
+            throw new IllegalStateException("TASK_RECEIPT_SUPERSEDED");
+        return current;
     }
 
     private Task lockTask(UUID tenant,UUID id,long version) {
