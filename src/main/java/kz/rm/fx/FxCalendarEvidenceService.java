@@ -31,12 +31,15 @@ public class FxCalendarEvidenceService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
     private final Clock clock;
+    private final TrustedKaseCalendarHttpClient sourceClient;
 
     public FxCalendarEvidenceService(JdbcTemplate jdbc,
-                                     TenantAuthorization authorization, Clock clock) {
+                                     TenantAuthorization authorization, Clock clock,
+                                     TrustedKaseCalendarHttpClient sourceClient) {
         this.jdbc=jdbc;
         this.authorization=authorization;
         this.clock=clock;
+        this.sourceClient=sourceClient;
     }
 
     private static URI trustedSource(String source) {
@@ -58,6 +61,27 @@ public class FxCalendarEvidenceService {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         } catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    }
+
+
+    public record ReviewedSession(LocalDate date, String instrument,
+                                  NbrkTradingCalendarPolicy.TradingStatus status) {}
+
+    /**
+     * Fetches official KASE bytes via restricted HTTPS transport, then stages
+     * caller-reviewed day assertions. It does not extract or certify the days
+     * against the HTML: independent review remains mandatory before enabling.
+     * Network work happens BEFORE the transactional DB staging call.
+     */
+    public UUID fetchAndStageReviewed(String sourceUrl,List<ReviewedSession> sessions) {
+        if(sessions==null||sessions.isEmpty())
+            throw new IllegalArgumentException("CUR_R2B_CALENDAR_REVIEW_REQUIRED");
+        var downloaded=sourceClient.fetch(sourceUrl);
+        String sha=digest(downloaded.bytes());
+        List<NbrkTradingCalendarPolicy.Day> days=sessions.stream()
+            .map(d->new NbrkTradingCalendarPolicy.Day(d.date(),d.instrument(),
+                d.status(),downloaded.sourceUrl(),sha)).toList();
+        return stageSource(downloaded.sourceUrl(),downloaded.bytes(),sha,days);
     }
 
     /**
