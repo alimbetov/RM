@@ -4,6 +4,8 @@ import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,16 +31,27 @@ public class TaskService {
                        UUID createdBy, TaskState state, Instant dueAt, long version) {}
     public record Event(UUID id, UUID taskId, UUID actorUserId, String action,
                         TaskState from, TaskState to, Long previousVersion,
-                        long newVersion, Instant occurredAt) {}
+                        long newVersion, Instant occurredAt,
+                        UUID previousAssigneeUserId, UUID nextAssigneeUserId) {}
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
     private final Clock clock;
+    private String assigneeAccountLockSql;
 
     public TaskService(JdbcTemplate jdbc, TenantAuthorization authorization, Clock clock) {
         this.jdbc=jdbc;
         this.authorization=authorization;
         this.clock=clock;
+    }
+
+    @PostConstruct
+    void initializeAssigneeLock() {
+        String database=jdbc.execute((ConnectionCallback<String>) c->
+            c.getMetaData().getDatabaseProductName());
+        String lock=database!=null && database.toLowerCase(java.util.Locale.ROOT)
+            .contains("postgresql")?"FOR SHARE":"FOR UPDATE";
+        assigneeAccountLockSql="SELECT status FROM public.iam_user_account WHERE id=? "+lock;
     }
 
     private UUID admit(VerifiedActor actor, UUID tenant, DomainPermission permission) {
@@ -85,7 +98,7 @@ public class TaskService {
             VALUES (?,?,?,'OPEN',?,?,0,?,?,?,?,?)
             """,tenant,id,assignee,Timestamp.from(dueAt),Timestamp.from(now),
             cleanTitle,creator,requestKey,fingerprint,Timestamp.from(now));
-        event(tenant,id,creator,"CREATED",null,TaskState.OPEN,null,0L);
+        event(tenant,id,creator,"CREATED",null,TaskState.OPEN,null,0L,null,assignee);
         return load(tenant,id);
     }
 
@@ -94,14 +107,15 @@ public class TaskService {
                        long expectedVersion) {
         UUID manager=admit(actor,tenant,DomainPermission.TASK_MANAGE);
         if(assignee==null)throw new IllegalArgumentException("TASK_ASSIGNEE_REQUIRED");
+        // Lock the target actor BEFORE the task row to avoid task-vs-IAM cycles.
+        requireMember(tenant,assignee);
         Task before=lockTask(tenant,id,expectedVersion);
         if(before.state()!=TaskState.OPEN && before.state()!=TaskState.BLOCKED)
             throw new IllegalStateException("TASK_REASSIGN_STATE_INVALID");
-        requireMember(tenant,assignee);
         if(before.assigneeUserId().equals(assignee))return before;
         update(tenant,id,expectedVersion,"assignee_user_id",assignee);
         event(tenant,id,manager,"ASSIGNED",before.state(),before.state(),
-                expectedVersion,expectedVersion+1);
+                expectedVersion,expectedVersion+1,before.assigneeUserId(),assignee);
         return load(tenant,id);
     }
 
@@ -133,7 +147,7 @@ public class TaskService {
             throw new IllegalStateException("TASK_ARCHIVE_REQUIRES_COMPLETED");
         update(tenant,id,expectedVersion,"status",TaskState.ARCHIVED.name());
         event(tenant,id,manager,"ARCHIVED",before.state(),TaskState.ARCHIVED,
-                expectedVersion,expectedVersion+1);
+                expectedVersion,expectedVersion+1,before.assigneeUserId(),before.assigneeUserId());
         return load(tenant,id);
     }
 
@@ -146,7 +160,8 @@ public class TaskService {
         if(before.state()!=from)
             throw new IllegalStateException("TASK_TRANSITION_INVALID");
         update(tenant,id,version,"status",to.name());
-        event(tenant,id,employee,action,from,to,version,version+1);
+        event(tenant,id,employee,action,from,to,version,version+1,
+            before.assigneeUserId(),before.assigneeUserId());
         return load(tenant,id);
     }
 
@@ -184,7 +199,8 @@ public class TaskService {
         if(limit<1||limit>100)throw new IllegalArgumentException("TASK_HISTORY_LIMIT_INVALID");
         return jdbc.query("""
             SELECT id,task_id,actor_user_id,action_code,from_state,to_state,
-                   previous_version,new_version,occurred_at
+                   previous_version,new_version,occurred_at,
+                   previous_assignee_user_id,next_assignee_user_id
             FROM crm.task_event WHERE tenant_id=? AND task_id=?
             ORDER BY new_version DESC LIMIT ?
             """,(rs,n)->new Event(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
@@ -192,7 +208,8 @@ public class TaskService {
                 rs.getString(5)==null?null:TaskState.valueOf(rs.getString(5)),
                 TaskState.valueOf(rs.getString(6)),
                 rs.getObject(7)==null?null:rs.getLong(7),rs.getLong(8),
-                rs.getTimestamp(9).toInstant()),tenant,id,limit);
+                rs.getTimestamp(9).toInstant(),
+                rs.getObject(10,UUID.class),rs.getObject(11,UUID.class)),tenant,id,limit);
     }
 
     private Task lockTask(UUID tenant,UUID id,long version) {
@@ -226,6 +243,11 @@ public class TaskService {
     }
 
     private void requireMember(UUID tenant,UUID user) {
+        // An account suspension UPDATE must wait until this command commits.
+        String accountStatus=jdbc.query(assigneeAccountLockSql,rs->
+            rs.next()?rs.getString(1):null,user);
+        if(!"ACTIVE".equals(accountStatus))
+            throw new SecurityException("TASK_ASSIGNEE_MUST_BE_ACTIVE_MEMBER");
         String state=jdbc.query("""
             SELECT m.status FROM public.iam_workspace w
             JOIN public.iam_org_membership m
@@ -248,15 +270,17 @@ public class TaskService {
     }
 
     private void event(UUID tenant,UUID id,UUID user,String action,
-                       TaskState before,TaskState after,Long version,long next) {
+                       TaskState before,TaskState after,Long version,long next,
+                       UUID previousAssignee,UUID nextAssignee) {
         jdbc.update("""
             INSERT INTO crm.task_event
               (tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
-               previous_version,new_version,occurred_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+               previous_version,new_version,occurred_at,
+               previous_assignee_user_id,next_assignee_user_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """,tenant,UUID.randomUUID(),id,user,action,
             before==null?null:before.name(),after.name(),version,next,
-            Timestamp.from(clock.instant()));
+            Timestamp.from(clock.instant()),previousAssignee,nextAssignee);
     }
 
     private static String sha(String input) {
