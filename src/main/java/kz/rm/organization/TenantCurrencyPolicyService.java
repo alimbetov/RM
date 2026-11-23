@@ -106,6 +106,92 @@ public class TenantCurrencyPolicyService {
             throw new IllegalStateException("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
     }
 
+
+    /** CUR-R1B: owner-only configuration change with tenant CAS and immutable event. */
+    @Transactional
+    public Policy setCurrencyEnabled(VerifiedActor actor, UUID tenantId, String currency,
+                                     String purpose, boolean enabled, long expectedVersion) {
+        UUID user=actorId(actor);
+        if(tenantId==null || currency==null || !currency.matches("[A-Z]{3}")
+                || purpose==null || !List.of("PURCHASE","ACCOUNTING","INVENTORY_VALUATION",
+                    "SALES_INTERNAL","PUBLIC_PRICE").contains(purpose) || expectedVersion<0)
+            throw new IllegalArgumentException("TENANT_CURRENCY_CHANGE_INVALID");
+        try { java.util.Currency.getInstance(currency); }
+        catch(IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("TENANT_CURRENCY_ISO_INVALID",invalid);
+        }
+        if(("PUBLIC_PRICE".equals(purpose)||"ACCOUNTING".equals(purpose))
+                && (!"KZT".equals(currency)||!enabled))
+            throw new IllegalStateException("TENANT_CURRENCY_MANDATORY_KZT");
+        authorization.requireForCommand(user,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
+        // Shared currency row is locked before any allowlist read/write.
+        Policy policy=loadRequired(tenantId,true);
+        if(!"ACTIVE".equals(policy.status()))
+            throw new IllegalStateException("TENANT_CURRENCY_POLICY_REVIEW_REQUIRED");
+        if(policy.rowVersion()!=expectedVersion)
+            throw new IllegalStateException("TENANT_CURRENCY_STALE_VERSION");
+        String state=enabled?"ENABLED":"DISABLED";
+        String current=jdbc.query("""
+            SELECT state FROM public.tenant_allowed_currency
+            WHERE tenant_id=? AND currency_code=? AND purpose=?
+            """,rs->rs.next()?rs.getString(1):null,tenantId,currency,purpose);
+        if(state.equals(current))return policy;
+        Timestamp now=Timestamp.from(Instant.now());
+        if(current==null) {
+            jdbc.update("""
+                INSERT INTO public.tenant_allowed_currency
+                (tenant_id,currency_code,purpose,state,row_version,created_at,updated_at)
+                VALUES (?,?,?,?,0,?,?)
+                """,tenantId,currency,purpose,state,now,now);
+        } else {
+            jdbc.update("""
+                UPDATE public.tenant_allowed_currency
+                SET state=?,row_version=row_version+1,updated_at=?
+                WHERE tenant_id=? AND currency_code=? AND purpose=?
+                """,state,now,tenantId,currency,purpose);
+        }
+        int changed=jdbc.update("""
+            UPDATE public.tenant_currency_policy
+            SET row_version=row_version+1,policy_version=policy_version+1,
+                approved_by=?,approved_at=?,updated_at=?
+            WHERE tenant_id=? AND row_version=?
+            """,user,now,now,tenantId,expectedVersion);
+        if(changed!=1)throw new IllegalStateException("TENANT_CURRENCY_STALE_VERSION");
+        jdbc.update("""
+            INSERT INTO public.tenant_currency_policy_event
+            (tenant_id,id,revision_no,actor_user_id,action_code,currency_code,purpose,occurred_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,tenantId,UUID.randomUUID(),expectedVersion+2,user,
+                enabled?"CURRENCY_ENABLED":"CURRENCY_DISABLED",currency,purpose,now);
+        return loadRequired(tenantId,false);
+    }
+
+    /**
+     * Internal purpose-specific admission; caller must own an outer business
+     * transaction and follow global tenant-policy-before-commercial-row lock order.
+     * A configured PURCHASE currency is not an assertion of legal settlement rights.
+     */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void requireCurrencyForPurpose(UUID tenantId,String currency,String purpose) {
+        if(tenantId==null||currency==null||!currency.matches("[A-Z]{3}")||
+                purpose==null||!List.of("PURCHASE","ACCOUNTING","INVENTORY_VALUATION",
+                    "SALES_INTERNAL","PUBLIC_PRICE").contains(purpose))
+            throw new IllegalArgumentException("TENANT_CURRENCY_PURPOSE_INVALID");
+        if("PUBLIC_PRICE".equals(purpose)) {
+            requirePublicKzCurrency(tenantId,currency);
+            return;
+        }
+        Policy p=loadRequired(tenantId,true);
+        if(!"ACTIVE".equals(p.status()))
+            throw new IllegalStateException("TENANT_CURRENCY_POLICY_REVIEW_REQUIRED");
+        Integer count=jdbc.queryForObject("""
+            SELECT count(*) FROM public.tenant_allowed_currency
+            WHERE tenant_id=? AND currency_code=? AND purpose=? AND state='ENABLED'
+            """,Integer.class,tenantId,currency,purpose);
+        if(count==null||count!=1)
+            throw new IllegalStateException("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+    }
+
     private Policy loadRequired(UUID tenantId,boolean lock) {
         Policy p=load(tenantId,lock);
         if(p==null)throw new IllegalStateException("TENANT_CURRENCY_POLICY_NOT_INITIALIZED");
