@@ -57,13 +57,11 @@ jobs:
         run: |
           docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
             SELECT CASE WHEN to_regclass('crm.task_reconciliation_snapshot') IS NULL
-              THEN 'PRE_SNAPSHOT_SCHEMA' ELSE 1/0::text END;" > /tmp/task-pre-schema.txt
+              THEN 'PRE_SNAPSHOT_SCHEMA' ELSE 'ALREADY_EXISTS' END;" > /tmp/task-pre-schema.txt
           grep -Fx PRE_SNAPSHOT_SCHEMA /tmp/task-pre-schema.txt
-          for table in task_item task_event task_crm_followup customer_interaction; do
+          for table in task_item task_event customer_interaction; do
             docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
-              SELECT tenant_id::text || '/' || id::text FROM crm.$table ORDER BY 1"               > "/tmp/task-before-$table.txt" || {
-                if [ "$table" != "task_crm_followup" ]; then exit 1; fi
-              }
+              SELECT tenant_id::text || '/' || id::text FROM crm.$table ORDER BY 1"               > "/tmp/task-before-$table.txt"
           done
           docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
             SELECT tenant_id::text || '/' || task_id::text FROM crm.task_crm_followup ORDER BY 1"             > /tmp/task-before-followup-keys.txt
