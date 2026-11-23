@@ -75,7 +75,7 @@ public class TaskReconciliationSnapshotService {
             JOIN crm.task_item t ON t.tenant_id=l.tenant_id AND t.id=l.task_id
             WHERE l.tenant_id=? AND l.interaction_id=?
               AND t.status IN ('OPEN','IN_PROGRESS','BLOCKED','QUEUED')
-            ORDER BY t.id
+            ORDER BY t.id LIMIT 10001
             """,(rs,n)->new Item(rs.getObject(1,UUID.class),
                 TaskState.valueOf(rs.getString(2)),rs.getLong(3)),tenant,interactionId);
         if(items.size()>10000)throw new IllegalStateException("TASK_SNAPSHOT_CAPACITY_EXCEEDED");
