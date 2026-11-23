@@ -1118,4 +1118,116 @@ class TaskServiceQualificationTest {
         } finally {release.countDown();}
     }
 
+    @Test void t39ManagerQueuePaginatesAndHidesUnassignedTasksFromEmployee() {
+        var t=tenant();
+        var created=new java.util.ArrayList<TaskService.Task>();
+        for(int i=0;i<5;i++) {
+            var task=tasks.create(t.manager(),t.id(),"General operations",
+                t.staff().userId(),DUE,"task-r31-queue-"+i+"-001");
+            tasks.requeue(t.manager(),t.id(),task.id(),0,"task-r31-requeue-"+i+"-001");
+            created.add(task);
+        }
+        var seen=new java.util.HashSet<UUID>();
+        UUID cursor=null;
+        do {
+            var page=tasks.managerQueue(t.manager(),t.id(),2,cursor);
+            assertThat(page.items().size()).isBetween(1,2);
+            for(var task:page.items()){
+                assertThat(task.state()).isEqualTo(TaskState.QUEUED);
+                assertThat(task.assigneeUserId()).isNull();
+                assertThat(seen.add(task.id())).isTrue();
+            }
+            cursor=page.nextAfterId();
+        }while(cursor!=null);
+        assertThat(seen).containsExactlyInAnyOrderElementsOf(
+            created.stream().map(TaskService.Task::id).toList());
+        assertThatThrownBy(()->tasks.managerQueue(t.staff(),t.id(),2,null))
+            .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->tasks.managerQueue(t.manager(),t.id(),101,null))
+            .hasMessage("TASK_QUEUE_PAGE_INVALID");
+        for(var task:created) {
+            assertThatThrownBy(()->tasks.getMine(t.staff(),t.id(),task.id()))
+                .hasMessage("TASK_NOT_ACCESSIBLE");
+        }
+    }
+
+    @Test void t40ManagerQueueCannotExposeAnotherTenantOrUnauthorizedRole() {
+        var a=tenant();
+        var b=tenant();
+        var task=tasks.create(a.manager(),a.id(),"General operations",
+            a.staff().userId(),DUE,"task-r31-isolate-001");
+        tasks.requeue(a.manager(),a.id(),task.id(),0,"task-r31-isolate-queue-001");
+        assertThat(tasks.managerQueue(b.manager(),b.id(),20,null).items())
+            .extracting(TaskService.Task::id).doesNotContain(task.id());
+        assertThat(tasks.managerQueue(a.manager(),a.id(),20,null).items())
+            .extracting(TaskService.Task::id).contains(task.id());
+        assertThatThrownBy(()->tasks.managerQueue(b.staff(),a.id(),20,null))
+            .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void t41CancelledCrmReconciliationPageAdvancesWithoutRepeatingTasks() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var created=new java.util.ArrayList<UUID>();
+        for(int i=0;i<5;i++){
+            var task=followups.create(t.manager(),t.id(),source,"Review order",
+                t.staff().userId(),DUE,"task-r31-crm-page-"+i+"-001");
+            created.add(task.id());
+        }
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var first=reconciliation.pendingPage(t.manager(),t.id(),source,null,2);
+        assertThat(first.items()).hasSize(2);
+        assertThat(first.nextAfterTaskId()).isNotNull();
+        var selected=first.items().getFirst();
+        reconciliation.reconcileCancelled(t.manager(),t.id(),source,
+            selected.taskId(),selected.version(),"task-r31-page-reconcile-001");
+        var all=new java.util.HashSet<UUID>();
+        for(var item:first.items())assertThat(all.add(item.taskId())).isTrue();
+        UUID cursor=first.nextAfterTaskId();
+        while(cursor!=null){
+            var page=reconciliation.pendingPage(t.manager(),t.id(),source,cursor,2);
+            for(var item:page.items())assertThat(all.add(item.taskId())).isTrue();
+            cursor=page.nextAfterTaskId();
+        }
+        assertThat(all).containsExactlyInAnyOrderElementsOf(created);
+        assertThat(reconciliation.pendingPage(t.manager(),t.id(),source,null,100).items())
+            .extracting(TaskCrmReconciliationService.Pending::taskId)
+            .doesNotContain(selected.taskId());
+        assertThatThrownBy(()->reconciliation.pendingPage(t.staff(),t.id(),source,null,2))
+            .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->reconciliation.pendingPage(t.manager(),t.id(),source,null,0))
+            .hasMessage("TASK_RECONCILE_QUERY_INVALID");
+    }
+
+    @Test void t42PostgresqlQueuePageDoesNotResurrectConcurrentlyClaimedTask() throws Exception {
+        try(var conn=dataSource.getConnection()){
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID replacement=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-r31-claim-"+UUID.randomUUID(),"Queue claim")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),replacement,OrganizationMembershipEntity.Role.MEMBER));
+        var task=tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-r31-claim-create-001");
+        tasks.requeue(t.manager(),t.id(),task.id(),0,"task-r31-claim-requeue-001");
+        var page=tasks.managerQueue(t.manager(),t.id(),10,null);
+        assertThat(page.items()).extracting(TaskService.Task::id).contains(task.id());
+        var claim=tasks.assign(t.manager(),t.id(),task.id(),replacement,1,
+            "task-r31-claim-assign-001");
+        assertThat(claim.state()).isEqualTo(TaskState.OPEN);
+        assertThat(tasks.managerQueue(t.manager(),t.id(),10,null).items())
+            .extracting(TaskService.Task::id).doesNotContain(task.id());
+        assertThatThrownBy(()->tasks.assign(t.manager(),t.id(),task.id(),
+            t.staff().userId(),1,"task-r31-stale-claim-001"))
+            .hasMessage("TASK_STALE_VERSION");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(3);
+    }
+
 }
