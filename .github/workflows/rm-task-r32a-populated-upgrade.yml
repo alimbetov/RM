@@ -175,15 +175,18 @@ jobs:
         run: |
           set -euo pipefail
           {
-            printf 'commit=%s\\npostgres=17\\nchangeset=0153\\n' "$GITHUB_SHA"
+            echo "commit=$GITHUB_SHA"
+            echo "postgres=17"
+            echo "changeset=0153"
             for db in rm_test rm_restore; do
-              printf 'database=%s\\n' "$db"
+              echo "database=$db"
               docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
                 SELECT 'sealed_snapshots=' || count(*) FROM crm.task_reconciliation_snapshot_seal"
               docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
                 SELECT 'snapshot_items=' || count(*) FROM crm.task_reconciliation_snapshot_item"
             done
-            printf 'digest_before_restore=PASS\\ndigest_after_restore=PASS\\n'
+            echo "digest_before_restore=PASS"
+            echo "digest_after_restore=PASS"
           } > rm-task-r32a-pg-evidence.txt
       - name: Publish populated migration and restore Surefire evidence
         if: always()
