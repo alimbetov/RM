@@ -37,6 +37,7 @@ class SkuFxSellerApprovalQualificationTest {
     @Autowired StorefrontOfferService offers;
     @Autowired AutoOrderService orders;
     @Autowired DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired VerifiedTenantRoleCommands roleCommands;
 
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,
@@ -274,6 +275,61 @@ class SkuFxSellerApprovalQualificationTest {
                 BigDecimal.ONE,BigDecimal.ZERO,BigDecimal.ZERO,BigDecimal.ONE,0))
                 .isInstanceOf(SecurityException.class);
         assertThat(decisions(a)).isZero();
+    }
+
+    @Test void r2a11PostgresqlNegotiationCommitBeforeApprovalDeniesAtomicPriceChange()
+            throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"511"));
+        var locked=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var negotiate=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,f.tenant());
+                locked.countDown();
+                try {
+                    if(!release.await(5,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2A_NEGOTIATION_RACE_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                Timestamp now=Timestamp.from(Instant.now());
+                jdbc.update("""
+                    INSERT INTO crm.sales_price_proposal
+                      (tenant_id,id,offer_id,catalog_item_id,buyer_user_id,quantity,
+                       list_price_at_submit,current_unit_price,currency,state,revision,
+                       next_actor,round_count,expires_at,created_at,updated_at,row_version)
+                    VALUES (?,?,?,?,?,1,100,95,'KZT','AWAITING_SELLER',1,'SELLER',0,?,?,?,0)
+                    """,f.tenant(),UUID.randomUUID(),f.offer(),f.item(),f.buyer(),
+                    Timestamp.from(Instant.now().plusSeconds(3600)),now,now);
+                return true;
+            }));
+            assertThat(locked.await(5,TimeUnit.SECONDS)).isTrue();
+            var approve=pool.submit(()->{
+                try {
+                    fx.decide(f.actor(),f.tenant(),c.id(),true,"fx-race-neg-001");
+                    return "APPROVED";
+                } catch(IllegalStateException expected) {
+                    return expected.getMessage();
+                }
+            });
+            release.countDown();
+            assertThat(negotiate.get(8,TimeUnit.SECONDS)).isTrue();
+            assertThat(approve.get(8,TimeUnit.SECONDS))
+                    .isEqualTo("CUR_R2A_ACTIVE_NEGOTIATION");
+            assertThat(revisions(f)).isZero();
+            assertThat(decisions(f)).isZero();
+        } finally {
+            release.countDown();
+        }
     }
 
     @Test void r2a10PostgresqlEvidenceRejectsUpdateOrDelete() throws Exception {
