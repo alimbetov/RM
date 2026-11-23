@@ -23,6 +23,7 @@ REQUIRED = {
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification": ("inventory-0081-populated-postgresql",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification": ("sales-084-populated-postgresql",),
     "RustFS Real Infrastructure E2E": ("rustfs-real-infra-e2e-surefire",),
+    "RM TASK R2 Service Qualification": ("rm-task-h2-{sha}", "rm-task-postgresql-{sha}"),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
@@ -44,6 +45,7 @@ SUITES = {
         ("RustFsLiveInfrastructureE2ETest", "RustFsRealClamAvE2ETest"),
     "CRM R1.2 Populated PostgreSQL Upgrade Qualification":
         ("CrmR1aQualificationTest",),
+    "RM TASK R2 Service Qualification": ("TaskServiceQualificationTest",),
 }
 
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
@@ -150,7 +152,8 @@ def verify():
         jobs = gate.get("jobs", [])
         if not jobs or any(j.get("conclusion") != "success" for j in jobs):
             problems.append(f"{name}: missing/failed jobs")
-        expected_artifacts = REQUIRED.get(name)
+        expected_artifact_templates = REQUIRED.get(name)
+        expected_artifacts = tuple(a.replace("{sha}", sha) for a in expected_artifact_templates) if expected_artifact_templates else ()
         if not expected_artifacts:
             problems.append(f"{name}: missing expected artifact configuration")
             continue
@@ -202,7 +205,19 @@ def verify():
                     group = discovered_suites.setdefault(suite, {"tests": 0, "skipped": 0})
                     group["tests"] += values["tests"]
                     group["skipped"] += values["skipped"]
-                missing_cases = REQUIRED_CASES.get(artifact_name, set()) - executed_cases
+                required_cases = REQUIRED_CASES.get(artifact_name, set())
+                if artifact_name.startswith("rm-task-postgresql-"):
+                    required_cases = {
+                        ("TaskServiceQualificationTest", "t04PostgresqlConcurrentStartAllowsExactlyOneTransition"),
+                        ("TaskServiceQualificationTest", "t05PostgresqlImmutableTaskHistoryRejectsTampering"),
+                        ("TaskServiceQualificationTest", "t08PostgresqlSuspensionWaitsUntilAdmittedCreationCommits"),
+                        ("TaskServiceQualificationTest", "t09LegacyNullAssigneeCanBeAssignedWithoutLosingAudit"),
+                    }
+                    if counts["tests"] != 9 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 9 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 9 or counts["skipped"] != 3):
+                    problems.append(f"{artifact_name}: expected 9 discovered cases with 3 PG-only skips")
+                missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
                 if counts["tests"] <= 0 or counts["failures"] or counts["errors"]:
