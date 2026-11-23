@@ -69,7 +69,7 @@ jobs:
           clean: true
       - name: Verify exact source SHA
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Apply 0149-0152 on the populated database and qualify R3.2A
+      - name: Apply 0149-0153 on the populated database and qualify R3.2A
         run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
       - name: Assert all historical task and CRM keys survive
         env:
@@ -92,6 +92,11 @@ jobs:
             docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
               SELECT to_regclass('crm.$table') IS NOT NULL" | grep -Fx t
           done
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+            SELECT count(*) FROM pg_trigger
+            WHERE tgrelid='crm.task_reconciliation_snapshot_seal'::regclass
+              AND tgname='trg_task_snapshot_seal_transaction_fence'
+              AND NOT tgisinternal" | grep -Fx 1
       - name: Verify post-commit manifest digest from persisted PostgreSQL rows
         env:
           PG_CONTAINER: ${{ job.services.postgres.id }}
@@ -164,6 +169,22 @@ jobs:
               WHERE s.item_count<>d.item_count OR z.items_sha256<>d.recomputed;
               IF invalid_count<>0 THEN RAISE EXCEPTION 'restored snapshot digest mismatch'; END IF;
             END \$\$;"
+      - name: Capture PostgreSQL migration / sealed snapshot / restore proof
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          {
+            printf 'commit=%s\\npostgres=17\\nchangeset=0153\\n' "$GITHUB_SHA"
+            for db in rm_test rm_restore; do
+              printf 'database=%s\\n' "$db"
+              docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
+                SELECT 'sealed_snapshots=' || count(*) FROM crm.task_reconciliation_snapshot_seal"
+              docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
+                SELECT 'snapshot_items=' || count(*) FROM crm.task_reconciliation_snapshot_item"
+            done
+            printf 'digest_before_restore=PASS\\ndigest_after_restore=PASS\\n'
+          } > rm-task-r32a-pg-evidence.txt
       - name: Publish populated migration and restore Surefire evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -171,4 +192,5 @@ jobs:
           name: rm-task-r32a-populated-pg-${{ github.sha }}
           path: |
             target/surefire-reports/
+            rm-task-r32a-pg-evidence.txt
           if-no-files-found: error
