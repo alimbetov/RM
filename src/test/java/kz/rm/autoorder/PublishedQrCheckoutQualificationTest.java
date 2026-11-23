@@ -122,6 +122,42 @@ class PublishedQrCheckoutQualificationTest {
                 """,Integer.class,f.tenant());
     }
 
+    @Test void decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation() {
+        var f=setup();
+        UUID id=buy(f,email(),2,0,new BigDecimal("250.0000"),key()).order().orderId();
+        assertThat(jdbc.queryForObject("""
+            SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,String.class,f.tenant(),id)).isEqualTo("PICKUP_PROOF_REQUIRED");
+        assertThat(jdbc.queryForObject("""
+            SELECT status FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,String.class,f.tenant(),id)).isEqualTo("PLACED");
+    }
+
+    @Test void decFul01RegularCheckoutRetainsHistoricalStandardChannel() {
+        var f=setup();
+        UUID id=auto.checkout(f.slug(),email(),key(),
+                List.of(new AutoOrderService.Line(f.offer(),2))).order().orderId();
+        assertThat(jdbc.queryForObject("""
+            SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,String.class,f.tenant(),id)).isEqualTo("STANDARD");
+    }
+
+    @Test void decFul01PostgresRejectsDowngradingQrOrderFulfillmentMode() throws Exception {
+        try(var c=dataSource.getConnection()){
+            Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName().toLowerCase()
+                .contains("postgresql"));
+        }
+        var f=setup();
+        UUID id=buy(f,email(),1,0,new BigDecimal("250.0000"),key()).order().orderId();
+        assertThatThrownBy(()->jdbc.update("""
+            UPDATE crm.sales_order SET fulfillment_mode='STANDARD'
+            WHERE tenant_id=? AND id=?
+            """,f.tenant(),id)).hasMessageContaining("SALES_FULFILLMENT_MODE_IMMUTABLE");
+        assertThat(jdbc.queryForObject("""
+            SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,String.class,f.tenant(),id)).isEqualTo("PICKUP_PROOF_REQUIRED");
+    }
+
     @Test void qr03AcceptedCurrentPriceCreatesOnePlacedOrderWithEmailIdentity() {
         var f=setup();
         var placed=buy(f,email(),3,0,new BigDecimal("250.0000"),key());
