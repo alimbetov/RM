@@ -4,6 +4,8 @@ on:
     branches: [base_dev]
     paths:
       - 'src/main/java/kz/rm/fx/SkuFxSellerApprovalService.java'
+      - 'src/main/java/kz/rm/fx/NbrkTradingCalendarPolicy.java'
+      - 'src/test/java/kz/rm/fx/NbrkTradingCalendarPolicyTest.java'
       - 'src/main/java/kz/rm/fx/FxEvaluationClockConfiguration.java'
       - 'src/main/java/kz/rm/fx/SkuFxCandidateCalculator.java'
       - 'src/main/java/kz/rm/fx/NbrkRateSnapshotReader.java'
@@ -35,15 +37,16 @@ jobs:
       - name: Exact-SHA checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Service-only calculation and approval H2 qualification
-        run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest test
+        run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest,NbrkTradingCalendarPolicyTest test
       - name: Verify test report, count and expected database skip
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
           for name, expected, skipped in [
-              ('SkuFxSellerApprovalQualificationTest',21,6),
-              ('SkuFxCandidateCalculatorTest',9,0)]:
+              ('SkuFxSellerApprovalQualificationTest',23,8),
+              ('SkuFxCandidateCalculatorTest',9,0),
+              ('NbrkTradingCalendarPolicyTest',4,0)]:
               p=Path('target/surefire-reports/TEST-kz.rm.fx.'+name+'.xml')
               assert p.is_file(),p
               cases=list(E.parse(p).getroot().iter('testcase'))
@@ -93,13 +96,14 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: PostgreSQL seller FX evidence and snapshot qualification
         run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest test
-      - name: Require 30 executed cases without skips
+      - name: Require 36 executed cases without skips
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
-          for name, expected in [('SkuFxSellerApprovalQualificationTest',21),
-                                 ('SkuFxCandidateCalculatorTest',9)]:
+          for name, expected in [('SkuFxSellerApprovalQualificationTest',23),
+                                 ('SkuFxCandidateCalculatorTest',9),
+                                 ('NbrkTradingCalendarPolicyTest',4)]:
               p=Path('target/surefire-reports/TEST-kz.rm.fx.'+name+'.xml')
               assert p.is_file(),p
               cases=list(E.parse(p).getroot().iter('testcase'))
