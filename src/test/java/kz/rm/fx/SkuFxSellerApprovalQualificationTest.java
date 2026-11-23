@@ -46,6 +46,8 @@ class SkuFxSellerApprovalQualificationTest {
                 UUID.randomUUID(),"fxowner-"+UUID.randomUUID(),"FX owner"));
         var buyer=users.saveAndFlush(new UserAccountEntity(
                 UUID.randomUUID(),"fxbuyer-"+UUID.randomUUID(),"Buyer"));
+        var seller=users.saveAndFlush(new UserAccountEntity(
+                UUID.randomUUID(),"fxseller-"+UUID.randomUUID(),"Seller"));
         var org=organizations.saveAndFlush(new OrganizationEntity(
                 UUID.randomUUID(),"FX Approval LLP","FX store","KZ"));
         var workspace=workspaces.saveAndFlush(
@@ -54,6 +56,9 @@ class SkuFxSellerApprovalQualificationTest {
         memberships.saveAndFlush(new OrganizationMembershipEntity(
                 UUID.randomUUID(),org.getId(),owner.getId(),
                 OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),org.getId(),seller.getId(),
+                OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
         String slug="fx-r2a-"+UUID.randomUUID();
         jdbc.update("""
@@ -91,13 +96,20 @@ class SkuFxSellerApprovalQualificationTest {
         JwtDecoder decoder=token->Jwt.withTokenValue(token).header("alg","RS256")
                 .subject(subject).issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(600)).build();
-        VerifiedActor actor=new OidcActorResolver(decoder,users).resolve("fx-synthetic");
-        var role=roleCommands.createRole(actor,tenant,
+        VerifiedActor ownerActor=new OidcActorResolver(decoder,users).resolve("fx-owner");
+        var role=roleCommands.createRole(ownerActor,tenant,
                 "FX_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "FX seller test role");
-        roleCommands.grant(actor,tenant,role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
-        roleCommands.assign(actor,tenant,owner.getId(),role.id());
-        roleCommands.enable(actor,tenant);
+        roleCommands.grant(ownerActor,tenant,role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roleCommands.assign(ownerActor,tenant,seller.getId(),role.id());
+        roleCommands.enable(ownerActor,tenant);
+        String sellerSubject=jdbc.queryForObject("""
+            SELECT external_subject FROM public.iam_user_account WHERE id=?
+            """,String.class,seller.getId());
+        JwtDecoder sellerDecoder=token->Jwt.withTokenValue(token).header("alg","RS256")
+                .subject(sellerSubject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600)).build();
+        VerifiedActor actor=new OidcActorResolver(sellerDecoder,users).resolve("fx-staff");
         return new Fixture(tenant,offer,item,slug,actor,buyer.getId());
     }
 
