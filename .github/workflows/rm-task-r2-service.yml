@@ -14,6 +14,7 @@ on:
       - '.github/workflows/rm-exact-sha-admission.yml'
       - '.github/scripts/verify_rm_qa_01b.py'
       - '.github/scripts/test_verify_rm_qa_01b.py'
+      - 'docs/reviews/RM-TASK-R2-01A2-SECOND-TECHNICAL-REVIEW-2026-11-23.md'
   workflow_dispatch:
 permissions:
   contents: read
