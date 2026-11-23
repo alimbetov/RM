@@ -57,19 +57,21 @@ public class TaskReconciliationSnapshotService {
                 ||!requestKey.matches("[A-Za-z0-9_-]{8,100}"))
             throw new IllegalArgumentException("TASK_SNAPSHOT_REQUEST_INVALID");
 
-        // Serializes same-source captures and CRM status changes on PostgreSQL.
-        List<UUID> source=jdbc.query("""
-            SELECT id FROM crm.customer_interaction
-            WHERE tenant_id=? AND id=? AND status='CANCELLED' FOR UPDATE
-            """,(rs,n)->rs.getObject(1,UUID.class),tenant,interactionId);
-        if(source.isEmpty())
-            throw new IllegalStateException("TASK_SNAPSHOT_SOURCE_NOT_CANCELLED");
+        // Lock the canonical source before replay/capture: a committed receipt
+        // remains replayable after a later source status change, but a new
+        // capture requires the source to be CANCELLED at the lock boundary.
+        List<String> source=jdbc.query("""
+            SELECT status FROM crm.customer_interaction
+            WHERE tenant_id=? AND id=? FOR UPDATE
+            """,(rs,n)->rs.getString(1),tenant,interactionId);
         Snapshot previous=findByKey(tenant,manager,requestKey);
         if(previous!=null) {
             if(!previous.interactionId().equals(interactionId))
                 throw new IllegalStateException("TASK_SNAPSHOT_REQUEST_CONFLICT");
             return previous;
         }
+        if(source.isEmpty()||!"CANCELLED".equals(source.getFirst()))
+            throw new IllegalStateException("TASK_SNAPSHOT_SOURCE_NOT_CANCELLED");
         List<Item> items=jdbc.query("""
             SELECT t.id,t.status,t.row_version FROM crm.task_crm_followup l
             JOIN crm.task_item t ON t.tenant_id=l.tenant_id AND t.id=l.task_id
@@ -136,6 +138,35 @@ public class TaskReconciliationSnapshotService {
         boolean hasMore=result.size()>limit;
         List<Item> page=List.copyOf(result.subList(0,Math.min(limit,result.size())));
         return new Page(page,hasMore?page.getLast().taskId():null);
+    }
+
+    /**
+     * Recheck the committed immutable manifest against its persisted seal.
+     * This is a diagnostic integrity admission, not a task-state read or
+     * authorization for an automatic reconciliation command.
+     */
+    @Transactional(readOnly=true)
+    public boolean verifyIntegrity(VerifiedActor actor, UUID tenant, UUID snapshotId) {
+        UUID manager=admit(actor,tenant);
+        if(snapshotId==null)throw new IllegalArgumentException("TASK_SNAPSHOT_PAGE_INVALID");
+        List<int[]> counts=jdbc.query("""
+            SELECT s.item_count FROM crm.task_reconciliation_snapshot s
+            WHERE s.tenant_id=? AND s.id=? AND s.created_by=?
+            """,(rs,n)->new int[]{rs.getInt(1)},tenant,snapshotId,manager);
+        if(counts.isEmpty())throw new SecurityException("TASK_SNAPSHOT_NOT_ACCESSIBLE");
+        List<String> seals=jdbc.query("""
+            SELECT items_sha256 FROM crm.task_reconciliation_snapshot_seal
+            WHERE tenant_id=? AND snapshot_id=?
+            """,(rs,n)->rs.getString(1),tenant,snapshotId);
+        if(seals.size()!=1)return false;
+        List<Item> persisted=jdbc.query("""
+            SELECT task_id,captured_state,captured_version
+            FROM crm.task_reconciliation_snapshot_item
+            WHERE tenant_id=? AND snapshot_id=? ORDER BY task_id
+            """,(rs,n)->new Item(rs.getObject(1,UUID.class),
+                TaskState.valueOf(rs.getString(2)),rs.getLong(3)),tenant,snapshotId);
+        return persisted.size()==counts.getFirst()[0]
+            && snapshotDigest(persisted).equals(seals.getFirst());
     }
 
     private static String snapshotDigest(List<Item> items) {
