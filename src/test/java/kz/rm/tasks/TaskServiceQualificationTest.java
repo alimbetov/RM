@@ -86,7 +86,7 @@ class TaskServiceQualificationTest {
         assertThat(created.version()).isZero();
         assertThat(tasks.create(t.manager(),t.id(),"Prepare customer call",
             t.staff().userId(),DUE,"task-create-001").id()).isEqualTo(created.id());
-        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Other task",
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Review order",
             t.staff().userId(),DUE,"task-create-001"))
             .hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
         assertThat(tasks.listMine(t.staff(),t.id(),null,10,0))
@@ -113,7 +113,7 @@ class TaskServiceQualificationTest {
 
     @Test void t02TenantIsolationAndEmployeeCannotManageOrArchive() {
         var a=tenant();var b=tenant();
-        var task=tasks.create(a.manager(),a.id(),"Tenant A",
+        var task=tasks.create(a.manager(),a.id(),"General operations",
             a.staff().userId(),DUE,"task-isolation-001");
         assertThatThrownBy(()->tasks.getMine(b.manager(),b.id(),task.id()))
             .isInstanceOf(SecurityException.class);
@@ -136,7 +136,7 @@ class TaskServiceQualificationTest {
 
     @Test void t03StaleVersionAndInvalidTransitionLeaveNoEvent() {
         var a=tenant();
-        var task=tasks.create(a.manager(),a.id(),"Version check",
+        var task=tasks.create(a.manager(),a.id(),"Review document",
             a.staff().userId(),DUE,"task-version-001");
         assertThatThrownBy(()->tasks.complete(a.staff(),a.id(),task.id(),0))
             .hasMessage("TASK_TRANSITION_INVALID");
@@ -154,7 +154,7 @@ class TaskServiceQualificationTest {
                 .toLowerCase().contains("postgresql"));
         }
         var t=tenant();
-        var created=tasks.create(t.manager(),t.id(),"Concurrent start",
+        var created=tasks.create(t.manager(),t.id(),"Check inventory",
             t.staff().userId(),DUE,"task-concurr-001");
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)) {
@@ -184,7 +184,7 @@ class TaskServiceQualificationTest {
                 .toLowerCase().contains("postgresql"));
         }
         var t=tenant();
-        var created=tasks.create(t.manager(),t.id(),"Immutable task history",
+        var created=tasks.create(t.manager(),t.id(),"Review order",
             t.staff().userId(),DUE,"task-immut-001");
         assertThatThrownBy(()->jdbc.update("""
             DELETE FROM crm.task_event WHERE tenant_id=? AND task_id=?
@@ -195,7 +195,7 @@ class TaskServiceQualificationTest {
     }
     @Test void t06ReassignmentHistoryCapturesBothEmployeesAndRevokesOldVisibility() {
         var t=tenant();
-        var created=tasks.create(t.manager(),t.id(),"Handover work",
+        var created=tasks.create(t.manager(),t.id(),"General operations",
             t.staff().userId(),DUE,"task-reassign-001");
         UUID replacement=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
             "task-replacement-"+UUID.randomUUID(),"Replacement")).getId();
@@ -222,7 +222,7 @@ class TaskServiceQualificationTest {
 
     @Test void t07SuspendedAssigneeCannotReceiveNewTaskOrReassignment() {
         var t=tenant();
-        var created=tasks.create(t.manager(),t.id(),"Keep task",
+        var created=tasks.create(t.manager(),t.id(),"Review document",
             t.staff().userId(),DUE,"task-keep-001");
         UUID suspended=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
             "task-disabled-"+UUID.randomUUID(),"Disabled")).getId();
@@ -231,7 +231,7 @@ class TaskServiceQualificationTest {
         jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",suspended);
         assertThatThrownBy(()->tasks.assign(t.manager(),t.id(),created.id(),suspended,0))
             .hasMessage("TASK_ASSIGNEE_MUST_BE_ACTIVE_MEMBER");
-        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Forbidden",
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Review order",
             suspended,DUE,"task-blocked-001"))
             .hasMessage("TASK_ASSIGNEE_MUST_BE_ACTIVE_MEMBER");
         assertThat(jdbc.queryForObject("""
@@ -254,7 +254,7 @@ class TaskServiceQualificationTest {
         var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
         try(var pool=Executors.newFixedThreadPool(2)) {
             var create=pool.submit(()->tx.execute(status->{
-                var task=tasks.create(t.manager(),t.id(),"Lock protected",
+                var task=tasks.create(t.manager(),t.id(),"Check inventory",
                     t.staff().userId(),DUE,"task-race-lock-001");
                 admitted.countDown();
                 try {
@@ -308,6 +308,19 @@ class TaskServiceQualificationTest {
               AND previous_assignee_user_id IS NULL AND next_assignee_user_id=?
             """,Integer.class,t.id(),legacy,t.staff().userId())).isEqualTo(1);
         assertThat(tasks.getMine(t.staff(),t.id(),legacy).id()).isEqualTo(legacy);
+    }
+
+    @Test void t10TitleVocabularyRejectsSensitiveFreeTextWithoutWrites() {
+        var t=tenant();
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),
+            "Customer alice@example.com",t.staff().userId(),DUE,"task-pii-001"))
+            .hasMessage("TASK_TITLE_NOT_APPROVED");
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),
+            "Call +77011234567",t.staff().userId(),DUE,"task-pii-002"))
+            .hasMessage("TASK_TITLE_NOT_APPROVED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_item WHERE tenant_id=?
+            """,Integer.class,t.id())).isZero();
     }
 
 }
