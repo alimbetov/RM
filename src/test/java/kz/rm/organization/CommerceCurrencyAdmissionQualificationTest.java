@@ -26,6 +26,8 @@ class CommerceCurrencyAdmissionQualificationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired AutoOrderService orders;
     @Autowired CommerceCurrencyAdmission admission;
+    @Autowired kz.rm.storefront.PublishedOfferCardQuery cards;
+    @Autowired kz.rm.iam.UserAccountRepository users;
     @Autowired PlatformTransactionManager txManager;
     @Autowired DataSource dataSource;
     @Autowired kz.rm.iam.OrganizationRepository organizations;
@@ -69,6 +71,20 @@ class CommerceCurrencyAdmissionQualificationTest {
                 """,tenant,now,now);
         }
         return new Store(tenant,offer,slug);
+    }
+
+    private String qr(Store store) {
+        UUID actor=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(
+                UUID.randomUUID(),"cur-qr-"+UUID.randomUUID(),"QR staff")).getId();
+        String ref=UUID.randomUUID().toString().replace("-","");
+        jdbc.update("""
+            INSERT INTO crm.store_offer_qr_ref
+            (tenant_id,id,offer_id,active_offer_id,public_ref,generation,
+             state,row_version,issued_at,issued_by)
+            VALUES (?,?,?,?,?,1,'ACTIVE',0,?,?)
+            """,store.tenant(),UUID.randomUUID(),store.offer(),store.offer(),ref,
+                Timestamp.from(Instant.now()),actor);
+        return ref;
     }
 
     private AutoOrderService.CheckoutResult checkout(Store store) {
@@ -131,6 +147,22 @@ class CommerceCurrencyAdmissionQualificationTest {
                 .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
         assertThatThrownBy(()->admission.assertPublicRead(UUID.randomUUID(),"KZT"))
                 .hasMessage("CUR_PUBLIC_POLICY_NOT_ACTIVE");
+    }
+
+    @Test void curc07KztQrPublicCardShowsPublishedSnapshot() {
+        Store store=setup("KZT",true);
+        String ref=qr(store);
+        var card=cards.findPublished(ref,"ru");
+        assertThat(card.currency()).isEqualTo("KZT");
+        assertThat(card.unitPrice()).isEqualByComparingTo("125.2500");
+    }
+
+    @Test void curc08LegacyForeignQrCardRejectedBeforeMediaExposure() {
+        Store store=setup("USD",true);
+        String ref=qr(store);
+        assertThatThrownBy(()->cards.findPublished(ref,"ru"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
     }
 
     @Test void curc06PostgresPolicyChangeVsCheckoutLinearizes() throws Exception {
