@@ -4268,3 +4268,14 @@ ALTER TABLE crm.task_event ADD CONSTRAINT fk_task_event_next_assignee
 --rollback ALTER TABLE crm.task_event DROP CONSTRAINT fk_task_event_prev_assignee;
 --rollback ALTER TABLE crm.task_event DROP COLUMN next_assignee_user_id;
 --rollback ALTER TABLE crm.task_event DROP COLUMN previous_assignee_user_id;
+
+
+--changeset rm:0143-task-r2-execution-idempotency
+-- An immutable actor-scoped command receipt belongs to the task event itself.
+ALTER TABLE crm.task_event ADD COLUMN request_key VARCHAR(100);
+ALTER TABLE crm.task_event ADD COLUMN request_sha256 CHAR(64);
+CREATE UNIQUE INDEX uq_task_event_command_request
+ ON crm.task_event(tenant_id,actor_user_id,request_key);
+--rollback DROP INDEX crm.uq_task_event_command_request;
+--rollback ALTER TABLE crm.task_event DROP COLUMN request_sha256;
+--rollback ALTER TABLE crm.task_event DROP COLUMN request_key;
