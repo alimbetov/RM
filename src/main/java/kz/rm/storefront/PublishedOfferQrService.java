@@ -1,6 +1,7 @@
 package kz.rm.storefront;
 
 import kz.rm.iam.DomainPermission;
+import kz.rm.organization.CommerceCurrencyAdmission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,15 +33,23 @@ public class PublishedOfferQrService {
     public record Reference(UUID offerId, String publicRef, int generation,
                             State state, long rowVersion, Instant issuedAt) {}
 
-    private record OfferState(long version, String state, UUID catalogItemId) {}
+    private record OfferState(long version, String state, UUID catalogItemId, String currency) {}
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
+    private final CommerceCurrencyAdmission currencyAdmission;
 
     public PublishedOfferQrService(JdbcTemplate jdbc, TenantAuthorization authorization) {
+        this(jdbc,authorization,null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PublishedOfferQrService(JdbcTemplate jdbc, TenantAuthorization authorization,
+                                   CommerceCurrencyAdmission currencyAdmission) {
         this.jdbc = jdbc;
         this.authorization = authorization;
+        this.currencyAdmission = currencyAdmission;
     }
 
     /**
@@ -248,6 +257,7 @@ public class PublishedOfferQrService {
     }
 
     private String lockStore(UUID tenant) {
+        if (currencyAdmission != null) currencyAdmission.lockKzMarket(tenant);
         String state = jdbc.query("""
                 SELECT state FROM crm.store_front WHERE tenant_id=? FOR UPDATE
                 """, rs -> rs.next() ? rs.getString(1) : null, tenant);
@@ -258,16 +268,17 @@ public class PublishedOfferQrService {
     private OfferState lockOffer(UUID tenant, UUID offer) {
         if (offer == null) throw new IllegalArgumentException("Offer required");
         OfferState row = jdbc.query("""
-                SELECT row_version,state,catalog_item_id
+                SELECT row_version,state,catalog_item_id,currency
                 FROM crm.store_offer WHERE tenant_id=? AND id=? FOR UPDATE
                 """, rs -> rs.next()
                 ? new OfferState(rs.getLong(1), rs.getString(2),
-                        rs.getObject(3, UUID.class)) : null, tenant, offer);
+                        rs.getObject(3, UUID.class),rs.getString(4)) : null, tenant, offer);
         if (row == null) throw new IllegalArgumentException("Offer not found in tenant");
         return row;
     }
 
     private void requirePublished(String storeState, OfferState offer, UUID tenant) {
+        if (currencyAdmission != null) currencyAdmission.assertKzt(offer.currency());
         if (!"PUBLISHED".equals(storeState) || !"PUBLISHED".equals(offer.state())
                 || offer.catalogItemId() == null)
             throw new IllegalStateException("QR_OFFER_NOT_PUBLISHED");
