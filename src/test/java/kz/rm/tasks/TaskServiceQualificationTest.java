@@ -27,6 +27,7 @@ class TaskServiceQualificationTest {
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
     private record Tenant(UUID id, VerifiedActor manager,VerifiedActor staff,UUID orgId) {}
 
@@ -192,4 +193,101 @@ class TaskServiceQualificationTest {
             SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
             """,Integer.class,t.id(),created.id())).isEqualTo(1);
     }
+    @Test void t06ReassignmentHistoryCapturesBothEmployeesAndRevokesOldVisibility() {
+        var t=tenant();
+        var created=tasks.create(t.manager(),t.id(),"Handover work",
+            t.staff().userId(),DUE,"task-reassign-001");
+        UUID replacement=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-replacement-"+UUID.randomUUID(),"Replacement")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),replacement,OrganizationMembershipEntity.Role.MEMBER));
+        var reassigned=tasks.assign(t.manager(),t.id(),created.id(),replacement,0);
+        assertThat(reassigned.assigneeUserId()).isEqualTo(replacement);
+        assertThat(reassigned.version()).isEqualTo(1);
+        var events=tasks.historyMine(t.manager(),t.id(),created.id(),10);
+        assertThat(events).hasSize(2);
+        assertThat(events.getFirst().action()).isEqualTo("ASSIGNED");
+        assertThat(events.getFirst().previousAssigneeUserId())
+            .isEqualTo(t.staff().userId());
+        assertThat(events.getFirst().nextAssigneeUserId()).isEqualTo(replacement);
+        assertThat(events.get(1).previousAssigneeUserId()).isNull();
+        assertThat(events.get(1).nextAssigneeUserId()).isEqualTo(t.staff().userId());
+        assertThatThrownBy(()->tasks.getMine(t.staff(),t.id(),created.id()))
+            .hasMessage("TASK_NOT_ACCESSIBLE");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event
+            WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),created.id())).isEqualTo(2);
+    }
+
+    @Test void t07SuspendedAssigneeCannotReceiveNewTaskOrReassignment() {
+        var t=tenant();
+        var created=tasks.create(t.manager(),t.id(),"Keep task",
+            t.staff().userId(),DUE,"task-keep-001");
+        UUID suspended=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-disabled-"+UUID.randomUUID(),"Disabled")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),suspended,OrganizationMembershipEntity.Role.MEMBER));
+        jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",suspended);
+        assertThatThrownBy(()->tasks.assign(t.manager(),t.id(),created.id(),suspended,0))
+            .hasMessage("TASK_ASSIGNEE_MUST_BE_ACTIVE_MEMBER");
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Forbidden",
+            suspended,DUE,"task-blocked-001"))
+            .hasMessage("TASK_ASSIGNEE_MUST_BE_ACTIVE_MEMBER");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_item WHERE tenant_id=?
+            """,Integer.class,t.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),created.id())).isEqualTo(1);
+    }
+
+    @Test void t08PostgresqlSuspensionWaitsUntilAdmittedCreationCommits() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        var admitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var suspendStarted=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var create=pool.submit(()->tx.execute(status->{
+                var task=tasks.create(t.manager(),t.id(),"Lock protected",
+                    t.staff().userId(),DUE,"task-race-lock-001");
+                admitted.countDown();
+                try {
+                    if(!release.await(10,TimeUnit.SECONDS))
+                        throw new IllegalStateException("TASK_RACE_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return task;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var suspension=pool.submit(()->{
+                suspendStarted.countDown();
+                return jdbc.update("""
+                    UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?
+                    """,t.staff().userId());
+            });
+            assertThat(suspendStarted.await(10,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            var task=create.get(15,TimeUnit.SECONDS);
+            assertThat(task.state()).isEqualTo(TaskState.OPEN);
+            assertThat(suspension.get(15,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.iam_user_account WHERE id=?
+                """,String.class,t.staff().userId())).isEqualTo("SUSPENDED");
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_event
+                WHERE tenant_id=? AND task_id=?
+                """,Integer.class,t.id(),task.id())).isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+    }
+
 }
