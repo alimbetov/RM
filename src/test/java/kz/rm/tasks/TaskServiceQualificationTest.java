@@ -290,4 +290,24 @@ class TaskServiceQualificationTest {
         }
     }
 
+    @Test void t09LegacyNullAssigneeCanBeAssignedWithoutLosingAudit() {
+        var t=tenant();
+        UUID legacy=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.task_item
+              (tenant_id,id,assignee_user_id,status,due_at,created_at,row_version,title)
+            VALUES (?,?,NULL,'OPEN',?,?,0,?)
+            """,t.id(),legacy,java.sql.Timestamp.from(DUE),
+            java.sql.Timestamp.from(Instant.now()),"Migrated task");
+        var assigned=tasks.assign(t.manager(),t.id(),legacy,t.staff().userId(),0);
+        assertThat(assigned.assigneeUserId()).isEqualTo(t.staff().userId());
+        assertThat(assigned.version()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event
+            WHERE tenant_id=? AND task_id=? AND action_code='ASSIGNED'
+              AND previous_assignee_user_id IS NULL AND next_assignee_user_id=?
+            """,Integer.class,t.id(),legacy,t.staff().userId())).isEqualTo(1);
+        assertThat(tasks.getMine(t.staff(),t.id(),legacy).id()).isEqualTo(legacy);
+    }
+
 }
