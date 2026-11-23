@@ -476,4 +476,92 @@ class StorefrontManagementQualificationTest {
                 """, Integer.class, t.tenant())).isZero();
     }
 
+
+    @Test void curR1cSellerApprovedKztUsesCanonicalRevisionAndRejectsStaleApproval() {
+        Fixture t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        VerifiedActor seller=verified(t.staff());
+        String slug="cur-approved-"+UUID.randomUUID();
+        var storeDraft=storefronts.createDraft(seller,t.tenant(),slug);
+        storefronts.publish(seller,t.tenant(),storeDraft.id(),storeDraft.rowVersion());
+        UUID item=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,t.tenant(),item,"CUR-APPROVAL-"+UUID.randomUUID());
+        var draft=offers.createDraft(seller,t.tenant(),item,"Approved widget",
+                new java.math.BigDecimal("100.0000"),"KZT");
+        var published=offers.publish(seller,t.tenant(),draft.id(),draft.rowVersion());
+        var placed=autoOrders.checkout(slug,"cur-approved-"+UUID.randomUUID()+"@example.kz",
+                "cur-appr-"+UUID.randomUUID().toString().substring(0,15),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(),1)));
+        var approved=offers.approveSuggestedKzt(seller,t.tenant(),draft.id(),
+                new java.math.BigDecimal("125.0000"),published.rowVersion());
+        assertThat(approved.unitPrice()).isEqualByComparingTo("125.0000");
+        assertThat(approved.rowVersion()).isEqualTo(published.rowVersion()+1);
+        var history=offers.priceHistory(seller,t.tenant(),draft.id(),0,10);
+        assertThat(history).hasSize(2);
+        assertThat(history.getFirst().newPrice()).isEqualByComparingTo("125.0000");
+        assertThat(history.getFirst().actorUserId()).isEqualTo(t.staff());
+        assertThatThrownBy(()->offers.approveSuggestedKzt(seller,t.tenant(),draft.id(),
+                new java.math.BigDecimal("130.0000"),published.rowVersion()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("STALE_OFFER_VERSION");
+        assertThat(offers.priceHistory(seller,t.tenant(),draft.id(),0,10)).hasSize(2);
+        assertThat(jdbc.queryForObject("""
+            SELECT unit_price_snapshot FROM crm.sales_order_line
+            WHERE tenant_id=? AND order_id=?
+            """,java.math.BigDecimal.class,t.tenant(),placed.order().orderId()))
+                .isEqualByComparingTo("100.0000");
+    }
+
+    @Test void curR1cPostgresCheckoutVsApprovedPriceHasSingleSnapshot() throws Exception {
+        try(var db=dataSource.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(db.getMetaData()
+                    .getDatabaseProductName().contains("PostgreSQL"));
+        }
+        Fixture t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        VerifiedActor seller=verified(t.staff());
+        String slug="cur-race-"+UUID.randomUUID();
+        var storeDraft=storefronts.createDraft(seller,t.tenant(),slug);
+        storefronts.publish(seller,t.tenant(),storeDraft.id(),storeDraft.rowVersion());
+        UUID item=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,t.tenant(),item,"CUR-RACE-"+UUID.randomUUID());
+        var draft=offers.createDraft(seller,t.tenant(),item,"Race widget",
+                new java.math.BigDecimal("100.0000"),"KZT");
+        var pub=offers.publish(seller,t.tenant(),draft.id(),draft.rowVersion());
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var checkout=pool.submit(()->{
+                start.await();
+                return autoOrders.checkout(slug,
+                        "cur-race-"+UUID.randomUUID()+"@example.kz",
+                        "cur-race-"+UUID.randomUUID().toString().substring(0,15),
+                        java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(),1)));
+            });
+            var price=pool.submit(()->{
+                start.await();
+                return offers.approveSuggestedKzt(seller,t.tenant(),draft.id(),
+                        new java.math.BigDecimal("110.0000"),pub.rowVersion());
+            });
+            start.countDown();
+            var order=checkout.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(price.get(10,java.util.concurrent.TimeUnit.SECONDS).unitPrice())
+                    .isEqualByComparingTo("110.0000");
+            var snap=jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),order.order().orderId());
+            assertThat(snap).isIn(new java.math.BigDecimal("100.0000"),
+                    new java.math.BigDecimal("110.0000"));
+            assertThat(offers.priceHistory(seller,t.tenant(),draft.id(),0,10)).hasSize(2);
+        }
+    }
+
 }
