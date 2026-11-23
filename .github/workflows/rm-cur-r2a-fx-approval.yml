@@ -47,7 +47,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as E
           for name, expected, skipped in [
-              ('SkuFxSellerApprovalQualificationTest',27,8),
+              ('SkuFxSellerApprovalQualificationTest',29,10),
               ('SkuFxCandidateCalculatorTest',9,0),
               ('NbrkTradingCalendarPolicyTest',4,0),
               ('TrustedKaseCalendarHttpClientTest',4,0)]:
@@ -100,12 +100,12 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: PostgreSQL seller FX evidence and snapshot qualification
         run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest,NbrkTradingCalendarPolicyTest,TrustedKaseCalendarHttpClientTest test
-      - name: Require 44 executed cases without skips
+      - name: Require 46 executed cases without skips
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
-          for name, expected in [('SkuFxSellerApprovalQualificationTest',27),
+          for name, expected in [('SkuFxSellerApprovalQualificationTest',29),
                                  ('SkuFxCandidateCalculatorTest',9),
                                  ('NbrkTradingCalendarPolicyTest',4),
                                  ('TrustedKaseCalendarHttpClientTest',4)]:
