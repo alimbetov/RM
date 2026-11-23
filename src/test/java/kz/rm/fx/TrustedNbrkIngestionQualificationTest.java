@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.*;
 class TrustedNbrkIngestionQualificationTest {
     @Autowired NbrkRssXmlParser parser;
     @Autowired NbrkRateRevisionWriter writer;
+    @Autowired NbrkRateSnapshotReader reader;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
 
@@ -91,6 +92,11 @@ class TrustedNbrkIngestionQualificationTest {
         var outcome=service(one(date,"504.11")).importForDate(date);
         assertThat(outcome.corrected()).isEqualTo(1);
         assertThat(revisions(date)).isEqualTo(2);
+        assertThat(reader.latest("USD",date)).isPresent().get().satisfies(v -> {
+            assertThat(v.revision()).isEqualTo(2);
+            assertThat(v.rateKzt()).isEqualByComparingTo("504.11");
+            assertThat(v.rawPayloadSha256()).matches("[0-9a-f]{64}");
+        });
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.fx_official_rate_snapshot s
             JOIN crm.fx_rate_import_run r ON r.id=s.source_import_run_id
