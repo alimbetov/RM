@@ -40,7 +40,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as E
           for name, expected, skipped in [
-              ('SkuFxSellerApprovalQualificationTest',10,1),
+              ('SkuFxSellerApprovalQualificationTest',11,2),
               ('SkuFxCandidateCalculatorTest',9,0)]:
               p=Path('target/surefire-reports/TEST-kz.rm.fx.'+name+'.xml')
               assert p.is_file(),p
@@ -91,12 +91,12 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: PostgreSQL seller FX evidence and snapshot qualification
         run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest,SkuFxCandidateCalculatorTest test
-      - name: Require 19 executed cases without skips
+      - name: Require 20 executed cases without skips
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
-          for name, expected in [('SkuFxSellerApprovalQualificationTest',10),
+          for name, expected in [('SkuFxSellerApprovalQualificationTest',11),
                                  ('SkuFxCandidateCalculatorTest',9)]:
               p=Path('target/surefire-reports/TEST-kz.rm.fx.'+name+'.xml')
               assert p.is_file(),p
