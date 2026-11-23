@@ -3584,3 +3584,15 @@ CREATE INDEX idx_iam_oidc_revocation_due
 --rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN lease_owner;
 --rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN next_attempt_at;
 --rollback ALTER TABLE public.iam_deletion_oidc_revocation_outbox DROP COLUMN attempt_count;
+
+
+--changeset rm:0121-fc40-fulfillment-channel-policy
+-- DEC-FUL-01: one existing SALES order aggregate, durable fulfillment admission.
+-- Historical orders retain STANDARD. QR checkout/accepted quote opt in explicitly.
+ALTER TABLE crm.sales_order
+ ADD COLUMN fulfillment_mode VARCHAR(24) NOT NULL DEFAULT 'STANDARD';
+ALTER TABLE crm.sales_order
+ ADD CONSTRAINT ck_sales_order_fulfillment_mode
+ CHECK (fulfillment_mode IN ('STANDARD','PICKUP_PROOF_REQUIRED'));
+--rollback ALTER TABLE crm.sales_order DROP CONSTRAINT ck_sales_order_fulfillment_mode;
+--rollback ALTER TABLE crm.sales_order DROP COLUMN fulfillment_mode;
