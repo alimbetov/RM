@@ -125,6 +125,14 @@ public class SalesInventoryCommandService {
         var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
+        // DEC-FUL-01: refuse generic entry point even for a replay against
+        // an already handover-completed order. Route authority is immutable.
+        String fulfillmentMode=jdbc.queryForObject("""
+            SELECT fulfillment_mode FROM crm.sales_order
+            WHERE tenant_id=? AND id=?
+            """,String.class,tenantId,orderId);
+        if(!"STANDARD".equals(fulfillmentMode))
+            throw new IllegalStateException("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         if("COMPLETED".equals(state)) {
             int expected=lines(tenantId,orderId).size();
             Integer completed=jdbc.queryForObject("""
@@ -135,14 +143,6 @@ public class SalesInventoryCommandService {
                 throw new IllegalStateException("Completed order has inconsistent fulfillment");
             return new CommandResult(orderId,state,0);
         }
-        // DEC-FUL-01: check durable order provenance before ANY generic stock debit.
-        // QR-originated orders require credential + warehouse handover even while CONFIRMED.
-        String fulfillmentMode=jdbc.queryForObject("""
-            SELECT fulfillment_mode FROM crm.sales_order
-            WHERE tenant_id=? AND id=?
-            """,String.class,tenantId,orderId);
-        if(!"STANDARD".equals(fulfillmentMode))
-            throw new IllegalStateException("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         if(!"CONFIRMED".equals(state) && !"PREPARING".equals(state))
             throw new IllegalStateException("Order not ready for fulfillment");
         // FC-40 interim safety fence: once physical picking has begun,
