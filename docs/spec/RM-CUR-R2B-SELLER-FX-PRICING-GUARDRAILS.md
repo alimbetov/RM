@@ -99,3 +99,11 @@ Never interpret these synthetic calendar tests as official 2026 holiday schedule
 **Tests:** missing calendar day (no price mutation), closed day with zero allowed trading days (approval), observed trading day with zero allowance (refusal), changed bytes SHA (reject at staging). Prior PostgreSQL race tests for quote-first and IAM-suspend-first continue in the suite.
 
 `main`, `DEC-FUL-01`, controllers, auto FX repricing and the canonical STOREFRONT KZT price owner remain unchanged.
+
+## 11. KASE transport slice and remaining independent source-to-day review
+
+`TrustedKaseCalendarHttpClient` now fetches official KASE calendar/index or numeric instrument-notice page bytes from an exact HTTPS allowlist. HTTP redirects, alternate hosts, compressed/binary bodies, oversized responses and TLS failures fail closed. No HTTP request occurs inside `FxCalendarEvidenceService.stageSource`'s DB transaction. `fetchAndStageReviewed` fetches bytes, computes SHA-256 and stores instrument/date assertions supplied by a separate trusted review process. This is **transport-verifiable staging**, not an automatically parsed calendar.
+
+Critical remaining acceptance gap: an independent parser/attestor must derive each `TRADING`/`CLOSED` status from the actual KASE document and exception notices, verify relevant market/instrument scope, and sign off on the exact source digest. A valid HTML SHA alone cannot certify a status; source staging and tenant gate enabling must remain limited to controlled synthetic UAT until this is complete. Remote-live fetching is not a CI requirement; transport security is tested with synthetic HTTP fixtures.
+
+New requirements added to the H2/PostgreSQL qualification: four `TrustedKaseCalendarHttpClientTest` negative/positive transport tests; along with 27 FX service, nine calculation and four calendar policy tests, for **44 total PostgreSQL cases**. This count is a target; PASS must be established on the final exact commit.
