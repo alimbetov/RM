@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from verify_rm_qa_01b import REQUIRED as REQUIRED_WORKFLOWS
 
 FUNCTIONAL = Path("rm-r3-functional-coverage.json")
 ROLES = Path("rm-user-role-scenario-results.json")
@@ -75,7 +76,10 @@ def render(root):
             and migration.get("fileCount", 0) > 0,
             "Missing Liquibase SHA-256 fingerprint")
     required = manifest.get("required", [])
-    require(len(required) == 6 and len({x.get("name") for x in required}) == 6 and
+    # Use the exact same eight-family catalogue as the primary QA verifier:
+    # a stale hard-coded count must never block an otherwise qualified RC.
+    require(len(required) == len(REQUIRED_WORKFLOWS) and
+            {x.get("name") for x in required} == set(REQUIRED_WORKFLOWS) and
             all(g.get("sha") == sha and g.get("conclusion") == "success"
                 and g.get("status") == "completed" for g in required),
             "Missing same-SHA mandatory workflow")
