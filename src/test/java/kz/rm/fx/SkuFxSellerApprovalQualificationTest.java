@@ -496,4 +496,120 @@ class SkuFxSellerApprovalQualificationTest {
         assertThat(decisions(f)).isZero();
     }
 
+    @Test void r2b06ExactMaxIncreaseAndPriceBoundsAreInclusive() {
+        var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("10"),new BigDecimal("0"),
+                new BigDecimal("110"),new BigDecimal("110"),7,3600,0);
+        var c=candidate(f,rate(effectiveDate(),"110"));
+        var d=fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-bound-equal-001");
+        assertThat(d.action()).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject("""
+            SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?
+            """,BigDecimal.class,f.tenant(),f.offer())).isEqualByComparingTo("110");
+        assertThat(revisions(f)).isEqualTo(1);
+    }
+
+    @Test void r2b07PostgresqlFxApprovalCommitsBeforeCheckoutPreservingNewSnapshot()
+            throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"560"));
+        var approved=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var approval=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,f.tenant());
+                fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-approve-first-001");
+                approved.countDown();
+                try {
+                    if(!release.await(8,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2B_APPROVAL_WAIT_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(approved.await(8,TimeUnit.SECONDS)).isTrue();
+            var checkout=pool.submit(()->orders.checkout(f.slug(),
+                "fx-buyer-"+UUID.randomUUID()+"@example.kz",
+                "r2b-order-"+UUID.randomUUID().toString().substring(0,15),
+                List.of(new AutoOrderService.Line(f.offer(),1))));
+            release.countDown();
+            assertThat(approval.get(12,TimeUnit.SECONDS)).isTrue();
+            var receipt=checkout.get(12,TimeUnit.SECONDS);
+            assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,BigDecimal.class,f.tenant(),receipt.order().orderId()))
+                .isEqualByComparingTo("560");
+            assertThat(revisions(f)).isEqualTo(1);
+            assertThat(decisions(f)).isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test void r2b08PostgresqlFxApprovalCommitsBeforeNewNegotiation() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"561"));
+        var approved=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var approval=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,f.tenant());
+                fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-approve-neg-first-001");
+                approved.countDown();
+                try {
+                    if(!release.await(8,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_R2B_APPROVAL_NEG_WAIT_TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return true;
+            }));
+            assertThat(approved.await(8,TimeUnit.SECONDS)).isTrue();
+            var negotiation=pool.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,f.tenant());
+                var price=jdbc.queryForObject("""
+                    SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?
+                    """,BigDecimal.class,f.tenant(),f.offer());
+                Timestamp now=Timestamp.from(Instant.now());
+                jdbc.update("""
+                    INSERT INTO crm.sales_price_proposal
+                      (tenant_id,id,offer_id,catalog_item_id,buyer_user_id,quantity,
+                       list_price_at_submit,current_unit_price,currency,state,revision,
+                       next_actor,round_count,expires_at,created_at,updated_at,row_version)
+                    VALUES (?,?,?,?,?,1,?,?,'KZT','AWAITING_SELLER',1,'SELLER',0,?,?,?,0)
+                    """,f.tenant(),UUID.randomUUID(),f.offer(),f.item(),f.buyer(),
+                    price,price,Timestamp.from(Instant.now().plusSeconds(3600)),now,now);
+                return price;
+            }));
+            release.countDown();
+            assertThat(approval.get(12,TimeUnit.SECONDS)).isTrue();
+            assertThat(negotiation.get(12,TimeUnit.SECONDS)).isEqualByComparingTo("561");
+            assertThat(revisions(f)).isEqualTo(1);
+            assertThat(decisions(f)).isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+    }
+
 }
