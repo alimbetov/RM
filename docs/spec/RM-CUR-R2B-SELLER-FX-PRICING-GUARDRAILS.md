@@ -138,3 +138,9 @@ Full official KASE calendar *classification* remains HOLD: the presently reviewe
 An enabled tenant calendar gate must never become an opt-out if its referenced immutable source seal disappears or is not yet installed. The admission service now reads tenant enablement first, then explicitly requires the corresponding seal; missing seal rejects FX seller approval before commit with no canonical price revision or seller decision. Regression `r2b22` creates an intentionally malformed gated source without its seal to prove this boundary (synthetic corruption, not production DDL).
 
 Latest required matrix is **34 FX integration scenarios** (11 PostgreSQL-only) + **9 calculator** + **4 calendar evaluator** + **4 KASE transport** = **51 PostgreSQL tests**. H2 executes 23 FX integration scenarios and skips 11 PG-only. All PASS assertions remain contingent on same-final-SHA CI results; do not use old SHA evidence for new release admission.
+
+## 16. Calendar admission cannot bypass SKU guardrail pricing
+
+Once calendar admission is enabled for a tenant, the seller FX approval additionally requires an immutable SKU FX guardrail revision captured at calculation time. An opted-in calendar is not authorization for unlimited price changes. The independent negative test `r2b23` proves rejection `CUR_R2B_GUARDRAIL_REQUIRED` and zero public price/decision writes. Older tenants with calendar gate OFF retain the prior default-off R2A behavior.
+
+**Final targeted CI:** 35 FX service qualification scenarios (11 PostgreSQL-only), 9 FX numerical, 4 calendar policy, 4 KASE HTTPS transport = **52 PostgreSQL cases**; H2 executes 24 FX integration cases plus the 17 non-DB cases. All need a successful final-SHA admission. Full unattended official instrument-day parsing and independent status attestation remain explicitly unimplemented; production HOLD is not lifted.
