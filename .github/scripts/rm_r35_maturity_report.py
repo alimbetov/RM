@@ -75,7 +75,7 @@ def render(root):
             and migration.get("fileCount", 0) > 0,
             "Missing Liquibase SHA-256 fingerprint")
     required = manifest.get("required", [])
-    require(len(required) == 5 and len({x.get("name") for x in required}) == 5 and
+    require(len(required) == 6 and len({x.get("name") for x in required}) == 6 and
             all(g.get("sha") == sha and g.get("conclusion") == "success"
                 and g.get("status") == "completed" for g in required),
             "Missing same-SHA mandatory workflow")
