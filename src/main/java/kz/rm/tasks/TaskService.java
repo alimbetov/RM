@@ -250,7 +250,7 @@ public class TaskService {
             INSERT INTO crm.task_event
               (tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
                previous_version,new_version,occurred_at)
-            VALUES (?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
             """,tenant,UUID.randomUUID(),id,user,action,
             before==null?null:before.name(),after.name(),version,next,
             Timestamp.from(clock.instant()));
