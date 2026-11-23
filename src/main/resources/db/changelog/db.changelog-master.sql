@@ -4097,3 +4097,62 @@ CREATE TRIGGER trg_cur_r2b_guardrail_immutable
  BEFORE UPDATE OR DELETE ON crm.sku_fx_guardrail_version
  FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_cur_r2b_guardrail_immutable ON crm.sku_fx_guardrail_version;
+
+
+--changeset rm:0134-cur-r2b4-calendar-evidence-admission
+-- Staged instrument-specific KASE evidence. Never infer missing trading days.
+-- Opt-in only: the tenant gate defaults OFF, existing CUR-R2A tenants are unchanged.
+CREATE TABLE crm.fx_calendar_source_evidence (
+ id UUID NOT NULL PRIMARY KEY,
+ source_url VARCHAR(500) NOT NULL,
+ raw_sha256 CHAR(64) NOT NULL,
+ source_byte_count INTEGER NOT NULL,
+ verified_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ verification_method VARCHAR(32) NOT NULL,
+ CONSTRAINT uq_fx_calendar_source_sha UNIQUE(source_url,raw_sha256),
+ CONSTRAINT ck_fx_calendar_source_sha CHECK(length(raw_sha256)=64),
+ CONSTRAINT ck_fx_calendar_source_size CHECK(source_byte_count BETWEEN 1 AND 1048576),
+ CONSTRAINT ck_fx_calendar_source_method CHECK(verification_method='SOURCE_SHA_VERIFIED')
+);
+CREATE TABLE crm.fx_calendar_day_evidence (
+ source_id UUID NOT NULL,
+ instrument VARCHAR(16) NOT NULL,
+ trading_date DATE NOT NULL,
+ trading_status VARCHAR(8) NOT NULL,
+ CONSTRAINT pk_fx_calendar_day_evidence PRIMARY KEY(source_id,instrument,trading_date),
+ CONSTRAINT fk_fx_calendar_day_source FOREIGN KEY(source_id)
+  REFERENCES crm.fx_calendar_source_evidence(id),
+ CONSTRAINT ck_fx_calendar_instrument CHECK(instrument IN ('USD/KZT','EUR/KZT','CNY/KZT')),
+ CONSTRAINT ck_fx_calendar_day_status CHECK(trading_status IN ('TRADING','CLOSED'))
+);
+CREATE INDEX idx_fx_calendar_day_lookup
+ ON crm.fx_calendar_day_evidence(instrument,trading_date);
+CREATE TABLE crm.fx_calendar_tenant_gate (
+ tenant_id UUID NOT NULL PRIMARY KEY,
+ enabled BOOLEAN NOT NULL DEFAULT FALSE,
+ max_trading_days INTEGER NOT NULL,
+ source_id UUID NOT NULL,
+ approved_by UUID NOT NULL,
+ approved_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_fx_calendar_gate_tenant FOREIGN KEY(tenant_id)
+  REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_fx_calendar_gate_source FOREIGN KEY(source_id)
+  REFERENCES crm.fx_calendar_source_evidence(id),
+ CONSTRAINT fk_fx_calendar_gate_actor FOREIGN KEY(approved_by)
+  REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_fx_calendar_gate_age CHECK(max_trading_days BETWEEN 0 AND 10)
+);
+--rollback DROP TABLE crm.fx_calendar_tenant_gate;
+--rollback DROP INDEX crm.idx_fx_calendar_day_lookup;
+--rollback DROP TABLE crm.fx_calendar_day_evidence;
+--rollback DROP TABLE crm.fx_calendar_source_evidence;
+
+--changeset rm:0135-cur-r2b4-calendar-evidence-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_cur_r2b4_calendar_source_immutable
+ BEFORE UPDATE OR DELETE ON crm.fx_calendar_source_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_cur_r2b4_calendar_day_immutable
+ BEFORE UPDATE OR DELETE ON crm.fx_calendar_day_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_cur_r2b4_calendar_day_immutable ON crm.fx_calendar_day_evidence;
+--rollback DROP TRIGGER trg_cur_r2b4_calendar_source_immutable ON crm.fx_calendar_source_evidence;
