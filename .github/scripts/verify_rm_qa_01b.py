@@ -238,11 +238,13 @@ def verify():
                         ("TaskServiceQualificationTest", "t34ReconciliationAndQueueRollbackLeaveNoPartialEvents"),
                         ("TaskServiceQualificationTest", "t35PostgresqlCancelRacesWithEmployeeCompletionExactlyOneWins"),
                         ("TaskServiceQualificationTest", "t36PostgresqlRequeueRacesWithReassignmentExactlyOneWins"),
+                        ("TaskServiceQualificationTest", "t37ReconciliationRejectsUnrelatedSourceAndForeignTenantWithoutTaskMutation"),
+                        ("TaskServiceQualificationTest", "t38PostgresqlSourceCancellationSerializesAgainstFollowupCreation"),
                     }
-                    if counts["tests"] != 36 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 36 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 36 or counts["skipped"] != 10):
-                    problems.append(f"{artifact_name}: expected 36 discovered cases with 10 PG-only skips")
+                    if counts["tests"] != 38 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 38 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 38 or counts["skipped"] != 11):
+                    problems.append(f"{artifact_name}: expected 38 discovered cases with 11 PG-only skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
