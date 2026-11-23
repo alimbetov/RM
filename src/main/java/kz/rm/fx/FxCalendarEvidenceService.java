@@ -103,6 +103,34 @@ public class FxCalendarEvidenceService {
                     ||!expectedSha.equals(day.sha256()))
                 throw new IllegalArgumentException("CUR_R2B_CALENDAR_DAY_PROVENANCE_MISMATCH");
         }
+        // Serialize a semantic replay before checking unique source identity.
+        String locked=jdbc.query("""
+            SELECT provider_code FROM crm.fx_calendar_source_lock
+            WHERE provider_code='KASE' FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null);
+        if(!"KASE".equals(locked))
+            throw new IllegalStateException("CUR_R2B_CALENDAR_IMPORT_LOCK_MISSING");
+        Map<String,String> reviewed=new HashMap<>();
+        for(var day:reviewedDays) {
+            String key=day.instrument()+"|"+day.date();
+            if(reviewed.putIfAbsent(key,day.status().name())!=null)
+                throw new IllegalArgumentException("CUR_R2B_CALENDAR_DUPLICATE_DAY");
+        }
+        UUID previous=jdbc.query("""
+            SELECT id FROM crm.fx_calendar_source_evidence
+            WHERE source_url=? AND raw_sha256=?
+            """,rs->rs.next()?rs.getObject(1,UUID.class):null,sourceUrl,expectedSha);
+        if(previous!=null) {
+            Map<String,String> stored=new HashMap<>();
+            jdbc.query("""
+                SELECT instrument,trading_date,trading_status
+                FROM crm.fx_calendar_day_evidence WHERE source_id=?
+                """,rs->stored.put(rs.getString(1)+"|"+rs.getDate(2).toLocalDate(),
+                        rs.getString(3)),previous);
+            if(!stored.equals(reviewed))
+                throw new IllegalStateException("CUR_R2B_CALENDAR_REPLAY_CONFLICT");
+            return previous;
+        }
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.fx_calendar_source_evidence
@@ -155,14 +183,14 @@ public class FxCalendarEvidenceService {
 
     /** Run inside the same storefront-serialized approval transaction. */
     @Transactional(readOnly=true)
-    public void requireAdmittedCalendar(UUID tenant, String baseCurrency,
+    public UUID requireAdmittedCalendar(UUID tenant, String baseCurrency,
                                         LocalDate validDate, LocalDate evaluationDate) {
         record Gate(UUID sourceId,int limit) {}
         Gate gate=jdbc.query("""
             SELECT source_id,max_trading_days FROM crm.fx_calendar_tenant_gate
             WHERE tenant_id=? AND enabled=TRUE
             """,rs->rs.next()?new Gate(rs.getObject(1,UUID.class),rs.getInt(2)):null,tenant);
-        if(gate==null)return; // Existing tenants remain under their R2B calendar-day guardrail.
+        if(gate==null)return null; // Existing tenants remain under their R2B calendar-day guardrail.
         String instrument=baseCurrency+"/KZT";
         Map<LocalDate,NbrkTradingCalendarPolicy.Day> days=new HashMap<>();
         jdbc.query("""
@@ -180,5 +208,6 @@ public class FxCalendarEvidenceService {
         var assessment=NbrkTradingCalendarPolicy.assess(validDate,evaluationDate,instrument,days);
         if(assessment.observedTradingDays()>gate.limit())
             throw new IllegalStateException("CUR_R2B_TRADING_DAY_AGE_EXCEEDED");
+        return gate.sourceId();
     }
 }
