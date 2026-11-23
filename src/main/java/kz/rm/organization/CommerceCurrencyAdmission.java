@@ -43,6 +43,25 @@ public class CommerceCurrencyAdmission {
             throw new IllegalStateException("CUR_PUBLIC_KZT_NOT_ENABLED");
     }
 
+    /**
+     * Non-public currency is allowed only for a configured internal sales
+     * purpose. This does not authorize foreign-currency public offers.
+     * Caller already holds the policy lock acquired before storefront rows.
+     */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void assertDraftCurrency(UUID tenant,String currency) {
+        if (!enabled || "KZT".equals(currency)) return;
+        if (tenant==null || currency==null || !currency.matches("[A-Z]{3}"))
+            throw new IllegalArgumentException("CUR_INTERNAL_CURRENCY_INVALID");
+        Integer n=jdbc.queryForObject("""
+            SELECT count(*) FROM public.tenant_allowed_currency
+            WHERE tenant_id=? AND currency_code=? AND purpose='SALES_INTERNAL'
+              AND state='ENABLED'
+            """,Integer.class,tenant,currency);
+        if(n==null || n!=1)
+            throw new IllegalStateException("CUR_INTERNAL_CURRENCY_NOT_ALLOWED");
+    }
+
     public void assertKzt(String currency) {
         if (enabled && !"KZT".equals(currency))
             throw new IllegalStateException("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
