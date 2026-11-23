@@ -261,7 +261,7 @@ public class CrmInteractionService {
     private CrmCancellationEventRef event(UUID tenant,UUID id,UUID actor,
                                           String action,Long previous,long next) {
         UUID eventId=UUID.randomUUID();
-        Timestamp timestamp=Timestamp.from(Instant.now());
+        Timestamp timestamp=Timestamp.from(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
         jdbc.update("""
                 INSERT INTO crm.customer_interaction_event
                   (tenant_id,id,interaction_id,actor_id,action_code,
