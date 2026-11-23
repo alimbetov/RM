@@ -1446,4 +1446,96 @@ class TaskServiceQualificationTest {
             """,Integer.class,t.id())).isZero();
     }
 
+    @Test void t49CommittedSnapshotReplaysAfterStatusChangeAndLostResponse() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-postcommit-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        var original=tx.execute(status->snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-postcommit-key-001"));
+        // A caller losing the response after commit cannot distinguish success
+        // from a failure. The same request must return the committed receipt.
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='OPEN',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var replay=snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-postcommit-key-001");
+        assertThat(replay).isEqualTo(original);
+        assertThatThrownBy(()->snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-new-after-reopen-001"))
+            .hasMessage("TASK_SNAPSHOT_SOURCE_NOT_CANCELLED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot
+            WHERE tenant_id=? AND request_key=?
+            """,Integer.class,t.id(),"task-r32-postcommit-key-001")).isEqualTo(1);
+        assertThat(snapshots.verifyIntegrity(t.manager(),t.id(),original.id())).isTrue();
+    }
+
+    @Test void t50SnapshotIntegrityVerifiesPersistedRowsAndDeniesForeignActor() {
+        var t=tenant();
+        var other=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-digest-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var snap=snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-digest-capture-001");
+        assertThat(snapshots.verifyIntegrity(t.manager(),t.id(),snap.id())).isTrue();
+        assertThatThrownBy(()->snapshots.verifyIntegrity(t.staff(),t.id(),snap.id()))
+            .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->snapshots.verifyIntegrity(other.manager(),other.id(),snap.id()))
+            .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void t51PostgresqlExactlyTenThousandTasksCaptureAndPageWithoutLoss()
+            throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        jdbc.update("""
+            INSERT INTO crm.task_item(tenant_id,id,status,created_at,row_version)
+            SELECT ?,md5('task-r32-exact-' || generate_series::text)::uuid,
+                   'OPEN',CURRENT_TIMESTAMP,0
+            FROM generate_series(1,10000)
+            """,t.id());
+        jdbc.update("""
+            INSERT INTO crm.task_crm_followup
+              (tenant_id,task_id,interaction_id,created_by,linked_at)
+            SELECT tenant_id,id,?,?,CURRENT_TIMESTAMP FROM crm.task_item
+            WHERE tenant_id=? AND created_by IS NULL
+            """,source,t.manager().userId(),t.id());
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var snap=snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-exact-boundary-001");
+        assertThat(snap.itemCount()).isEqualTo(10000);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot_item
+            WHERE tenant_id=? AND snapshot_id=?
+            """,Integer.class,t.id(),snap.id())).isEqualTo(10000);
+        assertThat(snapshots.verifyIntegrity(t.manager(),t.id(),snap.id())).isTrue();
+        int count=0;UUID cursor=null;
+        do {
+            var page=snapshots.page(t.manager(),t.id(),snap.id(),cursor,100);
+            assertThat(page.items()).isNotEmpty();
+            count+=page.items().size();
+            cursor=page.nextAfterTaskId();
+        }while(cursor!=null);
+        assertThat(count).isEqualTo(10000);
+    }
+
 }
