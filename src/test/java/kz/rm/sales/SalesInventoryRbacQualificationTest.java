@@ -173,6 +173,34 @@ class SalesInventoryRbacQualificationTest {
             """,Integer.class,c.tenant(),id)).isEqualTo(3);
     }
 
+    @Test void decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing() {
+        Context c=context(10);
+        UUID id=order(c,3);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        // Simulates the persistent checkout provenance independently of QR transport.
+        jdbc.update("""
+            UPDATE crm.sales_order SET fulfillment_mode='PICKUP_PROOF_REQUIRED'
+            WHERE tenant_id=? AND id=? AND status='PLACED'
+            """,c.tenant(),id);
+        commands.confirm(c.staff(),c.tenant(),id,c.location());
+        long before=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+            """,Long.class,c.tenant());
+        assertThatThrownBy(()->commands.fulfill(c.staff(),c.tenant(),id))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
+        assertThat(status(c,id)).isEqualTo("CONFIRMED");
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("10");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("3");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+            """,Long.class,c.tenant())).isEqualTo(before);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=? AND order_id=?
+            """,Long.class,c.tenant(),id)).isZero();
+    }
+
     @Test void fc40PickedOrderCannotCancelAndReservationStaysIntact() {
         Context c=context(10);
         UUID id=order(c,3);
