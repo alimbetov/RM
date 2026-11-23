@@ -4333,3 +4333,10 @@ CREATE INDEX idx_task_queue ON crm.task_item(tenant_id,status,due_at,id);
 --rollback ALTER TABLE crm.task_item DROP CONSTRAINT ck_task_status;
 -- NOTE: downgrade of the status constraint requires zero QUEUED/CANCELLED rows.
 --rollback ALTER TABLE crm.task_item ADD CONSTRAINT ck_task_status CHECK (status IN ('OPEN','IN_PROGRESS','BLOCKED','COMPLETED','ARCHIVED'));
+
+
+--changeset rm:0148-task-r31-queue-keyset-index
+-- Supports tenant/status/id keyset scans without sorting by due_at.
+CREATE INDEX idx_task_queue_keyset
+ ON crm.task_item(tenant_id,status,id);
+--rollback DROP INDEX crm.idx_task_queue_keyset;
