@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest
 class TaskServiceQualificationTest {
     @Autowired TaskService tasks;
+    @Autowired TaskCrmFollowupService followups;
     @Autowired UserAccountRepository users;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -65,6 +66,7 @@ class TaskServiceQualificationTest {
             "Task manager");
         roles.grant(a,tenant,managerRole.id(),DomainPermission.TASK_MANAGE);
         roles.grant(a,tenant,managerRole.id(),DomainPermission.TASK_READ);
+        roles.grant(a,tenant,managerRole.id(),DomainPermission.CRM_READ);
         roles.assign(a,tenant,manager,managerRole.id());
         var employee=roles.createRole(a,tenant,
             "TASK_E_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
@@ -515,6 +517,108 @@ class TaskServiceQualificationTest {
             SELECT count(*) FROM crm.task_event
             WHERE tenant_id=? AND task_id=? AND action_code='ARCHIVED'
             """,Integer.class,t.id(),second.id())).isZero();
+    }
+
+    private UUID crmInteraction(Tenant t,String state) {
+        UUID customer=UUID.randomUUID();
+        UUID interaction=UUID.randomUUID();
+        var now=java.sql.Timestamp.from(Instant.now());
+        jdbc.update("""
+            INSERT INTO crm.customer
+              (tenant_id,id,customer_type,organization_label,status,created_at,row_version)
+            VALUES (?,?,'COMPANY','Synthetic CRM customer','ACTIVE',?,0)
+            """,t.id(),customer,now);
+        jdbc.update("""
+            INSERT INTO crm.customer_interaction
+              (tenant_id,id,customer_id,kind,status,responsible_user_id,
+               occurred_at,request_key,request_sha256,created_by,created_at,updated_at,row_version)
+            VALUES (?,?,?,'CALL',?,?,?, ?,?,?,?, ?,0)
+            """,t.id(),interaction,customer,state,t.manager().userId(),now,
+            "crmtest_"+UUID.randomUUID().toString().replace("-",""),
+            new byte[32],t.manager().userId(),now,now);
+        return interaction;
+    }
+
+    @Test void t18CrmFollowupCreationRetryAndScopedLinkRead() {
+        var t=tenant();
+        UUID interaction=crmInteraction(t,"OPEN");
+        var task=followups.create(t.manager(),t.id(),interaction,"Prepare customer call",
+            t.staff().userId(),DUE,"task-crm-followup-001");
+        assertThat(followups.create(t.manager(),t.id(),interaction,"Prepare customer call",
+            t.staff().userId(),DUE,"task-crm-followup-001").id()).isEqualTo(task.id());
+        var link=followups.getMine(t.manager(),t.id(),task.id());
+        assertThat(link.interactionId()).isEqualTo(interaction);
+        assertThat(link.taskId()).isEqualTo(task.id());
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_crm_followup
+            WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event
+            WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(1);
+        assertThatThrownBy(()->followups.getMine(t.staff(),t.id(),task.id()))
+            .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void t19CrmFollowupRejectsForeignAndClosedInteractionWithNoTasks() {
+        var a=tenant();
+        var b=tenant();
+        UUID foreign=crmInteraction(b,"OPEN");
+        UUID cancelled=crmInteraction(a,"CANCELLED");
+        assertThatThrownBy(()->followups.create(a.manager(),a.id(),foreign,
+            "Prepare customer call",a.staff().userId(),DUE,"task-crm-foreign-001"))
+            .hasMessage("TASK_CRM_INTERACTION_NOT_ACTIVE");
+        assertThatThrownBy(()->followups.create(a.manager(),a.id(),cancelled,
+            "Prepare customer call",a.staff().userId(),DUE,"task-crm-closed-001"))
+            .hasMessage("TASK_CRM_INTERACTION_NOT_ACTIVE");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_item WHERE tenant_id=?
+            """,Integer.class,a.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_crm_followup WHERE tenant_id=?
+            """,Integer.class,a.id())).isZero();
+    }
+
+    @Test void t20CrmFollowupCannotReuseTaskRequestForAnotherInteraction() {
+        var t=tenant();
+        UUID first=crmInteraction(t,"OPEN");
+        UUID second=crmInteraction(t,"OPEN");
+        var task=followups.create(t.manager(),t.id(),first,"Review order",
+            t.staff().userId(),DUE,"task-crm-conflict-001");
+        assertThatThrownBy(()->followups.create(t.manager(),t.id(),second,"Review order",
+            t.staff().userId(),DUE,"task-crm-conflict-001"))
+            .hasMessage("TASK_CRM_LINK_REPLAY_CONFLICT");
+        assertThat(followups.getMine(t.manager(),t.id(),task.id()).interactionId())
+            .isEqualTo(first);
+    }
+
+    @Test void t21PostgresqlCrmLinkIsImmutableAndCompositeTenantFkIsEnforced() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var a=tenant();
+        var b=tenant();
+        UUID interaction=crmInteraction(a,"OPEN");
+        UUID foreign=crmInteraction(b,"OPEN");
+        var task=followups.create(a.manager(),a.id(),interaction,"Review order",
+            a.staff().userId(),DUE,"task-crm-pg-fk-001");
+        assertThatThrownBy(()->jdbc.update("""
+            UPDATE crm.task_crm_followup SET interaction_id=?
+            WHERE tenant_id=? AND task_id=?
+            """,foreign,a.id(),task.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+            DELETE FROM crm.task_crm_followup WHERE tenant_id=? AND task_id=?
+            """,a.id(),task.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+            INSERT INTO crm.task_crm_followup
+              (tenant_id,task_id,interaction_id,created_by,linked_at)
+            VALUES (?,?,?,?,?)
+            """,a.id(),UUID.randomUUID(),foreign,a.manager().userId(),
+            java.sql.Timestamp.from(Instant.now()))).isInstanceOf(Exception.class);
+        assertThat(followups.getMine(a.manager(),a.id(),task.id()).interactionId())
+            .isEqualTo(interaction);
     }
 
 }
