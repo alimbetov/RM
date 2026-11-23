@@ -382,7 +382,9 @@ public class SkuFxSellerApprovalService {
         if(guard==null) {
             if(calc.guardrailId()!=null)
                 throw new IllegalStateException("CUR_R2B_GUARDRAIL_STALE");
-            return calendarSourceId; // legacy R2A tenants remain gated by CUR-R1C
+            if(calendarSourceId!=null)
+                throw new IllegalStateException("CUR_R2B_GUARDRAIL_REQUIRED");
+            return null; // legacy R2A tenants remain gated by CUR-R1C
         }
         if(!guard.id().equals(calc.guardrailId())
                 ||guard.revision()!=calc.guardrailRevision())
