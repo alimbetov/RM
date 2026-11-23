@@ -47,6 +47,7 @@ public class SkuFxSellerApprovalService {
     private final StorefrontOfferService offers;
     private final TenantCurrencyPolicyService currencies;
     private final SkuFxCandidateCalculator calculator;
+    private final FxCalendarEvidenceService calendarEvidence;
     private String officialRateReadLockSql;
     private final Clock clock;
 
@@ -75,9 +76,10 @@ public class SkuFxSellerApprovalService {
 
     public SkuFxSellerApprovalService(JdbcTemplate jdbc, StorefrontOfferService offers,
                  TenantCurrencyPolicyService currencies, SkuFxCandidateCalculator calculator,
-                 Clock clock) {
+                 Clock clock,FxCalendarEvidenceService calendarEvidence) {
         this.jdbc=jdbc;this.offers=offers;this.currencies=currencies;this.calculator=calculator;
         this.clock=java.util.Objects.requireNonNull(clock,"FX evaluation clock required");
+        this.calendarEvidence=java.util.Objects.requireNonNull(calendarEvidence);
     }
 
     /**
@@ -373,6 +375,8 @@ public class SkuFxSellerApprovalService {
     }
 
     private void verifyGuardrails(UUID tenant,Calculation calc,Rate rate) {
+        LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
+        calendarEvidence.requireAdmittedCalendar(tenant,rate.currency(),rate.date(),today);
         Guardrail guard=latestGuardrail(tenant,calc.offer());
         if(guard==null) {
             if(calc.guardrailId()!=null)
@@ -388,7 +392,6 @@ public class SkuFxSellerApprovalService {
             """,Timestamp.class,tenant,calc.id()).toInstant();
         if(!clock.instant().isBefore(calculated.plusSeconds(guard.calculationTtlSeconds())))
             throw new IllegalStateException("CUR_R2B_CALCULATION_EXPIRED");
-        LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
         long age=ChronoUnit.DAYS.between(rate.date(),today);
         if(age<0||age>guard.maxRateCalendarDays())
             throw new IllegalStateException("CUR_R2B_RATE_TOO_OLD");
