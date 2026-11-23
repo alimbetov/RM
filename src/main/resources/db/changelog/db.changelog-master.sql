@@ -3898,3 +3898,124 @@ CREATE INDEX idx_fx_r1a3_revision_import_run
 --rollback ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a3_revision_provenance;
 --rollback ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT fk_fx_r1a3_revision_import_run;
 --rollback ALTER TABLE crm.fx_official_rate_snapshot DROP COLUMN source_import_run_id;
+
+
+--changeset rm:0129-cur-r2a-immutable-sku-fx-approval-evidence
+-- Versioned seller-approved anchor; NO second public price owner.
+CREATE TABLE crm.sku_fx_policy_version (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ revision BIGINT NOT NULL,
+ anchor_currency CHAR(3) NOT NULL,
+ anchor_amount NUMERIC(19,4) NOT NULL,
+ buffer_pct NUMERIC(8,4) NOT NULL,
+ markup_pct NUMERIC(8,4) NOT NULL,
+ rounding_step_kzt NUMERIC(19,4) NOT NULL,
+ approved_by UUID NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sku_fx_policy_version PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uk_sku_fx_policy_version_rev UNIQUE(tenant_id,offer_id,revision),
+ CONSTRAINT fk_sku_fx_policy_offer FOREIGN KEY(tenant_id,offer_id)
+    REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_sku_fx_policy_actor FOREIGN KEY(approved_by)
+    REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_sku_fx_policy_revision CHECK(revision>0),
+ CONSTRAINT ck_sku_fx_policy_currency CHECK(anchor_currency IN ('USD','EUR','CNY')),
+ CONSTRAINT ck_sku_fx_policy_amount CHECK(anchor_amount>0 AND rounding_step_kzt>0),
+ CONSTRAINT ck_sku_fx_policy_pct CHECK(buffer_pct>=0 AND buffer_pct<=1000
+    AND markup_pct>=0 AND markup_pct<=1000)
+);
+CREATE TABLE crm.sku_fx_calculation (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ policy_id UUID NOT NULL,
+ policy_revision BIGINT NOT NULL,
+ rate_snapshot_id UUID NOT NULL,
+ offer_row_version BIGINT NOT NULL,
+ current_price_kzt NUMERIC(19,4) NOT NULL,
+ candidate_price_kzt NUMERIC(19,4) NOT NULL,
+ anchor_currency CHAR(3) NOT NULL,
+ anchor_amount NUMERIC(19,4) NOT NULL,
+ nominal NUMERIC(19,6) NOT NULL,
+ rate_kzt NUMERIC(24,10) NOT NULL,
+ valid_date DATE NOT NULL,
+ source_revision INTEGER NOT NULL,
+ source_sha256 CHAR(64) NOT NULL,
+ buffer_pct NUMERIC(8,4) NOT NULL,
+ markup_pct NUMERIC(8,4) NOT NULL,
+ rounding_step_kzt NUMERIC(19,4) NOT NULL,
+ formula_version VARCHAR(24) NOT NULL,
+ request_sha256 CHAR(64) NOT NULL,
+ calculated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sku_fx_calculation PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_sku_fx_calculation_request UNIQUE(tenant_id,request_sha256),
+ CONSTRAINT fk_sku_fx_calculation_offer FOREIGN KEY(tenant_id,offer_id)
+    REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_sku_fx_calculation_policy FOREIGN KEY(tenant_id,policy_id)
+    REFERENCES crm.sku_fx_policy_version(tenant_id,id),
+ CONSTRAINT fk_sku_fx_calculation_rate FOREIGN KEY(rate_snapshot_id)
+    REFERENCES crm.fx_official_rate_snapshot(id),
+ CONSTRAINT ck_sku_fx_calculation_positive CHECK(current_price_kzt>0
+    AND candidate_price_kzt>0 AND anchor_amount>0 AND nominal>0 AND rate_kzt>0),
+ CONSTRAINT ck_sku_fx_calculation_version CHECK(offer_row_version>=0
+    AND policy_revision>0 AND source_revision>0),
+ CONSTRAINT ck_sku_fx_calculation_formula CHECK(formula_version='SKU_FX_R2A_V1'),
+ CONSTRAINT ck_sku_fx_calculation_source_sha CHECK(length(source_sha256)=64)
+);
+CREATE TABLE crm.sku_fx_seller_decision (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ calculation_id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL,
+ request_key VARCHAR(100) NOT NULL,
+ action VARCHAR(16) NOT NULL,
+ price_revision_id UUID,
+ decided_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_sku_fx_seller_decision PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_sku_fx_decision_calculation UNIQUE(tenant_id,calculation_id),
+ CONSTRAINT uq_sku_fx_decision_request UNIQUE(tenant_id,request_key),
+ CONSTRAINT fk_sku_fx_decision_calc FOREIGN KEY(tenant_id,calculation_id)
+    REFERENCES crm.sku_fx_calculation(tenant_id,id),
+ CONSTRAINT fk_sku_fx_decision_offer FOREIGN KEY(tenant_id,offer_id)
+    REFERENCES crm.store_offer(tenant_id,id),
+ CONSTRAINT fk_sku_fx_decision_actor FOREIGN KEY(actor_user_id)
+    REFERENCES public.iam_user_account(id),
+ CONSTRAINT fk_sku_fx_decision_price FOREIGN KEY(tenant_id,price_revision_id)
+    REFERENCES crm.store_offer_price_revision(tenant_id,id),
+ CONSTRAINT ck_sku_fx_decision_action CHECK(action IN ('APPROVED','REJECTED')),
+ CONSTRAINT ck_sku_fx_decision_price CHECK(
+    (action='APPROVED' AND price_revision_id IS NOT NULL)
+    OR (action='REJECTED' AND price_revision_id IS NULL))
+);
+CREATE INDEX idx_sku_fx_policy_offer ON crm.sku_fx_policy_version(tenant_id,offer_id,revision DESC);
+CREATE INDEX idx_sku_fx_calculation_offer ON crm.sku_fx_calculation(tenant_id,offer_id,calculated_at DESC);
+--rollback DROP INDEX crm.idx_sku_fx_calculation_offer;
+--rollback DROP INDEX crm.idx_sku_fx_policy_offer;
+--rollback DROP TABLE crm.sku_fx_seller_decision;
+--rollback DROP TABLE crm.sku_fx_calculation;
+--rollback DROP TABLE crm.sku_fx_policy_version;
+
+--changeset rm:0130-cur-r2a-evidence-immutability dbms:postgresql splitStatements:false
+-- All approval evidence append-only; existing commercial price history already immutable.
+CREATE OR REPLACE FUNCTION crm.cur_r2a_reject_evidence_mutation()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CUR_R2A_IMMUTABLE_EVIDENCE';
+END;
+$$;
+CREATE TRIGGER trg_cur_r2a_policy_immutable
+ BEFORE UPDATE OR DELETE ON crm.sku_fx_policy_version
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_cur_r2a_calc_immutable
+ BEFORE UPDATE OR DELETE ON crm.sku_fx_calculation
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_cur_r2a_decision_immutable
+ BEFORE UPDATE OR DELETE ON crm.sku_fx_seller_decision
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_cur_r2a_decision_immutable ON crm.sku_fx_seller_decision;
+--rollback DROP TRIGGER trg_cur_r2a_calc_immutable ON crm.sku_fx_calculation;
+--rollback DROP TRIGGER trg_cur_r2a_policy_immutable ON crm.sku_fx_policy_version;
+--rollback DROP FUNCTION crm.cur_r2a_reject_evidence_mutation();
