@@ -39,6 +39,7 @@ class OrderPackagingQualificationTest {
  @Autowired EmailIdentityCrypto crypto;
  @Autowired JdbcTemplate jdbc;
  @Autowired DataSource dataSource;
+ @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
  record Fixture(UUID tenant,UUID order,String ref,VerifiedActor seller,VerifiedActor buyer,
                 VerifiedActor owner,UUID roleId) {}
@@ -415,6 +416,61 @@ class OrderPackagingQualificationTest {
     SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
     """,BigDecimal.class,f.tenant(),f.order())).isEqualByComparingTo(totalBefore);
   }
+ }
+
+ @Test void buyerDecisionRequiresCurrentActiveQrReference(){
+  var f=setup();var offered=offer(f,key());
+  jdbc.update("""
+   UPDATE crm.sales_order_qr_reference
+   SET state='REVOKED',active_order_id=NULL,revoked_at=CURRENT_TIMESTAMP,row_version=row_version+1
+   WHERE tenant_id=? AND order_id=? AND public_ref=? AND state='ACTIVE'
+   """,f.tenant(),f.order(),f.ref());
+  assertThatThrownBy(()->decide(f,offered.serviceLineId(),0,
+   OrderPackagingService.Choice.ACCEPT,key()))
+   .isInstanceOf(RuntimeException.class);
+  assertThat(jdbc.queryForObject("""
+   SELECT status FROM crm.sales_order_service_line WHERE tenant_id=? AND id=?
+   """,String.class,f.tenant(),offered.serviceLineId())).isEqualTo("OFFERED");
+ }
+ @Test void catalogDeactivationCommitsBeforeWaitingOfferAndOfferFailsClosedOnPostgres() throws Exception {
+  try(var c=dataSource.getConnection()){
+   Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+  }
+  var f=setup();
+  var held=new CountDownLatch(1);
+  var release=new CountDownLatch(1);
+  var attempts=new CountDownLatch(1);
+  var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+  try(var pool=Executors.newFixedThreadPool(2)){
+   var deactivation=pool.submit(()->tx.execute(status->{
+    jdbc.queryForObject("""
+     SELECT current_version FROM crm.sales_packaging_catalog_head
+     WHERE tenant_id=? AND service_code='GIFT_WRAP' FOR UPDATE
+     """,Integer.class,f.tenant());
+    jdbc.update("""
+     UPDATE crm.sales_packaging_catalog_head SET active=FALSE,row_version=row_version+1
+     WHERE tenant_id=? AND service_code='GIFT_WRAP'
+     """,f.tenant());
+    held.countDown();
+    try {if(!release.await(15,TimeUnit.SECONDS))throw new IllegalStateException("release timed out");}
+    catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+    return true;
+   }));
+   assertThat(held.await(15,TimeUnit.SECONDS)).isTrue();
+   var proposal=pool.submit(()->{
+    attempts.countDown();
+    try {offer(f,key());return "INCORRECTLY_OFFERED";}
+    catch(IllegalStateException e){return e.getMessage();}
+   });
+   assertThat(attempts.await(10,TimeUnit.SECONDS)).isTrue();
+   try {
+    assertThatThrownBy(()->proposal.get(250,TimeUnit.MILLISECONDS))
+     .isInstanceOf(java.util.concurrent.TimeoutException.class);
+   } finally {release.countDown();}
+   assertThat(deactivation.get(20,TimeUnit.SECONDS)).isTrue();
+   assertThat(proposal.get(20,TimeUnit.SECONDS)).isEqualTo("PACKAGING_CATALOG_INACTIVE");
+  }
+  assertThat(lineCount(f)).isZero();
  }
 
 }
