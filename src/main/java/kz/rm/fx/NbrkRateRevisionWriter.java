@@ -8,17 +8,14 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Serializes NBRK semantic corrections under the existing FX provider lock.
- * Snapshot revisions and run metadata are append-only (PostgreSQL triggers).
- */
+/** Atomic immutable NBRK rate revisions with exact import-run provenance. */
 @Service
 public class NbrkRateRevisionWriter {
     private final JdbcTemplate jdbc;
-
     public NbrkRateRevisionWriter(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
@@ -35,8 +32,8 @@ public class NbrkRateRevisionWriter {
         if (rates.stream().map(FxRateProvider.Rate::currency).distinct().count() != rates.size())
             throw new IllegalArgumentException("NBRK_BATCH_DUPLICATE_CURRENCY");
 
-        // This lock must exist as a seeded row in Liquibase. It serializes competing
-        // NBRK writers even when two workers imported different source payloads.
+        // Single global provider lock: concurrent readers/writers of the same
+        // source cannot select and append divergent "latest" revisions.
         String locked = jdbc.query("""
             SELECT provider_code FROM crm.fx_rate_provider_lock
             WHERE provider_code='NBRK' FOR UPDATE
@@ -44,6 +41,7 @@ public class NbrkRateRevisionWriter {
         if (!"NBRK".equals(locked))
             throw new IllegalStateException("NBRK_PROVIDER_LOCK_MISSING");
 
+        List<Pending> pending = new ArrayList<>();
         int inserted = 0;
         int corrected = 0;
         int replayed = 0;
@@ -60,8 +58,8 @@ public class NbrkRateRevisionWriter {
                     rate.currency(), Date.valueOf(date));
 
             Existing current = existing.isEmpty() ? null : existing.getFirst();
-            // The canonical digest (rather than raw XML SHA) makes reordering
-            // and whitespace-only changes a semantic no-op.
+            // Semantic normalization: whitespace, XML order and decimal scale
+            // never generate artificial revisions.
             if (current != null && current.sha256.equals(semanticHash)
                     && current.rate.compareTo(rate.rateKzt()) == 0
                     && current.nominal.compareTo(rate.nominal()) == 0) {
@@ -69,29 +67,38 @@ public class NbrkRateRevisionWriter {
                 continue;
             }
             int nextRevision = current == null ? 1 : Math.addExact(current.revision, 1);
-            jdbc.update("""
-                INSERT INTO crm.fx_official_rate_snapshot
-                  (id,provider_code,base_currency,quote_currency,nominal,rate,
-                   valid_date,source_revision,source_payload_sha256,synthetic,recorded_at)
-                VALUES (?,'NBRK',?,?,?,?,?,?,?,FALSE,?)
-                """, UUID.randomUUID(), rate.currency(), rate.quoteCurrency(),
-                rate.nominal(), rate.rateKzt(), Date.valueOf(date),
-                nextRevision, semanticHash, Timestamp.from(Instant.now()));
+            pending.add(new Pending(rate, semanticHash, nextRevision));
             if (current == null) inserted++; else corrected++;
         }
+
+        // Run row is inserted before associated rate revisions to keep FK
+        // immediate on both PostgreSQL and H2, with no intermediate commit.
         UUID runId = UUID.randomUUID();
+        Timestamp completedAt = Timestamp.from(Instant.now());
         jdbc.update("""
             INSERT INTO crm.fx_rate_import_run
               (id,provider_code,requested_date,imported_count,replayed_count,
                source_count,synthetic,completed_at,raw_payload_sha256,source_endpoint)
             VALUES (?,'NBRK',?,?,?,?,FALSE,?,?,?)
             """, runId, Date.valueOf(date), inserted + corrected, replayed, rates.size(),
-                Timestamp.from(Instant.now()), rawSha256,
-                TrustedNbrkHttpClient.ENDPOINT_ID);
+                completedAt, rawSha256, TrustedNbrkHttpClient.ENDPOINT_ID);
+
+        for (Pending rate : pending) {
+            jdbc.update("""
+                INSERT INTO crm.fx_official_rate_snapshot
+                  (id,provider_code,base_currency,quote_currency,nominal,rate,
+                   valid_date,source_revision,source_payload_sha256,synthetic,
+                   recorded_at,source_import_run_id)
+                VALUES (?,'NBRK',?,?,?,?,?,?,?,FALSE,?,?)
+                """, UUID.randomUUID(), rate.rate.currency(), rate.rate.quoteCurrency(),
+                    rate.rate.nominal(), rate.rate.rateKzt(), Date.valueOf(date),
+                    rate.revision, rate.semanticHash, completedAt, runId);
+        }
         return new TrustedNbrkIngestionService.Outcome(runId, date,
                 inserted, corrected, replayed, rawSha256);
     }
 
     private record Existing(int revision, String sha256,
                             java.math.BigDecimal nominal, java.math.BigDecimal rate) {}
+    private record Pending(FxRateProvider.Rate rate, String semanticHash, int revision) {}
 }
