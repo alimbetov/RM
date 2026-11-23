@@ -24,6 +24,7 @@ REQUIRED = {
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification": ("sales-084-populated-postgresql",),
     "RustFS Real Infrastructure E2E": ("rustfs-real-infra-e2e-surefire",),
     "RM TASK R2 Service Qualification": ("rm-task-h2-{sha}", "rm-task-postgresql-{sha}"),
+    "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification": ("rm-task-r32a-populated-pg-{sha}",),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
@@ -46,6 +47,7 @@ SUITES = {
     "CRM R1.2 Populated PostgreSQL Upgrade Qualification":
         ("CrmR1aQualificationTest",),
     "RM TASK R2 Service Qualification": ("TaskServiceQualificationTest",),
+    "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification": ("TaskServiceQualificationTest",),
 }
 
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
