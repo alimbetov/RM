@@ -50,3 +50,21 @@ All tests run against actual PostgreSQL and assert row counts, actual amounts, s
 6. Keep CUR-R1C activation default OFF; require separately approved scoped UAT tenant rollout with rollback and monitoring.
 
 **Acceptance:** all R2B PG scenarios and exact-SHA workflow success on same final commit; no controllers, automatic FX repricing, main merge, DEC-FUL-01 mutation. Production admission remains HOLD until distinct decision.
+
+## 8. CUR-R2B Calendar/Clock/Inverse-Race technical review (2026-11-23)
+
+**Official NBRK evidence:** NBRK describes USD/KZT as a next-business-day official rate from KASE fixing and other currencies as cross-rates. Official **valid_date**, source revision and source SHA are data fields from the trusted NBRK importer, never derived from an assumed holiday calendar. Primary references:
+- https://nationalbank.kz/ru/news/suraqtar/17842
+- https://nationalbank.kz/ru/exchangerates/ezhednevnye-oficialnye-rynochnye-kursy-valyut
+
+**Current implemented admission (R2B scope):**
+- Evaluate `valid_date <= today(Asia/Almaty)` using injected UTC `Clock`.
+- Apply seller-configured maximum **calendar days** between official valid date and Almaty local evaluation date. This is a configurable freshness SLA; it is *not* a verified KASE/NBRK holiday schedule. Sunday-to-Friday allowance of 2 days can be configured; Monday may exceed the same allowance, with no synthetic rate interpolation.
+- Calculation TTL and immutable timestamps use the same injectable Clock; no sleep-based timing test.
+- Published correction of a rate for its valid date invalidates older revisions under shared NBRK source lock.
+- **Production gap:** dedicated authoritative holiday/trading calendar source and publication-delay/late-arrival exceptions have not been implemented. Manual override must not invent official rates. This gap blocks claimed complete NBRK calendar admission.
+- Inverse PostgreSQL tests exercise FX approval committing before checkout, and before new negotiation, with canonical price-history and order snapshot assertions. They complement existing negotiation-first tests; source/IAM/checkout interleavings need full qualification before general rollout.
+
+**Audit-only constraints:** migrations 0129–0131 and DEC-FUL-01 unchanged; public KZT price remains exclusively STOREFRONT-owned. No new FX controller or automatic FX repricing.
+
+**CI:** final test results must be separately confirmed by exact-SHA action runs. This section does not assert admission.
