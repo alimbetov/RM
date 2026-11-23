@@ -88,10 +88,11 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t49CommittedSnapshotReplaysAfterStatusChangeAndLostResponse",
                         "t50SnapshotIntegrityVerifiesPersistedRowsAndDeniesForeignActor",
                         "t51PostgresqlExactlyTenThousandTasksCaptureAndPageWithoutLoss",
+                        "t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
-                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21","t27","t28","t35","t36","t38","t42","t46","t47","t48","t51"))}
+                        skipped={("TaskServiceQualificationTest",n) for n in names if n.startswith(("t04","t05","t08","t14","t15","t21","t27","t28","t35","t36","t38","t42","t46","t47","t48","t51","t52"))}
                 if artifact == "kms-postgres-surefire":
                     suite_cases = {
                         "CommercialCoreE2EQualificationTest": [
