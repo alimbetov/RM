@@ -1362,21 +1362,31 @@ class TaskServiceQualificationTest {
         assertThat(snapshots.page(t.manager(),t.id(),snap.id(),null,10).items())
             .hasSize(1);
 
-        // R3.2A regression: BEFORE INSERT cannot inspect a seal that is still
-        // uncommitted in another transaction. The header fence must wait for
-        // the publisher and reject the insert after seal becomes visible.
+        // Concurrency regression on an already COMMITTED, unsealed snapshot
+        // header. In T1 a new seal is uncommitted; T2 attempts a late item
+        // insert. Both paths must serialize on the header row. If T2 proceeds
+        // after T1 commits, it must re-read the seal and fail closed.
         var unrelated=tasks.create(t.manager(),t.id(),"Review order",
             t.staff().userId(),DUE,"task-r32-unrelated-late-item-001");
-        var publishedId=new java.util.concurrent.atomic.AtomicReference<UUID>();
+        UUID unsealed=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.task_reconciliation_snapshot
+              (tenant_id,id,interaction_id,created_by,request_key,captured_at,item_count)
+            VALUES (?,?,?,?,?,CURRENT_TIMESTAMP,0)
+            """,t.id(),unsealed,source,t.manager().userId(),
+            "task-r32-late-insert-race-001");
         var inserted=new CountDownLatch(1);
         var release=new CountDownLatch(1);
         var lateStarted=new CountDownLatch(1);
         var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
         try(var pool=Executors.newFixedThreadPool(2)) {
             var publish=pool.submit(()->tx.execute(status->{
-                var sealed=snapshots.capture(t.manager(),t.id(),source,
-                    "task-r32-late-insert-race-001");
-                publishedId.set(sealed.id());
+                jdbc.update("""
+                    INSERT INTO crm.task_reconciliation_snapshot_seal
+                      (tenant_id,snapshot_id,sealed_at,items_sha256)
+                    VALUES (?,?,CURRENT_TIMESTAMP,?)
+                    """,t.id(),unsealed,
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
                 inserted.countDown();
                 try {
                     if(!release.await(20,TimeUnit.SECONDS))
@@ -1385,18 +1395,17 @@ class TaskServiceQualificationTest {
                     Thread.currentThread().interrupt();
                     throw new IllegalStateException(e);
                 }
-                return sealed;
+                return true;
             }));
             assertThat(inserted.await(15,TimeUnit.SECONDS)).isTrue();
             var late=pool.submit(()->{
                 lateStarted.countDown();
                 try {
-                    UUID target=publishedId.get();
                     jdbc.update("""
                         INSERT INTO crm.task_reconciliation_snapshot_item
                         (tenant_id,snapshot_id,task_id,captured_state,captured_version)
                         VALUES (?,?,?,'OPEN',0)
-                        """,t.id(),target,unrelated.id());
+                        """,t.id(),unsealed,unrelated.id());
                     return "UNEXPECTED_INSERT";
                 }catch(Exception expected) {
                     return "REJECTED";
@@ -1407,13 +1416,13 @@ class TaskServiceQualificationTest {
                 assertThatThrownBy(()->late.get(300,TimeUnit.MILLISECONDS))
                     .isInstanceOf(java.util.concurrent.TimeoutException.class);
             }finally{release.countDown();}
-            var published=publish.get(30,TimeUnit.SECONDS);
+            assertThat(publish.get(30,TimeUnit.SECONDS)).isTrue();
             assertThat(late.get(30,TimeUnit.SECONDS)).isEqualTo("REJECTED");
-            assertThat(snapshots.verifyIntegrity(t.manager(),t.id(),published.id())).isTrue();
+            assertThat(snapshots.verifyIntegrity(t.manager(),t.id(),unsealed)).isTrue();
             assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.task_reconciliation_snapshot_item
                 WHERE tenant_id=? AND snapshot_id=?
-                """,Integer.class,t.id(),published.id())).isEqualTo(published.itemCount());
+                """,Integer.class,t.id(),unsealed)).isZero();
         }finally{release.countDown();}
     }
 
