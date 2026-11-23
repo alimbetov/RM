@@ -1363,4 +1363,87 @@ class TaskServiceQualificationTest {
             .hasSize(1);
     }
 
+    @Test void t47PostgresqlConcurrentSnapshotSameRequestCommitsSingleSealedManifest()
+            throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-samekey-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var a=pool.submit(()->{
+                gate.await(10,TimeUnit.SECONDS);
+                return snapshots.capture(t.manager(),t.id(),source,"task-r32-samekey-capture-001");
+            });
+            var b=pool.submit(()->{
+                gate.await(10,TimeUnit.SECONDS);
+                return snapshots.capture(t.manager(),t.id(),source,"task-r32-samekey-capture-001");
+            });
+            gate.countDown();
+            var first=a.get(30,TimeUnit.SECONDS);
+            var second=b.get(30,TimeUnit.SECONDS);
+            assertThat(first.id()).isEqualTo(second.id());
+            assertThat(first.itemCount()).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_reconciliation_snapshot
+                WHERE tenant_id=? AND request_key=?
+                """,Integer.class,t.id(),"task-r32-samekey-capture-001")).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_reconciliation_snapshot_seal
+                WHERE tenant_id=? AND snapshot_id=?
+                """,Integer.class,t.id(),first.id())).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_reconciliation_snapshot_item
+                WHERE tenant_id=? AND snapshot_id=?
+                """,Integer.class,t.id(),first.id())).isEqualTo(1);
+        }
+    }
+
+    @Test void t48PostgresqlSnapshotOverCapacityRejectsWithoutPartialManifest()
+            throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        jdbc.update("""
+            INSERT INTO crm.task_item(tenant_id,id,status,created_at,row_version)
+            SELECT ?,md5('task-r32-cap-' || generate_series::text)::uuid,
+                   'OPEN',CURRENT_TIMESTAMP,0
+            FROM generate_series(1,10001)
+            """,t.id());
+        jdbc.update("""
+            INSERT INTO crm.task_crm_followup
+              (tenant_id,task_id,interaction_id,created_by,linked_at)
+            SELECT tenant_id,id,?,?,CURRENT_TIMESTAMP FROM crm.task_item
+            WHERE tenant_id=? AND created_by IS NULL
+            """,source,t.manager().userId(),t.id());
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_crm_followup
+            WHERE tenant_id=? AND interaction_id=?
+            """,Integer.class,t.id(),source)).isEqualTo(10001);
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        assertThatThrownBy(()->snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-cap-overflow-001"))
+            .hasMessage("TASK_SNAPSHOT_CAPACITY_EXCEEDED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot WHERE tenant_id=?
+            """,Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot_seal WHERE tenant_id=?
+            """,Integer.class,t.id())).isZero();
+    }
+
 }
