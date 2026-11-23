@@ -91,6 +91,12 @@ class TrustedNbrkIngestionQualificationTest {
         var outcome=service(one(date,"504.11")).importForDate(date);
         assertThat(outcome.corrected()).isEqualTo(1);
         assertThat(revisions(date)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.fx_official_rate_snapshot s
+            JOIN crm.fx_rate_import_run r ON r.id=s.source_import_run_id
+            WHERE s.provider_code='NBRK' AND s.valid_date=?
+              AND r.provider_code='NBRK' AND r.raw_payload_sha256 IS NOT NULL
+            """,Integer.class,java.sql.Date.valueOf(date))).isEqualTo(2);
         assertThat(jdbc.queryForList("""
              SELECT source_revision FROM crm.fx_official_rate_snapshot
              WHERE provider_code='NBRK' AND base_currency='USD' AND valid_date=?
