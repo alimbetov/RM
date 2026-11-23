@@ -7,6 +7,7 @@ on:
       - 'src/test/java/kz/rm/fx/**'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - '.github/workflows/rm-fx-r1a3-trusted-nbrk.yml'
+      - 'docs/spec/RM-FX-R1A3-TRUSTED-NBRK-INGESTION.md'
   workflow_dispatch:
 permissions:
   contents: read
