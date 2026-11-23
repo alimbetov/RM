@@ -211,11 +211,15 @@ public class FxCalendarEvidenceService {
                                         LocalDate validDate, LocalDate evaluationDate) {
         record Gate(UUID sourceId,int limit) {}
         Gate gate=jdbc.query("""
-            SELECT g.source_id,g.max_trading_days FROM crm.fx_calendar_tenant_gate g
-            JOIN crm.fx_calendar_source_seal m ON m.source_id=g.source_id
-            WHERE g.tenant_id=? AND g.enabled=TRUE
+            SELECT source_id,max_trading_days FROM crm.fx_calendar_tenant_gate
+            WHERE tenant_id=? AND enabled=TRUE
             """,rs->rs.next()?new Gate(rs.getObject(1,UUID.class),rs.getInt(2)):null,tenant);
         if(gate==null)return null; // Existing tenants remain under their R2B calendar-day guardrail.
+        Integer sealed=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.fx_calendar_source_seal WHERE source_id=?
+            """,Integer.class,gate.sourceId());
+        if(sealed==null||sealed!=1)
+            throw new IllegalStateException("CUR_R2B_CALENDAR_MANIFEST_MISSING");
         String instrument=baseCurrency+"/KZT";
         Map<LocalDate,NbrkTradingCalendarPolicy.Day> days=new HashMap<>();
         jdbc.query("""
