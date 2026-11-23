@@ -3684,3 +3684,89 @@ CREATE TRIGGER trg_sales_fulfillment_mode_immutable
  FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_fulfillment_mode_change();
 --rollback DROP TRIGGER trg_sales_fulfillment_mode_immutable ON crm.sales_order;
 --rollback DROP FUNCTION crm.reject_sales_fulfillment_mode_change();
+
+
+--changeset rm:0123-cur-r1a-tenant-currency-foundation
+-- No automatic conversion of historical offers, orders, valuations or quotes.
+-- KZ public-facing price admission is a separate application rule; foreign
+-- purchase purposes must not authorize foreign public prices.
+CREATE TABLE public.tenant_currency_policy (
+ tenant_id UUID NOT NULL PRIMARY KEY,
+ accounting_currency CHAR(3) NOT NULL DEFAULT 'KZT',
+ market_country CHAR(2) NOT NULL DEFAULT 'KZ',
+ public_price_currency CHAR(3) NOT NULL DEFAULT 'KZT',
+ status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+ policy_version BIGINT NOT NULL DEFAULT 1,
+ row_version BIGINT NOT NULL DEFAULT 0,
+ approved_by UUID,
+ approved_at TIMESTAMP WITH TIME ZONE,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_cur_policy_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_cur_policy_actor FOREIGN KEY(approved_by) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_cur_policy_market CHECK(market_country='KZ' AND public_price_currency='KZT'),
+ CONSTRAINT ck_cur_policy_accounting CHECK(accounting_currency='KZT'),
+ CONSTRAINT ck_cur_policy_status CHECK(status IN ('ACTIVE','REVIEW_REQUIRED')),
+ CONSTRAINT ck_cur_policy_version CHECK(policy_version>=1 AND row_version>=0),
+ CONSTRAINT ck_cur_policy_approval CHECK((approved_by IS NULL AND approved_at IS NULL)
+      OR (approved_by IS NOT NULL AND approved_at IS NOT NULL))
+);
+CREATE TABLE public.tenant_allowed_currency (
+ tenant_id UUID NOT NULL,
+ currency_code CHAR(3) NOT NULL,
+ purpose VARCHAR(24) NOT NULL,
+ state VARCHAR(12) NOT NULL DEFAULT 'ENABLED',
+ row_version BIGINT NOT NULL DEFAULT 0,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_cur_allowed PRIMARY KEY(tenant_id,currency_code,purpose),
+ CONSTRAINT fk_cur_allowed_policy FOREIGN KEY(tenant_id)
+    REFERENCES public.tenant_currency_policy(tenant_id),
+ CONSTRAINT ck_cur_allowed_iso CHECK(length(trim(currency_code))=3
+    AND upper(currency_code)=currency_code),
+ CONSTRAINT ck_cur_allowed_purpose CHECK(purpose IN
+    ('PURCHASE','ACCOUNTING','INVENTORY_VALUATION','SALES_INTERNAL','PUBLIC_PRICE')),
+ CONSTRAINT ck_cur_allowed_state CHECK(state IN ('ENABLED','DISABLED')),
+ CONSTRAINT ck_cur_allowed_row_version CHECK(row_version>=0),
+ CONSTRAINT ck_cur_allowed_public CHECK(purpose<>'PUBLIC_PRICE' OR currency_code='KZT'),
+ CONSTRAINT ck_cur_allowed_accounting CHECK(purpose<>'ACCOUNTING' OR currency_code='KZT')
+);
+CREATE INDEX idx_cur_allowed_purpose
+ ON public.tenant_allowed_currency(tenant_id,purpose,state);
+CREATE TABLE public.tenant_currency_policy_event (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ revision_no BIGINT NOT NULL,
+ actor_user_id UUID NOT NULL,
+ action_code VARCHAR(32) NOT NULL,
+ currency_code CHAR(3) NOT NULL,
+ purpose VARCHAR(24) NOT NULL,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_cur_policy_event PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_cur_policy_event_rev UNIQUE(tenant_id,revision_no),
+ CONSTRAINT fk_cur_policy_event_tenant FOREIGN KEY(tenant_id)
+   REFERENCES public.tenant_currency_policy(tenant_id),
+ CONSTRAINT fk_cur_policy_event_actor FOREIGN KEY(actor_user_id)
+   REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_cur_event_revision CHECK(revision_no>=1),
+ CONSTRAINT ck_cur_event_action CHECK(action_code IN
+   ('INITIALIZED','CURRENCY_ENABLED','CURRENCY_DISABLED'))
+);
+--rollback DROP TABLE public.tenant_currency_policy_event;
+--rollback DROP INDEX public.idx_cur_allowed_purpose;
+--rollback DROP TABLE public.tenant_allowed_currency;
+--rollback DROP TABLE public.tenant_currency_policy;
+
+--changeset rm:0124-cur-r1a-currency-event-immutable dbms:postgresql splitStatements:false
+-- Currency approval history is append-only; not a new financial ledger.
+CREATE OR REPLACE FUNCTION public.reject_currency_policy_event_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'TENANT_CURRENCY_POLICY_EVENT_IMMUTABLE';
+END;
+$$;
+CREATE TRIGGER trg_cur_policy_event_immutable
+ BEFORE UPDATE OR DELETE ON public.tenant_currency_policy_event
+ FOR EACH ROW EXECUTE FUNCTION public.reject_currency_policy_event_mutation();
+--rollback DROP TRIGGER trg_cur_policy_event_immutable ON public.tenant_currency_policy_event;
+--rollback DROP FUNCTION public.reject_currency_policy_event_mutation();
