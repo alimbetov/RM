@@ -773,4 +773,59 @@ class TaskServiceQualificationTest {
             """,Integer.class,t.id(),task.id())).isEqualTo(2);
     }
 
+    @Test void t28PostgresqlTwoManagersConcurrentReassignmentExactlyOneWins()
+             throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID manager2=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-manager-two-"+UUID.randomUUID(),"Secondary manager")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),manager2,OrganizationMembershipEntity.Role.MANAGER));
+        var role=roles.createRole(t.owner(),t.id(),
+            "TASK_SECOND_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+            "Second manager");
+        roles.grant(t.owner(),t.id(),role.id(),DomainPermission.TASK_MANAGE);
+        roles.assign(t.owner(),t.id(),manager2,role.id());
+        VerifiedActor actor2=verified(manager2);
+        UUID target1=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-new-one-"+UUID.randomUUID(),"Assignee one")).getId();
+        UUID target2=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-new-two-"+UUID.randomUUID(),"Assignee two")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),target1,OrganizationMembershipEntity.Role.MEMBER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),target2,OrganizationMembershipEntity.Role.MEMBER));
+        var task=tasks.create(t.manager(),t.id(),"General operations",
+            t.staff().userId(),DUE,"task-double-manager-001");
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.assign(t.manager(),t.id(),task.id(),target1,0,
+                    "task-double-manager-key1");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            var second=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.assign(actor2,t.id(),task.id(),target2,0,
+                    "task-double-manager-key2");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            gate.countDown();
+            assertThat(java.util.List.of(first.get(20,TimeUnit.SECONDS),
+                second.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(
+                    "OK","TASK_STALE_VERSION");
+        }
+        assertThat(jdbc.queryForObject("""
+            SELECT row_version FROM crm.task_item WHERE tenant_id=? AND id=?
+            """,Long.class,t.id(),task.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event
+            WHERE tenant_id=? AND task_id=? AND action_code='ASSIGNED'
+            """,Integer.class,t.id(),task.id())).isEqualTo(1);
+    }
+
 }
