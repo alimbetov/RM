@@ -275,6 +275,22 @@ def verify():
                         ("TaskServiceQualificationTest", "t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture"),
                         ("TaskServiceQualificationTest", "t53PostgresqlManagerRevocationRacesWithSnapshotCapture"),
                     }
+                if artifact_name.startswith("rm-task-t00-postgresql-"):
+                    required_cases = {
+                        ("CrmInteractionQualificationTest", name) for name in (
+                            "t00CancellationEventHasCanonicalIdentityAndSingleRevision",
+                            "t00OuterTransactionRollbackRemovesCancellationAndSourceEvent",
+                            "t00CancellationIntentPortCannotRunOutsideCrmTransaction",
+                            "t00PgConcurrentCancellationCreatesExactlyOneCanonicalEvent",
+                            "t00PgActorSuspensionCommitsBeforeCancellationDeniesWithoutEvent",
+                            "t00PgCancellationCommitsBeforeActorSuspensionPreservesOneEvent",
+                            "t00PgCanonicalEventIdentityAndPrecisionAreStoredExactly",
+                            "t00PgTransactionPortReceivesPersistedCanonicalEvent",
+                            "t00PgPortFailureRollsBackCancellationAndEvent",
+                        )
+                    }
+                    if counts["tests"] != 9 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: nine T00 PostgreSQL cases must execute without skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
