@@ -4,6 +4,8 @@ import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,16 @@ public class CrmBuyerLinkService {
 
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
+    private String accountShareLockSql;
+
+    @PostConstruct
+    void configureAccountLock() {
+        String product=jdbc.execute((ConnectionCallback<String>) c ->
+                c.getMetaData().getDatabaseProductName());
+        String mode=product!=null && product.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
+                ? "FOR SHARE" : "FOR UPDATE";
+        accountShareLockSql="SELECT status FROM public.iam_user_account WHERE id=? " + mode;
+    }
 
     public CrmBuyerLinkService(JdbcTemplate jdbc, TenantAuthorization authorization) {
         this.jdbc=jdbc;
@@ -52,9 +64,7 @@ public class CrmBuyerLinkService {
                 """,rs->rs.next()?rs.getString(1):null,tenant,customer);
         if(!"ACTIVE".equals(customerStatus))
             throw new IllegalArgumentException("Active CRM customer required");
-        String buyerStatus=jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE
-                """,rs->rs.next()?rs.getString(1):null,buyer);
+        String buyerStatus=jdbc.query(accountShareLockSql,rs->rs.next()?rs.getString(1):null,buyer);
         if(!"ACTIVE".equals(buyerStatus)) throw new SecurityException("Buyer account inactive");
         List<Link> byKey=jdbc.query("""
                 SELECT id,customer_id,buyer_user_id,status,row_version
@@ -290,9 +300,7 @@ public class CrmBuyerLinkService {
     }
 
     private String lockActiveBuyer(UUID buyerId) {
-        return jdbc.query("""
-                SELECT status FROM public.iam_user_account WHERE id=? FOR SHARE
-                """,rs->rs.next()?rs.getString(1):null,buyerId);
+        return jdbc.query(accountShareLockSql,rs->rs.next()?rs.getString(1):null,buyerId);
     }
 
     private Link lockLink(UUID tenant,UUID linkId) {
