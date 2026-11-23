@@ -19,7 +19,7 @@ import java.util.UUID;
  * Caller must hold both TASK_MANAGE and CRM_READ in the same tenant.
  */
 @Service
-public final class TaskCrmFollowupService {
+public class TaskCrmFollowupService {
     public record Link(UUID tenantId, UUID taskId, UUID interactionId,
                        UUID createdBy, Instant linkedAt) {}
 
