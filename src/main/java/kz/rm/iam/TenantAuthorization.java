@@ -169,7 +169,7 @@ public class TenantAuthorization {
     private boolean permitted(DomainPermission permission, OrganizationMembershipEntity.Role role) {
         if (role == null) return false;
         return switch (permission) {
-            case CRM_READ, ORGANIZATION_LOCATION_READ, INVENTORY_STOCK_READ, SALES_ORDER_READ -> true;
+            case CRM_READ, ORGANIZATION_LOCATION_READ, INVENTORY_STOCK_READ, SALES_ORDER_READ, TASK_READ -> true;
             case TENANT_RBAC_MANAGE, SALES_PROPOSAL_RESPOND, SALES_ORDER_CONFIRM, SALES_ORDER_CANCEL,
                  SALES_ORDER_FULFILL, SALES_RETURN_REVIEW, SALES_RETURN_RECEIVE,
                  SALES_RETURN_INSPECT, SALES_RETURN_POST, SALES_PACKAGING_MANAGE, INVENTORY_RELEASE,
@@ -177,7 +177,7 @@ public class TenantAuthorization {
                  INVENTORY_FULFILL, FILES_UPLOAD, FILES_READ, FILES_ATTACH,
                  FILES_DETACH, FILES_DELETE, CATALOG_READ, CATALOG_WRITE,
                  CATALOG_PRICE_MANAGE, CATALOG_PUBLISH,
-                 STOREFRONT_OFFER_MANAGE, STOREFRONT_OFFER_PUBLISH -> false;
+                 STOREFRONT_OFFER_MANAGE, STOREFRONT_OFFER_PUBLISH, TASK_MANAGE, TASK_EXECUTE -> false;
             case CRM_PII_READ -> role == OrganizationMembershipEntity.Role.OWNER
                 || role == OrganizationMembershipEntity.Role.ADMIN
                 || role == OrganizationMembershipEntity.Role.MANAGER;
