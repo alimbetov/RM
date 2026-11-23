@@ -10,6 +10,10 @@ on:
       - 'src/test/java/kz/rm/tasks/**'
       - '.github/workflows/rm-task-r2-service.yml'
       - 'docs/spec/RM-TASK-R2-SERVICE-FOUNDATION.md'
+      - 'docs/reviews/RM-TASK-R2-01A1-TECHNICAL-REVIEW-2026-11-23.md'
+      - '.github/workflows/rm-exact-sha-admission.yml'
+      - '.github/scripts/verify_rm_qa_01b.py'
+      - '.github/scripts/test_verify_rm_qa_01b.py'
   workflow_dispatch:
 permissions:
   contents: read
