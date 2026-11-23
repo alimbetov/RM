@@ -4307,3 +4307,11 @@ CREATE TRIGGER trg_task_crm_followup_immutable
  BEFORE UPDATE OR DELETE ON crm.task_crm_followup
  FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_task_crm_followup_immutable ON crm.task_crm_followup;
+
+
+--changeset rm:0146-task-r2-due-date-evidence
+-- Additive immutable due-date change evidence. Original event revisions remain untouched.
+ALTER TABLE crm.task_event ADD COLUMN previous_due_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE crm.task_event ADD COLUMN next_due_at TIMESTAMP WITH TIME ZONE;
+--rollback ALTER TABLE crm.task_event DROP COLUMN next_due_at;
+--rollback ALTER TABLE crm.task_event DROP COLUMN previous_due_at;
