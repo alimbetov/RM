@@ -3770,3 +3770,75 @@ CREATE TRIGGER trg_cur_policy_event_immutable
  FOR EACH ROW EXECUTE FUNCTION public.reject_currency_policy_event_mutation();
 --rollback DROP TRIGGER trg_cur_policy_event_immutable ON public.tenant_currency_policy_event;
 --rollback DROP FUNCTION public.reject_currency_policy_event_mutation();
+
+
+--changeset rm:0125-fx-r1a-rate-snapshot-and-refresh-history
+-- Synthetic-only initial slice. No external network, no SKU prices or ledger changes.
+-- Real NBRK corrections later require separate qualified revision policy.
+CREATE TABLE crm.fx_rate_provider_lock (
+ provider_code VARCHAR(24) NOT NULL PRIMARY KEY,
+ CONSTRAINT ck_fx_r1a_provider CHECK(provider_code='MOCK')
+);
+INSERT INTO crm.fx_rate_provider_lock(provider_code) VALUES ('MOCK');
+
+CREATE TABLE crm.fx_official_rate_snapshot (
+ id UUID NOT NULL PRIMARY KEY,
+ provider_code VARCHAR(24) NOT NULL,
+ base_currency CHAR(3) NOT NULL,
+ quote_currency CHAR(3) NOT NULL,
+ nominal NUMERIC(19,6) NOT NULL,
+ rate NUMERIC(24,10) NOT NULL,
+ valid_date DATE NOT NULL,
+ source_revision INTEGER NOT NULL DEFAULT 1,
+ source_payload_sha256 CHAR(64) NOT NULL,
+ synthetic BOOLEAN NOT NULL,
+ recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_fx_r1a_snapshot_provider FOREIGN KEY(provider_code)
+   REFERENCES crm.fx_rate_provider_lock(provider_code),
+ CONSTRAINT uq_fx_r1a_rate_identity UNIQUE(provider_code,base_currency,quote_currency,valid_date,source_revision),
+ CONSTRAINT ck_fx_r1a_base CHECK(base_currency IN ('USD','CNY','EUR')),
+ CONSTRAINT ck_fx_r1a_quote CHECK(quote_currency='KZT'),
+ CONSTRAINT ck_fx_r1a_positive CHECK(nominal>0 AND rate>0),
+ CONSTRAINT ck_fx_r1a_revision CHECK(source_revision=1),
+ CONSTRAINT ck_fx_r1a_mock CHECK(provider_code='MOCK' AND synthetic=TRUE),
+ CONSTRAINT ck_fx_r1a_sha CHECK(length(source_payload_sha256)=64)
+);
+CREATE INDEX idx_fx_r1a_valid_date ON crm.fx_official_rate_snapshot(base_currency,valid_date);
+
+CREATE TABLE crm.fx_rate_import_run (
+ id UUID NOT NULL PRIMARY KEY,
+ provider_code VARCHAR(24) NOT NULL,
+ requested_date DATE NOT NULL,
+ imported_count INTEGER NOT NULL,
+ replayed_count INTEGER NOT NULL,
+ source_count INTEGER NOT NULL,
+ synthetic BOOLEAN NOT NULL,
+ completed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT fk_fx_r1a_run_provider FOREIGN KEY(provider_code)
+   REFERENCES crm.fx_rate_provider_lock(provider_code),
+ CONSTRAINT ck_fx_r1a_run_counts CHECK(imported_count>=0 AND replayed_count>=0
+   AND source_count>0 AND imported_count+replayed_count=source_count),
+ CONSTRAINT ck_fx_r1a_run_mock CHECK(provider_code='MOCK' AND synthetic=TRUE)
+);
+CREATE INDEX idx_fx_r1a_run_history ON crm.fx_rate_import_run(provider_code,completed_at);
+--rollback DROP TABLE crm.fx_rate_import_run;
+--rollback DROP INDEX crm.idx_fx_r1a_valid_date;
+--rollback DROP TABLE crm.fx_official_rate_snapshot;
+--rollback DROP TABLE crm.fx_rate_provider_lock;
+
+--changeset rm:0126-fx-r1a-immutable-snapshots dbms:postgresql splitStatements:false
+CREATE OR REPLACE FUNCTION crm.fx_r1a_reject_evidence_mutation()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'FX_R1A_IMMUTABLE_EVIDENCE';
+END;
+$$;
+CREATE TRIGGER trg_fx_r1a_snapshot_immutable
+ BEFORE UPDATE OR DELETE ON crm.fx_official_rate_snapshot
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_r1a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_r1a_import_run_immutable
+ BEFORE UPDATE OR DELETE ON crm.fx_rate_import_run
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_r1a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_fx_r1a_import_run_immutable ON crm.fx_rate_import_run;
+--rollback DROP TRIGGER trg_fx_r1a_snapshot_immutable ON crm.fx_official_rate_snapshot;
+--rollback DROP FUNCTION crm.fx_r1a_reject_evidence_mutation();
