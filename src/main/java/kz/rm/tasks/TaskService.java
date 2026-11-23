@@ -165,14 +165,17 @@ public class TaskService {
         UUID user=admit(actor,tenant,DomainPermission.TASK_READ);
         if(limit<1||limit>100||offset<0||offset>100000)
             throw new IllegalArgumentException("TASK_PAGE_INVALID");
-        return jdbc.query("""
+        String sql="""
             SELECT tenant_id,id,title,assignee_user_id,created_by,status,due_at,row_version
             FROM crm.task_item
             WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)
-              AND (? IS NULL OR status=?)
-            ORDER BY due_at ASC,id ASC LIMIT ? OFFSET ?
-            """,(rs,n)->map(rs),tenant,user,user,state==null?null:state.name(),
-            state==null?null:state.name(),limit,offset);
+            """+(state==null?"":" AND status=? ")
+            +" ORDER BY due_at ASC,id ASC LIMIT ? OFFSET ?";
+        var args=new ArrayList<Object>(List.of(tenant,user,user));
+        if(state!=null)args.add(state.name());
+        args.add(limit);
+        args.add(offset);
+        return jdbc.query(sql,(rs,n)->map(rs),args.toArray());
     }
 
     @Transactional
