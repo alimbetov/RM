@@ -73,7 +73,7 @@ public class TaskCrmReconciliationService {
      */
     public record PendingPage(List<Pending> items, UUID nextAfterTaskId) {}
 
-    @Transactional(readOnly=true)
+    @Transactional
     public PendingPage pendingPage(VerifiedActor actor,UUID tenant,UUID interactionId,
                                    UUID afterTaskId,int limit) {
         admit(actor,tenant);
