@@ -3335,7 +3335,7 @@ CREATE TRIGGER trg_crm_r22_buyer_event_immutable
 --rollback DROP TRIGGER trg_crm_r22_buyer_event_immutable ON crm.customer_buyer_link_event;
 
 
---changeset rm:0105-crm-r22b-lifecycle-dispute
+--changeset rm:0105-crm-r22b-lifecycle-dispute dbms:postgresql
 -- Keep terminal link rows forever; only currently active mappings occupy
 -- one-to-one uniqueness slots. Revoked links can be re-proposed with NEW consent.
 ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT uk_crm_buyer_link_customer;
@@ -3365,6 +3365,40 @@ ALTER TABLE crm.customer_buyer_link_event ADD CONSTRAINT ck_crm_buyer_link_event
 --rollback DROP INDEX crm.uk_crm_buyer_active_customer;
 --rollback ALTER TABLE crm.customer_buyer_link ADD CONSTRAINT uk_crm_buyer_link_buyer UNIQUE(tenant_id,buyer_user_id);
 --rollback ALTER TABLE crm.customer_buyer_link ADD CONSTRAINT uk_crm_buyer_link_customer UNIQUE(tenant_id,customer_id);
+
+
+--changeset rm:0105h2-crm-r22b-lifecycle-dispute-compat dbms:h2
+-- H2 has no partial unique indexes. Nullable generated columns replicate
+-- PostgreSQL's active-only uniqueness without restricting revoked history.
+-- PostgreSQL 0105 SQL body is unchanged for checksum compatibility.
+ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT uk_crm_buyer_link_customer;
+ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT uk_crm_buyer_link_buyer;
+ALTER TABLE crm.customer_buyer_link
+ ADD COLUMN active_customer_id UUID GENERATED ALWAYS AS
+  (CASE WHEN status IN ('PENDING','CONFIRMED','DISPUTED') THEN customer_id ELSE NULL END);
+ALTER TABLE crm.customer_buyer_link
+ ADD COLUMN active_buyer_user_id UUID GENERATED ALWAYS AS
+  (CASE WHEN status IN ('PENDING','CONFIRMED','DISPUTED') THEN buyer_user_id ELSE NULL END);
+CREATE UNIQUE INDEX uk_crm_buyer_active_customer ON crm.customer_buyer_link(tenant_id,active_customer_id);
+CREATE UNIQUE INDEX uk_crm_buyer_active_buyer ON crm.customer_buyer_link(tenant_id,active_buyer_user_id);
+ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT ck_crm_buyer_link_state;
+ALTER TABLE crm.customer_buyer_link ADD CONSTRAINT ck_crm_buyer_link_state
+ CHECK(status IN ('PENDING','CONFIRMED','DISPUTED','REVOKED'));
+ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT ck_crm_buyer_link_confirmed;
+ALTER TABLE crm.customer_buyer_link ADD CONSTRAINT ck_crm_buyer_link_confirmed CHECK(
+ (status='PENDING' AND confirmed_at IS NULL)
+ OR (status IN ('CONFIRMED','DISPUTED') AND confirmed_at IS NOT NULL)
+ OR status='REVOKED');
+ALTER TABLE crm.customer_buyer_link_event DROP CONSTRAINT ck_crm_buyer_link_event_action;
+ALTER TABLE crm.customer_buyer_link_event ADD CONSTRAINT ck_crm_buyer_link_event_action
+ CHECK(action_code IN ('PROPOSED','CONFIRMED','DISPUTED','REVOKED','DISPUTE_CLOSED'));
+--rollback ALTER TABLE crm.customer_buyer_link_event DROP CONSTRAINT ck_crm_buyer_link_event_action;
+--rollback ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT ck_crm_buyer_link_confirmed;
+--rollback ALTER TABLE crm.customer_buyer_link DROP CONSTRAINT ck_crm_buyer_link_state;
+--rollback DROP INDEX crm.uk_crm_buyer_active_buyer;
+--rollback DROP INDEX crm.uk_crm_buyer_active_customer;
+--rollback ALTER TABLE crm.customer_buyer_link DROP COLUMN active_buyer_user_id;
+--rollback ALTER TABLE crm.customer_buyer_link DROP COLUMN active_customer_id;
 
 
 --changeset rm:0106-crm-r22c-dispute-adjudication
