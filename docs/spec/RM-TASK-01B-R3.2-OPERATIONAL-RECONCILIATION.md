@@ -28,6 +28,14 @@ R3.1 `pendingPage(afterTaskId)` provides bounded incremental traversal, NOT a st
 - T48 (PostgreSQL): 10,001 pending linked tasks trigger fail-closed capacity rejection with no partial header or seal.
 - Mandatory gate: 48 PostgreSQL tests (0 skipped) and 48 discovered H2 (15 PostgreSQL-only skipped); all six required domain/workflow artifacts with exact SHA and matching checksums.
 
+## Следующий инженерный этап — R3.2B (актуальное исполняемое ТЗ)
+
+**Подробная спецификация:** [RM-TASK-01B/R3.2B — SLA Policy & Durable Outbox Foundation](RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md).
+
+Результат R3.2A — неизменяемый снимок с криптографической печатью, защищённой пагинацией и ограничением 10 000. **R3.2B отдельно** разрабатывает версионированную SLA-политику, независимое обязательство менеджера рассмотреть отменённый CRM source, atomically committed CRM cancellation event → outbox intent, tenant FK, lease/fencing, replay/dead-letter и PostgreSQL доказательства. **R3.2C отдельно** допускает работающий scheduler и настоящие каналы доставки после consent/security/legal/operational gate.
+
+Ниже сохранено историческое R3.2 предложение SLA/outbox; при разночтении детализация R3.2B имеет приоритет **в отношении будущего R3.2B исполнения**, но не переопределяет норматив `RM-PLATFORM-STANDARD-R2` и уже утверждённые R3.1/R3.2A контракты. До подтверждения R3.2A independent gates нельзя считать R3.2B qualified. В частности, `task.due_at` **не** является сроком CRM reconciliation review; его источник — неизменяемое CRM `CANCELLED` event. Настоящая отправка и автоматическая отмена задач остаются STOP.
+
 ## Proposed SLA — **not yet approved for execution**
 
 | Attribute | Contract |
