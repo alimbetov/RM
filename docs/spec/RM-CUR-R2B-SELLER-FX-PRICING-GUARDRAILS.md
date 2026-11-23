@@ -107,3 +107,11 @@ Never interpret these synthetic calendar tests as official 2026 holiday schedule
 Critical remaining acceptance gap: an independent parser/attestor must derive each `TRADING`/`CLOSED` status from the actual KASE document and exception notices, verify relevant market/instrument scope, and sign off on the exact source digest. A valid HTML SHA alone cannot certify a status; source staging and tenant gate enabling must remain limited to controlled synthetic UAT until this is complete. Remote-live fetching is not a CI requirement; transport security is tested with synthetic HTTP fixtures.
 
 New requirements added to the H2/PostgreSQL qualification: four `TrustedKaseCalendarHttpClientTest` negative/positive transport tests; along with 27 FX service, nine calculation and four calendar policy tests, for **44 total PostgreSQL cases**. This count is a target; PASS must be established on the final exact commit.
+
+## 12. Inverse PostgreSQL race completion (synthetic UAT)
+
+- `r2b16` — an FX approval holds its trusted IAM admission until transaction commit; a seller account suspension started afterwards must serialize, preserving exactly one approved price revision/decision and ending with the actor suspended.
+- `r2b17` — an FX approval commits before a new available accepted quote is written; the quote writer takes the same storefront lock and sees the updated canonical KZT amount, with exactly one FX price revision.
+- The complementary `r2b10/r2b11` tests (quote-first and suspension-first) remain mandatory.
+
+The specialized CI matrix now requires **29 FX integration cases**, nine FX mathematics, four calendar evidence and four KASE HTTPS transport tests = **46 PostgreSQL cases**, and **19 executed H2 integration cases** plus ten intentionally PostgreSQL-only skips. No production claims are made until exact-SHA CI succeeds.
