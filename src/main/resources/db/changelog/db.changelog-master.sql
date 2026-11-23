@@ -3883,3 +3883,18 @@ CREATE INDEX idx_fx_r1a3_source_revision
 --rollback DELETE FROM crm.fx_rate_provider_lock WHERE provider_code='NBRK';
 --rollback ALTER TABLE crm.fx_rate_provider_lock DROP CONSTRAINT ck_fx_r1a_provider;
 --rollback ALTER TABLE crm.fx_rate_provider_lock ADD CONSTRAINT ck_fx_r1a_provider CHECK(provider_code='MOCK');
+
+
+--changeset rm:0128-fx-r1a3-revision-source-run-link
+-- Each NBRK rate revision points to the immutable import run which produced it.
+ALTER TABLE crm.fx_official_rate_snapshot ADD COLUMN source_import_run_id UUID;
+ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT fk_fx_r1a3_revision_import_run
+ FOREIGN KEY (source_import_run_id) REFERENCES crm.fx_rate_import_run(id);
+ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT ck_fx_r1a3_revision_provenance
+ CHECK (provider_code='MOCK' OR source_import_run_id IS NOT NULL);
+CREATE INDEX idx_fx_r1a3_revision_import_run
+ ON crm.fx_official_rate_snapshot(source_import_run_id);
+--rollback DROP INDEX crm.idx_fx_r1a3_revision_import_run;
+--rollback ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a3_revision_provenance;
+--rollback ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT fk_fx_r1a3_revision_import_run;
+--rollback ALTER TABLE crm.fx_official_rate_snapshot DROP COLUMN source_import_run_id;
