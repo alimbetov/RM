@@ -4385,3 +4385,41 @@ CREATE TRIGGER trg_task_reconciliation_snapshot_item_immutable
  FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_task_reconciliation_snapshot_item_immutable ON crm.task_reconciliation_snapshot_item;
 --rollback DROP TRIGGER trg_task_reconciliation_snapshot_immutable ON crm.task_reconciliation_snapshot;
+
+
+--changeset rm:0151-task-r32-snapshot-seal
+-- A committed immutable seal prevents extending a captured task set.
+CREATE TABLE crm.task_reconciliation_snapshot_seal (
+ tenant_id UUID NOT NULL,
+ snapshot_id UUID NOT NULL,
+ sealed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ items_sha256 CHAR(64) NOT NULL,
+ CONSTRAINT pk_task_reconciliation_snapshot_seal PRIMARY KEY(tenant_id,snapshot_id),
+ CONSTRAINT fk_task_reconciliation_snapshot_seal FOREIGN KEY(tenant_id,snapshot_id)
+  REFERENCES crm.task_reconciliation_snapshot(tenant_id,id),
+ CONSTRAINT ck_task_reconciliation_snapshot_seal_sha CHECK(length(items_sha256)=64)
+);
+--rollback DROP TABLE crm.task_reconciliation_snapshot_seal;
+
+--changeset rm:0152-task-r32-snapshot-seal-protection dbms:postgresql splitStatements:false
+CREATE OR REPLACE FUNCTION crm.task_snapshot_reject_insert_after_seal()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF EXISTS (
+  SELECT 1 FROM crm.task_reconciliation_snapshot_seal
+   WHERE tenant_id=NEW.tenant_id AND snapshot_id=NEW.snapshot_id
+ ) THEN
+  RAISE EXCEPTION 'TASK_SNAPSHOT_ALREADY_SEALED';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_task_snapshot_no_late_insert
+ BEFORE INSERT ON crm.task_reconciliation_snapshot_item
+ FOR EACH ROW EXECUTE FUNCTION crm.task_snapshot_reject_insert_after_seal();
+CREATE TRIGGER trg_task_snapshot_seal_immutable
+ BEFORE UPDATE OR DELETE ON crm.task_reconciliation_snapshot_seal
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_task_snapshot_seal_immutable ON crm.task_reconciliation_snapshot_seal;
+--rollback DROP TRIGGER trg_task_snapshot_no_late_insert ON crm.task_reconciliation_snapshot_item;
+--rollback DROP FUNCTION crm.task_snapshot_reject_insert_after_seal();
