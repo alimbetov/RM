@@ -59,12 +59,12 @@ class TaskServiceQualificationTest {
             UUID.randomUUID(),org,staff,OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
         VerifiedActor a=verified(owner),b=verified(staff);
-        var manager=roles.createRole(a,tenant,
+        var managerRole=roles.createRole(a,tenant,
             "TASK_M_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
             "Task manager");
-        roles.grant(a,tenant,manager.id(),DomainPermission.TASK_MANAGE);
-        roles.grant(a,tenant,manager.id(),DomainPermission.TASK_READ);
-        roles.assign(a,tenant,manager,manager.id());
+        roles.grant(a,tenant,managerRole.id(),DomainPermission.TASK_MANAGE);
+        roles.grant(a,tenant,managerRole.id(),DomainPermission.TASK_READ);
+        roles.assign(a,tenant,manager,managerRole.id());
         var employee=roles.createRole(a,tenant,
             "TASK_E_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
             "Task employee");
