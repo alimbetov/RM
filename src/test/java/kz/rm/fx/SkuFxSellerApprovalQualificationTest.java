@@ -946,4 +946,27 @@ class SkuFxSellerApprovalQualificationTest {
                 .hasMessage("CUR_R2B_CALENDAR_REPLAY_CONFLICT");
     }
 
+    @Test void r2b20PostgresqlCalendarSealBlocksLateDayInsertion() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        UUID source=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,
+            effectiveDate());
+        LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
+        assertThatThrownBy(()->jdbc.update("""
+            INSERT INTO crm.fx_calendar_day_evidence
+              (source_id,instrument,trading_date,trading_status)
+            VALUES (?,? ,?,'TRADING')
+            """,source,"USD/KZT",java.sql.Date.valueOf(today)))
+            .isInstanceOf(Exception.class)
+            .hasRootCauseMessage("ERROR: CUR_R2B_CALENDAR_SOURCE_SEALED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.fx_calendar_day_evidence WHERE source_id=?
+            """,Integer.class,source)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT day_count FROM crm.fx_calendar_source_seal WHERE source_id=?
+            """,Integer.class,source)).isEqualTo(1);
+    }
+
 }
