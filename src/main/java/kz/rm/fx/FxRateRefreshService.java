@@ -1,5 +1,6 @@
 package kz.rm.fx;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
@@ -21,6 +22,7 @@ public final class FxRateRefreshService {
     private final String mode;
     private final boolean isNonProductionProfile;
 
+    @Autowired
     public FxRateRefreshService(List<FxRateProvider> providers,
                                 @Value("${rm.fx.rate.provider:DISABLED}") String mode,
                                 Environment environment) {
