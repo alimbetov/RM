@@ -3,12 +3,6 @@ name: RM TASK R3.2A Populated PostgreSQL Upgrade Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/tasks/**'
-      - 'src/test/java/kz/rm/tasks/**'
-      - 'src/main/resources/db/changelog/**'
-      - '.github/workflows/rm-task-r32a-populated-upgrade.yml'
-      - '.github/workflows/rm-exact-sha-admission.yml'
   workflow_dispatch:
 
 permissions:
