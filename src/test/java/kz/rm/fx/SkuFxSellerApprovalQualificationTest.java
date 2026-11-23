@@ -16,6 +16,14 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.junit.jupiter.api.AfterEach;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +47,22 @@ class SkuFxSellerApprovalQualificationTest {
     @Autowired DataSource dataSource;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired VerifiedTenantRoleCommands roleCommands;
+    @Autowired MutableClock clock;
+
+    static final class MutableClock extends Clock {
+        private final AtomicReference<Instant> current=new AtomicReference<>(Instant.now());
+        void advance(Duration duration) { current.updateAndGet(t->t.plus(duration)); }
+        void reset() { current.set(Instant.now()); }
+        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(java.time.ZoneId zone) { return Clock.fixed(instant(),zone); }
+        @Override public Instant instant() { return current.get(); }
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TestClockConfig {
+        @Bean @Primary MutableClock fxTestClock() { return new MutableClock(); }
+    }
+    @AfterEach void resetFxClock() { clock.reset(); }
 
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,
                            VerifiedActor actor,UUID buyer) {}
@@ -450,7 +474,7 @@ class SkuFxSellerApprovalQualificationTest {
                 new BigDecimal("1000"),new BigDecimal("100"),
                 new BigDecimal("1"),new BigDecimal("100000"),30,1,0);
         var c=candidate(f,rate(effectiveDate(),"551"));
-        Thread.sleep(1250);
+        clock.advance(Duration.ofSeconds(2));
         assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-expired-001"))
                 .hasMessage("CUR_R2B_CALCULATION_EXPIRED");
         assertThat(revisions(f)).isZero();
