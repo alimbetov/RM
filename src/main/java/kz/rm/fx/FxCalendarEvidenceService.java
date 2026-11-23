@@ -6,6 +6,8 @@ import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.URI;
 import java.security.MessageDigest;
@@ -32,14 +34,17 @@ public class FxCalendarEvidenceService {
     private final TenantAuthorization authorization;
     private final Clock clock;
     private final TrustedKaseCalendarHttpClient sourceClient;
+    private final TransactionTemplate transactions;
 
     public FxCalendarEvidenceService(JdbcTemplate jdbc,
                                      TenantAuthorization authorization, Clock clock,
-                                     TrustedKaseCalendarHttpClient sourceClient) {
+                                     TrustedKaseCalendarHttpClient sourceClient,
+                                     PlatformTransactionManager transactionManager) {
         this.jdbc=jdbc;
         this.authorization=authorization;
         this.clock=clock;
         this.sourceClient=sourceClient;
+        this.transactions=new TransactionTemplate(transactionManager);
     }
 
     private static URI trustedSource(String source) {
@@ -81,7 +86,8 @@ public class FxCalendarEvidenceService {
         List<NbrkTradingCalendarPolicy.Day> days=sessions.stream()
             .map(d->new NbrkTradingCalendarPolicy.Day(d.date(),d.instrument(),
                 d.status(),downloaded.sourceUrl(),sha)).toList();
-        return stageSource(downloaded.sourceUrl(),downloaded.bytes(),sha,days);
+        return transactions.execute(status->stageSource(
+            downloaded.sourceUrl(),downloaded.bytes(),sha,days));
     }
 
     /**
