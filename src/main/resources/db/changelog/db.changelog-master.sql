@@ -3630,3 +3630,22 @@ ALTER TABLE crm.sales_order
  CHECK (fulfillment_mode IN ('STANDARD','PICKUP_PROOF_REQUIRED'));
 --rollback ALTER TABLE crm.sales_order DROP CONSTRAINT ck_sales_order_fulfillment_mode;
 --rollback ALTER TABLE crm.sales_order DROP COLUMN fulfillment_mode;
+
+
+--changeset rm:0122-fc40-fulfillment-mode-immutable dbms:postgresql
+-- The execution channel is immutable after order creation; a generic service
+-- cannot downgrade an already proof-required order via direct SQL.
+CREATE OR REPLACE FUNCTION crm.reject_sales_fulfillment_mode_change()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.fulfillment_mode IS DISTINCT FROM OLD.fulfillment_mode THEN
+  RAISE EXCEPTION 'SALES_FULFILLMENT_MODE_IMMUTABLE';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_sales_fulfillment_mode_immutable
+ BEFORE UPDATE ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_fulfillment_mode_change();
+--rollback DROP TRIGGER trg_sales_fulfillment_mode_immutable ON crm.sales_order;
+--rollback DROP FUNCTION crm.reject_sales_fulfillment_mode_change();
