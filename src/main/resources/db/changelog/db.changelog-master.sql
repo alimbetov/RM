@@ -3842,3 +3842,44 @@ CREATE TRIGGER trg_fx_r1a_import_run_immutable
 --rollback DROP TRIGGER trg_fx_r1a_import_run_immutable ON crm.fx_rate_import_run;
 --rollback DROP TRIGGER trg_fx_r1a_snapshot_immutable ON crm.fx_official_rate_snapshot;
 --rollback DROP FUNCTION crm.fx_r1a_reject_evidence_mutation();
+
+
+--changeset rm:0127-fx-r1a3-trusted-nbrk-revisions
+-- Extend, not replace, R1A mock evidence. Never rewrite existing rows.
+ALTER TABLE crm.fx_rate_provider_lock DROP CONSTRAINT ck_fx_r1a_provider;
+ALTER TABLE crm.fx_rate_provider_lock ADD CONSTRAINT ck_fx_r1a_provider
+ CHECK (provider_code IN ('MOCK','NBRK'));
+INSERT INTO crm.fx_rate_provider_lock(provider_code) VALUES ('NBRK');
+
+ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a_base;
+ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a_revision;
+ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT ck_fx_r1a_revision
+ CHECK (source_revision >= 1);
+ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a_mock;
+ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT ck_fx_r1a_source_integrity
+ CHECK ((provider_code='MOCK' AND synthetic=TRUE AND source_revision=1)
+     OR (provider_code='NBRK' AND synthetic=FALSE));
+ALTER TABLE crm.fx_rate_import_run DROP CONSTRAINT ck_fx_r1a_run_mock;
+ALTER TABLE crm.fx_rate_import_run ADD CONSTRAINT ck_fx_r1a_run_source_integrity
+ CHECK ((provider_code='MOCK' AND synthetic=TRUE)
+     OR (provider_code='NBRK' AND synthetic=FALSE));
+ALTER TABLE crm.fx_rate_import_run ADD COLUMN raw_payload_sha256 CHAR(64);
+ALTER TABLE crm.fx_rate_import_run ADD COLUMN source_endpoint VARCHAR(120);
+ALTER TABLE crm.fx_rate_import_run ADD CONSTRAINT ck_fx_r1a3_raw_sha
+ CHECK (raw_payload_sha256 IS NULL OR length(raw_payload_sha256)=64);
+CREATE INDEX idx_fx_r1a3_source_revision
+ ON crm.fx_official_rate_snapshot(provider_code,base_currency,valid_date,source_revision);
+--rollback DROP INDEX crm.idx_fx_r1a3_source_revision;
+--rollback ALTER TABLE crm.fx_rate_import_run DROP CONSTRAINT ck_fx_r1a3_raw_sha;
+--rollback ALTER TABLE crm.fx_rate_import_run DROP COLUMN source_endpoint;
+--rollback ALTER TABLE crm.fx_rate_import_run DROP COLUMN raw_payload_sha256;
+--rollback ALTER TABLE crm.fx_rate_import_run DROP CONSTRAINT ck_fx_r1a_run_source_integrity;
+--rollback ALTER TABLE crm.fx_rate_import_run ADD CONSTRAINT ck_fx_r1a_run_mock CHECK(provider_code='MOCK' AND synthetic=TRUE);
+--rollback ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a_source_integrity;
+--rollback ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT ck_fx_r1a_mock CHECK(provider_code='MOCK' AND synthetic=TRUE);
+--rollback ALTER TABLE crm.fx_official_rate_snapshot DROP CONSTRAINT ck_fx_r1a_revision;
+--rollback ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT ck_fx_r1a_revision CHECK(source_revision=1);
+--rollback ALTER TABLE crm.fx_official_rate_snapshot ADD CONSTRAINT ck_fx_r1a_base CHECK(base_currency IN ('USD','CNY','EUR'));
+--rollback DELETE FROM crm.fx_rate_provider_lock WHERE provider_code='NBRK';
+--rollback ALTER TABLE crm.fx_rate_provider_lock DROP CONSTRAINT ck_fx_r1a_provider;
+--rollback ALTER TABLE crm.fx_rate_provider_lock ADD CONSTRAINT ck_fx_r1a_provider CHECK(provider_code='MOCK');
