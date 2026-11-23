@@ -176,7 +176,7 @@ public class FxCalendarEvidenceService {
                                 int maxTradingDays) {
         if(actor==null||tenant==null||sourceId==null||maxTradingDays<0||maxTradingDays>10)
             throw new IllegalArgumentException("CUR_R2B_CALENDAR_ADMISSION_INVALID");
-        authorization.requireForCommand(actor.userId(),tenant,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        authorization.requireForCommand(actor.userId(),tenant,DomainPermission.TENANT_RBAC_MANAGE);
         UUID locked=jdbc.query("""
             SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE
             """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
