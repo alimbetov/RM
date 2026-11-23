@@ -188,9 +188,10 @@ public class AutoOrderService {
         UUID orderId=UUID.randomUUID();
         Timestamp now=Timestamp.from(Instant.now());
         jdbc.update("""
-            INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at)
-            VALUES (?,?,?,NULL,'PLACED',?,?,?)
-            """,tenant,orderId,identity.identityId(),total,currency,now);
+            INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
+            VALUES (?,?,?,NULL,'PLACED',?,?,?,?)
+            """,tenant,orderId,identity.identityId(),total,currency,now,
+            acknowledged==null?"STANDARD":"PICKUP_PROOF_REQUIRED");
         for(Offer o:offers) {
             jdbc.update("""
                 INSERT INTO crm.sales_order_line
@@ -371,8 +372,8 @@ public class AutoOrderService {
         jdbc.update("""
                 INSERT INTO crm.sales_order
                   (tenant_id,id,pending_email_identity_id,buyer_user_id,status,
-                   total_amount,currency,created_at)
-                VALUES (?,?,?,?,'PLACED',?,?,?)
+                   total_amount,currency,created_at,fulfillment_mode)
+                VALUES (?,?,?,?,'PLACED',?,?,?,'PICKUP_PROOF_REQUIRED')
                 """,tenant,orderId,emailIdentities.getFirst(),user,total,
                 quote.currency(),now);
         jdbc.update("""
