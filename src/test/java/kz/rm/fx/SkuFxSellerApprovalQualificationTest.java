@@ -444,4 +444,32 @@ class SkuFxSellerApprovalQualificationTest {
         assertThat(decisions(f)).isZero();
     }
 
+    @Test void r2b04ExpiredCalculationNeverPublishesPrice() throws Exception {
+        var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("1000"),new BigDecimal("100"),
+                new BigDecimal("1"),new BigDecimal("100000"),30,1,0);
+        var c=candidate(f,rate(effectiveDate(),"551"));
+        Thread.sleep(1250);
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-expired-001"))
+                .hasMessage("CUR_R2B_CALCULATION_EXPIRED");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
+    @Test void r2b05SupersededGuardrailCannotApproveEarlierCalculation() {
+        var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("1000"),new BigDecimal("100"),
+                new BigDecimal("1"),new BigDecimal("100000"),30,3600,0);
+        var c=candidate(f,rate(effectiveDate(),"552"));
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("10"),new BigDecimal("10"),
+                new BigDecimal("1"),new BigDecimal("100000"),30,3600,1);
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,"r2b-policy-001"))
+                .hasMessage("CUR_R2B_GUARDRAIL_STALE");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
 }
