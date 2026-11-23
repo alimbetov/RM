@@ -6,7 +6,7 @@
 **Product:** RM Business → TASKS / CRM Interaction. **Scope:** Java 21 / Spring Boot modular monolith, существующие application services, PostgreSQL/Liquibase, H2 diagnostics, JUnit and exact-SHA CI.  
 **STOP:** новые REST-контроллеры/UI, автоматическая отмена задач, реальные отправки, планировщик, почтовый/SMS/push-провайдер, Redis/Kafka/второй TASKS aggregate, новый branch, merge `main`. **Production: HOLD.**
 
-> **R32B-T00 source review (2026-11-23):** [Contract & Dependency Qualification](../reviews/RM-TASK-R32B-T00-CONTRACT-DEPENDENCY-QUALIFICATION-2026-11-23.md). Проверено: CRM `cancel()` записывает immutable `CANCELLED` event в той же транзакции, но приватный `void event()` не возвращает canonical `eventId/occurredAt` для TASKS. Типизированный transaction-mandatory порт, правила IAM/policy и конкурентные PostgreSQL доказательства ещё не квалифицированы. **До T00 gate нельзя начинать B1/B2 код или DDL на предположениях.** R3.2A independent gates по-прежнему обязательны. 
+> **R32B-T00 source review (2026-11-23):** [Contract & Dependency Qualification](../reviews/RM-TASK-R32B-T00-CONTRACT-DEPENDENCY-QUALIFICATION-2026-11-23.md). Проверено: CRM `cancel()` записывает immutable `CANCELLED` event в той же транзакции. **Source contract corrected:** введены canonical `eventId/occurredAt` и transaction-mandatory порт с отключённым sink; PostgreSQL и IAM/SLA admission ещё не подтверждены. **До T00 gate нельзя начинать B1/B2 код или DDL на предположениях.** R3.2A independent gates по-прежнему обязательны. 
 
 ## 0. Цель, инженерное решение и смежные документы
 
@@ -40,7 +40,7 @@
 | `OidcRevocationOutboxWorker` | same-DB atomic claim, worker lease + attempt fencing; external at-least-once | this IAM worker is NOT a TASK notification engine |
 | Current HEAD source | no TASK SLA policy table, TASK notification outbox or external TASK dispatcher confirmed | **R3.2B DESIGN ONLY** before implementing B1–B4 |
 
-**Prior-stage dependency:** Before declaring R3.2B `CODE QUALIFIED`, verify R3.2A's populated PostgreSQL upgrade of changesets 0148–0152, independent seal/digest check after restart, exact 10 000 success and 10 001 rejection, CRM cancellation/IAM revocation races, after-COMMIT response-loss retry and full current-SHA evidence. R3.2B *design* may proceed while those gaps remain; no inheritance of historical PASS.
+**Prior-stage dependency:** Before declaring R3.2B `CODE QUALIFIED`, verify R3.2A's populated PostgreSQL upgrade of changesets 0148–0153, independent seal/digest check after restart, exact 10 000 success and 10 001 rejection, CRM cancellation/IAM revocation races, after-COMMIT response-loss retry and full current-SHA evidence. R3.2B *design* may proceed while those gaps remain; no inheritance of historical PASS.
 
 ## 1. Product behavior and state boundaries
 
@@ -174,7 +174,7 @@ No active manager / revoked grant / suspended account must result in **no extern
 
 ## 8. PostgreSQL / Liquibase migration and performance contract
 
-- Append changesets **after current highest source ID** (current inspected master ends with 0152), choose unused IDs on implementation HEAD; never rewrite applied 0140–0152, 0105 or historical IAM outbox migrations. New changesets must be forward-only and additive, with a realistic rollback/compensation policy for populated tables.
+- Append changesets **after current highest source ID** (current inspected master ends with 0153), choose unused IDs on implementation HEAD; never rewrite applied 0140–0153, 0105 or historical IAM outbox migrations. New changesets must be forward-only and additive, with a realistic rollback/compensation policy for populated tables.
 - Real PostgreSQL is the concurrency authority. H2 equivalents may omit PostgreSQL-only partial/exclusion/trigger mechanics while preserving relevant functional checks; conditional dbms changesets must not modify PostgreSQL checksums. A green H2 run never substitutes for PG uniqueness, lock or failover evidence.
 - Index plans: unique source event dedup, `(tenant,policy_family,effective_from,revision)`, due reviews `(tenant,review_state,due_at,id)`, `(status,next_attempt_at,lease_until,id)`, and foreign-key access `(tenant,obligation_id)`. Inspect `EXPLAIN (ANALYZE, BUFFERS)` for bounded claim/overdue queries; avoid full scans and tenant hot-spot lock contention.
 - **Populated upgrade:** seed actual R3.1/R3.2A CRM interactions (OPEN/CANCELLED), linked task items/events/queue, sealed 0/1/100/10 000 snapshot, nonempty old IAM outbox; run new migrations, compare record counts, FK, digest, task state, request-key and inventory/order independence. No retrospective creation of dispatchable notification rows.
@@ -213,7 +213,7 @@ Additional adversarial cases to extend matrix where justified: source cancel×ta
 | Gate | Requirements | Verdict if incomplete |
 |---|---|---|
 | `R32B-G0` **Design authority** | SLA-01…10 reviewed; approvers, policy scope, clock, retention/routing decisions signed, no hidden defaults | `DESIGN HOLD` |
-| `R32B-G1` **R3.2A prerequisite** | full exact-SHA evidence; populated 0148–0152, source/IAM races, post-commit recovery, independent digest verification | `DEPENDENCY HOLD` |
+| `R32B-G1` **R3.2A prerequisite** | full exact-SHA evidence; populated 0148–0153, source/IAM races, post-commit recovery, independent digest verification | `DEPENDENCY HOLD` |
 | `R32B-G2` **DB & policy** | additive schema, immutable versions, tenant grants, current-activation guard, clean+populated PG; failed foreign FK/unique attempts | `FOUNDATION HOLD` |
 | `R32B-G3` **Atomic intent** | real CRM cancellation event in same transaction as eligible obligation + outbox; replay, rollback and policy races | `FOUNDATION HOLD` |
 | `R32B-G4` **Durability mechanics** | two workers/lease takeover/CAS, retries/dead-letter/restore, fake adapter only, no external sends | `OUTBOX FOUNDATION HOLD` |
