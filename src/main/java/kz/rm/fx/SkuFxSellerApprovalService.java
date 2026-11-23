@@ -254,6 +254,7 @@ public class SkuFxSellerApprovalService {
         // For approval, the canonical STOREFRONT mutation obtains currency
         // -> storefront -> offer in the established order.
         UUID priceRevision=null;
+        UUID calendarSourceId=null;
         if(approve) {
             lockOfficialRateSource();
             // Recheck latest policy/rate and block negotiation while holding
@@ -271,7 +272,7 @@ public class SkuFxSellerApprovalService {
             Rate verified=rate(calculation.rateId(),active.currency());
             if(verified.revision()!=latestRateRevision(verified))
                 throw new IllegalStateException("CUR_R2A_RATE_SUPERSEDED");
-            verifyGuardrails(tenant,calculation,verified);
+            calendarSourceId=verifyGuardrails(tenant,calculation,verified);
             Integer negotiations=jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_price_proposal
                 WHERE tenant_id=? AND offer_id=?
@@ -299,10 +300,10 @@ public class SkuFxSellerApprovalService {
         jdbc.update("""
             INSERT INTO crm.sku_fx_seller_decision
               (tenant_id,id,calculation_id,offer_id,actor_user_id,request_key,
-               action,price_revision_id,decided_at)
-            VALUES (?,?,?,?,?,?,?,?,?)
+               action,price_revision_id,decided_at,calendar_source_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
             """,tenant,id,calculationId,calculation.offer(),actor.userId(),
-                requestKey,action,priceRevision,Timestamp.from(clock.instant()));
+                requestKey,action,priceRevision,Timestamp.from(clock.instant()),calendarSourceId);
         return new Decision(id,calculationId,action,priceRevision);
     }
 
@@ -374,14 +375,14 @@ public class SkuFxSellerApprovalService {
                 :null,tenant,offer);
     }
 
-    private void verifyGuardrails(UUID tenant,Calculation calc,Rate rate) {
+    private UUID verifyGuardrails(UUID tenant,Calculation calc,Rate rate) {
         LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
-        calendarEvidence.requireAdmittedCalendar(tenant,rate.currency(),rate.date(),today);
+        UUID calendarSourceId=calendarEvidence.requireAdmittedCalendar(tenant,rate.currency(),rate.date(),today);
         Guardrail guard=latestGuardrail(tenant,calc.offer());
         if(guard==null) {
             if(calc.guardrailId()!=null)
                 throw new IllegalStateException("CUR_R2B_GUARDRAIL_STALE");
-            return; // legacy R2A tenants remain gated by CUR-R1C; not UAT admission
+            return calendarSourceId; // legacy R2A tenants remain gated by CUR-R1C
         }
         if(!guard.id().equals(calc.guardrailId())
                 ||guard.revision()!=calc.guardrailRevision())
@@ -404,6 +405,7 @@ public class SkuFxSellerApprovalService {
         if(delta.abs().multiply(new BigDecimal("100"))
                 .compareTo(calc.currentKzt().multiply(tolerance))>0)
             throw new IllegalStateException("CUR_R2B_PRICE_DELTA_EXCEEDED");
+        return calendarSourceId;
     }
 
     private long latestPolicyRevision(UUID tenant,UUID offer) {
