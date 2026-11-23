@@ -223,11 +223,12 @@ def verify():
                         ("TaskServiceQualificationTest", "t19CrmFollowupRejectsForeignAndClosedInteractionWithNoTasks"),
                         ("TaskServiceQualificationTest", "t20CrmFollowupCannotReuseTaskRequestForAnotherInteraction"),
                         ("TaskServiceQualificationTest", "t21PostgresqlCrmLinkIsImmutableAndCompositeTenantFkIsEnforced"),
+                        ("TaskServiceQualificationTest", "t22CrmFollowupRetryAfterSourceClosureReturnsOriginalTask"),
                     }
-                    if counts["tests"] != 21 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 21 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 21 or counts["skipped"] != 6):
-                    problems.append(f"{artifact_name}: expected 21 discovered cases with 6 PG-only skips")
+                    if counts["tests"] != 22 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 22 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 22 or counts["skipped"] != 6):
+                    problems.append(f"{artifact_name}: expected 22 discovered cases with 6 PG-only skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
