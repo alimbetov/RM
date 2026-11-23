@@ -642,4 +642,135 @@ class TaskServiceQualificationTest {
             """,Integer.class,t.id(),source)).isEqualTo(1);
     }
 
+    @Test void t23ManagerReschedulePreservesDueEvidenceAndKeyedReplay() {
+        var t=tenant();
+        var created=tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-due-create-001");
+        Instant next=DUE.plusSeconds(172800);
+        var changed=tasks.reschedule(t.manager(),t.id(),created.id(),next,0,
+            "task-due-change-001");
+        assertThat(changed.dueAt()).isEqualTo(next);
+        assertThat(changed.version()).isEqualTo(1);
+        assertThat(tasks.reschedule(t.manager(),t.id(),created.id(),next,0,
+            "task-due-change-001")).isEqualTo(changed);
+        assertThatThrownBy(()->tasks.reschedule(t.manager(),t.id(),created.id(),
+            next.plusSeconds(3600),0,"task-due-change-001"))
+            .hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
+        var events=tasks.historyMine(t.manager(),t.id(),created.id(),10);
+        assertThat(events.getFirst().action()).isEqualTo("DUE_DATE_CHANGED");
+        assertThat(events.getFirst().previousDueAt()).isEqualTo(DUE);
+        assertThat(events.getFirst().nextDueAt()).isEqualTo(next);
+        assertThat(events).hasSize(2);
+        assertThatThrownBy(()->tasks.reschedule(t.staff(),t.id(),created.id(),
+            next.plusSeconds(1),1,"task-due-employee-001"))
+            .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->tasks.reschedule(t.manager(),t.id(),created.id(),
+            next.plusSeconds(1),0,"task-due-stale-001"))
+            .hasMessage("TASK_STALE_VERSION");
+    }
+
+    @Test void t24TerminalTaskCannotRescheduleAndReplayedOldDueReceiptIsSuperseded() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Check inventory",
+            t.staff().userId(),DUE,"task-due-term-001");
+        Instant next=DUE.plusSeconds(3600);
+        tasks.reschedule(t.manager(),t.id(),task.id(),next,0,"task-due-term-key-001");
+        tasks.start(t.staff(),t.id(),task.id(),1,"task-due-start-001");
+        tasks.complete(t.staff(),t.id(),task.id(),2,"task-due-done-001");
+        assertThatThrownBy(()->tasks.reschedule(t.manager(),t.id(),task.id(),
+            next.plusSeconds(3600),3,"task-due-after-done-001"))
+            .hasMessage("TASK_RESCHEDULE_TERMINAL");
+        assertThatThrownBy(()->tasks.reschedule(t.manager(),t.id(),task.id(),
+            next,0,"task-due-term-key-001"))
+            .hasMessage("TASK_RECEIPT_SUPERSEDED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(4);
+    }
+
+    @Test void t25ClosedCrmSourcePreservesLinkedTaskAndHistoryButRejectsNewLink() {
+        var t=tenant();
+        UUID interaction=crmInteraction(t,"OPEN");
+        var task=followups.create(t.manager(),t.id(),interaction,"Prepare customer call",
+            t.staff().userId(),DUE,"task-source-cancel-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+            row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),interaction);
+        assertThat(followups.getMine(t.manager(),t.id(),task.id()).interactionId())
+            .isEqualTo(interaction);
+        assertThat(tasks.start(t.staff(),t.id(),task.id(),0).state())
+            .isEqualTo(TaskState.IN_PROGRESS);
+        assertThat(tasks.complete(t.staff(),t.id(),task.id(),1).state())
+            .isEqualTo(TaskState.COMPLETED);
+        assertThatThrownBy(()->followups.create(t.manager(),t.id(),interaction,
+            "Prepare customer call",t.staff().userId(),DUE,"task-source-cancel-new-001"))
+            .hasMessage("TASK_CRM_INTERACTION_NOT_ACTIVE");
+        assertThat(tasks.historyMine(t.manager(),t.id(),task.id(),10)).hasSize(3);
+    }
+
+    @Test void t26RollbackBeforeFollowupCommitAllowsExactRequestRetry() {
+        var t=tenant();
+        UUID interaction=crmInteraction(t,"OPEN");
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        assertThatThrownBy(()->tx.execute(status->{
+            followups.create(t.manager(),t.id(),interaction,"Review order",
+                t.staff().userId(),DUE,"task-rollback-followup-001");
+            throw new IllegalStateException("TEST_CRASH_BEFORE_COMMIT");
+        })).hasMessage("TEST_CRASH_BEFORE_COMMIT");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_item WHERE tenant_id=? AND created_request_key=?
+            """,Integer.class,t.id(),"task-rollback-followup-001")).isZero();
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_crm_followup WHERE tenant_id=?
+            """,Integer.class,t.id())).isZero();
+        var task=followups.create(t.manager(),t.id(),interaction,"Review order",
+            t.staff().userId(),DUE,"task-rollback-followup-001");
+        assertThat(followups.getMine(t.manager(),t.id(),task.id()).interactionId())
+            .isEqualTo(interaction);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_item WHERE tenant_id=? AND created_request_key=?
+            """,Integer.class,t.id(),"task-rollback-followup-001")).isEqualTo(1);
+    }
+
+    @Test void t27PostgresqlConcurrentRescheduleAndReassignmentHaveSingleWinner()
+             throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID replacement=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-race-target-"+UUID.randomUUID(),"Other assignee")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),t.orgId(),replacement,OrganizationMembershipEntity.Role.MEMBER));
+        var task=tasks.create(t.manager(),t.id(),"General operations",
+            t.staff().userId(),DUE,"task-r2-race-create-001");
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var due=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.reschedule(t.manager(),t.id(),task.id(),DUE.plusSeconds(7200),
+                      0,"task-r2-race-due-001");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            var assignment=pool.submit(()->{
+                gate.await(5,TimeUnit.SECONDS);
+                try {tasks.assign(t.manager(),t.id(),task.id(),replacement,
+                      0,"task-r2-race-assign-001");return "OK";}
+                catch(IllegalStateException e){return e.getMessage();}
+            });
+            gate.countDown();
+            assertThat(java.util.List.of(due.get(20,TimeUnit.SECONDS),
+                assignment.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(
+                    "OK","TASK_STALE_VERSION");
+        }
+        assertThat(jdbc.queryForObject("""
+            SELECT row_version FROM crm.task_item WHERE tenant_id=? AND id=?
+            """,Long.class,t.id(),task.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(2);
+    }
+
 }
