@@ -132,3 +132,9 @@ Only `TENANT_RBAC_MANAGE` (non-delegable organization OWNER) can enable or repla
 Final target qualification matrix: **33 FX integration scenarios**, including **11 PostgreSQL-only**, plus 9 FX calculator + 4 calendar evaluator + 4 KASE transport tests = **50 PostgreSQL tests**. H2 runs 22 FX integration scenarios (11 PG-only skips), plus the same 17 unit scenarios. Exact-SHA confirmation requires the workflow's final success on the same branch SHA.
 
 Full official KASE calendar *classification* remains HOLD: the presently reviewed day assertions are not automatically reconciled with KASE instrument-specific notices or signed by an independent verifier; no synthetic source is entitled to a production calendar activation.
+
+## 15. Fail-closed admission if source manifest is missing
+
+An enabled tenant calendar gate must never become an opt-out if its referenced immutable source seal disappears or is not yet installed. The admission service now reads tenant enablement first, then explicitly requires the corresponding seal; missing seal rejects FX seller approval before commit with no canonical price revision or seller decision. Regression `r2b22` creates an intentionally malformed gated source without its seal to prove this boundary (synthetic corruption, not production DDL).
+
+Latest required matrix is **34 FX integration scenarios** (11 PostgreSQL-only) + **9 calculator** + **4 calendar evaluator** + **4 KASE transport** = **51 PostgreSQL tests**. H2 executes 23 FX integration scenarios and skips 11 PG-only. All PASS assertions remain contingent on same-final-SHA CI results; do not use old SHA evidence for new release admission.
