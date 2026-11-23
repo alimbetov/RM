@@ -8,15 +8,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
@@ -114,15 +111,22 @@ public class FxCalendarEvidenceService {
             SELECT count(*) FROM crm.fx_calendar_source_evidence WHERE id=?
             """,Integer.class,sourceId);
         if(exists==null||exists!=1)throw new IllegalStateException("CUR_R2B_CALENDAR_SOURCE_MISSING");
-        jdbc.update("""
-            INSERT INTO crm.fx_calendar_tenant_gate
-              (tenant_id,enabled,max_trading_days,source_id,approved_by,approved_at)
-            VALUES (?,TRUE,?,?,?,?)
-            ON CONFLICT (tenant_id) DO UPDATE SET enabled=TRUE,
-              max_trading_days=EXCLUDED.max_trading_days,
-              source_id=EXCLUDED.source_id,approved_by=EXCLUDED.approved_by,
-              approved_at=EXCLUDED.approved_at
-            """,tenant,maxTradingDays,sourceId,actor.userId(),Timestamp.from(clock.instant()));
+        Integer existing=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.fx_calendar_tenant_gate WHERE tenant_id=?
+            """,Integer.class,tenant);
+        if(existing!=null&&existing>0) {
+            jdbc.update("""
+                UPDATE crm.fx_calendar_tenant_gate
+                SET enabled=TRUE,max_trading_days=?,source_id=?,approved_by=?,approved_at=?
+                WHERE tenant_id=?
+                """,maxTradingDays,sourceId,actor.userId(),Timestamp.from(clock.instant()),tenant);
+        } else {
+            jdbc.update("""
+                INSERT INTO crm.fx_calendar_tenant_gate
+                  (tenant_id,enabled,max_trading_days,source_id,approved_by,approved_at)
+                VALUES (?,TRUE,?,?,?,?)
+                """,tenant,maxTradingDays,sourceId,actor.userId(),Timestamp.from(clock.instant()));
+        }
     }
 
     /** Run inside the same storefront-serialized approval transaction. */
