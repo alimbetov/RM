@@ -112,7 +112,7 @@ public class TaskService {
         Task before=lockTask(tenant,id,expectedVersion);
         if(before.state()!=TaskState.OPEN && before.state()!=TaskState.BLOCKED)
             throw new IllegalStateException("TASK_REASSIGN_STATE_INVALID");
-        if(before.assigneeUserId().equals(assignee))return before;
+        if(java.util.Objects.equals(before.assigneeUserId(),assignee))return before;
         update(tenant,id,expectedVersion,"assignee_user_id",assignee);
         event(tenant,id,manager,"ASSIGNED",before.state(),before.state(),
                 expectedVersion,expectedVersion+1,before.assigneeUserId(),assignee);
