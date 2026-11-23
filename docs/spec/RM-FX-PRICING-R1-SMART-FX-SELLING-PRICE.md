@@ -203,3 +203,21 @@ Append-only журнал `(tenant_id, event_id, aggregate_id, action, actor, fro
 **Entry gate:** completed `RM-CURRENCY-R1` and required `FC-00/FC-40` evidence.  
 **Exit gate:** fixed KZT publication, reproducible calculation, safe approvals, no sales/stock corruption, complete required PG/CI evidence, explicitly approved FX_AUTO or kept disabled.  
 **Do not** create an FX payment engine, independent price catalogue, currency ledger, crypto-market rate feed, controller/UI, second Order, inventory valuation rewriter, or finance subsystem. `main` unchanged; **production HOLD**.
+
+
+## 12. FX-R0M: offline mock exchange-rate refresh (2026-11-23)
+
+**Scope implemented separately:** `kz.rm.fx.FxRateProvider` interface, synthetic `MockFxRateProvider`, `FxRateRefreshService.simulateRefresh(date)`, deterministic fixtures USD/CNY/EUR on 2026-11-20/21, explicit `MOCK` source and `synthetic=true`, offline unit tests and exact-SHA workflow `.github/workflows/rm-fx-r0-mock-qualification.yml`. Source validation, official rates ingestion, immutable PostgreSQL rates, tenant policies for `PRICING_ANCHOR`, persistent scheduler and public price publication **NOT IMPLEMENTED**.
+
+**Default setting:** `rm.fx.rate.provider=DISABLED`. For controlled `dev` or `test` profiles only, set environment `RM_FX_RATE_PROVIDER=MOCK`; `FxRateRefreshService.simulateRefresh(LocalDate)` can then be called exclusively by trusted application/service test code. Production profile will fail closed even with `MOCK` configured, and mock component is absent from production context. No automatic refresh job, HTTP, database write, customer-facing FX quote, price revision or stock movement is performed.
+
+**Adapter plan** (each needs qualification before enabling):
+- `NBRK_RSS`: canonical official KZT rates, XML schema/nominal/valid-date/signature or hash verification, secure XML parser, verified host and retries.
+- `NBRK_DATA`: assess published REST dataset contract and currency-series coverage; official provenance does not mean it supports the exact required endpoint.
+- `KURS24`: separate external aggregator with rates categories (official NBRK **versus** cash exchange/bank market rates); KURS24 observations are **never silently promoted** to official NBRK. Confirm API stability, terms/attribution, licensing, allowable caching and stale behavior before any use.
+- `MOCK`: exclusively offline test data; no market value and not a pricing approval source.
+- `DISABLED`: safe default, last published KZT public price remains untouched.
+
+**Selection policy:** never silently fall back from official NBRK to market/bank rate; provider identity, valid date, nominal, observed timestamps and source lineage must survive snapshots. If approved official feed unavailable, keep the existing published KZT price. `FX_AUTO` remains disabled until explicitly accepted in its later independent release gate.
+
+Reference providers: https://nationalbank.kz/ru/news/tehnicheskie-resursy/7469 and https://kurs24.kz/developers ; open data https://data.nationalbank.kz/api-docs . This document is a design record, not a claim about third-party SLA, no-key status or legal entitlement.
