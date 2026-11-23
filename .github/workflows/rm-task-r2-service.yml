@@ -16,6 +16,7 @@ on:
       - '.github/scripts/verify_rm_qa_01b.py'
       - '.github/scripts/test_verify_rm_qa_01b.py'
       - 'docs/reviews/RM-TASK-R2-01A2-SECOND-TECHNICAL-REVIEW-2026-11-23.md'
+      - 'docs/spec/RM-TASK-01B-R2-LIFECYCLE-HARDENING.md'
   workflow_dispatch:
 permissions:
   contents: read
