@@ -22,6 +22,7 @@ class TaskServiceQualificationTest {
     @Autowired TaskService tasks;
     @Autowired TaskCrmFollowupService followups;
     @Autowired TaskCrmReconciliationService reconciliation;
+    @Autowired TaskReconciliationSnapshotService snapshots;
     @Autowired UserAccountRepository users;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -1228,6 +1229,125 @@ class TaskServiceQualificationTest {
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
             """,Integer.class,t.id(),task.id())).isEqualTo(3);
+    }
+
+    @Test void t43FrozenReconciliationTraversalSurvivesConcurrentTaskCancellation() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var created=new java.util.ArrayList<UUID>();
+        for(int i=0;i<5;i++) {
+            var task=followups.create(t.manager(),t.id(),source,"General operations",
+                t.staff().userId(),DUE,"task-r32-snapshot-"+i+"-001");
+            created.add(task.id());
+        }
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var snapshot=snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-capture-request-001");
+        assertThat(snapshot.itemCount()).isEqualTo(5);
+        assertThat(snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-capture-request-001").id()).isEqualTo(snapshot.id());
+        var first=snapshots.page(t.manager(),t.id(),snapshot.id(),null,2);
+        assertThat(first.items()).hasSize(2);
+        var changed=first.items().getFirst();
+        reconciliation.reconcileCancelled(t.manager(),t.id(),source,changed.taskId(),
+            changed.capturedVersion(),"task-r32-reconcile-changed-001");
+        var collected=new java.util.HashSet<UUID>();
+        first.items().forEach(x->assertThat(collected.add(x.taskId())).isTrue());
+        UUID cursor=first.nextAfterTaskId();
+        while(cursor!=null) {
+            var page=snapshots.page(t.manager(),t.id(),snapshot.id(),cursor,2);
+            page.items().forEach(x->assertThat(collected.add(x.taskId())).isTrue());
+            cursor=page.nextAfterTaskId();
+        }
+        assertThat(collected).containsExactlyInAnyOrderElementsOf(created);
+        assertThat(snapshots.page(t.manager(),t.id(),snapshot.id(),null,100).items())
+            .hasSize(5);
+        assertThat(reconciliation.pending(t.manager(),t.id(),source,100)).hasSize(4);
+        assertThatThrownBy(()->reconciliation.reconcileCancelled(
+            t.manager(),t.id(),source,changed.taskId(),changed.capturedVersion(),
+            "task-r32-stale-reconcile-001")).hasMessage("TASK_STALE_VERSION");
+    }
+
+    @Test void t44SnapshotTenantAndActorPrivacyRequestReplayAndInvalidSource() {
+        var a=tenant();var b=tenant();
+        UUID source=crmInteraction(a,"OPEN");
+        assertThatThrownBy(()->snapshots.capture(a.manager(),a.id(),source,
+            "task-r32-not-cancelled-001"))
+            .hasMessage("TASK_SNAPSHOT_SOURCE_NOT_CANCELLED");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,a.id(),source);
+        var snap=snapshots.capture(a.manager(),a.id(),source,"task-r32-private-001");
+        assertThat(snap.itemCount()).isZero();
+        assertThatThrownBy(()->snapshots.page(b.manager(),b.id(),snap.id(),null,10))
+            .hasMessage("TASK_SNAPSHOT_NOT_ACCESSIBLE");
+        assertThatThrownBy(()->snapshots.page(a.staff(),a.id(),snap.id(),null,10))
+            .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->snapshots.page(a.manager(),a.id(),snap.id(),null,101))
+            .hasMessage("TASK_SNAPSHOT_PAGE_INVALID");
+        UUID unrelated=crmInteraction(a,"OPEN");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,a.id(),unrelated);
+        assertThatThrownBy(()->snapshots.capture(a.manager(),a.id(),unrelated,
+            "task-r32-private-001")).hasMessage("TASK_SNAPSHOT_REQUEST_CONFLICT");
+    }
+
+    @Test void t45SnapshotRollbackBeforeCommitKeepsNoManifestAndRetryWorks() {
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-rollback-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        assertThatThrownBy(()->tx.execute(status->{
+            snapshots.capture(t.manager(),t.id(),source,"task-r32-snapshot-crash-001");
+            throw new IllegalStateException("TASK_SNAPSHOT_SIMULATED_CRASH");
+        })).hasMessage("TASK_SNAPSHOT_SIMULATED_CRASH");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot
+            WHERE tenant_id=? AND request_key=?
+            """,Integer.class,t.id(),"task-r32-snapshot-crash-001")).isZero();
+        var retried=snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-snapshot-crash-001");
+        assertThat(retried.itemCount()).isEqualTo(1);
+        assertThat(snapshots.page(t.manager(),t.id(),retried.id(),null,5).items())
+            .hasSize(1);
+    }
+
+    @Test void t46PostgresqlSnapshotManifestAndEntriesAreImmutable() throws Exception {
+        try(var conn=dataSource.getConnection()) {
+            Assumptions.assumeTrue(conn.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        UUID source=crmInteraction(t,"OPEN");
+        var task=followups.create(t.manager(),t.id(),source,"Review order",
+            t.staff().userId(),DUE,"task-r32-immutable-source-001");
+        jdbc.update("""
+            UPDATE crm.customer_interaction SET status='CANCELLED',
+                row_version=row_version+1 WHERE tenant_id=? AND id=?
+            """,t.id(),source);
+        var snap=snapshots.capture(t.manager(),t.id(),source,
+            "task-r32-immutable-capture-001");
+        assertThatThrownBy(()->jdbc.update("""
+            DELETE FROM crm.task_reconciliation_snapshot_item
+            WHERE tenant_id=? AND snapshot_id=? AND task_id=?
+            """,t.id(),snap.id(),task.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+            UPDATE crm.task_reconciliation_snapshot SET item_count=0
+            WHERE tenant_id=? AND id=?
+            """,t.id(),snap.id())).isInstanceOf(Exception.class);
+        assertThat(snapshots.page(t.manager(),t.id(),snap.id(),null,10).items())
+            .hasSize(1);
     }
 
 }
