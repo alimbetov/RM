@@ -135,6 +135,14 @@ public class SalesInventoryCommandService {
                 throw new IllegalStateException("Completed order has inconsistent fulfillment");
             return new CommandResult(orderId,state,0);
         }
+        // DEC-FUL-01: check durable order provenance before ANY generic stock debit.
+        // QR-originated orders require credential + warehouse handover even while CONFIRMED.
+        String fulfillmentMode=jdbc.queryForObject("""
+            SELECT fulfillment_mode FROM crm.sales_order
+            WHERE tenant_id=? AND id=?
+            """,String.class,tenantId,orderId);
+        if(!"STANDARD".equals(fulfillmentMode))
+            throw new IllegalStateException("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         if(!"CONFIRMED".equals(state) && !"PREPARING".equals(state))
             throw new IllegalStateException("Order not ready for fulfillment");
         // FC-40 interim safety fence: once physical picking has begun,
