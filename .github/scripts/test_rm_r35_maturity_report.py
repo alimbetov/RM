@@ -57,7 +57,7 @@ class MaturityReportContractTest(unittest.TestCase):
                 "name": "synthetic-required-" + str(i),
                 "sha": SHA, "status": "completed", "conclusion": "success",
                 "verifiedArtifacts": [{"sha256": "c" * 64}]
-            } for i in range(5)]
+            } for i in range(6)]
         }
         self.save_inputs()
 
