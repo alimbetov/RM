@@ -61,9 +61,12 @@ public class OrderPackagingService {
         if(saved!=null)return replay(tenant,order,saved,actor,"OFFER",hash);
         requireMutableOrder(order);
         if(order.buyer()==null)throw new IllegalStateException("PACKAGING_BUYER_NOT_LINKED");
+        // Serialize offers with catalogue publication/deactivation.
+        // Lock DAG: IAM actor/workspace -> SALES order -> packaging catalogue head.
+        // This pins the published version selected for the immutable offer snapshot.
         Head head=jdbc.query("""
             SELECT current_version,active FROM crm.sales_packaging_catalog_head
-            WHERE tenant_id=? AND service_code=?
+            WHERE tenant_id=? AND service_code=? FOR UPDATE
             """,rs->rs.next()?new Head(rs.getInt(1),rs.getBoolean(2)):null,tenant,code);
         if(head==null||!head.active())throw new IllegalStateException("PACKAGING_CATALOG_INACTIVE");
         PackagingServiceCatalogService.Version version=catalog.version(tenant,code,head.version());
@@ -98,15 +101,20 @@ public class OrderPackagingService {
             throw new IllegalArgumentException("PACKAGING_INPUT_INVALID");
         var owned=orders.readOwn(buyer,orderPublicRef);
         UUID actor=buyer.userId();
+        // readOwn already locked and verified the original order and active QR.
+        // Resolve the exact tenant through that SAME globally unique active QR,
+        // not an unqualified order-id scan across seller workspaces.
         Order order=jdbc.query("""
-            SELECT tenant_id,id,buyer_user_id,status,currency
-            FROM crm.sales_order WHERE id=? AND buyer_user_id=?
+            SELECT o.tenant_id,o.id,o.buyer_user_id,o.status,o.currency
+            FROM crm.sales_order o
+            JOIN crm.sales_order_qr_reference qr
+              ON qr.tenant_id=o.tenant_id AND qr.order_id=o.id
+            WHERE qr.public_ref=? AND qr.state='ACTIVE'
+              AND o.id=? AND o.buyer_user_id=?
             """,rs->{
                 if(!rs.next())throw new SecurityException("PACKAGING_ORDER_NOT_ACCESSIBLE");
-                Order found=mapOrder(rs);
-                if(rs.next())throw new SecurityException("PACKAGING_ORDER_AMBIGUOUS");
-                return found;
-            },owned.orderId(),actor);
+                return mapOrder(rs);
+            },orderPublicRef,owned.orderId(),actor);
         // The QR ownership service already locks exactly this SALES order row.
         String action=choice.name();
         String hash=sha(actor,action,serviceLineId,null,expectedRevision);
