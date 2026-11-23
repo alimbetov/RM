@@ -117,6 +117,62 @@ class TenantCurrencyPolicyQualificationTest {
         assertThat(currencies.get(f.owner(),f.tenant()).publicPriceCurrency()).isEqualTo("KZT");
     }
 
+
+    @Test void cur06PurchaseCurrencyCanBeEnabledWithoutPublicUsdAdmission() {
+        Fixture f=fixture();
+        currencies.initialize(f.owner(),f.tenant());
+        var p=currencies.setCurrencyEnabled(f.owner(),f.tenant(),"USD","PURCHASE",true,0);
+        assertThat(p.rowVersion()).isEqualTo(1);
+        assertThat(currencies.listAllowed(f.owner(),f.tenant()))
+                .anyMatch(row->"USD".equals(row.currency()) &&
+                        "PURCHASE".equals(row.purpose()) && "ENABLED".equals(row.state()));
+        var tx=new TransactionTemplate(transactionManager);
+        tx.execute(status->{
+            currencies.requireCurrencyForPurpose(f.tenant(),"USD","PURCHASE");
+            return null;
+        });
+        assertThatThrownBy(()->tx.execute(status->{
+            currencies.requirePublicKzCurrency(f.tenant(),"USD");
+            return null;
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM public.tenant_currency_policy_event
+            WHERE tenant_id=? AND action_code='CURRENCY_ENABLED' AND revision_no=2
+            """,Integer.class,f.tenant())).isEqualTo(1);
+    }
+
+    @Test void cur07CurrencyChangeCasIsolationAndIdempotency() {
+        Fixture a=fixture(), b=fixture();
+        currencies.initialize(a.owner(),a.tenant());
+        currencies.initialize(b.owner(),b.tenant());
+        assertThatThrownBy(()->currencies.setCurrencyEnabled(a.owner(),b.tenant(),
+                "USD","PURCHASE",true,0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->currencies.setCurrencyEnabled(a.viewer(),a.tenant(),
+                "USD","PURCHASE",true,0)).isInstanceOf(SecurityException.class);
+        var first=currencies.setCurrencyEnabled(a.owner(),a.tenant(),"USD","PURCHASE",true,0);
+        assertThat(first.rowVersion()).isEqualTo(1);
+        assertThat(currencies.setCurrencyEnabled(a.owner(),a.tenant(),"USD",
+                "PURCHASE",true,1).rowVersion()).isEqualTo(1);
+        assertThatThrownBy(()->currencies.setCurrencyEnabled(a.owner(),a.tenant(),
+                "EUR","PURCHASE",true,0)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("TENANT_CURRENCY_STALE_VERSION");
+        assertThatThrownBy(()->currencies.setCurrencyEnabled(a.owner(),a.tenant(),
+                "USD","PUBLIC_PRICE",true,1)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("TENANT_CURRENCY_MANDATORY_KZT");
+        assertThatThrownBy(()->currencies.setCurrencyEnabled(a.owner(),a.tenant(),
+                "KZT","PUBLIC_PRICE",false,1)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("TENANT_CURRENCY_MANDATORY_KZT");
+        assertThat(currencies.setCurrencyEnabled(a.owner(),a.tenant(),"USD",
+                "PURCHASE",false,1).rowVersion()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM public.tenant_currency_policy_event WHERE tenant_id=?
+            """,Integer.class,a.tenant())).isEqualTo(3);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM public.tenant_currency_policy_event WHERE tenant_id=?
+            """,Integer.class,b.tenant())).isEqualTo(1);
+    }
+
     @Test void cur05PostgresCurrencyAuditIsAppendOnly() throws Exception {
         try(var c=dataSource.getConnection()) {
             Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
