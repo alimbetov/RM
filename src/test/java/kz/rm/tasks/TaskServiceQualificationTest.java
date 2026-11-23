@@ -28,7 +28,7 @@ class TaskServiceQualificationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
 
-    private record Tenant(UUID id, VerifiedActor owner,VerifiedActor staff,UUID orgId) {}
+    private record Tenant(UUID id, VerifiedActor manager,VerifiedActor staff,UUID orgId) {}
 
     private VerifiedActor verified(UUID user) {
         String subject=jdbc.queryForObject("""
@@ -43,6 +43,8 @@ class TaskServiceQualificationTest {
     private Tenant tenant() {
         UUID owner=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
             "task-owner-"+UUID.randomUUID(),"Task owner")).getId();
+        UUID manager=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+            "task-manager-"+UUID.randomUUID(),"Task manager")).getId();
         UUID staff=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
             "task-staff-"+UUID.randomUUID(),"Task employee")).getId();
         UUID org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
@@ -52,6 +54,8 @@ class TaskServiceQualificationTest {
         memberships.saveAndFlush(new OrganizationMembershipEntity(
             UUID.randomUUID(),org,owner,OrganizationMembershipEntity.Role.OWNER));
         memberships.saveAndFlush(new OrganizationMembershipEntity(
+            UUID.randomUUID(),org,manager,OrganizationMembershipEntity.Role.MANAGER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
             UUID.randomUUID(),org,staff,OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
         VerifiedActor a=verified(owner),b=verified(staff);
@@ -60,7 +64,7 @@ class TaskServiceQualificationTest {
             "Task manager");
         roles.grant(a,tenant,manager.id(),DomainPermission.TASK_MANAGE);
         roles.grant(a,tenant,manager.id(),DomainPermission.TASK_READ);
-        roles.assign(a,tenant,owner,manager.id());
+        roles.assign(a,tenant,manager,manager.id());
         var employee=roles.createRole(a,tenant,
             "TASK_E_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
             "Task employee");
@@ -68,20 +72,20 @@ class TaskServiceQualificationTest {
         roles.grant(a,tenant,employee.id(),DomainPermission.TASK_READ);
         roles.assign(a,tenant,staff,employee.id());
         roles.enable(a,tenant);
-        return new Tenant(tenant,a,b,org);
+        return new Tenant(tenant,verified(manager),b,org);
     }
 
     private static final Instant DUE=Instant.parse("2027-02-01T08:00:00Z");
 
     @Test void t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory() {
         var t=tenant();
-        var created=tasks.create(t.owner(),t.id(),"Prepare customer call",
+        var created=tasks.create(t.manager(),t.id(),"Prepare customer call",
             t.staff().userId(),DUE,"task-create-001");
         assertThat(created.state()).isEqualTo(TaskState.OPEN);
         assertThat(created.version()).isZero();
-        assertThat(tasks.create(t.owner(),t.id(),"Prepare customer call",
+        assertThat(tasks.create(t.manager(),t.id(),"Prepare customer call",
             t.staff().userId(),DUE,"task-create-001").id()).isEqualTo(created.id());
-        assertThatThrownBy(()->tasks.create(t.owner(),t.id(),"Other task",
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Other task",
             t.staff().userId(),DUE,"task-create-001"))
             .hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
         assertThat(tasks.listMine(t.staff(),t.id(),null,10,0))
@@ -96,9 +100,9 @@ class TaskServiceQualificationTest {
         assertThat(done.state()).isEqualTo(TaskState.COMPLETED);
         assertThatThrownBy(()->tasks.start(t.staff(),t.id(),created.id(),4))
             .hasMessage("TASK_TRANSITION_INVALID");
-        var archived=tasks.archive(t.owner(),t.id(),created.id(),4);
+        var archived=tasks.archive(t.manager(),t.id(),created.id(),4);
         assertThat(archived.state()).isEqualTo(TaskState.ARCHIVED);
-        assertThat(tasks.historyMine(t.owner(),t.id(),created.id(),10))
+        assertThat(tasks.historyMine(t.manager(),t.id(),created.id(),10))
             .extracting(TaskService.Event::action)
             .containsExactly("ARCHIVED","COMPLETED","RESUMED","BLOCKED","STARTED","CREATED");
         assertThat(jdbc.queryForObject("""
@@ -108,9 +112,9 @@ class TaskServiceQualificationTest {
 
     @Test void t02TenantIsolationAndEmployeeCannotManageOrArchive() {
         var a=tenant();var b=tenant();
-        var task=tasks.create(a.owner(),a.id(),"Tenant A",
+        var task=tasks.create(a.manager(),a.id(),"Tenant A",
             a.staff().userId(),DUE,"task-isolation-001");
-        assertThatThrownBy(()->tasks.getMine(b.owner(),b.id(),task.id()))
+        assertThatThrownBy(()->tasks.getMine(b.manager(),b.id(),task.id()))
             .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->tasks.start(b.staff(),b.id(),task.id(),0))
             .isInstanceOf(SecurityException.class);
@@ -119,7 +123,7 @@ class TaskServiceQualificationTest {
             .isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->tasks.archive(a.staff(),a.id(),task.id(),0))
             .isInstanceOf(SecurityException.class);
-        assertThatThrownBy(()->tasks.assign(a.owner(),a.id(),task.id(),
+        assertThatThrownBy(()->tasks.assign(a.manager(),a.id(),task.id(),
             b.staff().userId(),0)).isInstanceOf(SecurityException.class);
         assertThat(jdbc.queryForObject("""
             SELECT row_version FROM crm.task_item WHERE tenant_id=? AND id=?
@@ -131,7 +135,7 @@ class TaskServiceQualificationTest {
 
     @Test void t03StaleVersionAndInvalidTransitionLeaveNoEvent() {
         var a=tenant();
-        var task=tasks.create(a.owner(),a.id(),"Version check",
+        var task=tasks.create(a.manager(),a.id(),"Version check",
             a.staff().userId(),DUE,"task-version-001");
         assertThatThrownBy(()->tasks.complete(a.staff(),a.id(),task.id(),0))
             .hasMessage("TASK_TRANSITION_INVALID");
@@ -149,7 +153,7 @@ class TaskServiceQualificationTest {
                 .toLowerCase().contains("postgresql"));
         }
         var t=tenant();
-        var created=tasks.create(t.owner(),t.id(),"Concurrent start",
+        var created=tasks.create(t.manager(),t.id(),"Concurrent start",
             t.staff().userId(),DUE,"task-concurr-001");
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)) {
@@ -179,7 +183,7 @@ class TaskServiceQualificationTest {
                 .toLowerCase().contains("postgresql"));
         }
         var t=tenant();
-        var created=tasks.create(t.owner(),t.id(),"Immutable task history",
+        var created=tasks.create(t.manager(),t.id(),"Immutable task history",
             t.staff().userId(),DUE,"task-immut-001");
         assertThatThrownBy(()->jdbc.update("""
             DELETE FROM crm.task_event WHERE tenant_id=? AND task_id=?
