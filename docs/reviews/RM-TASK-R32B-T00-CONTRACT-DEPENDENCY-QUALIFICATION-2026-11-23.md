@@ -89,9 +89,19 @@ interface CrmCancellationReviewIntentPort {
 
 C05–C12 cannot be marked PASS until B1/B2 support exists. Tests must be actual PostgreSQL two-connection integration tests, not just mocks or a document checklist.
 
+## 5A. T00 implementation increment — canonical event handoff (2026-11-23)
+
+Source changes in `base_dev` now include:
+- `CrmCancellationEventRef` (tenant, interaction, actual event UUID, microsecond-precision occurredAt, CRM newVersion).
+- `CrmCancellationReviewIntentPort` and the only registered implementation `DisabledCrmCancellationReviewIntentPort`, a `@Transactional(MANDATORY)` no-op with non-null event validation.
+- `CrmInteractionService` creates `eventId` and `occurredAt` once, writes the same values into the CRM event row, and calls the disabled port **after successful cancellation event INSERT but before transactional return**. This leaves the CRM public cancel method signature unchanged.
+- Two JUnit baseline tests: canonical cancellation event identity/revision and outer-transaction rollback after event insert. These are newly committed tests, **not yet PostgreSQL-executed qualification evidence**.
+
+This increment closes the **source implementation** aspect of T00-01/T00-02 but not T00 admission. Feature remains OFF. No policy/obligation/outbox DDL, scheduler, notification or IAM grant was created. If future feature enabling changes the implementation of the port, CRM cancellation must remain fail-closed and atomically rollback on port failure; actual PostgreSQL dual-connection tests and policy approval are still mandatory.
+
 ## 6. T00 exit gate / implementation order
 
-**T00 source review: completed. T00 dependency qualification: HOLD.**
+**T00 source review: completed; typed source handoff implemented with disabled sink. T00 dependency qualification: HOLD pending real PostgreSQL tests, IAM/SLA approvals and same-SHA CI.**
 
 - **Before B1:** close/verify R3.2A gates, approve permissions and policy semantics, establish T00-C01..C04 baseline and source-event typed port contract.
 - **B1 design/DDL next, only when above decisions are explicit:** immutable policy revisions, activation guard, review obligation and evidence; do not implement an outbox at the same time by assumption.
