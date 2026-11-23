@@ -776,10 +776,13 @@ class SkuFxSellerApprovalQualificationTest {
 
     @Test void r2b13ClosedSessionAllowsApprovalWhenCalendarGateEnabled() {
         var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("1000"),new BigDecimal("100"),
+                new BigDecimal("1"),new BigDecimal("1000000"),7,3600,0);
         var c=candidate(f,rate(effectiveDate(),"581"));
         LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
         UUID sourceId=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,today);
-        calendarEvidence.enableForTenant(f.actor(),f.tenant(),sourceId,0);
+        calendarEvidence.enableForTenant(f.ownerActor(),f.tenant(),sourceId,0);
         var receipt=fx.decide(f.actor(),f.tenant(),c.id(),true,
                 "r2b-calendar-closed-001");
         assertThat(receipt.action()).isEqualTo("APPROVED");
@@ -793,10 +796,13 @@ class SkuFxSellerApprovalQualificationTest {
 
     @Test void r2b14TradingSessionAgeFailsClosedWithZeroAllowance() {
         var f=fixture();
+        fx.configureGuardrails(f.actor(),f.tenant(),f.offer(),
+                new BigDecimal("1000"),new BigDecimal("100"),
+                new BigDecimal("1"),new BigDecimal("1000000"),7,3600,0);
         var c=candidate(f,rate(effectiveDate(),"582"));
         LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
         UUID sourceId=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.TRADING,today);
-        calendarEvidence.enableForTenant(f.actor(),f.tenant(),sourceId,0);
+        calendarEvidence.enableForTenant(f.ownerActor(),f.tenant(),sourceId,0);
         assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
                 "r2b-calendar-trading-001"))
                 .hasMessage("CUR_R2B_TRADING_DAY_AGE_EXCEEDED");
@@ -1001,6 +1007,19 @@ class SkuFxSellerApprovalQualificationTest {
         assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
                 "r2b-manifest-missing-001"))
                 .hasMessage("CUR_R2B_CALENDAR_MANIFEST_MISSING");
+        assertThat(revisions(f)).isZero();
+        assertThat(decisions(f)).isZero();
+    }
+
+    @Test void r2b23CalendarAdmissionCannotBypassSkuPriceGuardrails() {
+        var f=fixture();
+        var c=candidate(f,rate(effectiveDate(),"586"));
+        LocalDate today=LocalDate.now(clock.withZone(ZoneId.of("Asia/Almaty")));
+        UUID source=stageCalendar(NbrkTradingCalendarPolicy.TradingStatus.CLOSED,today);
+        calendarEvidence.enableForTenant(f.ownerActor(),f.tenant(),source,0);
+        assertThatThrownBy(()->fx.decide(f.actor(),f.tenant(),c.id(),true,
+                "r2b-no-guardrail-001"))
+                .hasMessage("CUR_R2B_GUARDRAIL_REQUIRED");
         assertThat(revisions(f)).isZero();
         assertThat(decisions(f)).isZero();
     }
