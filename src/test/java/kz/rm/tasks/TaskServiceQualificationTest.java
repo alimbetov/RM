@@ -1346,6 +1346,19 @@ class TaskServiceQualificationTest {
             UPDATE crm.task_reconciliation_snapshot SET item_count=0
             WHERE tenant_id=? AND id=?
             """,t.id(),snap.id())).isInstanceOf(Exception.class);
+        assertThatThrownBy(()->jdbc.update("""
+            INSERT INTO crm.task_reconciliation_snapshot_item
+            (tenant_id,snapshot_id,task_id,captured_state,captured_version)
+            VALUES (?,?,?,'OPEN',0)
+            """,t.id(),snap.id(),UUID.randomUUID())).isInstanceOf(Exception.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_reconciliation_snapshot_seal
+            WHERE tenant_id=? AND snapshot_id=? AND length(items_sha256)=64
+            """,Integer.class,t.id(),snap.id())).isEqualTo(1);
+        assertThatThrownBy(()->jdbc.update("""
+            DELETE FROM crm.task_reconciliation_snapshot_seal
+            WHERE tenant_id=? AND snapshot_id=?
+            """,t.id(),snap.id())).isInstanceOf(Exception.class);
         assertThat(snapshots.page(t.manager(),t.id(),snap.id(),null,10).items())
             .hasSize(1);
     }
