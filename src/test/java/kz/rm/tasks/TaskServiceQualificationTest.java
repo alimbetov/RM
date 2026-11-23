@@ -29,7 +29,7 @@ class TaskServiceQualificationTest {
     @Autowired DataSource dataSource;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
 
-    private record Tenant(UUID id, VerifiedActor manager,VerifiedActor staff,UUID orgId) {}
+    private record Tenant(UUID id, VerifiedActor manager,VerifiedActor staff,UUID orgId,VerifiedActor owner) {}
 
     private VerifiedActor verified(UUID user) {
         String subject=jdbc.queryForObject("""
@@ -73,7 +73,7 @@ class TaskServiceQualificationTest {
         roles.grant(a,tenant,employee.id(),DomainPermission.TASK_READ);
         roles.assign(a,tenant,staff,employee.id());
         roles.enable(a,tenant);
-        return new Tenant(tenant,verified(manager),b,org);
+        return new Tenant(tenant,verified(manager),b,org,a);
     }
 
     private static final Instant DUE=Instant.parse("2027-02-01T08:00:00Z");
@@ -321,6 +321,153 @@ class TaskServiceQualificationTest {
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.task_item WHERE tenant_id=?
             """,Integer.class,t.id())).isZero();
+    }
+
+    private UUID staffExecuteRole(Tenant t) {
+        return jdbc.queryForObject("""
+            SELECT a.role_id FROM public.iam_tenant_user_role a
+            JOIN public.iam_tenant_role_permission p
+              ON p.tenant_id=a.tenant_id AND p.role_id=a.role_id
+            WHERE a.tenant_id=? AND a.user_id=? AND p.permission_code='TASK_EXECUTE'
+            """,UUID.class,t.id(),t.staff().userId());
+    }
+
+    @Test void t11LostResponseRetryReturnsSameTaskWithoutDuplicateTransition() {
+        var t=tenant();
+        var created=tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-retry-create-001");
+        assertThat(tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-retry-create-001").id()).isEqualTo(created.id());
+        var started=tasks.start(t.staff(),t.id(),created.id(),0,"task-execute-retry-001");
+        var replay=tasks.start(t.staff(),t.id(),created.id(),0,"task-execute-retry-001");
+        assertThat(replay).isEqualTo(started);
+        assertThatThrownBy(()->tasks.block(t.staff(),t.id(),created.id(),1,
+            "task-execute-retry-001")).hasMessage("TASK_REQUEST_REPLAY_CONFLICT");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),created.id())).isEqualTo(2);
+        tasks.block(t.staff(),t.id(),created.id(),1,"task-execute-block-001");
+        assertThatThrownBy(()->tasks.start(t.staff(),t.id(),created.id(),0,
+            "task-execute-retry-001")).hasMessage("TASK_RECEIPT_SUPERSEDED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),created.id())).isEqualTo(3);
+    }
+
+    @Test void t12EarlierTaskPermissionRevocationDeniesExecutionWithoutWrites() {
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Check inventory",
+            t.staff().userId(),DUE,"task-revoke-early-001");
+        roles.revoke(t.owner(),t.id(),staffExecuteRole(t),DomainPermission.TASK_EXECUTE);
+        assertThatThrownBy(()->tasks.start(t.staff(),t.id(),task.id(),0,
+            "task-revoked-exec-001")).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+            """,Integer.class,t.id(),task.id())).isEqualTo(1);
+    }
+
+    @Test void t13EarlierMembershipRevocationDeniesAssigneeCreation() {
+        var t=tenant();
+        jdbc.update("""
+            UPDATE public.iam_org_membership SET status='SUSPENDED'
+            WHERE organization_id=? AND user_id=?
+            """,t.orgId(),t.staff().userId());
+        assertThatThrownBy(()->tasks.create(t.manager(),t.id(),"Check inventory",
+            t.staff().userId(),DUE,"task-member-deny-001"))
+            .hasMessage("TASK_ASSIGNEE_MUST_BE_ACTIVE_MEMBER");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.task_item WHERE tenant_id=?
+            """,Integer.class,t.id())).isZero();
+    }
+
+    @Test void t14PostgresqlRoleRevocationWaitsForAdmittedExecutionCommit() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        var task=tasks.create(t.manager(),t.id(),"Review order",
+            t.staff().userId(),DUE,"task-perm-race-001");
+        UUID role=staffExecuteRole(t);
+        var admitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var startedRevoke=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var execution=pool.submit(()->tx.execute(status->{
+                var result=tasks.start(t.staff(),t.id(),task.id(),0,
+                    "task-perm-race-key-001");
+                admitted.countDown();
+                try {
+                    if(!release.await(10,TimeUnit.SECONDS))throw new IllegalStateException("TIMEOUT");
+                }catch(InterruptedException e){
+                    Thread.currentThread().interrupt();throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                startedRevoke.countDown();
+                roles.revoke(t.owner(),t.id(),role,DomainPermission.TASK_EXECUTE);
+                return true;
+            });
+            assertThat(startedRevoke.await(10,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(execution.get(15,TimeUnit.SECONDS).state())
+                .isEqualTo(TaskState.IN_PROGRESS);
+            assertThat(revoke.get(15,TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(()->tasks.start(t.staff(),t.id(),task.id(),0,
+                "task-perm-race-key-001")).isInstanceOf(SecurityException.class);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?
+                """,Integer.class,t.id(),task.id())).isEqualTo(2);
+        } finally {release.countDown();}
+    }
+
+    @Test void t15PostgresqlMembershipRevocationWaitsForTaskAssignmentCommit() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var t=tenant();
+        var admitted=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var revocationRequested=new CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var creation=pool.submit(()->tx.execute(status->{
+                var task=tasks.create(t.manager(),t.id(),"General operations",
+                    t.staff().userId(),DUE,"task-membership-race-001");
+                admitted.countDown();
+                try {
+                    if(!release.await(10,TimeUnit.SECONDS))throw new IllegalStateException("TIMEOUT");
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();throw new IllegalStateException(e);
+                }
+                return task;
+            }));
+            assertThat(admitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->tx.execute(status->{
+                revocationRequested.countDown();
+                jdbc.queryForObject("""
+                    SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE
+                    """,UUID.class,t.id());
+                return jdbc.update("""
+                    UPDATE public.iam_org_membership SET status='SUSPENDED'
+                    WHERE organization_id=? AND user_id=?
+                    """,t.orgId(),t.staff().userId());
+            }));
+            assertThat(revocationRequested.await(10,TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            var task=creation.get(15,TimeUnit.SECONDS);
+            assertThat(revoke.get(15,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.task_event
+                WHERE tenant_id=? AND task_id=?
+                """,Integer.class,t.id(),task.id())).isEqualTo(1);
+            assertThatThrownBy(()->tasks.start(t.staff(),t.id(),task.id(),0,
+                "task-membership-after-001")).isInstanceOf(SecurityException.class);
+        } finally {release.countDown();}
     }
 
 }
