@@ -224,11 +224,16 @@ def verify():
                         ("TaskServiceQualificationTest", "t20CrmFollowupCannotReuseTaskRequestForAnotherInteraction"),
                         ("TaskServiceQualificationTest", "t21PostgresqlCrmLinkIsImmutableAndCompositeTenantFkIsEnforced"),
                         ("TaskServiceQualificationTest", "t22CrmFollowupRetryAfterSourceClosureReturnsOriginalTask"),
+                        ("TaskServiceQualificationTest", "t23ManagerReschedulePreservesDueEvidenceAndKeyedReplay"),
+                        ("TaskServiceQualificationTest", "t24TerminalTaskCannotRescheduleAndReplayedOldDueReceiptIsSuperseded"),
+                        ("TaskServiceQualificationTest", "t25ClosedCrmSourcePreservesLinkedTaskAndHistoryButRejectsNewLink"),
+                        ("TaskServiceQualificationTest", "t26RollbackBeforeFollowupCommitAllowsExactRequestRetry"),
+                        ("TaskServiceQualificationTest", "t27PostgresqlConcurrentRescheduleAndReassignmentHaveSingleWinner"),
                     }
-                    if counts["tests"] != 22 or counts["skipped"] != 0:
-                        problems.append(f"{artifact_name}: expected 22 executed cases without skips")
-                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 22 or counts["skipped"] != 6):
-                    problems.append(f"{artifact_name}: expected 22 discovered cases with 6 PG-only skips")
+                    if counts["tests"] != 27 or counts["skipped"] != 0:
+                        problems.append(f"{artifact_name}: expected 27 executed cases without skips")
+                if artifact_name.startswith("rm-task-h2-") and (counts["tests"] != 27 or counts["skipped"] != 7):
+                    problems.append(f"{artifact_name}: expected 27 discovered cases with 7 PG-only skips")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
