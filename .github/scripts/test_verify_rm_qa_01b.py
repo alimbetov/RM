@@ -52,6 +52,8 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "t13EarlierMembershipRevocationDeniesAssigneeCreation",
                         "t14PostgresqlRoleRevocationWaitsForAdmittedExecutionCommit",
                         "t15PostgresqlMembershipRevocationWaitsForTaskAssignmentCommit",
+                        "t16LostResponseAssignmentRetryUsesOneImmutableEvent",
+                        "t17ArchiveRetryAndCrossTaskKeyCollisionFailClosed",
                     ]
                     suite_cases={"TaskServiceQualificationTest":names}
                     if artifact_name.startswith("rm-task-h2-"):
