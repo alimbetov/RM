@@ -139,6 +139,157 @@ class CatalogQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+
+    @Test void sellerEditR0SameSkuAcrossTenantsUsesEmployeeSpecificGrants() {
+        var a=tenant();
+        var b=tenant();
+        UUID dual=user();
+        member(a,dual);
+        member(b,dual);
+        grant(a,dual,DomainPermission.CATALOG_READ,DomainPermission.CATALOG_WRITE,
+                DomainPermission.CATALOG_PRICE_MANAGE);
+        grant(b,dual,DomainPermission.CATALOG_READ,DomainPermission.CATALOG_WRITE);
+        VerifiedActor editor=verified(dual);
+        String sku="DUAL-"+UUID.randomUUID();
+        var productA=commands.createDraft(editor,a.tenant(),sku,
+                CatalogItem.Kind.PRODUCT,"ru","Tenant A item",null);
+        var productB=commands.createDraft(editor,b.tenant(),sku,
+                CatalogItem.Kind.PRODUCT,"ru","Tenant B item",null);
+        Instant date=Instant.parse("2026-11-01T00:00:00Z");
+        assertThat(commands.addPriceRevision(editor,a.tenant(),productA.id(),
+                new BigDecimal("1400.0000"),"KZT",date,0).rowVersion()).isEqualTo(1);
+        assertThatThrownBy(()->commands.addPriceRevision(editor,b.tenant(),productB.id(),
+                new BigDecimal("999.0000"),"KZT",date,0))
+                .isInstanceOf(SecurityException.class);
+
+        // Even a user present in both organizations cannot write a foreign
+        // item through the other tenant context with a shared SKU.
+        assertThatThrownBy(()->commands.updateModelCode(editor,a.tenant(),
+                productB.id(),"FOREIGN",0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price WHERE tenant_id=? AND item_id=?
+                """,Integer.class,a.tenant(),productA.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price WHERE tenant_id=? AND item_id=?
+                """,Integer.class,b.tenant(),productB.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.cat_item WHERE tenant_id=? AND id=?
+                """,Long.class,b.tenant(),productB.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action='PRICE_REVISED'
+                """,Integer.class,b.tenant(),productB.id())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item WHERE sku=? AND tenant_id IN (?,?)
+                """,Integer.class,sku,a.tenant(),b.tenant())).isEqualTo(2);
+    }
+
+    @Test void sellerEditR0RevokedPriceGrantCannotAppendAnotherRevision() {
+        var t=tenant();
+        UUID editorId=user();
+        member(t,editorId);
+        VerifiedActor owner=verified(t.owner());
+        var role=roles.createRole(owner,t.tenant(),
+                "EDR0_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Catalog edit R0 role");
+        roles.grant(owner,t.tenant(),role.id(),DomainPermission.CATALOG_WRITE);
+        roles.grant(owner,t.tenant(),role.id(),DomainPermission.CATALOG_PRICE_MANAGE);
+        roles.assign(owner,t.tenant(),editorId,role.id());
+        roles.enable(owner,t.tenant());
+        VerifiedActor editor=verified(editorId);
+
+        var product=commands.createDraft(editor,t.tenant(),
+                "REVOKE-"+UUID.randomUUID(),CatalogItem.Kind.PRODUCT,
+                "ru","Scoped price",null);
+        var first=commands.addPriceRevision(editor,t.tenant(),product.id(),
+                new BigDecimal("450.0000"),"KZT",
+                Instant.parse("2026-11-01T00:00:00Z"),0);
+        assertThat(first.rowVersion()).isEqualTo(1);
+
+        roles.revoke(owner,t.tenant(),role.id(),DomainPermission.CATALOG_PRICE_MANAGE);
+        assertThatThrownBy(()->commands.addPriceRevision(editor,t.tenant(),product.id(),
+                new BigDecimal("480.0000"),"KZT",
+                Instant.parse("2026-11-02T00:00:00Z"),first.rowVersion()))
+                .isInstanceOf(SecurityException.class);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price WHERE tenant_id=? AND item_id=?
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.cat_item WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),product.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action='PRICE_REVISED'
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(1);
+        // A stale actor is not a stored capability: ordinary catalog edits
+        // remain allowed only because this employee retains CATALOG_WRITE.
+        assertThat(commands.updateModelCode(editor,t.tenant(),product.id(),
+                "MODEL-A",1).rowVersion()).isEqualTo(2);
+    }
+
+    @Test void sellerEditR0PostgresTwoEditorsOneCatalogPriceRevisionWins() throws Exception {
+        try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"));
+        }
+        var t=tenant();
+        UUID first=user(),second=user();
+        member(t,first);
+        member(t,second);
+        grant(t,first,DomainPermission.CATALOG_WRITE,DomainPermission.CATALOG_PRICE_MANAGE);
+        grant(t,second,DomainPermission.CATALOG_PRICE_MANAGE);
+        var editorA=verified(first);
+        var editorB=verified(second);
+        var product=commands.createDraft(editorA,t.tenant(),
+                "CAS-"+UUID.randomUUID(),CatalogItem.Kind.PRODUCT,
+                "ru","Price CAS race",null);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Boolean> a=()->{
+                if(!start.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Price race start timed out");
+                try {
+                    commands.addPriceRevision(editorA,t.tenant(),product.id(),
+                            new BigDecimal("1100.0000"),"KZT",
+                            Instant.parse("2026-11-01T00:00:00Z"),0);
+                    return true;
+                } catch (IllegalStateException conflict) { return false; }
+            };
+            java.util.concurrent.Callable<Boolean> b=()->{
+                if(!start.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("Price race start timed out");
+                try {
+                    commands.addPriceRevision(editorB,t.tenant(),product.id(),
+                            new BigDecimal("1200.0000"),"KZT",
+                            Instant.parse("2026-11-02T00:00:00Z"),0);
+                    return true;
+                } catch (IllegalStateException conflict) { return false; }
+            };
+            var fa=pool.submit(a);
+            var fb=pool.submit(b);
+            start.countDown();
+            boolean winnerA=fa.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            boolean winnerB=fb.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat((winnerA?1:0)+(winnerB?1:0)).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price WHERE tenant_id=? AND item_id=?
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.cat_item WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),product.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action='PRICE_REVISED'
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(1);
+    }
+
     @Test void postgresCatalogPriceAndAuditAreAppendOnly() throws Exception {
         try(var connection=java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
             org.junit.jupiter.api.Assumptions.assumeTrue(
