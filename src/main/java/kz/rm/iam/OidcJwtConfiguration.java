@@ -43,7 +43,21 @@ public class OidcJwtConfiguration {
                 ? OAuth2TokenValidatorResult.success()
                 : OAuth2TokenValidatorResult.failure(
                     new OAuth2Error("invalid_token","Untrusted token audience",null));
+        // Keycloak RM access tokens carry claim typ=Bearer; ID tokens do not.
+        // Issuer/audience/signature alone cannot distinguish an ID token from
+        // an API access token when clients share the same audience.
+        // token_use is optional for Keycloak, but when present (other issuers)
+        // it must not identify an ID/refresh token.
+        OAuth2TokenValidator<Jwt> accessTokenPurpose=jwt -> {
+            Object type=jwt.getClaims().get("typ");
+            Object use=jwt.getClaims().get("token_use");
+            if(!"Bearer".equals(type) || (use!=null && !"access".equals(use)))
+                return OAuth2TokenValidatorResult.failure(
+                    new OAuth2Error("invalid_token","RM API access token required",null));
+            return OAuth2TokenValidatorResult.success();
+        };
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(issuer),expectedAudience));
+                JwtValidators.createDefaultWithIssuer(issuer),
+                expectedAudience,accessTokenPurpose));
     }
 }
