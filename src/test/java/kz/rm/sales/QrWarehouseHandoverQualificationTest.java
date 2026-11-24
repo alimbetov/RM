@@ -658,6 +658,36 @@ class QrWarehouseHandoverQualificationTest {
             allowRevokeCommit.countDown();
         }
         assertNoHandoverEffects(c,o);
+        qualifyPickScopeBothCommitOrders();
+    }
+
+    private void qualifyPickScopeBothCommitOrders() throws Exception {
+        try(var issuer=new JourneySignedActorFixture()){
+            for(boolean revokeFirst:List.of(false,true)){
+                var c=context();var o=order(c,false);
+                var owner=issuer.resolve(jdbc,users,c.owner().userId());
+                var staff=issuer.resolve(jdbc,users,c.staff().userId());
+                sales.confirm(staff.userId(),c.tenant(),o.id(),c.warehouse());
+                prep.startPreparing(staff,c.tenant(),o.id(),c.warehouse(),version(c,o),key());
+                long version=version(c,o);
+                var before=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),o.id(),c.warehouse(),c.itemOne());
+                String request=key();
+                Runnable pick=()->prep.confirmPicked(staff,c.tenant(),o.id(),c.warehouse(),o.lines().getFirst(),5,version,request);
+                Runnable revoke=()->scopes.revoke(owner,c.tenant(),c.warehouse(),staff.userId());
+                PgCommitOrderEvidence.run(jdbc,transactionManager,revokeFirst?revoke:pick,revokeFirst?pick:revoke,
+                    revokeFirst?"WAREHOUSE_SCOPE_REQUIRED":null);
+                assertThat(status(c,o)).isEqualTo("PREPARING");
+                assertThat(version(c,o)).isEqualTo(revokeFirst?version:version+1);
+                assertThat(stock(c,c.itemOne(),"on_hand")).isEqualByComparingTo("20");
+                assertThat(stock(c,c.itemOne(),"reserved")).isEqualByComparingTo("5");
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_pick_confirmation WHERE tenant_id=? AND order_id=?",Integer.class,c.tenant(),o.id())).isEqualTo(revokeFirst?0:1);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_preparation_receipt WHERE tenant_id=? AND request_key=?",Integer.class,c.tenant(),request)).isEqualTo(revokeFirst?0:1);
+                if(revokeFirst)assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),o.id(),c.warehouse(),c.itemOne())).isEqualTo(before);
+                var after=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),o.id(),c.warehouse(),c.itemOne());
+                assertThatThrownBy(()->prep.markReadyForPickup(staff,c.tenant(),o.id(),c.warehouse(),version(c,o),key())).isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+                assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),o.id(),c.warehouse(),c.itemOne())).isEqualTo(after);
+            }
+        }
     }
 
     /** A lost client response after COMMIT must not cause a second debit.

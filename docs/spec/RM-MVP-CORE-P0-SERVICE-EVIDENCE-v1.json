@@ -45,7 +45,12 @@
     {
       "id": "CORE-IAM-04",
       "behavior": "Active employee/order → revoke and confirm A→B/B→A → committed authorized winner only",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "postgresSalesConfirmationFencesConcurrentPermissionRevocation"
+        }
+      ],
       "legacyBehavior": "Revocation fences subsequent staff operations",
       "legacyProofs": [
         {
@@ -53,8 +58,8 @@
           "test": "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Текущая привязка проверяет STOREFRONT после SQL suspension, а не оба порядка revoke × confirm; дополнить verified SALES маршрут.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Both permission-revoke/confirm schedules implemented with signed JWT and observed PG blocking edge. Account/membership suspension variants and persisted independent evidence still pending.",
       "candidateProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
@@ -101,7 +106,20 @@
     {
       "id": "CORE-IAM-06",
       "behavior": "Warehouse A grant only → attempt B; revoke × pick/handover both orders → scope enforced",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr05WrongWarehouseAndRevokedAssignmentBlockPreparation"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06bPgHandoverCommitPrecedesConcurrentScopeRevocation"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06bPgScopeRevocationCommitPrecedesHandoverAdmission"
+        }
+      ],
       "legacyBehavior": "Cross tenant grants and revocation are isolated",
       "legacyProofs": [
         {
@@ -109,8 +127,8 @@
           "test": "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Старая привязка к общим grants не доказывает warehouse scope; отдельно оба порядка pick × revoke.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Both pick/revoke schedules added to existing scope-revocation test; legacy handover schedules remain supporting. Full strict verified QR setup and durable evidence pending.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
