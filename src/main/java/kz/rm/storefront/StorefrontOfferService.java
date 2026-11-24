@@ -33,6 +33,12 @@ public class StorefrontOfferService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
     private final CommerceCurrencyAdmission currencyAdmission;
+    private kz.rm.fx.auto.FxAutoExecutionPreparationService autoPreparation;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureFxAutoPreparation(kz.rm.fx.auto.FxAutoExecutionPreparationService preparation){
+        this.autoPreparation=preparation;
+    }
 
     public StorefrontOfferService(JdbcTemplate jdbc, TenantAuthorization authorization) {
         this(jdbc, authorization, null);
@@ -147,6 +153,79 @@ public class StorefrontOfferService {
             throw new SecurityException("Verified actor and selected tenant required");
         authorization.requireForCommand(actor.userId(), tenant, DomainPermission.STOREFRONT_OFFER_MANAGE);
         return fetch(tenant, offerId, false);
+    }
+
+    /**
+     * Closed owner port for R2C qualification. Recomputes inside the same
+     * transaction; never accepts a caller-supplied candidate or assessment.
+     * The database SYSTEM_AUTO fence remains closed in deployed schemas.
+     */
+    @Transactional
+    public UUID executeFxAuto(VerifiedActor actor, UUID tenant,
+            kz.rm.fx.auto.FxAutoExecutionPreparationService.Command command) {
+        if (autoPreparation == null)
+            throw new IllegalStateException("FX_AUTO_EXECUTION_DISABLED");
+        var assessment=autoPreparation.assess(actor,tenant,command);
+        if (!"WOULD_UPDATE".equals(assessment.decision()))
+            throw new IllegalStateException(assessment.decision());
+        Offer current=locked(tenant,command.offerId(),command.expectedOfferVersion());
+        if(current.state()!=State.PUBLISHED || !"KZT".equals(current.currency())
+                || current.unitPrice().compareTo(assessment.oldKzt())!=0)
+            throw new IllegalStateException("FX_AUTO_TARGET_BINDING_INVALID");
+        BigDecimal candidate=assessment.candidateKzt();
+        validatePrice(current.title(),candidate,"KZT");
+        BigDecimal delta=candidate.subtract(current.unitPrice()).abs();
+        if(delta.signum()==0 || delta.compareTo(assessment.actualDeltaKzt())!=0
+                || delta.compareTo(assessment.remainingKzt())>0)
+            throw new IllegalStateException("FX_AUTO_BUDGET_ASSESSMENT_INVALID");
+        UUID context=jdbc.queryForObject("""
+            SELECT CAST(t->>'commercialContextId' AS uuid)
+            FROM crm.fx_auto_policy_revision p
+            CROSS JOIN LATERAL jsonb_array_elements(CAST(p.payload AS jsonb)->'targets') t
+            WHERE p.tenant_id=? AND p.id=? AND CAST(t->>'offer' AS uuid)=?
+            """,UUID.class,tenant,assessment.policyRevision(),current.id());
+        if(context==null)throw new IllegalStateException("FX_AUTO_COMMERCIAL_CONTEXT_STALE");
+        // Server-derived economic identity, not a run ID or caller key.
+        String event=jdbc.queryForObject("""
+            SELECT crm.fx_auto_sha_v1(jsonb_build_object(
+                'schema','PRODUCT_AUTO_V1','tenant',CAST(? AS text),'offer',CAST(? AS text),
+                'source',CAST(? AS text),'policyRevision',CAST(? AS text),'context',CAST(? AS text)))
+            """,String.class,tenant,current.id(),command.sourceSnapshotId(),assessment.policyRevision(),context);
+        UUID existing=jdbc.query("""
+            SELECT id FROM crm.fx_auto_execution_receipt
+            WHERE tenant_id=? AND semantic_event_key=?
+            """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant,event);
+        if(existing!=null)return existing;
+        actor.userId();
+        if(jdbc.update("""
+            UPDATE crm.store_offer SET unit_price=?,row_version=row_version+1
+            WHERE tenant_id=? AND id=? AND row_version=? AND state='PUBLISHED'
+              AND currency='KZT' AND unit_price=?
+            """,candidate,tenant,current.id(),current.rowVersion(),current.unitPrice())!=1)
+            throw new IllegalStateException("STALE_OFFER_VERSION");
+        UUID revision=UUID.randomUUID(),consumption=UUID.randomUUID(),receipt=UUID.randomUUID();
+        // In the current release this insert fails closed in PostgreSQL.
+        // The exception propagates and rolls back the preceding offer CAS.
+        jdbc.update("""
+            INSERT INTO crm.store_offer_price_revision
+            (tenant_id,id,offer_id,offer_row_version,old_price,new_price,old_currency,new_currency,
+             actor_user_id,recorded_at,provenance)
+            VALUES (?,?,?,?,?,?,'KZT','KZT',NULL,clock_timestamp(),'SYSTEM_AUTO')
+            """,tenant,revision,current.id(),current.rowVersion()+1,current.unitPrice(),candidate);
+        jdbc.update("""
+            INSERT INTO crm.fx_auto_budget_consumption
+            (tenant_id,id,offer_id,price_revision_id,policy_revision_id,approval_id,delta_kzt,recorded_at)
+            VALUES (?,?,?,?,?,?,?,clock_timestamp())
+            """,tenant,consumption,current.id(),revision,assessment.policyRevision(),command.approvalId(),delta);
+        jdbc.update("""
+            INSERT INTO crm.fx_auto_execution_receipt
+            (tenant_id,id,semantic_event_key,consumption_id,offer_id,price_revision_id,policy_revision_id,
+             approval_id,commercial_context_id,source_snapshot_id,execution_epoch,recorded_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,clock_timestamp())
+            """,tenant,receipt,event,consumption,current.id(),revision,assessment.policyRevision(),
+            command.approvalId(),context,command.sourceSnapshotId(),command.expectedEpoch());
+        actor.userId();
+        return receipt;
     }
 
     public enum TaxBasis { TAX_INCLUDED, TAX_EXCLUDED, NONE }

@@ -941,4 +941,22 @@ class FxAutoOwnerAdmissionQualificationTest {
         assertThatThrownBy(()->jdbc.execute("TRUNCATE crm.fx_auto_budget_consumption,crm.fx_auto_execution_receipt")).isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_execution_receipt WHERE tenant_id=? AND id=?",Integer.class,t.id(),receipt)).isEqualTo(1);
     }
+
+    @Test void closedOwnerPortRollsBackCanonicalCasAndAllEvidence() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var target=bindContext(t,actor,draftTarget(t,"USD"));
+        diagnosticHistory(t,target,100,100,false);
+        var draft=enrollment.createPolicyRevision(actor,t.id(),budgetCommand(UUID.randomUUID(),0,"owner-port",100,target));
+        var approval=approvals.approve(actor,t.id(),approvalCommand(t,draft,"owner-port-approval"));
+        var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Almaty"));
+        UUID source=diagnosticSource(t,actor,date,"106");
+        var command=new FxAutoExecutionPreparationService.Command(approval.policyId(),approval.approvalId(),0,target.offerId(),0,"USD",date,source);
+        assertThatThrownBy(()->storefront.executeFxAuto(actor,t.id(),command))
+            .hasStackTraceContaining("FX_AUTO_EXECUTION_DISABLED");
+        assertThat(jdbc.queryForObject("SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?",java.math.BigDecimal.class,t.id(),target.offerId())).isEqualByComparingTo("100");
+        assertThat(jdbc.queryForObject("SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?",Long.class,t.id(),target.offerId())).isZero();
+        for(String table:java.util.List.of("fx_auto_budget_consumption","fx_auto_execution_receipt"))
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm."+table+" WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.store_offer_price_revision WHERE tenant_id=? AND offer_id=?",Integer.class,t.id(),target.offerId())).isEqualTo(1);
+    }
 }
