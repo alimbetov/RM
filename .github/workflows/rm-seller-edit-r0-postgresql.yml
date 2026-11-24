@@ -62,7 +62,7 @@ jobs:
         run: >-
           mvn -B -ntp clean test
           '-Dtest=SellerWarehouseScopeR0QualificationTest,CatalogQualificationTest,StorefrontManagementQualificationTest'
-      - name: Require all 14 seller-edit R0/R1 tests executed without skips or failures
+      - name: Require all 15 seller-edit R0/R1 tests executed without skips or failures
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
@@ -73,6 +73,7 @@ jobs:
               'sellerEditR0PostgresTwoEditorsOneCatalogPriceRevisionWins',
               'sellerEditR1SplitEmployeeGrantsPreserveCatalogVersionsAndImmutablePriceHistory',
               'sellerEditR1EmployeePriceAndPublisherRolesCannotRewriteCommittedOrders',
+              'sellerEditR1CatalogPriceAndSellerOfferPriceHaveIndependentHistories',
               'sellerR0ReceiptAndCorrectionRequireAssignedWarehouseDespiteTenantGrants',
               'sellerR0WarehouseScopeAndRoleRevocationBothBlockNewInventoryWrites',
               'sellerR0AllInventoryMutationsRespectWarehouseAssignment',
@@ -92,7 +93,7 @@ jobs:
               if c.get('name') not in names: continue
               assert not any(c.find(k) is not None for k in ('failure','error','skipped')), (
                   'SELLER_R0_FAILED_OR_SKIPPED: '+str(c.get('name')))
-          print('SELLER_EDIT_R0R1_14_OF_14_REAL_POSTGRESQL_EXECUTED')
+          print('SELLER_EDIT_R0R1_15_OF_15_REAL_POSTGRESQL_EXECUTED')
           PY
       - name: Preserve R0 PostgreSQL evidence
         if: always()
