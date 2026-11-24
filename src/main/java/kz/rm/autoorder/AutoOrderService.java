@@ -31,6 +31,9 @@ public class AutoOrderService {
     private final SalesOrderQrReferenceService orderQrReferences;
     private final CommerceCurrencyAdmission currencyAdmission;
     private String verifiedBuyerLockSql;
+    private String verifiedBuyerIdentityLockSql;
+    @org.springframework.beans.factory.annotation.Value("${rm.qr.legacy-email-first-checkout.enabled:false}")
+    private boolean legacyEmailFirstQrEnabled;
 
     public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
                             SalesOrderQrReferenceService orderQrReferences) {
@@ -70,12 +73,32 @@ public class AutoOrderService {
 
     @Transactional
     public CheckoutResult checkout(String slug,String email,String idempotencyKey,List<Line> lines) {
-        return checkoutInternal(slug,email,idempotencyKey,lines,null);
+        return checkoutInternal(slug,email,idempotencyKey,lines,null,null);
     }
 
+    /**
+     * QR-03A compatibility path, explicitly opt-in for legacy qualification.
+     * Not an admitted public MVP checkout operation.
+     */
     @Transactional
     public CheckoutResult checkoutPublishedQr(String slug,String email,String idempotencyKey,
                                                Line line,QrPriceAcknowledgement acknowledged) {
+        if(!legacyEmailFirstQrEnabled)throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
+        validateQrAcknowledgement(line,acknowledged);
+        return checkoutInternal(slug,email,idempotencyKey,List.of(line),acknowledged,null);
+    }
+
+    @Transactional
+    public CheckoutResult checkoutVerifiedPublishedQr(VerifiedActor buyer,String slug,
+            String idempotencyKey,Line line,QrPriceAcknowledgement acknowledged) {
+        if(buyer==null)throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
+        validateQrAcknowledgement(line,acknowledged);
+        if(!"KZT".equals(acknowledged.currency()))
+            throw new IllegalStateException("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+        return checkoutInternal(slug,null,idempotencyKey,List.of(line),acknowledged,buyer);
+    }
+
+    private static void validateQrAcknowledgement(Line line,QrPriceAcknowledgement acknowledged) {
         if(line==null||acknowledged==null||acknowledged.offerId()==null
                 ||!acknowledged.offerId().equals(line.offerId())
                 ||acknowledged.offerRowVersion()<0
@@ -89,14 +112,15 @@ public class AutoOrderService {
                 ||acknowledged.currency()==null
                 ||!acknowledged.currency().matches("[A-Z]{3}"))
             throw new IllegalArgumentException("QR_CHECKOUT_INVALID_ACKNOWLEDGEMENT");
-        return checkoutInternal(slug,email,idempotencyKey,List.of(line),acknowledged);
     }
 
     private CheckoutResult checkoutInternal(String slug,String email,
-                                            String idempotencyKey,List<Line> lines,
-                                            QrPriceAcknowledgement acknowledged) {
-        String normalized=emailIdentities.normalize(email);
-        if(slug==null||slug.isBlank()||idempotencyKey==null || !idempotencyKey.matches("[A-Za-z0-9_-]{8,100}")
+            String idempotencyKey,List<Line> lines,
+            QrPriceAcknowledgement acknowledged,VerifiedActor buyer) {
+        UUID principalId=buyer==null?null:buyer.userId();
+        String normalized=buyer==null?emailIdentities.normalize(email):null;
+        if(slug==null||slug.isBlank()||idempotencyKey==null
+                ||!idempotencyKey.matches("[A-Za-z0-9_-]{8,100}")
                 ||lines==null||lines.isEmpty()||lines.size()>100)
             throw new IllegalArgumentException("Invalid checkout");
         Map<UUID,Integer> basket=new TreeMap<>();
@@ -122,12 +146,16 @@ public class AutoOrderService {
                 +"|"+acknowledged.offerId()+"|"+acknowledged.offerRowVersion()
                 +"|"+acknowledged.acceptedUnitPrice().stripTrailingZeros().toPlainString()
                 +"|"+acknowledged.currency();
-        byte[] requestHash=digest(normalized+"|"+basket.entrySet().stream()
+        String buyerFingerprint=buyer==null?normalized:
+                "RM/QR-VERIFIED-LIST/V1|"+tenant+"|"+principalId;
+        byte[] requestHash=digest(buyerFingerprint+"|"+basket.entrySet().stream()
                 .map(e->e.getKey()+":"+e.getValue()).collect(Collectors.joining(","))
                 +qrIntent);
         // All competing transactions for a seller/idempotency key serialize here.
         // Always acquire checkout stripe BEFORE the global email stripe.
         lockStripe("crm.sales_checkout_lock", tenant + ":" + idempotencyKey);
+        // Check current buyer state before replay, not just before new writes.
+        BuyerProof buyerProof=buyer==null?null:lockVerifiedBuyer(buyer);
         List<OrderReceipt> existing=jdbc.query("""
             SELECT r.order_id,r.request_sha256,o.status FROM crm.sales_checkout_receipt r
             JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
@@ -177,6 +205,8 @@ public class AutoOrderService {
         if(offers.stream().anyMatch(o->!currency.equals(o.currency())))
             throw new IllegalArgumentException("Mixed currencies not supported");
         requireCurrency(currency);
+        if(buyerProof!=null && !"KZT".equals(currency))
+            throw new IllegalStateException("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
         if(acknowledged!=null) {
             // The storefront/offer rows are already locked. A QR revoke or a
             // seller price update MUST wait for this checkout, or commit before
@@ -203,13 +233,16 @@ public class AutoOrderService {
         BigDecimal total=offers.stream().map(o->o.unitPrice().multiply(BigDecimal.valueOf(o.quantity())))
                 .reduce(BigDecimal.ZERO,BigDecimal::add);
         // IAM alone owns global email deduplication and pending account provisioning.
-        EmailIdentityService.Identity identity=emailIdentities.findOrProvision(normalized);
+        UUID identityId=buyerProof==null
+                ?emailIdentities.findOrProvision(normalized).identityId()
+                :buyerProof.emailIdentityId();
+        UUID buyerId=buyerProof==null?null:buyerProof.userId();
         UUID orderId=UUID.randomUUID();
         Timestamp now=Timestamp.from(Instant.now());
         jdbc.update("""
             INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
-            VALUES (?,?,?,NULL,'PLACED',?,?,?,?)
-            """,tenant,orderId,identity.identityId(),total,currency,now,
+            VALUES (?,?,?,?,'PLACED',?,?,?,?)
+            """,tenant,orderId,identityId,buyerId,total,currency,now,
             acknowledged==null?"STANDARD":"PICKUP_PROOF_REQUIRED");
         for(Offer o:offers) {
             jdbc.update("""
@@ -229,7 +262,7 @@ public class AutoOrderService {
             VALUES (?,?,?,?,?)
             """,tenant,idempotencyKey,requestHash,orderId,now);
         // Fresh proof is always required; token stays encrypted in an internal durable outbox.
-        emailIdentities.queueVerification(identity.identityId());
+        if(buyerProof==null)emailIdentities.queueVerification(identityId);
         // QR-03B: create a NONSECRET stable locator while the newly created
         // order, immutable lines, status event, checkout receipt and IAM
         // verification outbox share ONE transaction. It is deliberately NOT
@@ -262,9 +295,33 @@ public class AutoOrderService {
     void configureQuoteLocks() {
         String db=jdbc.execute((ConnectionCallback<String>) c->
                 c.getMetaData().getDatabaseProductName());
-        verifiedBuyerLockSql="SELECT status FROM public.iam_user_account WHERE id=? "
-                +(db!=null&&db.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
-                ?"FOR SHARE":"FOR UPDATE");
+        String suffix=(db!=null&&db.toLowerCase(java.util.Locale.ROOT).contains("postgresql"))
+                ?"FOR SHARE":"FOR UPDATE";
+        verifiedBuyerLockSql="SELECT status FROM public.iam_user_account WHERE id=? "+suffix;
+        verifiedBuyerIdentityLockSql="SELECT status,external_subject "
+                +"FROM public.iam_user_account WHERE id=? "+suffix;
+    }
+
+    private record BuyerAccount(String status,String externalSubject) {}
+    private record BuyerProof(UUID userId,UUID emailIdentityId) {}
+
+    /** Checkout stripe -> buyer account -> verified email -> seller workspace. */
+    private BuyerProof lockVerifiedBuyer(VerifiedActor buyer) {
+        UUID user=buyer.userId();
+        List<BuyerAccount> accounts=jdbc.query(verifiedBuyerIdentityLockSql,
+                (rs,n)->new BuyerAccount(rs.getString(1),rs.getString(2)),user);
+        if(accounts.size()!=1 || !"ACTIVE".equals(accounts.getFirst().status())
+                ||accounts.getFirst().externalSubject()==null
+                ||accounts.getFirst().externalSubject().isBlank())
+            throw new SecurityException("VERIFIED_BUYER_REQUIRED");
+        List<UUID> identities=jdbc.query("""
+                SELECT id FROM public.iam_email_identity
+                WHERE user_id=? AND lifecycle_state='CURRENT'
+                  AND verified_at IS NOT NULL FOR UPDATE
+                """,(rs,n)->rs.getObject(1,UUID.class),user);
+        if(identities.size()!=1)
+            throw new SecurityException("VERIFIED_EMAIL_REQUIRED");
+        return new BuyerProof(user,identities.getFirst());
     }
 
     @Transactional

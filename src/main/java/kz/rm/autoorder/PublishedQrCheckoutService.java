@@ -1,5 +1,6 @@
 package kz.rm.autoorder;
 
+import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -22,23 +23,51 @@ public class PublishedQrCheckoutService {
 
     private final JdbcTemplate jdbc;
     private final AutoOrderService checkout;
+    @org.springframework.beans.factory.annotation.Value("${rm.qr.legacy-email-first-checkout.enabled:false}")
+    private boolean legacyEmailFirstQrEnabled;
 
     public PublishedQrCheckoutService(JdbcTemplate jdbc,AutoOrderService checkout) {
         this.jdbc=jdbc;
         this.checkout=checkout;
     }
 
+    /** Legacy email-first QR path: disabled except explicitly opted-in compatibility tests. */
     public AutoOrderService.CheckoutResult checkout(String publicOfferRef,String email,
-                                                    int quantity,long acceptedOfferVersion,
-                                                    BigDecimal acceptedUnitPrice,
-                                                    String acceptedCurrency,String requestKey) {
+            int quantity,long acceptedOfferVersion,BigDecimal acceptedUnitPrice,
+            String acceptedCurrency,String requestKey) {
+        if(!legacyEmailFirstQrEnabled)
+            throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
+        requireQuantity(quantity);
+        OfferTarget target=resolveTarget(publicOfferRef);
+        return checkout.checkoutPublishedQr(target.sellerSlug(),email,requestKey,
+                new AutoOrderService.Line(target.offerId(),quantity),
+                new AutoOrderService.QrPriceAcknowledgement(publicOfferRef,
+                        target.offerId(),acceptedOfferVersion,acceptedUnitPrice,
+                        acceptedCurrency));
+    }
+
+    public AutoOrderService.CheckoutResult checkoutVerified(VerifiedActor buyer,
+            String publicOfferRef,int quantity,long acceptedOfferVersion,
+            BigDecimal acceptedUnitPrice,String acceptedCurrency,String requestKey) {
+        if(buyer==null)throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
+        buyer.userId();
+        requireQuantity(quantity);
+        OfferTarget target=resolveTarget(publicOfferRef);
+        return checkout.checkoutVerifiedPublishedQr(buyer,target.sellerSlug(),requestKey,
+                new AutoOrderService.Line(target.offerId(),quantity),
+                new AutoOrderService.QrPriceAcknowledgement(publicOfferRef,
+                        target.offerId(),acceptedOfferVersion,acceptedUnitPrice,
+                        acceptedCurrency));
+    }
+
+    private static void requireQuantity(int quantity) {
+        if(quantity<1||quantity>1000)throw new IllegalArgumentException("QTY_INVALID");
+    }
+
+    private OfferTarget resolveTarget(String publicOfferRef) {
         if(publicOfferRef==null || !publicOfferRef.matches("[A-Za-z0-9_-]{32}"))
             throw new IllegalArgumentException("QR_UNAVAILABLE");
-        if(quantity<1||quantity>1000)
-            throw new IllegalArgumentException("QTY_INVALID");
-        // Public offer refs are nonsecret, stable and globally unique. No
-        // publication state is trusted from this preliminary lookup: it is
-        // re-checked after the checkout stripe, workspace and offer row locks.
+        // Lookup is nonsecret; authoritative offer/price/QR validation is locked downstream.
         List<OfferTarget> targets=jdbc.query("""
                 SELECT sf.slug,o.id
                 FROM crm.store_offer_qr_ref q
@@ -47,12 +76,7 @@ public class PublishedQrCheckoutService {
                 WHERE q.public_ref=?
                 """,(rs,n)->new OfferTarget(rs.getString(1),rs.getObject(2,UUID.class)),
                 publicOfferRef);
-        if(targets.isEmpty())throw new IllegalArgumentException("QR_UNAVAILABLE");
-        OfferTarget target=targets.getFirst();
-        return checkout.checkoutPublishedQr(target.sellerSlug(),email,requestKey,
-                new AutoOrderService.Line(target.offerId(),quantity),
-                new AutoOrderService.QrPriceAcknowledgement(publicOfferRef,
-                        target.offerId(),acceptedOfferVersion,acceptedUnitPrice,
-                        acceptedCurrency));
+        if(targets.size()!=1)throw new IllegalArgumentException("QR_UNAVAILABLE");
+        return targets.getFirst();
     }
 }
