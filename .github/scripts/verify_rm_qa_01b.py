@@ -40,7 +40,8 @@ SUITES = {
          "KmsFencedJobQualificationTest", "AuditRetentionQualificationTest",
          "SalesOrderQueryQualificationTest", "UserRoleMatrixR31QualificationTest",
          "MvpServiceWarehouseAdmissionQualificationTest",
-         "MvpServiceCurrencyStartupQualificationTest"),
+         "MvpServiceCurrencyStartupQualificationTest",
+         "BusMvpServiceJourneyQualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification":
         ("InventoryMovementQualificationTest",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification":
@@ -78,6 +79,8 @@ REQUIRED_CASES = {
          "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"),
         ("MvpServiceWarehouseAdmissionQualificationTest",
          "mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation"),
+        ("BusMvpServiceJourneyQualificationTest",
+         "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"),
         ("InventoryReservationQualificationTest", "reservationReleaseAndIdempotentReplay"),
         ("OrganizationLocationQueryQualificationTest", "paginationAndFiltersUseTenantBoundary"),
         ("KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
