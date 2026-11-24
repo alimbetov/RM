@@ -418,6 +418,129 @@ class StorefrontManagementQualificationTest {
                 .isEqualTo(StorefrontSettings.State.PAUSED);
     }
 
+    private record SellerPriceR0(Fixture fixture,VerifiedActor seller,VerifiedActor owner,
+                                 UUID roleId,UUID offerId,long version) {}
+
+    private SellerPriceR0 sellerPriceR0() {
+        var f=fixture();
+        UUID role=grant(f,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller=verified(f.staff());
+        var store=storefronts.createDraft(seller,f.tenant(),"r0-store-"+UUID.randomUUID());
+        storefronts.publish(seller,f.tenant(),store.id(),store.rowVersion());
+        UUID product=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,f.tenant(),product,"R0-"+UUID.randomUUID());
+        var draft=offers.createDraft(seller,f.tenant(),product,"Initial",
+                new java.math.BigDecimal("100.0000"),"KZT");
+        var published=offers.publish(seller,f.tenant(),draft.id(),draft.rowVersion());
+        return new SellerPriceR0(f,seller,verified(f.owner()),role,
+                published.id(),published.rowVersion());
+    }
+
+    private void assertR0Price(SellerPriceR0 x,String price,long version,int revisions) {
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price FROM crm.store_offer
+                WHERE tenant_id=? AND id=?
+                """,java.math.BigDecimal.class,x.fixture().tenant(),x.offerId()))
+                .isEqualByComparingTo(price);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer
+                WHERE tenant_id=? AND id=?
+                """,Long.class,x.fixture().tenant(),x.offerId()))
+                .isEqualTo(version);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,x.fixture().tenant(),x.offerId()))
+                .isEqualTo(revisions);
+    }
+
+    private static void awaitR0(java.util.concurrent.CountDownLatch latch) {
+        try {
+            if(!latch.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("Seller price race barrier timed out");
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    @Test void sellerR0PgPriceUpdateCommitsBeforeRoleRevokeKeepsOneRevision() throws Exception {
+        postgresOnly();
+        var x=sellerPriceR0();
+        var admitted=new java.util.concurrent.CountDownLatch(1);
+        var finish=new java.util.concurrent.CountDownLatch(1);
+        var attempted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var price=pool.submit(()->tx.execute(status->{
+                var updated=offers.updatePrice(x.seller(),x.fixture().tenant(),x.offerId(),
+                        "Raised",new java.math.BigDecimal("150.0000"),"KZT",x.version());
+                admitted.countDown();
+                awaitR0(finish);
+                return updated;
+            }));
+            assertThat(admitted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                attempted.countDown();
+                roles.revoke(x.owner(),x.fixture().tenant(),x.roleId(),
+                        DomainPermission.STOREFRONT_OFFER_MANAGE);
+                return true;
+            });
+            assertThat(attempted.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->revoke.get(250,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {finish.countDown();}
+            assertThat(price.get(20,java.util.concurrent.TimeUnit.SECONDS).rowVersion())
+                    .isEqualTo(x.version()+1);
+            assertThat(revoke.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {finish.countDown();}
+        assertR0Price(x,"150.0000",x.version()+1,2);
+        assertThatThrownBy(()->offers.updatePrice(x.seller(),x.fixture().tenant(),x.offerId(),
+                "Attempt",new java.math.BigDecimal("200.0000"),"KZT",x.version()+1))
+                .isInstanceOf(SecurityException.class);
+        assertR0Price(x,"150.0000",x.version()+1,2);
+    }
+
+    @Test void sellerR0PgRoleRevokeCommitsBeforePriceUpdateWithoutHistory() throws Exception {
+        postgresOnly();
+        var x=sellerPriceR0();
+        var revoked=new java.util.concurrent.CountDownLatch(1);
+        var finish=new java.util.concurrent.CountDownLatch(1);
+        var attempted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var revoke=pool.submit(()->tx.execute(status->{
+                roles.revoke(x.owner(),x.fixture().tenant(),x.roleId(),
+                        DomainPermission.STOREFRONT_OFFER_MANAGE);
+                revoked.countDown();
+                awaitR0(finish);
+                return true;
+            }));
+            assertThat(revoked.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var price=pool.submit(()->{
+                attempted.countDown();
+                try {
+                    offers.updatePrice(x.seller(),x.fixture().tenant(),x.offerId(),
+                            "Unsafe",new java.math.BigDecimal("175.0000"),"KZT",x.version());
+                    return true;
+                } catch(SecurityException denied) { return false; }
+            });
+            assertThat(attempted.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->price.get(250,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {finish.countDown();}
+            assertThat(revoke.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(price.get(20,java.util.concurrent.TimeUnit.SECONDS)).isFalse();
+        } finally {finish.countDown();}
+        assertR0Price(x,"100.0000",x.version(),1);
+    }
+
     @Test void postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder() throws Exception {
         postgresOnly();
         var t = fixture();
