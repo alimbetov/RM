@@ -43,7 +43,7 @@
 | **IDEA-13** | **CRM Integration / Import Hub** | Импорт клиентов/каталога и проверяемые интеграции | IDEA / конкурентное развитие | [KF Strategy (historical)](../strategy/RM-PRODUCT-TARGETS-AND-KILLER-FEATURES-R1.md) |
 | **IDEA-14** | **Sales KPI / Role Dashboards** | Обзоры продаж, продавцов, склада и customer segments | IDEA / INSIGHT + UI | INSIGHT-R1 / P1 CRM |
 | **IDEA-15** | **KF-01 InstantDeal & KF-02 Promise Engine** | Быстрый B2B offer→order и достоверное обещание доступности | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
-| **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | R0.1 ONLY AUTHORIZED / остальные PARKED | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) · [R0.1](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) |
+| **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | R0.1 ONLY AUTHORIZED (timeliness + calendar reads R1.1) / остальные PARKED | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) · [R0.1](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) |
 | **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | SPEC_EXISTS / Post-MVP, F2R-00 documentation only | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
 
 **Неактивные направления:** Business Network / межорганизационная торговая сеть (старый KF-05), полный бухгалтерский/налоговый ledger, масштабная маркетинговая платформа без канонических данных, автономное изменение остатков ML — **не включать в текущий план**.
@@ -245,5 +245,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | 2026-11-24 | R1.0 | Создан единый банк 16 направлений: Customer 360, L1/L2, Warehouse 360, Pareto/ABC/XYZ, Tribuo, EVT, Auction, Deal Chat, FX_AUTO и CRM improvements. Объединены ранее обсуждённые идеи без изменения MVP. |
 | 2026-11-24 | R1.1 | Добавлена IDEA-17: техническая адаптация FIN Analyzer → RM Intelligence (9 логических компонентов, P1/P2/P3, независимые продукты, 32 сценария будущей приёмки); отдельный документ FIN-ADAPT-R1. |
 | 2026-11-24 | R1.2 | CR-MVP-KF-RADAR-01: только R0.1 Overdue Task Signal разрешён к сервисной реализации, все прочие идеи остаются PARKED. |
+| 2026-11-24 | R1.3 | CR-MVP-KF-RADAR-01A: зелёные классы досрочного/своевременного выполнения, фильтры, пагинация, календарный read contract R1.1; UI design only until G2. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.

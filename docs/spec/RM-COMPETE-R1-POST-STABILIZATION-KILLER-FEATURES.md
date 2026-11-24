@@ -9,6 +9,8 @@
 
 **Owner exception 2026-11-24:** [RM-KF-RADAR-R0.1](RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) — Overdue Task Signal only, service-first, no business DML, no new tables or endpoints. The later [MVP Freeze §0A](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) and R0.1 spec govern this slice; general PARKED statements and FS launch timing remain applicable to all other features. Security, regression and production HOLD remain.
 
+**R1.1 narrow extension CR-MVP-KF-RADAR-01A:** R0.1 also specifies task completion timeliness, filter/keyset and calendar read composition (§11 of [R0.1](RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md)); Outlook-style UI is design-only until G2. All other KF remain PARKED.
+
 ## 0. Executive decision
 
 RM позиционируется как CRM-first B2B business operations platform с непрерывным циклом `клиент → предложение → заказ → резерв → исполнение → счёт/оплата`. Конкурентная цель — доказуемое сокращение времени, ошибок и стоимости выполнения типовых задач по сравнению с выбранными альтернативами (Bitrix24, Odoo, Zoho CRM, 1С, МойСклад) **в конкретных сегментах B2B торговли и дистрибуции**, а не абстрактное превосходство над всеми CRM/ERP.

@@ -1,16 +1,16 @@
 # RM-KF-RADAR-R0.1 — Overdue Task Signal
-## R1.0 — сервисный контракт и матрица квалификации
+## R1.1 — сервисный контракт, Task Performance & Calendar View
 
 **Дата:** 2026-11-24. **Ветка:** base_dev. **Source review SHA:** a15670566912e9c60e0ede52af489e72a58077ca.
-**Статус:** SPEC R1.0 / OWNER SCOPE EXCEPTION — R0.1 IMPLEMENTATION AUTHORIZED / NOT IMPLEMENTED / PRODUCTION HOLD.
-**Decision:** CR-MVP-KF-RADAR-01. Владелец продукта явно снял freeze только для R0.1; техническая редакция R1.0 предъявляется на review. Не считать этот документ разрешением R0.2+, UI, внешнего API, пилота или production.
+**Статус:** SPEC R1.1 / OWNER SCOPE EXCEPTION — R0.1 IMPLEMENTATION AUTHORIZED / NOT IMPLEMENTED / PRODUCTION HOLD.
+**Decision:** CR-MVP-KF-RADAR-01. Владелец продукта явно снял freeze только для R0.1; техническая редакция R1.0 предъявляется на review. R1.1 добавляет только §11 (CR-MVP-KF-RADAR-01A). Не считать этот документ разрешением R0.2+, реализации UI/внешнего API до G2, пилота или production.
 
 ## 0. Scope, normative sources and change control
 
 - [MVP Freeze](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) сохраняется, кроме узкого исключения CR-MVP-KF-RADAR-01.
 - [Platform Standard R2](../architecture/RM-PLATFORM-STANDARD-R2.md) — IAM, ownership, tenant, PII и обязательные gates не ослабляются.
 - [BSR R1](RM-BSR-R1-SERVICE-SCENARIO-QUALIFICATION.md) — текущая квалификация сервисного ядра не прерывается; обязательные тесты не удалять и не переводить в skipped.
-- [KF portfolio](RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) / [Idea Bank IDEA-16](../ideas/RM-IDEA-BANK-R1.md) — только TASK_OVERDUE, остальные сигналы и KF остаются PARKED.
+- [KF portfolio](RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) / [Idea Bank IDEA-16](../ideas/RM-IDEA-BANK-R1.md) — TASK_OVERDUE и узкое read-only расширение §11; остальные сигналы и KF остаются PARKED.
 - Работать только в base_dev, не создавать ветку, не трогать main. Если идёт exact-SHA квалификация release candidate, сначала завершить её или явно выбрать новый candidate с повтором всех обязательных gates. Не объявлять прежние PASS результатом нового SHA.
 
 ## 1. User outcome and non-goals
@@ -161,3 +161,95 @@ Owner approval received only for narrow freeze exception and development scope. 
 A verified actor receives only eligible task signals with correct due/version/severity and deterministic bounded ordering, no business writes, no cross-tenant leak, fresh permission decisions and valid race evidence. All 36 scenarios mapped and qualified, unchanged TASK mandatory suite and relevant full regression passed on exact SHA; no additional migrations. Report actual evidence instead of invented coverage. Revert code if needed without DB rollback. Production HOLD remains.
 
 **Revision history:** R1.0 — initial source-derived technical specification and explicit CR-MVP-KF-RADAR-01. No Java/SQL/test changes in this documentation revision.
+
+
+## 11. R1.1 — Task Performance & Calendar View (owner extension 2026-11-24)
+
+**Source review SHA:** 94b49c69697a353f58e888adc4ee4c8ec7c37e1b. **Decision:** CR-MVP-KF-RADAR-01A — add completed-task timeliness, filters and calendar read contract to R0.1 only. The user requested both 50% early and on-time completion in green, filtering, pagination and an Outlook-style calendar. Sections 1–10 and RAD-01…36 remain mandatory for the original OverdueSignalPage; their exclusions apply to that original endpoint. This section introduces a separate owner-side read composition, not a change to TASK lifecycle or permissions. R0.2+ signals, SLA automation, notifications, ML, schema changes remain PARKED. Backend service/read tests only under the narrow scope extension; UI/HTTP design is specified here, actual adapters and web implementation wait for G1 and G2 authorization, not approved for immediate implementation.
+
+### 11.1. Source facts and two independent classifications
+
+Source: [TaskService](../../src/main/java/kz/rm/tasks/TaskService.java), [TaskState](../../src/main/java/kz/rm/tasks/TaskState.java), [Liquibase master](../../src/main/resources/db/changelog/db.changelog-master.sql).
+- crm.task_item.created_at is the server creation instant; due_at is current deadline; row_version is current version. No completed_at column assumed.
+- TaskService.complete transitions IN_PROGRESS -> COMPLETED and atomically writes action COMPLETED in crm.task_event with occurred_at and new_version. archive transitions COMPLETED -> ARCHIVED; its event is not completion. reschedule allowed only OPEN/IN_PROGRESS/BLOCKED and writes DUE_DATE_CHANGED with previous_due_at/next_due_at. Current due is the effective deadline at completion for canonical terminal tasks because terminal reschedule is forbidden.
+- Read task + relevant immutable events in one committed SQL statement, using composite tenant_id/task_id. Completed event must be unique and consistent with transition and version: COMPLETED state expects event new_version=row_version; ARCHIVED expects completion at row_version-1 plus matching archive event. Missing/contradictory evidence yields UNKNOWN, never green by guess. No use of updated_at, archive timestamp, current time or CRM interaction closure as completion time. Legacy incomplete data must not be backfilled silently.
+- Keep lifecycle TaskState separate from display classification TaskTimeliness. Original TASK_OVERDUE eligibility unchanged, including exclusion of QUEUED/unassigned and terminal states. Completed history is not an active overdue alert. Read model may show creator-visible QUEUED/unassigned with neutral badge, never broaden manager queue visibility. Archived hidden by default but filterable if actor still has object access; archived completed result remains derived from original completion.
+
+### 11.2. Exact timing and 50% early rule
+
+Proposed R1.1 policy TASK_TIMELINESS_V1, not contractual SLA or employee performance rating:
+- planned = effectiveDueAt - createdAt; elapsed = completedAt - createdAt; saved = effectiveDueAt - completedAt. Use authoritative persisted Instant values at microsecond precision. For planned > 0 and elapsed >= 0, EARLY_50 iff 2 * elapsed <= planned. Use exact integer microseconds with BigInteger or numeric SQL; no floating point, overflow or rounded display percentages for classification. Boundary includes exactly 50%. A task completed 30% earlier is ON_TIME, not EARLY_50. Equality completedAt=dueAt is on time.
+- With valid completion evidence and nonnegative elapsed, compare completedAt with effectiveDueAt: completedAt > due => COMPLETED_LATE; otherwise EARLY_50 if eligible, else ON_TIME. A zero/negative planned interval cannot qualify as EARLY_50 and has no savings percentage; if completedAt>=createdAt and deadline known, on-time/late compare is still valid. Null deadline, missing completion event, contradictory version or completion before creation => UNKNOWN. Do not classify a future completion event beyond evaluatedAt as timely; mark UNKNOWN. Display signed savings only for positive planned interval, round at display only (e.g. 2 decimals, HALF_UP); do not clamp negatives.
+- Deadline comparison: effectiveDueAt is the operative deadline, not first assigned date or STARTED timestamp. Reassignment/requeue does not reset creation baseline. Show originalDueAt and originalDeadlineOutcome independently when provable. For a complete canonical version chain from CREATED at version 0, no DUE_DATE_CHANGED => original=current; otherwise earliest change.previous_due_at (including null). Verify ordered change evidence continuity and final next_due_at=current; missing/gapped/inconsistent history => original evidence UNKNOWN, no fabricated original date. deadlineChanged and original evidence quality expose known reschedule; green vs extended deadline must not hide original lateness. Do not use effective early metric alone as individual KPI. Original on-time/late is independent of effective classification. Original and effective are not different task objects.
+- Examples, created=day 0, due=day 10: completed day 3 => EARLY_50 70%; day 5 => EARLY_50 50%; day 8 => ON_TIME 20%; day 10 => ON_TIME 0%; day 12 => COMPLETED_LATE -20%. Original due day 4, effective due day 10, complete day 5 => EARLY_50 vs effective, LATE vs original, changed deadline visible.
+
+| Display code | Condition | Suggested semantic color (UI later) |
+|---|---|---|
+| EARLY_50 | completed/archived with valid evidence, saved >= 50% of positive plan | dark green #15803D + label 50%+ |
+| ON_TIME | valid completion by due, not EARLY_50 | green #22C55E + check/label |
+| COMPLETED_LATE | valid completion after due | orange #EA580C |
+| OVERDUE | original RAD eligibility | red #EF4444; existing 24/72h severity separately |
+| DUE_SOON | assigned OPEN/IN_PROGRESS/BLOCKED, evaluatedAt <= due <= evaluatedAt+24h | yellow #EAB308 (proposed 24h default) |
+| ACTIVE | assigned eligible nonterminal with due > evaluatedAt+24h | blue #3B82F6; show actual state separately |
+| CANCELLED | cancelled regardless of due | gray #94A3B8 |
+| QUEUED / UNSCHEDULED / UNKNOWN | neutral, with explicit reason; no false green | gray |
+
+Precedence terminal classification first, then neutral queue/unassigned, then active overdue/soon/active. ARCHIVED is a lifecycle marker, not a color override. Future UI uses text, icon and accessible contrast, not color alone. No hardcoded global SLA or automatic escalation; 24h due-soon and shade choices are proposed UI defaults.
+
+### 11.3. Filters, sorting and pagination
+
+Proposed entrypoint inside TASKS: TaskCalendarQueryService.listMine(VerifiedActor actor, UUID tenantId, TaskCalendarFilter filter, int limit, TaskCalendarCursor after). Use same TASK_READ and creator OR current assignee scope and fresh authorization fences as §4. Creator/assignee perspective filter MINE_ASSIGNED / MINE_CREATED / ALL_VISIBLE only narrows that scope. No arbitrary employee lookup or new tenant dashboard. No cross-tenant or public access. Never reveal hidden task IDs/counts/events.
+
+Filter allowlist:
+- viewDateBasis DUE (default) or COMPLETED; no joining separate unscoped feeds. dateFrom inclusive, dateTo exclusive, IANA ZoneId for display; convert local date boundaries with atStartOfDay(zone) to Instants (DST safe). Date basis and display zone do not influence overdue/early arithmetic. Range required for calendar, max 93 local calendar days per request, supports 42-cell month; optional list date range uses same bound, default current month proposed. Single explicit undated list mode only: DUE null, no date range, no calendar placement. COMPLETED basis includes only rows with validated completion evidence; UNKNOWN evidence available on due/undated views.
+- lifecycleStates multi-select; default all except ARCHIVED. timelinessCodes multi-select; assignment perspective; original deadline changed / original outcome optional filter only if supported by same evidence query. AND across categories, OR within category; absent category means all allowed, explicit empty rejected or normalized by documented contract (proposed reject). Typed enum validation, bounded date range, zone validation. No arbitrary SQL, free-text filters or new PII. No hidden client-side filtering after LIMIT.
+- Sort selected date ASC, task_id ASC, both using DB-native ordering; undated mode id ASC. Stable ties for unchanged fixture. No arbitrary sort expression. SQL limit+1, pageSize 1..100 (suggested default 20); nextCursor only if extra row; return immutable items, evaluatedAt, appliedFilter, nextCursor, hasMore. Previous page by client cursor stack with refresh semantics; no total pages/COUNT requirement; no OFFSET. Cursor bound to tenant/actor, date basis, normalized filter/range/zone, sort and page size (canonical hash or typed immutable values), plus last key; invalid/mismatched cursor rejected before task rows. Reset cursor when changing filters/view/range; each request reauthorizes and recalculates now. Live pages are not snapshot/export; concurrent edits may move rows across cursor; explicit refresh. No fabricated count for partially loaded day.
+- SQL candidate view: owner-scoped crm.task_item joined/aggregated with only its task_event rows. Apply date/filter predicates including computed timeliness before ORDER BY/LIMIT; one set-based statement, no N+1, no fetch-all or app-side postfilter. SQL exact threshold and Java evaluator must agree against independent oracle on PG/H2; dialect-specific typed static variants only if necessary. Filter by task/date early where safe, inspect plan for event joins; no migrations/index additions without separate CR.
+- Minimal DTO: taskId, state, sourceVersion, createdAt, effectiveDueAt, completedAt, timeliness, savingsPercent nullable, originalDueAt nullable, originalDeadlineOutcome, originalEvidenceQuality, deadlineChanged nullable/known flag, reasonCode. Do not return title/PII/assignee or creator identifiers, raw event payload or token; authorized detail via existing getMine. Calendar color/icon resolved from timeliness code, not persisted.
+
+### 11.4. Outlook-style Calendar UX contract (design only until G2)
+
+One read-model shared by List / Agenda / Day / Work Week / Week / Month. Today, previous/next period, date picker, view switch, reset filters, applied-filter chips. Proposed Monday-first week, work week Mon–Fri; locale/tenant presentation may later alter weekday configuration. Day range 1 local day; Week 7, Work Week 5; Month includes leading/trailing days (full week rows, max 42). Agenda is date-grouped keyset list. Calendar by deadline by default; explicit completion-date toggle places completed item on actual completion day. Task with deadline is a due-time marker, not a fabricated meeting duration; no calendar appointments or arbitrary time slots invented. Local clock display shows time zone; today and current time marker on relevant view. No drag/drop reschedule, external Outlook sync, recurrence or appointment entities in R1.1. Future task reschedule must use existing authorized TaskService with expected version and separate UI admission. Clicking card retrieves authorized detail; no UI access expansion.
+
+On date cells render bounded number of loaded rows, deterministic order and reason badge. If period result hasMore show persistent partial-loaded indicator and Load more, not an apparently empty/complete calendar. Per-cell +more uses scoped day query with same filters; exact +N only from complete result or separately qualified count (not required R1.1). List default 20, choices 20/50/100. Calendar navigation is range pagination independent of data cursor. Unschedule/null due rows shown in separate list, never fake a calendar date. Empty/loading/error/expired session states distinct; keyboard focus, textual status and accessible contrast; mobile week/agenda responsive design. No new tables for calendar. No integration with Microsoft Outlook/Microsoft Graph implied.
+
+### 11.5. Additional qualification matrix — 24 new scenarios, 60 total planned
+
+All RAD-01…36 preserved. Additional CAL-01…24 IDs are scenario families, not a claim of 24 exact JUnit methods. Qualify independently in PG with applicable H2 compatibility, use real verified actor fixture and isolated tests. Existing TASK 53 regression cases retained.
+
+| ID | Scenario | Expected |
+|---|---|---|
+| CAL-01 | 70%, exact 50%, immediately below 50% at microsecond precision | EARLY_50, EARLY_50, ON_TIME |
+| CAL-02 | early <50%, due equality, late by one microsecond | ON_TIME, ON_TIME, COMPLETED_LATE |
+| CAL-03 | very long duration and precision rounding | exact threshold, no overflow/false green |
+| CAL-04 | zero/negative plan and missing due | no EARLY_50; documented outcome/UNKNOWN |
+| CAL-05 | missing/duplicate/wrong-version completion, before creation/future | UNKNOWN, no guessed time |
+| CAL-06 | completed then archived, archive much later | original completion and timeliness retained |
+| CAL-07 | deadline extended before completion | effective green and original late both visible |
+| CAL-08 | multiple reschedules, first null, broken version/change chain | original evidence exact or UNKNOWN |
+| CAL-09 | reassign/requeue then completion | createdAt unchanged, current object scope |
+| CAL-10 | due soon exact now/24h and just outside | correct active class, overdue strict |
+| CAL-11 | cancelled/queued/unassigned/archived default rules | neutral/excluded as specified, no active alert |
+| CAL-12 | all filter categories AND/OR, combinations with sparse matches | filters before limit; independent SQL oracle |
+| CAL-13 | date basis DUE vs COMPLETED incl missing evidence | correct date placement, no duplicate |
+| CAL-14 | [from,to) day/month/week/year boundary, leap day | exactly one correct range |
+| CAL-15 | IANA zone offsets, DST spring/fall, 23/25h day | correct calendar bounds; same timing outcome |
+| CAL-16 | invalid dates/zone/range/enum/limit/empty selection | fail before task rows |
+| CAL-17 | stable keyset full traversal, tie IDs, 20/50/100 | exact static result, bounded reads |
+| CAL-18 | cursor changed filters/zone/basis/actor/tenant/page size | reject, no foreign data |
+| CAL-19 | concurrent complete/archive/reschedule during read | coherent task+event committed statement; refresh correct |
+| CAL-20 | role revoke, reassignment, cross tenant with same task ID | deny/no leak, fresh gate per page |
+| CAL-21 | null due unscheduled list; no fake date | valid scoped rows, no calendar placement |
+| CAL-22 | populated PG set-based query and filter before limit; no writes | plans, p95, independent result, no N+1 or DML |
+| CAL-23 | calendar view navigation, partial load, day drilldown, filter resets | G2 UI acceptance; backend range/hasMore contract in service phase |
+| CAL-24 | colors, labels, keyboard/mobile, no PII, expired/denied detail | G2 UI acceptance; service DTO/authorization subcases now |
+
+CAL-23/24 UI-only subcases explicitly DEFERRED_G2, never marked PASS by backend test. Backend gate requires all applicable service subcases CAL-01…24 and original RAD-01…36; full 60-family acceptance requires later G2 UI proof. No hidden skip of mandatory existing CI. Add separate suite (proposed TaskCalendarQualificationTest) with traceability and exact-SHA XML. Record query plans and workload as in RAD-36, including completion-event histories and sparse classification filters; performance targets remain proposed, no unapproved schema modifications. Cross-domain regression still mandatory.
+
+### 11.6. Delivery sequence and decision log
+
+R0.1A–D original OverdueSignalPage unchanged and may be qualified independently. R0.1E: exact completion evidence, timing evaluator and read filter contract; R0.1F: calendar/list range and keyset service, PG race/SQL/performance qualification. Reuse owner-side authorization/query infrastructure where safe, do not rewrite the existing TASK command lifecycle. G2-RADAR-UI: day/week/month/agenda, visual colors, filter/paging after approved G1/backend/security gate and scoped UI admission. Actual Outlook synchronization not requested. All code remains unimplemented at document revision; no CI verdict. Only base_dev, no main/production.
+
+User-confirmed: green for completed 50% early and on time, filters, pagination, Outlook-style calendar. Proposed pending review: createdAt/effective deadline formula, original-deadline parallel indicator, dark vs light green, other colors, due-soon 24h, range limits, perspective and view defaults, no calendar drag/drop or external sync. No automatic employee KPI or SLA claim.
+
+**Revision R1.1:** additive section 11; 36 original + 24 new scenario families; narrow read-only extension, UI design deferred. No Java/SQL/CI changes.
