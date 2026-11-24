@@ -56,6 +56,8 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired FxAutoPolicyEnrollmentService enrollment;
     @Autowired FxAutoDraftApprovalService approvals;
     @Autowired FxAutoConsentRevocationService revocations;
+    @Autowired FxAutoPersistentDryRunService simulations;
+    @Autowired kz.rm.fx.NbrkRateRevisionWriter rateWriter;
     @Autowired TenantOwnershipTransferService transfers;
     @Autowired TenantAccessStatusService accessStatus;
     @Autowired TenantCurrencyPolicyService currencies;
@@ -676,5 +678,31 @@ class FxAutoOwnerAdmissionQualificationTest {
         revocations.revoke(actor,t.id(),stop);
         assertThat(jdbc.queryForObject("SELECT trim(scope_sha256)=crm.fx_auto_scope_sha_v1(tenant_id,policy_revision_id) FROM crm.fx_auto_approval_evidence WHERE tenant_id=? AND id=?",Boolean.class,t.id(),approved.approvalId())).isTrue();
         assertThat(jdbc.queryForObject("SELECT crm.fx_auto_sha_v1(CAST(payload AS jsonb))=payload_sha256 FROM crm.fx_auto_policy_revision WHERE tenant_id=? AND id=?",Boolean.class,t.id(),draft.revisionId())).isTrue();
+    }
+
+    @Test void persistentDiagnosticCalculatesSealsReplaysAndStopsAfterRevocation() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var target=draftTarget(t,"USD");
+        jdbc.update("INSERT INTO crm.store_offer_price_revision(tenant_id,id,offer_id,offer_row_version,new_price,new_currency,actor_user_id,recorded_at) VALUES (?,?,?,0,100,'KZT',?,now()-interval '2 days')",t.id(),UUID.randomUUID(),target.offerId(),t.owner());
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft",target));
+        var approved=approvals.approve(actor,t.id(),approvalCommand(t,draft,"approval"));
+        var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Almaty"));
+        var amount=new java.math.BigDecimal("500");
+        rateWriter.persist(date,java.util.List.of(new kz.rm.fx.FxRateProvider.Rate("USD","KZT",amount,java.math.BigDecimal.ONE,date,"NBRK")),"a".repeat(64));
+        UUID source=jdbc.queryForObject("SELECT id FROM crm.fx_official_rate_snapshot WHERE provider_code='NBRK' AND base_currency='USD' AND valid_date=? ORDER BY source_revision DESC LIMIT 1",UUID.class,java.sql.Date.valueOf(date));
+        var command=new FxAutoPersistentDryRunService.Command(approved.policyId(),approved.approvalId(),0,"USD",date,source,"sim-1");
+        var first=simulations.simulate(actor,t.id(),command);
+        assertThat(first.itemCount()).isEqualTo(1);
+        assertThat(simulations.simulate(actor,t.id(),command)).isEqualTo(first);
+        assertThat(jdbc.queryForObject("SELECT trim(result_sha256)=crm.fx_auto_sim_sha_v1(tenant_id,simulation_id) FROM crm.fx_auto_simulation_seal WHERE tenant_id=? AND simulation_id=?",Boolean.class,t.id(),first.simulationId())).isTrue();
+        assertThat(jdbc.queryForObject("SELECT CAST(CAST(input_payload AS jsonb)->>'candidateKzt' AS numeric) FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=?",java.math.BigDecimal.class,t.id(),first.simulationId())).isEqualByComparingTo(amount);
+        assertThat(jdbc.queryForObject("SELECT CAST(CAST(input_payload AS jsonb)->>'baselineKzt' AS numeric) FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=?",java.math.BigDecimal.class,t.id(),first.simulationId())).isEqualByComparingTo("100");
+        assertThat(jdbc.queryForObject("SELECT outcome FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=?",String.class,t.id(),first.simulationId())).isEqualTo("SOURCE_NOT_ADMITTED");
+        assertThat(jdbc.queryForObject("SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?",java.math.BigDecimal.class,t.id(),target.offerId())).isEqualByComparingTo("100");
+        var second=new FxAutoPersistentDryRunService.Command(approved.policyId(),approved.approvalId(),0,"USD",date,source,"sim-rollback");
+        new TransactionTemplate(txManager).executeWithoutResult(s->{simulations.simulate(actor,t.id(),second);s.setRollbackOnly();});
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_simulation WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+        revocations.revoke(actor,t.id(),new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),0));
+        assertThatThrownBy(()->simulations.simulate(actor,t.id(),second)).hasMessageContaining("FX_AUTO_AUTHORITY_HOLD");
     }
 }
