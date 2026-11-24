@@ -81,7 +81,7 @@ class FxAutoOwnerAdmissionQualificationTest {
         jwks.start();
         decoder=NimbusJwtDecoder.withJwkSetUri(
                 "http://127.0.0.1:"+jwks.getAddress().getPort()+"/jwks").build();
-        OidcJwtConfiguration.configureValidation(decoder,ISSUER,AUDIENCE);
+        OidcTestDecoderSupport.configure(decoder,ISSUER,AUDIENCE);
     }
 
     @AfterAll static void closeJwks() {
