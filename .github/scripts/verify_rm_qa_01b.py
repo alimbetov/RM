@@ -38,7 +38,9 @@ SUITES = {
          "InventoryTransferStocktakeQualificationTest", "FilesR10bQualificationTest",
          "OrganizationLocationLifecycleQualificationTest", "KatoTerritoryQualificationTest",
          "KmsFencedJobQualificationTest", "AuditRetentionQualificationTest",
-         "SalesOrderQueryQualificationTest", "UserRoleMatrixR31QualificationTest"),
+         "SalesOrderQueryQualificationTest", "UserRoleMatrixR31QualificationTest",
+         "MvpServiceWarehouseAdmissionQualificationTest",
+         "MvpServiceCurrencyStartupQualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification":
         ("InventoryMovementQualificationTest",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification":
@@ -55,6 +57,27 @@ SUITES = {
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
 REQUIRED_CASES = {
     "kms-postgres-surefire": {
+        # MVP six-pack gates: require named cases from real PostgreSQL XML.
+        ("PublishedQrCheckoutQualificationTest",
+         "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"),
+        ("PublishedQrCheckoutQualificationTest",
+         "qrMvpAnonymousAndUnverifiedEmailCannotCreateNewOrder"),
+        ("PublishedQrCheckoutQualificationTest",
+         "qrMvpSuspendOrDeleteVersusCheckoutBothCommitOrders"),
+        ("CommerceCurrencyAdmissionQualificationTest",
+         "curc01MissingPolicyRejectsCheckoutWithoutSideEffects"),
+        ("CommerceCurrencyAdmissionQualificationTest",
+         "curc03UsdPublishedLegacyOfferRejectedWithoutOrder"),
+        ("CommerceCurrencyAdmissionQualificationTest",
+         "curc06PostgresPolicyChangeVsCheckoutLinearizes"),
+        ("CommerceCurrencyAdmissionQualificationTest",
+         "curc10PostgresThreeWayCheckoutPriceAndPolicyRaceIsAtomic"),
+        ("MvpServiceCurrencyStartupQualificationTest",
+         "mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled"),
+        ("MvpServiceWarehouseAdmissionQualificationTest",
+         "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"),
+        ("MvpServiceWarehouseAdmissionQualificationTest",
+         "mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation"),
         ("InventoryReservationQualificationTest", "reservationReleaseAndIdempotentReplay"),
         ("OrganizationLocationQueryQualificationTest", "paginationAndFiltersUseTenantBoundary"),
         ("KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
