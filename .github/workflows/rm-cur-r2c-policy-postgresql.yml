@@ -40,7 +40,7 @@ jobs:
       - name: Exact-SHA checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: PostgreSQL schema and isolated simulation tests
-        run: mvn -B -ntp -Dtest=FxAutoPolicySchemaPgTest,FxAutoRollingLimitEvaluatorTest,FxAutoDryRunTest,TenantCurrencyPolicyQualificationTest,SkuFxSellerApprovalQualificationTest test
+        run: mvn -B -ntp -Dtest=FxAutoPolicySchemaPgTest,FxAutoRollingLimitEvaluatorTest,FxAutoDryRunTest,FxAutoOwnerAdmissionQualificationTest,TenantCurrencyPolicyQualificationTest,SkuFxSellerApprovalQualificationTest test
       - name: Qualify synthetic non-owner PostgreSQL runtime role
         env:
           PG_CONTAINER: ${{ job.services.postgres.id }}
@@ -52,7 +52,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
-          for name, expected in [('FxAutoPolicySchemaPgTest',8),('FxAutoRollingLimitEvaluatorTest',8),('FxAutoDryRunTest',6)]:
+          for name, expected in [('FxAutoPolicySchemaPgTest',8),('FxAutoRollingLimitEvaluatorTest',8),('FxAutoDryRunTest',6),('FxAutoOwnerAdmissionQualificationTest',8)]:
               p=Path('target/surefire-reports/TEST-kz.rm.fx.auto.'+name+'.xml')
               cases=list(E.parse(p).getroot().iter('testcase'))
               assert len(cases)==expected,(name,len(cases))
