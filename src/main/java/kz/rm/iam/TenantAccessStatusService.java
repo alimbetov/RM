@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * Internal owner-only membership and workspace lifecycle. No HTTP endpoint.
- * Lock order: caller account UPDATE -> tenant workspace UPDATE -> membership.
+ * Lock order: all required accounts UPDATE in UUID order -> workspace UPDATE -> membership.
  * Mutations are serialized with TenantAuthorization.requireForCommand.
  */
 @Service
@@ -47,9 +47,25 @@ public class TenantAccessStatusService {
     private void changeMember(VerifiedActor actor, UUID tenantId, UUID targetUserId, boolean restore) {
         if (targetUserId == null) throw new IllegalArgumentException("Target user required");
         UUID callerId = requireActor(actor);
-        WorkspaceState tenant = lockAndRequireOwner(callerId, tenantId, false);
+        if (tenantId == null) throw new SecurityException("Tenant required");
         if (callerId.equals(targetUserId))
             throw new SecurityException("Owner cannot modify own membership status");
+        // Restore needs both account locks BEFORE the workspace lock.
+        // Use the same deterministic order across all JVMs and database sessions.
+        String targetAccountStatus = null;
+        if (restore) {
+            UUID first = callerId.compareTo(targetUserId) < 0 ? callerId : targetUserId;
+            UUID second = first.equals(callerId) ? targetUserId : callerId;
+            String firstStatus = lockAccount(first);
+            String secondStatus = lockAccount(second);
+            String callerStatus = first.equals(callerId) ? firstStatus : secondStatus;
+            targetAccountStatus = first.equals(targetUserId) ? firstStatus : secondStatus;
+            if (!"ACTIVE".equals(callerStatus)) throw new SecurityException("Actor inactive");
+        } else if (!"ACTIVE".equals(lockAccount(callerId))) {
+            throw new SecurityException("Actor inactive");
+        }
+        WorkspaceState tenant = lockWorkspaceAndRequireOwner(callerId, tenantId, false);
+        actor.userId();
 
         MembershipState target = jdbc.query("""
                 SELECT role,status FROM public.iam_org_membership
@@ -75,13 +91,8 @@ public class TenantAccessStatusService {
                 throw new SecurityException("Cannot suspend the last active owner");
         }
         if (restore) {
-            // An account suspension must not commit between this check and the
-            // membership restoration. Keep the target account locked until the
-            // membership update commits (caller -> tenant -> target ordering).
-            String accountStatus = jdbc.query("""
-                    SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
-                    """, rs -> rs.next() ? rs.getString(1) : null, targetUserId);
-            if (!"ACTIVE".equals(accountStatus))
+            // The target account is already locked until transaction completion.
+            if (!"ACTIVE".equals(targetAccountStatus))
                 throw new SecurityException("Target account is not active");
         }
 
@@ -95,7 +106,9 @@ public class TenantAccessStatusService {
 
     private void changeTenant(VerifiedActor actor, UUID tenantId, boolean restore) {
         UUID callerId = requireActor(actor);
-        WorkspaceState workspace = lockAndRequireOwner(callerId, tenantId, restore);
+        if (!"ACTIVE".equals(lockAccount(callerId))) throw new SecurityException("Actor inactive");
+        WorkspaceState workspace = lockWorkspaceAndRequireOwner(callerId, tenantId, restore);
+        actor.userId();
         String desired = restore ? "ACTIVE" : "SUSPENDED";
         if (desired.equals(workspace.status())) return;
         String from = restore ? "SUSPENDED" : "ACTIVE";
@@ -118,12 +131,14 @@ public class TenantAccessStatusService {
      * Also permits the OWNER of a SUSPENDED tenant to restore it: regular
      * TenantAuthorization cannot admit a command while tenant is suspended.
      */
-    private WorkspaceState lockAndRequireOwner(UUID callerId, UUID tenantId, boolean permitSuspended) {
-        if (tenantId == null) throw new SecurityException("Tenant required");
-        String actorStatus = jdbc.query("""
+    private String lockAccount(UUID userId) {
+        return jdbc.query("""
                 SELECT status FROM public.iam_user_account WHERE id=? FOR UPDATE
-                """, rs -> rs.next() ? rs.getString(1) : null, callerId);
-        if (!"ACTIVE".equals(actorStatus)) throw new SecurityException("Actor inactive");
+                """, rs -> rs.next() ? rs.getString(1) : null, userId);
+    }
+
+    private WorkspaceState lockWorkspaceAndRequireOwner(UUID callerId, UUID tenantId, boolean permitSuspended) {
+        if (tenantId == null) throw new SecurityException("Tenant required");
 
         WorkspaceState workspace = jdbc.query("""
                 SELECT organization_id,status FROM public.iam_workspace
