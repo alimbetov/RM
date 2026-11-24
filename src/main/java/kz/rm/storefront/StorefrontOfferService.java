@@ -289,10 +289,17 @@ public class StorefrontOfferService {
                 oldCurrency,newCurrency,actor,Timestamp.from(Instant.now()));
     }
 
+    public enum PriceProvenance { USER, SYSTEM_AUTO }
+
     public record PriceRevision(UUID id,long offerRowVersion,
                                 BigDecimal oldPrice,BigDecimal newPrice,
                                 String oldCurrency,String newCurrency,
-                                UUID actorUserId,Instant recordedAt) {}
+                                UUID actorUserId,Instant recordedAt,PriceProvenance provenance) {
+        public PriceRevision(UUID id,long offerRowVersion,BigDecimal oldPrice,BigDecimal newPrice,
+                             String oldCurrency,String newCurrency,UUID actorUserId,Instant recordedAt){
+            this(id,offerRowVersion,oldPrice,newPrice,oldCurrency,newCurrency,actorUserId,recordedAt,PriceProvenance.USER);
+        }
+    }
 
     @Transactional
     public List<PriceRevision> priceHistory(VerifiedActor actor,UUID tenant,
@@ -303,14 +310,14 @@ public class StorefrontOfferService {
         fetch(tenant,offerId,false); // do not leak foreign-tenant records
         return jdbc.query("""
                 SELECT id,offer_row_version,old_price,new_price,old_currency,
-                       new_currency,actor_user_id,recorded_at
+                       new_currency,actor_user_id,recorded_at,provenance
                 FROM crm.store_offer_price_revision
                 WHERE tenant_id=? AND offer_id=?
                 ORDER BY offer_row_version DESC,id DESC LIMIT ? OFFSET ?
                 """,(rs,n)->new PriceRevision(rs.getObject(1,UUID.class),rs.getLong(2),
                         rs.getBigDecimal(3),rs.getBigDecimal(4),rs.getString(5),
                         rs.getString(6),rs.getObject(7,UUID.class),
-                        rs.getTimestamp(8).toInstant()),
+                        rs.getTimestamp(8).toInstant(),PriceProvenance.valueOf(rs.getString(9))),
                 tenant,offerId,size,(long)page*size);
     }
 

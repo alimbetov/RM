@@ -44,7 +44,7 @@ public class FxAutoPersistentDryRunService {
     }
     public record Receipt(UUID simulationId,String resultSha256,int itemCount) {}
     private record Approval(UUID revision,UUID author,UUID membership,Instant expiry,String scope,String state,long epoch) {}
-    private record History(UUID id,long version,Instant at,BigDecimal oldPrice,BigDecimal newPrice,String oldCurrency,String newCurrency) {}
+    private record History(UUID id,long version,Instant at,BigDecimal oldPrice,BigDecimal newPrice,String oldCurrency,String newCurrency,boolean auto) {}
     private record Window(BigDecimal baseline,List<FxAutoRollingLimitEvaluator.Change> changes,List<UUID> evidence) {}
     private record PolicyLimits(long seconds,BigDecimal increase,BigDecimal decrease,BigDecimal variation,long publications, FxAutoDryRun.Budget budget) {}
     private record Target(UUID offer,UUID anchor,UUID guard,BigDecimal current,UUID priceRevision,
@@ -211,11 +211,11 @@ public class FxAutoPersistentDryRunService {
         Instant boundary;
         try{boundary=now.minusSeconds(seconds);}catch(DateTimeException|ArithmeticException e){return missing;}
         List<History> rows=jdbc.query("""
-            SELECT id,offer_row_version,recorded_at,old_price,new_price,trim(old_currency),trim(new_currency)
+            SELECT id,offer_row_version,recorded_at,old_price,new_price,trim(old_currency),trim(new_currency),provenance
             FROM crm.store_offer_price_revision WHERE tenant_id=? AND offer_id=?
             ORDER BY offer_row_version LIMIT 10001
             """,(rs,n)->new History(rs.getObject(1,UUID.class),rs.getLong(2),rs.getTimestamp(3).toInstant(),
-                rs.getBigDecimal(4),rs.getBigDecimal(5),rs.getString(6),rs.getString(7)),tenant,t.offer());
+                rs.getBigDecimal(4),rs.getBigDecimal(5),rs.getString(6),rs.getString(7),"SYSTEM_AUTO".equals(rs.getString(8))),tenant,t.offer());
         if(rows.isEmpty() || rows.size()>10000)return missing;
         BigDecimal baseline=null,previous=null;
         Instant prior=null;
@@ -228,7 +228,7 @@ public class FxAutoPersistentDryRunService {
                 if(h.version()!=0 || h.oldPrice()!=null || h.oldCurrency()!=null)return missing;
             }else{
                 if(h.oldPrice()==null || h.oldPrice().compareTo(previous)!=0 || !"KZT".equals(h.oldCurrency()))return missing;
-                if(h.at().isAfter(boundary))changes.add(new FxAutoRollingLimitEvaluator.Change(previous,h.newPrice(),false));
+                if(h.at().isAfter(boundary))changes.add(new FxAutoRollingLimitEvaluator.Change(previous,h.newPrice(),h.auto()));
             }
             if(!h.at().isAfter(boundary))baseline=h.newPrice();
             previous=h.newPrice();prior=h.at();evidence.add(h.id());

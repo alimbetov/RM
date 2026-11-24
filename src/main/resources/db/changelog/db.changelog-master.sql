@@ -5041,3 +5041,33 @@ CREATE TRIGGER trg_fx_auto_execution_receipt_no_truncate BEFORE TRUNCATE ON crm.
  FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_fx_auto_execution_receipt_no_truncate ON crm.fx_auto_execution_receipt;
 --rollback DROP TRIGGER trg_fx_auto_execution_receipt_immutable ON crm.fx_auto_execution_receipt;
+
+
+--changeset rm:0170-storefront-price-provenance
+-- Existing price evidence retains its original human actor. No synthetic user.
+ALTER TABLE crm.store_offer_price_revision ADD COLUMN provenance VARCHAR(16) DEFAULT 'USER' NOT NULL;
+ALTER TABLE crm.store_offer_price_revision ALTER COLUMN actor_user_id DROP NOT NULL;
+ALTER TABLE crm.store_offer_price_revision ADD CONSTRAINT ck_store_offer_price_provenance
+ CHECK((provenance='USER' AND actor_user_id IS NOT NULL) OR
+       (provenance='SYSTEM_AUTO' AND actor_user_id IS NULL AND old_price IS NOT NULL
+        AND old_currency='KZT' AND new_currency='KZT' AND old_price<>new_price));
+-- rollback deliberately fails if SYSTEM_AUTO evidence exists.
+--rollback ALTER TABLE crm.store_offer_price_revision ALTER COLUMN actor_user_id SET NOT NULL;
+--rollback ALTER TABLE crm.store_offer_price_revision DROP CONSTRAINT ck_store_offer_price_provenance;
+--rollback ALTER TABLE crm.store_offer_price_revision DROP COLUMN provenance;
+
+--changeset rm:0171-storefront-system-auto-closed dbms:postgresql splitStatements:false
+-- B.1 foundation only: all SYSTEM_AUTO inserts are closed until the trusted
+-- execution port and the deferred receipt/consumption invariant are qualified.
+CREATE FUNCTION crm.reject_unadmitted_auto_price() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.provenance='SYSTEM_AUTO' THEN RAISE EXCEPTION 'FX_AUTO_EXECUTION_DISABLED'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_store_offer_auto_closed BEFORE INSERT ON crm.store_offer_price_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_unadmitted_auto_price();
+CREATE TRIGGER trg_store_offer_price_no_truncate BEFORE TRUNCATE ON crm.store_offer_price_revision
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_price_revision_mutation();
+--rollback DROP TRIGGER trg_store_offer_price_no_truncate ON crm.store_offer_price_revision;
+--rollback DROP TRIGGER trg_store_offer_auto_closed ON crm.store_offer_price_revision;
+--rollback DROP FUNCTION crm.reject_unadmitted_auto_price();
