@@ -119,6 +119,24 @@ public class TaskCalendarQueryService {
         TaskTimingQueryService.requireSupported(cutoff);
         AppliedFilter f=normalize(filter,cutoff);
         verifyCursor(after,user,tenant,f,limit);
+        QueryPlan query=prepareQuery(relation,f,cutoff,tenant,user,limit,after);
+        List<Item> rows=jdbc.query(query.sql(),query.bind(),(rs,n)->new Item(
+            TaskTimingQueryService.map(rs),TaskTitlePolicy.calendarCode(rs.getString("title")),
+            TaskTimingQueryService.instant(rs,"selected_date")));
+        boolean more=rows.size()>limit;
+        List<Item> items=List.copyOf(rows.subList(0,Math.min(rows.size(),limit)));
+        Cursor next=null;
+        if(more){
+            Item last=items.getLast();next=new Cursor(tenant,user,f,limit,last.selectedDate(),last.timing().taskId());
+        }
+        actor.userId(); // fail closed if access token expired during query
+        return new Page(cutoff,f,items,more,next);
+    }
+    // Package-private query specification so qualification can EXPLAIN the exact
+    // production statement and binds without exposing a public SQL API.
+    record QueryPlan(String sql,org.springframework.jdbc.core.PreparedStatementSetter bind){}
+    static QueryPlan prepareQuery(String relation,AppliedFilter f,Instant cutoff,UUID tenant,
+                                  UUID user,int limit,Cursor after){
         String date=f.dateBasis()==DateBasis.DUE?"due_at":"completed_at";
         // Only closed enum-selected SQL fragments. All values bound.
         var states=f.states().stream().sorted().toList();
@@ -137,7 +155,7 @@ public class TaskCalendarQueryService {
             sql.append(" ORDER BY "+date+" ASC,id ASC");
         }
         sql.append(" LIMIT ?");
-        List<Item> rows=jdbc.query(sql.toString(),ps->{
+        return new QueryPlan(sql.toString(),ps->{
             int i=1;
             timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);ps.setObject(i++,tenant);
             ps.setObject(i++,user);ps.setObject(i++,user);
@@ -154,15 +172,6 @@ public class TaskCalendarQueryService {
                 }
             }
             ps.setInt(i,limit+1);
-        },(rs,n)->new Item(TaskTimingQueryService.map(rs),TaskTitlePolicy.calendarCode(rs.getString("title")),
-            TaskTimingQueryService.instant(rs,"selected_date")));
-        boolean more=rows.size()>limit;
-        List<Item> items=List.copyOf(rows.subList(0,Math.min(rows.size(),limit)));
-        Cursor next=null;
-        if(more){
-            Item last=items.getLast();next=new Cursor(tenant,user,f,limit,last.selectedDate(),last.timing().taskId());
-        }
-        actor.userId(); // fail closed if access token expired during query
-        return new Page(cutoff,f,items,more,next);
+        });
     }
 }

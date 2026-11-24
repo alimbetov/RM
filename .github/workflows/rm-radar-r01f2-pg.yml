@@ -1,0 +1,82 @@
+name: RM Radar R0.1F2 Calendar PostgreSQL Qualification
+on:
+  push:
+    branches: [base_dev]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  radar-f2-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify exact SHA and record runner
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p target/radar-calendar-performance
+          { echo "sha=$GITHUB_SHA"; uname -a; lscpu; free -m; } > target/radar-calendar-performance/runner.txt
+      - name: PostgreSQL 17 workload and performance targets
+        run: mvn -B -ntp -Dtest=TaskCalendarPgPerformanceQualificationTest,TaskCalendarPgConcurrencyQualificationTest -Drm.radar.f2.performance=true -Drm.radar.f2.races=true test
+      - name: Require all three named cases and measured evidence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as E
+          p=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskCalendarPgPerformanceQualificationTest.xml')
+          cases=list(E.parse(p).getroot().iter('testcase'))
+          assert len(cases)==3
+          assert {c.attrib['name'] for c in cases}==set(["f211OneThousandTasksWithHistory","f212TenThousandTasksWithHistory","f213HundredThousandTasksWithHistoryAndMixedCommands"])
+          assert not any(c.find(x) is not None for c in cases for x in ('failure','error','skipped'))
+          r=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskCalendarPgConcurrencyQualificationTest.xml')
+          races=list(E.parse(r).getroot().iter('testcase'))
+          assert len(races)==5
+          assert {c.attrib['name'] for c in races}==set(["f201CompletionBothOrdersAndRollback","f202ArchiveBothOrdersRetainsCompletion","f203RescheduleBothOrdersAndRollback","f204ReassignmentRemovesOldAssigneeBothOrders","f205RoleRevokeBothOrdersProvesBlockingEdge"])
+          assert not any(c.find(x) is not None for c in races for x in ('failure','error','skipped'))
+          root=Path('target/radar-calendar-performance')
+          for size in (1000,10000,100000):
+              assert (root/f'fixture-{size}.txt').is_file()
+              for density in ('dense','sparse'):
+                  for basis in ('due','completed-early'):
+                      for limit in (20,100):
+                          stem=f'{size}-{density}-{basis}-limit{limit}-first'
+                          assert (root/f'{stem}-plan.json').is_file()
+                          assert (root/f'{stem}-samples.csv').is_file()
+          for name in ('environment.txt','runner.txt','measurements.txt','100000-command-comparison.txt','100000-lock-sampling.csv','100000-command-baseline-samples.csv','100000-command-mixed-samples.csv'):
+              assert (root/name).is_file(), name
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rm-radar-f2-postgresql-${{ github.sha }}
+          path: |
+            target/radar-calendar-performance/
+            target/surefire-reports/TEST-kz.rm.tasks.TaskCalendarPgPerformanceQualificationTest.xml
+            target/surefire-reports/TEST-kz.rm.tasks.TaskCalendarPgConcurrencyQualificationTest.xml
+          if-no-files-found: error
