@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.*;
 import java.sql.Timestamp;
 import java.util.*;
+import kz.rm.fx.auto.FxAutoCanonicalPriceHistory.Window;
 
 /** B.2-B.4: qualification-only preparation under a caller-owned transaction.
  * No execution authority, no debit, no price mutation. PAUSED is diagnostic only.
@@ -46,8 +47,6 @@ public class FxAutoExecutionPreparationService {
     public record Assessment(UUID policyRevision,UUID priceRevision,BigDecimal oldKzt,BigDecimal candidateKzt,
                              BigDecimal actualDeltaKzt,BigDecimal remainingKzt,String decision) {}
     private record Approval(UUID revision,UUID author,UUID membership,Instant expiry,String scope,String state,long epoch) {}
-    private record History(UUID id,long version,Instant at,BigDecimal oldPrice,BigDecimal newPrice,String oldCurrency,String newCurrency,boolean auto) {}
-    private record Window(BigDecimal baseline,List<FxAutoRollingLimitEvaluator.Change> changes,List<UUID> evidence) {}
     private record PolicyLimits(long seconds,BigDecimal increase,BigDecimal decrease,BigDecimal variation,long publications, FxAutoDryRun.Budget budget) {}
     private record Target(UUID offer,UUID anchor,UUID guard,BigDecimal current,UUID priceRevision,
                           BigDecimal anchorAmount,BigDecimal buffer,BigDecimal markup,BigDecimal step,
@@ -152,7 +151,7 @@ public class FxAutoExecutionPreparationService {
         if(!t.eligible()||!t.reviewDue().isAfter(now)||java.time.temporal.ChronoUnit.DAYS.between(c.validDate(),today)>t.maxAge())
             throw new IllegalStateException("FX_AUTO_TARGET_BINDING_INVALID");
         BigDecimal candidate=calculator.preview(c.currency(),t.anchorAmount(),t.buffer(),t.markup(),t.step(),rate).suggestedKzt();
-        Window w=history(tenant,t,now,limits.seconds());
+        Window w=FxAutoCanonicalPriceHistory.history(jdbc,tenant,t.offer(),t.priceRevision(),t.current(),now,limits.seconds());
         var guard=new FxAutoRollingLimitEvaluator.Limits(t.increase(),t.decrease(),t.min(),t.max(),
                 limits.increase(),limits.decrease(),limits.variation(),limits.publications());
         var result=FxAutoRollingLimitEvaluator.evaluate(t.current(),candidate,w.baseline(),w.changes(),guard);
@@ -168,37 +167,4 @@ public class FxAutoExecutionPreparationService {
         actor.userId();
         return new Assessment(a.revision(),t.priceRevision(),t.current(),candidate,delta,balance.remainingKzt(),decision);
     }
-    /** Conservative history oracle: require a recorded boundary and an unbroken
-     * KZT chain from initial revision through the current canonical price. */
-    private Window history(UUID tenant,Target t,Instant now,long seconds){
-        Window missing=new Window(null,List.of(),List.of());
-        Instant boundary;
-        try{boundary=now.minusSeconds(seconds);}catch(DateTimeException|ArithmeticException e){return missing;}
-        List<History> rows=jdbc.query("""
-            SELECT id,offer_row_version,recorded_at,old_price,new_price,trim(old_currency),trim(new_currency),provenance
-            FROM crm.store_offer_price_revision WHERE tenant_id=? AND offer_id=?
-            ORDER BY offer_row_version LIMIT 10001
-            """,(rs,n)->new History(rs.getObject(1,UUID.class),rs.getLong(2),rs.getTimestamp(3).toInstant(),
-                rs.getBigDecimal(4),rs.getBigDecimal(5),rs.getString(6),rs.getString(7),"SYSTEM_AUTO".equals(rs.getString(8))),tenant,t.offer());
-        if(rows.isEmpty() || rows.size()>10000)return missing;
-        BigDecimal baseline=null,previous=null;
-        Instant prior=null;
-        List<FxAutoRollingLimitEvaluator.Change> changes=new ArrayList<>();
-        List<UUID> evidence=new ArrayList<>();
-        for(History h:rows){
-            if(h.at().isAfter(now) || (prior!=null && h.at().isBefore(prior))
-                || !"KZT".equals(h.newCurrency()) || h.newPrice().signum()<=0)return missing;
-            if(previous==null){
-                if(h.version()!=0 || h.oldPrice()!=null || h.oldCurrency()!=null)return missing;
-            }else{
-                if(h.oldPrice()==null || h.oldPrice().compareTo(previous)!=0 || !"KZT".equals(h.oldCurrency()))return missing;
-                if(h.at().isAfter(boundary))changes.add(new FxAutoRollingLimitEvaluator.Change(previous,h.newPrice(),h.auto()));
-            }
-            if(!h.at().isAfter(boundary))baseline=h.newPrice();
-            previous=h.newPrice();prior=h.at();evidence.add(h.id());
-        }
-        if(!rows.getLast().id().equals(t.priceRevision()) || previous.compareTo(t.current())!=0 || baseline==null)return missing;
-        return new Window(baseline,List.copyOf(changes),List.copyOf(evidence));
-    }
-
 }
