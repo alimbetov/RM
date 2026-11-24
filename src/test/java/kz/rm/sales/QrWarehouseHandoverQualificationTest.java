@@ -56,6 +56,7 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired UserAccountRepository users;
     @Autowired EmailIdentityCrypto crypto;
+    @Autowired EmailIdentityService emailIdentities;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
     @Autowired kz.rm.inventory.AuthenticatedInventoryCommands inventoryCommands;
@@ -103,7 +104,13 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
     private static String key(){return "PICK_"+UUID.randomUUID().toString().replace("-","");}
-    private Context context(){
+    private Context context(){return context(false);}
+
+    // CORE-RET-04 qualification must establish email proof through IAM, not
+    // a seeded CURRENT/verified_at row. Legacy compatibility fixtures stay separate.
+    private Context strictRet04Context(){return context(true);}
+
+    private Context context(boolean strictEmail){
         var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
                 "QR Warehouse Company","Warehouse","KZ"));
         UUID tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(
@@ -121,13 +128,20 @@ class QrWarehouseHandoverQualificationTest {
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
         String buyerEmail="qr-pick-"+UUID.randomUUID()+"@example.kz";
         Timestamp now=Timestamp.from(Instant.now());
-        jdbc.update("""
-                INSERT INTO public.iam_email_identity
-                 (id,user_id,lookup_hmac,email_envelope,verified_at,created_at,
-                  lifecycle_state,active_lookup_hmac,current_owner_id)
-                VALUES (?,?,?,?,?,?,'CURRENT',?,?)
-                """,UUID.randomUUID(),buyer,crypto.lookup(buyerEmail),
-                crypto.encrypt(buyerEmail),now,now,crypto.lookup(buyerEmail),buyer);
+        VerifiedActor buyerActor=verified(buyer);
+        if(strictEmail){
+            var proof=VerifiedBuyerEmailFixture.registerAndVerify(emailIdentities,crypto,jdbc,buyerActor,buyerEmail);
+            System.out.println("RET04E6A registration proof actor="+buyer+" identity="+proof.identityId()+
+                    " challenge="+proof.challengeId());
+        }else{
+            jdbc.update("""
+                    INSERT INTO public.iam_email_identity
+                     (id,user_id,lookup_hmac,email_envelope,verified_at,created_at,
+                      lifecycle_state,active_lookup_hmac,current_owner_id)
+                    VALUES (?,?,?,?,?,?,'CURRENT',?,?)
+                    """,UUID.randomUUID(),buyer,crypto.lookup(buyerEmail),
+                    crypto.encrypt(buyerEmail),now,now,crypto.lookup(buyerEmail),buyer);
+        }
         VerifiedActor ownerActor=verified(owner),staffActor=verified(staff);
         var role=roles.createRole(ownerActor,tenant,
                 "PICK_"+UUID.randomUUID().toString().replace("-","")
@@ -181,7 +195,7 @@ class QrWarehouseHandoverQualificationTest {
                     """,tenant,i==0?offerOne:offerTwo,i==0?one:two);
         }
         return new Context(tenant,warehouse,other,one,two,offerOne,offerTwo,
-                slug,ownerActor,staffActor,verified(buyer),buyerEmail);
+                slug,ownerActor,staffActor,buyerActor,buyerEmail);
     }
     private Order order(Context c,boolean twoLines){
         var basket=twoLines?List.of(new AutoOrderService.Line(c.offerOne(),5),
@@ -194,6 +208,7 @@ class QrWarehouseHandoverQualificationTest {
                 WHERE email_identity_id=(
                     SELECT id FROM public.iam_email_identity
                     WHERE user_id=? AND lifecycle_state='CURRENT')
+                  AND purpose='CHECKOUT'
                 ORDER BY created_at DESC,id DESC LIMIT 1
                 """,UUID.class,c.buyer().userId());
         byte[] envelope=jdbc.queryForObject("""
@@ -3290,7 +3305,7 @@ class QrWarehouseHandoverQualificationTest {
 
     private void coreRet04CommitOrder(boolean restockFirst) throws Exception {
         requirePostgres();
-        var c=context();var order=ready(c,false);
+        var c=strictRet04Context();var order=ready(c,false);
         var claim=qr07R25Quarantined(c,order);
         roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.INVENTORY_ADJUST);
         UUID sku=jdbc.queryForObject("""
@@ -3382,7 +3397,7 @@ class QrWarehouseHandoverQualificationTest {
 
     private Ret04B ret04BFixture() throws Exception {
         requirePostgres();
-        var c=context();var order=ready(c,false);
+        var c=strictRet04Context();var order=ready(c,false);
         var claim=qr07R25Quarantined(c,order);
         roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.INVENTORY_ADJUST);
         UUID sku=jdbc.queryForObject("""
@@ -3816,7 +3831,7 @@ class QrWarehouseHandoverQualificationTest {
 
     private void ret04CShared(boolean restockA,boolean restockB) throws Exception {
         requirePostgres();
-        var c=context();var orderA=ready(c,false);
+        var c=strictRet04Context();var orderA=ready(c,false);
         var claimA=qr07R25Quarantined(c,orderA);
         var orderB=ready(c,false);
         var claimB=qr07R2Approved(c,orderB,3);

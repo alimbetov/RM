@@ -1025,7 +1025,7 @@
         }
       ],
       "mappingVerdict": "SUPPORTING_PARTIAL",
-      "openRequirement": "56/56 dedicated PostgreSQL scenarios and three manifests verified on E.3B SHA. Global artifact re-verification integrated; new exact-SHA global execution, verified QR fixture and normative variant review remain open. Partial verdict is intentional.",
+      "openRequirement": "56/56 dedicated PostgreSQL scenarios and three manifests verified and globally reverified on E.5 SHA. E.6A replaces seeded verified buyer email with production REGISTRATION challenge proof in all 56 scenarios; new exact-SHA execution, verified published QR checkout fixture, durable proof binding and normative variant review remain open. Partial verdict is intentional.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
