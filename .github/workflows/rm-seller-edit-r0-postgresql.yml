@@ -1,0 +1,94 @@
+name: RM Seller Edit R0 Tenant RBAC and Warehouse PostgreSQL Qualification
+
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/kz/rm/inventory/InventoryAuthorizedCommandService.java'
+      - 'src/main/java/kz/rm/iam/WarehouseStaffScopeService.java'
+      - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
+      - 'src/main/java/kz/rm/catalog/CatalogItemService.java'
+      - 'src/main/java/kz/rm/storefront/StorefrontOfferService.java'
+      - 'src/test/java/kz/rm/inventory/SellerWarehouseScopeR0QualificationTest.java'
+      - 'src/test/java/kz/rm/catalog/CatalogQualificationTest.java'
+      - 'src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java'
+      - '.github/scripts/verify_rm_qa_01b.py'
+      - '.github/workflows/rm-seller-edit-r0-postgresql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seller-edit-r0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Pin exact SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Qualify tenant catalog, storefront revoke and warehouse scope in PostgreSQL
+        run: >-
+          mvn -B -ntp clean test
+          '-Dtest=SellerWarehouseScopeR0QualificationTest,CatalogQualificationTest,StorefrontManagementQualificationTest'
+      - name: Require all 10 R0 diagnostic cases executed without skips or failures
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          names = {
+              'sellerEditR0SameSkuAcrossTenantsUsesEmployeeSpecificGrants',
+              'sellerEditR0RevokedPriceGrantCannotAppendAnotherRevision',
+              'sellerEditR0PostgresTwoEditorsOneCatalogPriceRevisionWins',
+              'sellerR0ReceiptAndCorrectionRequireAssignedWarehouseDespiteTenantGrants',
+              'sellerR0WarehouseScopeAndRoleRevocationBothBlockNewInventoryWrites',
+              'sellerR0PostgresAdmittedReceiptCommitsBeforeWarehouseScopeRevocation',
+              'sellerR0PostgresScopeRevocationCommitsBeforeReceiptWithZeroLedger',
+              'sellerR0PostgresRoleRevocationCommitsBeforeReceiptWithZeroLedger',
+              'sellerR0PgPriceUpdateCommitsBeforeRoleRevokeKeepsOneRevision',
+              'sellerR0PgRoleRevokeCommitsBeforePriceUpdateWithoutHistory',
+          }
+          reports=list(Path('target/surefire-reports').glob('TEST-*.xml'))
+          assert reports, 'SELLER_R0_MISSING_SUREFIRE'
+          cases=[x for p in reports for x in ET.parse(p).getroot().iter('testcase')]
+          found={c.get('name') for c in cases}
+          assert names <= found, 'SELLER_R0_MISSING_REQUIRED: '+str(names-found)
+          for c in cases:
+              if c.get('name') not in names: continue
+              assert not any(c.find(k) is not None for k in ('failure','error','skipped')), (
+                  'SELLER_R0_FAILED_OR_SKIPPED: '+str(c.get('name')))
+          print('SELLER_EDIT_R0_10_OF_10_REAL_POSTGRESQL_EXECUTED')
+          PY
+      - name: Preserve R0 PostgreSQL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-seller-edit-r0-pg-${{ github.sha }}
+          path: target/surefire-reports/
+          if-no-files-found: warn
