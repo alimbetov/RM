@@ -260,8 +260,10 @@ class QrMvpServiceJourneyQualificationTest {
         returnAndInspect(s,order,line,2,SalesReturnPhysicalService.Disposition.RESTOCK);
         assertThat(sellable(s)).isEqualByComparingTo("9");
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM crm.sales_return_posting
-                WHERE tenant_id=? AND order_id=?
+                SELECT count(*) FROM crm.sales_return_posting p
+                JOIN crm.sales_return_request r
+                  ON r.tenant_id=p.tenant_id AND r.id=p.return_id
+                WHERE p.tenant_id=? AND r.order_id=?
                 """,Integer.class,s.tenant(),order)).isEqualTo(1);
     }
 
