@@ -31,10 +31,11 @@ class MvpServiceEvidenceContractTest(unittest.TestCase):
 
     def test_exactly_54_core_and_2_tasks_are_bound_to_executed_pg_methods(self):
         report = assess(self.root, self.passed, self.sha, True)
-        self.assertEqual(report["gate"], "CORE_SERVICE_EVIDENCE_QUALIFIED")
+        self.assertEqual(report["gate"], "HOLD")
         self.assertEqual(report["totalCoreP0"], 54)
-        self.assertEqual(report["verifiedCoreP0"], 54)
-        self.assertEqual(report["verifiedTaskAddenda"], 2)
+        self.assertEqual(report["verifiedCoreP0"], 0)
+        self.assertEqual(len(report["semanticGaps"]), 56)
+        self.assertEqual(report["verifiedTaskAddenda"], 0)
         self.assertEqual(report["productionAdmission"], "HOLD")
         self.assertTrue((self.root / REPORT).is_file())
 
@@ -44,8 +45,22 @@ class MvpServiceEvidenceContractTest(unittest.TestCase):
         self.passed[ARTIFACT].remove((p["suite"], p["test"]))
         report = assess(self.root, self.passed, self.sha, True, write=False)
         self.assertEqual(report["gate"], "HOLD")
-        self.assertEqual(report["verifiedCoreP0"], 53)
+        self.assertEqual(report["verifiedCoreP0"], 0)
         self.assertEqual(report["missingExecution"][0]["id"], entry["id"])
+
+    def test_wrong_behavior_bindings_are_explicit_gaps(self):
+        gaps = [x for x in self.registry["scenarios"] if x["mappingVerdict"] == "GAP"]
+        self.assertEqual(len(gaps), 18)
+        self.assertTrue(all(not x["requiredProofs"] and x["legacyProofs"] for x in gaps))
+        report = assess(self.root, self.passed, self.sha, True, write=False)
+        self.assertEqual(report["gate"], "HOLD")
+
+    def test_exact_empty_mapping_fails_closed(self):
+        row = next(x for x in self.registry["scenarios"] if x["mappingVerdict"] == "GAP")
+        row["mappingVerdict"] = "EXACT"
+        (self.root / MAPPING).write_text(json.dumps(self.registry))
+        with self.assertRaisesRegex(ValueError, "executable proof absent"):
+            assess(self.root, self.passed, self.sha, True, write=False)
 
     def test_missing_canonical_id_fails_closed(self):
         self.registry["scenarios"].pop()

@@ -458,7 +458,8 @@ def verify():
         }
         if mvp["gate"] != "CORE_SERVICE_EVIDENCE_QUALIFIED":
             problems.append("RM-MVP W6 missing exact-SHA PostgreSQL evidence: "
-                            + str(mvp["missingExecution"][:10]))
+                            + str(mvp["missingExecution"][:10])
+                            + "; semantic gaps: " + str(mvp["semanticGaps"][:10]))
     except (ValueError, KeyError, OSError, TypeError) as exc:
         problems.append("RM-MVP W6 evidence mapping invalid: "
                         + type(exc).__name__ + ": " + str(exc))

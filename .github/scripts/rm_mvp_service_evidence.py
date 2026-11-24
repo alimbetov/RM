@@ -54,14 +54,22 @@ def assess(root, passed_cases, sha, admission_pass, write=True):
     checks = []
     missing = []
     methods = set()
+    mapping_gaps = []
     for entry in [*cases, *addendum]:
         ident = entry.get("id")
         require(isinstance(entry.get("behavior"), str) and
                 len(entry["behavior"].strip()) > 24,
                 "W6 behavior must be explicitly described: " + str(ident))
         proofs = entry.get("requiredProofs")
-        require(isinstance(proofs, list) and len(proofs) > 0,
+        verdict = entry.get("mappingVerdict")
+        require(verdict in {"EXACT", "SUPPORTING_PARTIAL", "GAP"},
+                "W6 semantic mapping verdict absent or invalid: " + str(ident))
+        require(isinstance(proofs, list) and (verdict != "EXACT" or len(proofs) > 0),
                 "W6 executable proof absent: " + str(ident))
+        if verdict != "EXACT":
+            require(isinstance(entry.get("openRequirement"), str) and entry["openRequirement"].strip(),
+                    "W6 semantic gap reason absent: " + str(ident))
+            mapping_gaps.append({"id": ident, "verdict": verdict, "reason": entry["openRequirement"]})
         seen = set()
         bound = []
         for proof in proofs:
@@ -79,10 +87,11 @@ def assess(root, passed_cases, sha, admission_pass, write=True):
             if not found:
                 missing.append({"id": ident, "suite": suite, "method": method})
         checks.append({"id": ident, "behavior": entry["behavior"],
-                       "qualification": "VERIFIED_INTERNAL" if all(
+                       "mappingVerdict": verdict,
+                       "qualification": "VERIFIED_INTERNAL" if verdict == "EXACT" and bool(bound) and all(
                            p["executedPostgresql"] for p in bound)
                        else "HOLD", "evidence": bound})
-    gate = "CORE_SERVICE_EVIDENCE_QUALIFIED" if not missing and admission_pass else "HOLD"
+    gate = "CORE_SERVICE_EVIDENCE_QUALIFIED" if not missing and not mapping_gaps and admission_pass else "HOLD"
     report = {
         "schema": "RM-MVP-SERVICE-EVIDENCE/v1",
         "exactSha": sha,
@@ -100,6 +109,7 @@ def assess(root, passed_cases, sha, admission_pass, write=True):
         "uniqueExecutedMethodsMapped": len(methods & pg_cases),
         "totalUniqueMappedMethods": len(methods),
         "missingExecution": missing,
+        "semanticGaps": mapping_gaps,
         "scenarios": checks,
     }
     if write:

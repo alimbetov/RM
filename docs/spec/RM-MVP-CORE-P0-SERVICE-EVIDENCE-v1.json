@@ -3,8 +3,8 @@
   "sourceRegistry": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
   "evidenceArtifact": "kms-postgres-surefire",
   "scope": "SERVICE_ONLY_NO_HTTP_OR_LIVE_OIDC",
-  "admissionPolicy": "PASS only when every named PostgreSQL JUnit method actually executed on exact SHA with no failure/error/skip and all mandatory G1 workflows pass; test-name mapping remains explicitly scoped to stated behavior",
-  "reviewBasis": "Source method test review and MVP W1-W6 specification at 2026-11-24",
+  "admissionPolicy": "EXACT mapping and all required PostgreSQL executions plus parent admission required; GAP and SUPPORTING_PARTIAL explicitly HOLD. Candidate methods never count as proof.",
+  "reviewBasis": "BSR R1.1 semantic repair: 18 invalid bindings removed; all remaining mappings supporting only until variant review.",
   "scenarios": [
     {
       "id": "CORE-IAM-01",
@@ -14,7 +14,9 @@
           "suite": "R4FirstTenantOnboardingQualificationTest",
           "test": "verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Signed access token → resolver → onboarding; restart/replay и независимый подсчёт org/member/orphan."
     },
     {
       "id": "CORE-IAM-02",
@@ -24,7 +26,9 @@
           "suite": "R4FirstTenantOnboardingQualificationTest",
           "test": "unverifiedEmailSuspensionAndForeignTenantRejectWithoutWrites"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Отказы onboarding и JWT пока в разных тестах; проверить все owner-дельты."
     },
     {
       "id": "CORE-IAM-03",
@@ -34,35 +38,91 @@
           "suite": "UserRoleMatrixR31QualificationTest",
           "test": "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Связать invite/accept/grants и бизнес-команду с signed identity и AB-grants в одном варианте."
     },
     {
       "id": "CORE-IAM-04",
-      "behavior": "Revocation fences subsequent staff operations",
-      "requiredProofs": [
+      "behavior": "Active employee/order → revoke and confirm A→B/B→A → committed authorized winner only",
+      "requiredProofs": [],
+      "legacyBehavior": "Revocation fences subsequent staff operations",
+      "legacyProofs": [
         {
           "suite": "UserRoleMatrixR31QualificationTest",
           "test": "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Текущая привязка проверяет STOREFRONT после SQL suspension, а не оба порядка revoke × confirm; дополнить verified SALES маршрут.",
+      "candidateProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "postgresSalesConfirmationFencesConcurrentPermissionRevocation",
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "TenantRbacRevocationQualificationTest",
+          "test": "commandCannotProceedUntilEarlierRevocationCommits",
+          "path": "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-IAM-05",
-      "behavior": "Authorized staff operations require current selected warehouse assignment",
-      "requiredProofs": [
+      "behavior": "Linked buyer → suspend/delete races link read/checkout → no post-revoke new access, retain permitted immutable evidence",
+      "requiredProofs": [],
+      "legacyBehavior": "Authorized staff operations require current selected warehouse assignment",
+      "legacyProofs": [
         {
           "suite": "MvpServiceWarehouseAdmissionQualificationTest",
           "test": "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к складу не относится к блокировке покупателя; раздельно checkout/link/read и retention.",
+      "candidateProofs": [
+        {
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "test": "qrMvpSuspendOrDeleteVersusCheckoutBothCommitOrders",
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "CrmBuyerLinkQualificationTest",
+          "test": "postgresBothCommitOrdersForDeleteVersusConfirm",
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-IAM-06",
-      "behavior": "Cross tenant grants and revocation are isolated",
-      "requiredProofs": [
+      "behavior": "Warehouse A grant only → attempt B; revoke × pick/handover both orders → scope enforced",
+      "requiredProofs": [],
+      "legacyBehavior": "Cross tenant grants and revocation are isolated",
+      "legacyProofs": [
         {
           "suite": "UserRoleMatrixR31QualificationTest",
           "test": "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к общим grants не доказывает warehouse scope; отдельно оба порядка pick × revoke.",
+      "candidateProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06bPgHandoverCommitPrecedesConcurrentScopeRevocation",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06bPgScopeRevocationCommitPrecedesHandoverAdmission",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -74,7 +134,9 @@
           "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
           "test": "postgresConfirmedOrderWinsThenDeactivationIsBlockedByReservation"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Разделить INACTIVE с остатком и CLOSED без остатка; нормативное расхождение §12.3."
     },
     {
       "id": "CORE-ORG-02",
@@ -84,7 +146,9 @@
           "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
           "test": "postgresDeactivationWinsThenNewConfirmationRollsBackToPlaced"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Дополнить остальные пары transfer/confirm/close из того же класса; сохранить остаток при законной деактивации."
     },
     {
       "id": "CORE-CRM-01",
@@ -94,35 +158,91 @@
           "suite": "CrmInteractionQualificationTest",
           "test": "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Нужны PERSON и COMPANY, same-name без merge, независимые encrypted/foreign-row oracles."
     },
     {
       "id": "CORE-CRM-02",
-      "behavior": "Contact and interaction access limited by current CRM permission",
-      "requiredProofs": [
+      "behavior": "Two updates with same version, search empty/bounded/filter → one correct version, no foreign rows",
+      "requiredProofs": [],
+      "legacyBehavior": "Contact and interaction access limited by current CRM permission",
+      "legacyProofs": [
         {
           "suite": "CrmInteractionQualificationTest",
           "test": "crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к readonly interaction не доказывает customer/contact CAS и поиск.",
+      "candidateProofs": [
+        {
+          "suite": "CrmR1aQualificationTest",
+          "test": "crmR14TwoWritersSameContactVersionExactlyOneCommits",
+          "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "CrmR1aQualificationTest",
+          "test": "customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized",
+          "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-CRM-03",
-      "behavior": "Contact consent revocation overrides earlier grant",
-      "requiredProofs": [
+      "behavior": "Archive customer/contract × open order creation both orders → approved policy, order snapshot retained",
+      "requiredProofs": [],
+      "legacyBehavior": "Contact consent revocation overrides earlier grant",
+      "legacyProofs": [
         {
           "suite": "CrmInteractionQualificationTest",
           "test": "crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к consent ошибочна; заказ связан с IAM buyer, не прямо с CRM customer/contract; нужен контракт архивации и hash заказа.",
+      "candidateProofs": [
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline",
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "CrmBuyerLinkQualificationTest",
+          "test": "archivedCustomerCannotBeLinkedOrExposeOrderHistory",
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-CRM-04",
-      "behavior": "Customer and contract archive preserves history but blocks prohibited work",
-      "requiredProofs": [
+      "behavior": "Record interaction→assign→nextAction→complete; repeated request and inactive assignee → correct history",
+      "requiredProofs": [],
+      "legacyBehavior": "Customer and contract archive preserves history but blocks prohibited work",
+      "legacyProofs": [
         {
           "suite": "CrmInteractionQualificationTest",
           "test": "crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к архиву не покрывает record/assign/nextAction/complete; проверить каждый шаг и history.",
+      "candidateProofs": [
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable",
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "crmR21bPostgresBothTerminalCommitOrdersAreLinearizable",
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -134,7 +254,9 @@
           "suite": "CrmBuyerLinkQualificationTest",
           "test": "verifiedBuyerConfirmsOrderAndSellerSeesOnlyTenantOrders"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Проверить оба независимых CRM_READ/SALES_ORDER_READ и отсутствие infer-by-email; source test body не заменяет run."
     },
     {
       "id": "CORE-CRM-06",
@@ -144,7 +266,9 @@
           "suite": "CrmBuyerLinkQualificationTest",
           "test": "disputeFreezesSalesVisibilityAndSellerCanOnlyCloseFailClosed"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Последовательный dispute supporting; confirm × revoke не равен orderHistory × revoke; read linearization отдельно."
     },
     {
       "id": "CORE-CAT-01",
@@ -154,7 +278,9 @@
           "suite": "CatalogQualificationTest",
           "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Дополнить точные price/quantity bounds, invalid currency и negative zero-effect oracles."
     },
     {
       "id": "CORE-CAT-02",
@@ -164,7 +290,9 @@
           "suite": "CatalogQualificationTest",
           "test": "draftTranslationsAndVersionCasCannotLeakOtherTenant"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Catalog CAS сам по себе не доказывает коммерческую цену; проверить обе истории и old-order hash при drift."
     },
     {
       "id": "CORE-CAT-03",
@@ -174,7 +302,9 @@
           "suite": "CommercialCoreE2EQualificationTest",
           "test": "postgresArchiveAndOfferPublicationAreSerializedInBothOrders"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "В том же классе есть receipt-first; stocktake race и обе стороны всех конфликтов требуют отдельной привязки."
     },
     {
       "id": "CORE-STO-01",
@@ -184,7 +314,9 @@
           "suite": "StorefrontManagementQualificationTest",
           "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Resume выполняется publish с актуальной версией; отдельно revoked role, inactive workspace и tenant."
     },
     {
       "id": "CORE-STO-02",
@@ -194,7 +326,9 @@
           "suite": "StorefrontManagementQualificationTest",
           "test": "offerVersionCasAndCheckoutSnapshotStayImmutable"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "У price update CAS/no-op, а не универсальный request-key receipt; привязать hide и invalid product."
     },
     {
       "id": "CORE-STO-03",
@@ -204,7 +338,9 @@
           "suite": "StorefrontManagementQualificationTest",
           "test": "postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Оба теста кандидаты; доказать именно publication и оба управляемых порядка pause × checkout."
     },
     {
       "id": "CORE-SAL-01",
@@ -214,15 +350,35 @@
           "suite": "CommercialCoreE2EQualificationTest",
           "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Сквозной happy path из старой карты не доказывает конфликт ключа; отдельно lost response и process restart."
     },
     {
       "id": "CORE-SAL-02",
-      "behavior": "Duplicate checkout request cannot produce duplicate orders or receipts",
-      "requiredProofs": [
+      "behavior": "Price/pause change×checkout both orders → acknowledged version or reconfirm, no new order on deny",
+      "requiredProofs": [],
+      "legacyBehavior": "Duplicate checkout request cannot produce duplicate orders or receipts",
+      "legacyProofs": [
         {
           "suite": "PublishedQrCheckoutQualificationTest",
           "test": "qrMvpVerifiedConcurrentSameKeyHasOneOrderInPostgres"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к duplicate checkout не покрывает stale price/pause; отдельно verified QR и обычный route.",
+      "candidateProofs": [
+        {
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "test": "qr03SellerPriceChangeRejectsStaleAcceptanceBeforeBuyerProvisioning",
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "SellerOfferQualificationTest",
+          "test": "postgresCheckoutPauseSerializesWithoutPartialOrders",
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -234,7 +390,9 @@
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Кандидаты вызывают внутренние методы; нужен verified facade, multi-line snapshot и один склад в strict mode."
     },
     {
       "id": "CORE-SAL-04",
@@ -244,25 +402,63 @@
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "insufficientStockRollsBackStatusAndEveryReservation"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Shortage/outer rollback не равны hard crash; подтвердить last-line failure и отсутствие всех success-эффектов."
     },
     {
       "id": "CORE-SAL-05",
-      "behavior": "Reserved stock and ledger remain atomic with order completion",
-      "requiredProofs": [
+      "behavior": "Two orders compete for last units and reversed SKU ordering → no oversell/deadlock leak",
+      "requiredProofs": [],
+      "legacyBehavior": "Reserved stock and ledger remain atomic with order completion",
+      "legacyProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "fulfillmentDebitsOnceAndRequiresBothDomainPermissions"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая проверка fulfillment не является hot-SKU race; нужны управляемые schedules и отрицательные ledger oracles.",
+      "candidateProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand",
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "opposingMultiSkuOrdersReserveWithoutDeadlock",
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-SAL-06",
-      "behavior": "Seller denial preserves state and order inventory history",
-      "requiredProofs": [
+      "behavior": "Cancel×confirm and cancel×fulfill both orders → one valid final state/release/debit",
+      "requiredProofs": [],
+      "legacyBehavior": "Seller denial preserves state and order inventory history",
+      "legacyProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к permission deny ошибочна; random race не заменяет оба заданных порядка cancel × confirm/fulfill.",
+      "candidateProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome",
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "postgresMixedConcurrentOrderLifecyclePreservesLedgerAndIdempotency",
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -274,7 +470,9 @@
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Есть последовательный picked-deny; не найден самостоятельный детерминированный pick × cancel в обоих порядках."
     },
     {
       "id": "CORE-SAL-08",
@@ -284,25 +482,63 @@
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "SQL fixture proof-mode допустим для локального fence; полный путь должен создавать mode через verified QR checkout."
     },
     {
       "id": "CORE-SAL-09",
-      "behavior": "Order state and stock movement history trace each completed business order",
-      "requiredProofs": [
+      "behavior": "Generic fulfill×secure pickup both orders → exactly one legal debit with proof",
+      "requiredProofs": [],
+      "legacyBehavior": "Order state and stock movement history trace each completed business order",
+      "legacyProofs": [
         {
           "suite": "BusMvpServiceJourneyQualificationTest",
           "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к BUS happy path неверна; double-scan не заменяет generic fulfill × secure pickup на одном заказе.",
+      "candidateProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing",
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-SAL-10",
-      "behavior": "Partial physical pick prevents silent order cancellation",
-      "requiredProofs": [
+      "behavior": "Warehouse grants A not B; revoke × each confirm/prepare/fulfill both orders",
+      "requiredProofs": [],
+      "legacyBehavior": "Partial physical pick prevents silent order cancellation",
+      "legacyProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "fc40PickedOrderCannotCancelAndReservationStaysIntact"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к picked cancel неверна; квалифицировать strict flag и оба revoke orders для каждой операции.",
+      "candidateProofs": [
+        {
+          "suite": "MvpServiceWarehouseAdmissionQualificationTest",
+          "test": "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill",
+          "path": "src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "MvpServiceWarehouseAdmissionQualificationTest",
+          "test": "mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation",
+          "path": "src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -314,7 +550,9 @@
           "suite": "InventoryMovementQualificationTest",
           "test": "concurrentSameKeyPostsExactlyOneMovement"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Один same-key movement не покрывает transfer/stocktake; расширить реальные команды и ledger baseline."
     },
     {
       "id": "CORE-INV-02",
@@ -324,7 +562,9 @@
           "suite": "CommercialCoreE2EQualificationTest",
           "test": "postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Отличать per-page REPEATABLE_READ и durable cursor от tenant-wide immutable snapshot; foreign/empty/end cases."
     },
     {
       "id": "CORE-QR-01",
@@ -334,7 +574,9 @@
           "suite": "PublishedOfferQrQualificationTest",
           "test": "qrP01StableReprintAndCurrentPublishedPriceAfterRevision"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Стабильный reprint недостаточен; два revoke × checkout schedules и exact committed replay."
     },
     {
       "id": "CORE-QR-02",
@@ -344,15 +586,35 @@
           "suite": "PublishedOfferQrQualificationTest",
           "test": "qrP03PausedHiddenAndRevokedReferencesCannotExposeCard"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Старая привязка проверяет visibility без bytes; negative storage invocation и public derivative отделить от original."
     },
     {
       "id": "CORE-QR-03",
-      "behavior": "Public QR and cross tenant access never grant private order ownership",
-      "requiredProofs": [
+      "behavior": "Available/partial/unknown region preview including empty → advisory only",
+      "requiredProofs": [],
+      "legacyBehavior": "Public QR and cross tenant access never grant private order ownership",
+      "legacyProofs": [
         {
           "suite": "PublishedQrCheckoutQualificationTest",
           "test": "qr03bCrossBuyerAndCrossTenantStaffCannotReadOrReprint"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к private order read не относится к regional advisory; проверить zero reservation и отсутствие warehouse leakage.",
+      "candidateProofs": [
+        {
+          "suite": "RegionalPublicAvailabilityQualificationTest",
+          "test": "qr02bQuantityMustFitOneWarehouseNotSumAcrossTwo",
+          "path": "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "RegionalPublicAvailabilityQualificationTest",
+          "test": "qr02bUnknownKatoQtyAndRetiredQrCannotLeakInventory",
+          "path": "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -364,7 +626,9 @@
           "suite": "PublishedQrCheckoutQualificationTest",
           "test": "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Основной entrypoint checkoutVerified; email-first checkout по умолчанию закрыт; price race отдельно."
     },
     {
       "id": "CORE-QR-05",
@@ -374,7 +638,9 @@
           "suite": "QrNegotiatedCheckoutQualificationTest",
           "test": "qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Добавить точную привязку reject, self-accept, request conflict и конкурентный revision CAS."
     },
     {
       "id": "CORE-QR-06",
@@ -384,15 +650,35 @@
           "suite": "QrNegotiatedCheckoutQualificationTest",
           "test": "qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Accepted happy path не доказывает разные ключи/namespace/restart; scope receipt tenant+key, quote uniqueness отдельно."
     },
     {
       "id": "CORE-QR-07",
-      "behavior": "Accepted quote can be consumed at most once across competing checkout requests",
-      "requiredProofs": [
+      "behavior": "Expire/withdraw/revoke/suspend×checkout both orders, exact cutoff → winner only",
+      "requiredProofs": [],
+      "legacyBehavior": "Accepted quote can be consumed at most once across competing checkout requests",
+      "legacyProofs": [
         {
           "suite": "QrNegotiatedCheckoutQualificationTest",
           "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к double consumption ошибочна; для expire/withdraw/QR revoke/suspend нужны свои состояния и оба порядка.",
+      "candidateProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bExpiredQuoteFailsWithoutAnyOrderOrReceipt",
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04aExpiredProposalEffectiveStateAndMaterialization",
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -404,15 +690,35 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Полный pick/ready/no early debit есть как кандидат; сохранить отдельный incomplete-pick отрицательный oracle."
     },
     {
       "id": "CORE-PICK-02",
-      "behavior": "Warehouse scope revoke prevents unauthorized picking",
-      "requiredProofs": [
+      "behavior": "Buyer issues credential; scoped staff previews; foreign/expired deny",
+      "requiredProofs": [],
+      "legacyBehavior": "Warehouse scope revoke prevents unauthorized picking",
+      "legacyProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr05WrongWarehouseAndRevokedAssignmentBlockPreparation"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к preparation не доказывает issue/preview; wrong warehouse/expiry и zero IO/stock отдельно.",
+      "candidateProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06CredentialRequiresVerifiedBuyerAndReadyState",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06PreviewDoesNotConsumeAndCompletedHandoverDebitsOnce",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -424,7 +730,9 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr06CredentialRequiresVerifiedBuyerAndReadyState"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Issue-only не доказывает debit; reissue через issue с новым ключом; старый proof, replay и unique receipt."
     },
     {
       "id": "CORE-PICK-04",
@@ -434,7 +742,9 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Двухпоточный scan не равен two-JVM; добавить revoke-first и handover-first, account и permission variants."
     },
     {
       "id": "CORE-PICK-05",
@@ -444,7 +754,9 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Реальные Runtime.halt workers существуют; отдельно SQL fault при receipt/credential и run logs с кодами выхода."
     },
     {
       "id": "CORE-RET-01",
@@ -454,7 +766,9 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Capacity учитывает все незакрытые claims кроме REJECTED/CANCELLED_BY_BUYER; проверить состояния и independent sum."
     },
     {
       "id": "CORE-RET-02",
@@ -464,7 +778,9 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr07R1ReviewApproveAndImmutableDecisionReplay"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Review не равен physical reception; proof issue/consume, wrong warehouse, replay и no early stock."
     },
     {
       "id": "CORE-RET-03",
@@ -474,15 +790,35 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Связать RESTOCK movement по posting.movement_id; QUARANTINE отдельный ledger, WRITE_OFF без sellable credit."
     },
     {
       "id": "CORE-RET-04",
-      "behavior": "Damaged or quarantined returns never increase sellable stock",
-      "requiredProofs": [
+      "behavior": "Concurrent quarantine resolution in both orders → one resolution/conserved qty",
+      "requiredProofs": [],
+      "legacyBehavior": "Damaged or quarantined returns never increase sellable stock",
+      "legacyProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr07R2WriteOffAndQuarantineNeverIncreaseSellableStock"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая проверка disposition не доказывает resolution race; проверить два заданных порядка RESTOCK/DISPOSE и immutable original.",
+      "candidateProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25ConcurrentQuarantineRestockVsDisposeSettlesExactlyOnce",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross",
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
@@ -494,7 +830,9 @@
           "suite": "QrWarehouseHandoverQualificationTest",
           "test": "qr07R2TwoIndependentJvmsCannotDoubleRestockOneReturn"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Two-JVM duplicate не заменяет crash; добавить reception duplicate и исходный COMPLETED hash."
     },
     {
       "id": "CORE-XD-01",
@@ -504,7 +842,9 @@
           "suite": "BusMvpServiceJourneyQualificationTest",
           "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "BUS использует new VerifiedActor, обычную TASK и email-first checkout; CRM buyer link, cancellation и signed chain не доказаны одним journey."
     },
     {
       "id": "CORE-XD-02",
@@ -514,32 +854,59 @@
           "suite": "QrMvpServiceJourneyQualificationTest",
           "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Два маршрута существуют, decoder stub; tenant/email/warehouse setup через SQL/repos; нет WRITE_OFF полного J1."
     },
     {
       "id": "CORE-XD-03",
-      "behavior": "Negotiated quote reaches pickup and segregated quarantine",
-      "requiredProofs": [
+      "behavior": "A/B/AB actor tries foreign customer/offer/order/stock/QR/media using UUIDs and list filters",
+      "requiredProofs": [],
+      "legacyBehavior": "Negotiated quote reaches pickup and segregated quarantine",
+      "legacyProofs": [
         {
           "suite": "QrMvpServiceJourneyQualificationTest",
           "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"
+        }
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к negotiated happy path неверна; собрать A/B/AB по всем owner reads/list/count/history/bytes.",
+      "candidateProofs": [
+        {
+          "suite": "UserRoleMatrixR31QualificationTest",
+          "test": "urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal",
+          "path": "src/test/java/kz/rm/iam/UserRoleMatrixR31QualificationTest.java",
+          "review": "CANDIDATE_ONLY"
+        },
+        {
+          "suite": "FilesR10bQualificationTest",
+          "test": "tcrud03BinaryReadDoesNotWriteAnyBytesForWrongOwnerOrMissingPiiPermission",
+          "path": "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+          "review": "CANDIDATE_ONLY"
         }
       ]
     },
     {
       "id": "CORE-XD-04",
-      "behavior": "Cross tenant stock and order commands have no side effects",
-      "requiredProofs": [
+      "behavior": "Populated old schema→Liquibase→restart→read and replay historical orders/link/receipt/stock",
+      "requiredProofs": [],
+      "legacyBehavior": "Cross tenant stock and order commands have no side effects",
+      "legacyProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
           "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand"
         }
-      ]
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к oversell не относится к upgrade; использовать populated workflows, baseline schema/fixtures, restore и hash исторических rows.",
+      "candidateProofs": []
     },
     {
       "id": "CORE-XD-05",
-      "behavior": "Seller suspension and checkout in both commit orders preserve one order snapshot",
-      "requiredProofs": [
+      "behavior": "Frozen candidate SHA → mandatory H2/PG/security/infra jobs and per-ID evidence → no unexpected skip",
+      "requiredProofs": [],
+      "legacyBehavior": "Seller suspension and checkout in both commit orders preserve one order snapshot",
+      "legacyProofs": [
         {
           "suite": "CommercialCoreE2EQualificationTest",
           "test": "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot"
@@ -548,7 +915,10 @@
           "suite": "CommercialCoreE2EQualificationTest",
           "test": "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects"
         }
-      ]
+      ],
+      "mappingVerdict": "GAP",
+      "openRequirement": "Старая привязка к seller suspend × checkout неверна; gate является workflow+verifier+artifact set, не одним JUnit методом.",
+      "candidateProofs": []
     }
   ],
   "taskAddendum": [
@@ -560,7 +930,9 @@
           "suite": "TaskServiceQualificationTest",
           "test": "t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Full semantic variant and oracle review pending"
     },
     {
       "id": "BUS-TASK-02",
@@ -570,7 +942,9 @@
           "suite": "TaskServiceQualificationTest",
           "test": "t12EarlierTaskPermissionRevocationDeniesExecutionWithoutWrites"
         }
-      ]
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Full semantic variant and oracle review pending"
     }
   ]
 }
