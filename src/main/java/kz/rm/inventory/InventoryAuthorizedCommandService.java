@@ -73,6 +73,8 @@ public class InventoryAuthorizedCommandService {
         if(quantity==null || quantity.signum()<=0 || cause==null)
             throw new IllegalArgumentException("Positive quantity and write-off cause required");
         validateStaffKey(requestKey);
+        if(strictMvpServiceMode)
+            warehouseScopes.requireAssigned(actorId,tenantId,locationId);
         return movements.adjust(tenantId,locationId,itemId,requestKey,quantity.negate(),
                 InventoryMovementService.Reason.WRITE_OFF,actorId,cause);
     }
@@ -83,6 +85,17 @@ public class InventoryAuthorizedCommandService {
                 BigDecimal quantity,String requestKey) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         validateStaffKey(requestKey);
+        if(strictMvpServiceMode) {
+            if(sourceLocationId==null || targetLocationId==null
+                    || sourceLocationId.equals(targetLocationId))
+                throw new IllegalArgumentException("Two distinct warehouses required");
+            // Both scope locks precede movement locks in stable UUID order.
+            UUID first=sourceLocationId.compareTo(targetLocationId)<0
+                    ?sourceLocationId:targetLocationId;
+            UUID second=first.equals(sourceLocationId)?targetLocationId:sourceLocationId;
+            warehouseScopes.requireAssigned(actorId,tenantId,first);
+            warehouseScopes.requireAssigned(actorId,tenantId,second);
+        }
         return transfers.transfer(tenantId,sourceLocationId,targetLocationId,
                 itemId,quantity,requestKey,actorId);
     }
@@ -92,12 +105,16 @@ public class InventoryAuthorizedCommandService {
              UUID locationId,java.util.List<UUID> items,String requestKey) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         validateStaffKey(requestKey);
+        if(strictMvpServiceMode)
+            warehouseScopes.requireAssigned(actorId,tenantId,locationId);
         return stocktakes.start(tenantId,locationId,items,requestKey,actorId);
     }
     @Transactional
     kz.rm.inventory.dto.InventoryStocktakeDto recordCount(UUID actorId,UUID tenantId,
               UUID stocktakeId,UUID itemId,BigDecimal quantity,long expectedLineVersion) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        if(strictMvpServiceMode)
+            requireStocktakeWarehouse(actorId,tenantId,stocktakeId);
         return stocktakes.count(tenantId,stocktakeId,itemId,quantity,
                 expectedLineVersion,actorId);
     }
@@ -106,13 +123,25 @@ public class InventoryAuthorizedCommandService {
               UUID stocktakeId,String requestKey) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         validateStaffKey(requestKey);
+        if(strictMvpServiceMode)
+            requireStocktakeWarehouse(actorId,tenantId,stocktakeId);
         return stocktakes.post(tenantId,stocktakeId,requestKey,actorId);
     }
     @Transactional
     kz.rm.inventory.dto.InventoryStocktakeDto cancelStocktake(UUID actorId,UUID tenantId,
               UUID stocktakeId) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
+        if(strictMvpServiceMode)
+            requireStocktakeWarehouse(actorId,tenantId,stocktakeId);
         return stocktakes.cancel(tenantId,stocktakeId,actorId);
+    }
+
+    /** Stocktake location is server-owned and immutable; never take the
+     * warehouse identity from a workbook, employee or unchecked client DTO.
+     */
+    private void requireStocktakeWarehouse(UUID actorId,UUID tenantId,UUID stocktakeId) {
+        warehouseScopes.requireAssigned(actorId,tenantId,
+                stocktakes.details(tenantId,stocktakeId).locationId());
     }
 
     private static void validateStaffKey(String key){
