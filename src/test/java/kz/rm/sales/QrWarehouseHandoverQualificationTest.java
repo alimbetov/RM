@@ -61,6 +61,9 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired kz.rm.inventory.AuthenticatedInventoryCommands inventoryCommands;
     @Autowired kz.rm.inventory.AuthenticatedInventoryReconciliation reconciliation;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired GlobalAccountStatusService globalAccountStatus;
+    @Autowired GlobalRoleAssignmentRepository globalRoles;
+    @Autowired TenantAccessStatusService tenantAccessStatus;
 
     private record Context(UUID tenant,UUID warehouse,UUID otherWarehouse,
                            UUID itemOne,UUID itemTwo,UUID offerOne,UUID offerTwo,
@@ -3420,12 +3423,14 @@ class QrWarehouseHandoverQualificationTest {
         if(directory==null||directory.isBlank())return;
         String method=StackWalker.getInstance().walk(frames->frames
                 .map(StackWalker.StackFrame::getMethodName)
-                .filter(name->name.startsWith("qr07R25CoreRet04")).findFirst().orElse(null));
+                .filter(name->name.startsWith("qr07R25CoreRet04")||name.startsWith("qr07R25StrictRet04E")).findFirst().orElse(null));
         if(method==null)return;
         String sha=System.getenv("GITHUB_SHA");
         if(sha==null||!sha.matches("[0-9a-f]{40}"))throw new AssertionError("RET04D SHA missing");
         try{
-            var dir=java.nio.file.Path.of(directory,method);
+            var dir=method.startsWith("qr07R25StrictRet04E")
+                    ?java.nio.file.Path.of(directory).resolveSibling("identity-e3").resolve(method)
+                    :java.nio.file.Path.of(directory,method);
             java.nio.file.Files.createDirectories(dir);
             long sequence;
             try(var files=java.nio.file.Files.list(dir)){sequence=files.count();}
@@ -3905,6 +3910,197 @@ class QrWarehouseHandoverQualificationTest {
                 SELECT count(*) FROM crm.sales_return_event WHERE tenant_id=? AND return_id=?
                     AND from_state='QUARANTINED' AND to_state=? AND request_key=? AND expected_row_version=6
                 """,Integer.class,f.c().tenant(),f.returnId(),result.state(),f.requestKey())).isEqualTo(1);
+    }
+
+    // E.3A: signed token -> actual quarantine service; negative cases retain all
+    // 17 business projections. IAM lifecycle changes are not business effects.
+    @Test void qr07R25StrictRet04E01TrustedRestock() throws Exception { ret04EIdentityCase(1); }
+    @Test void qr07R25StrictRet04E02TrustedDispose() throws Exception { ret04EIdentityCase(2); }
+    @Test void qr07R25StrictRet04E03UntrustedSignature() throws Exception { ret04EIdentityCase(3); }
+    @Test void qr07R25StrictRet04E04WrongIssuer() throws Exception { ret04EIdentityCase(4); }
+    @Test void qr07R25StrictRet04E05WrongAudience() throws Exception { ret04EIdentityCase(5); }
+    @Test void qr07R25StrictRet04E06IdToken() throws Exception { ret04EIdentityCase(6); }
+    @Test void qr07R25StrictRet04E07RefreshToken() throws Exception { ret04EIdentityCase(7); }
+    @Test void qr07R25StrictRet04E08ExpiredBearer() throws Exception { ret04EIdentityCase(8); }
+    @Test void qr07R25StrictRet04E09SpoofedClaims() throws Exception { ret04EIdentityCase(9); }
+    @Test void qr07R25StrictRet04E10UnknownSubject() throws Exception { ret04EIdentityCase(10); }
+    @Test void qr07R25StrictRet04E11ForeignTenant() throws Exception { ret04EIdentityCase(11); }
+    @Test void qr07R25StrictRet04E12ForeignReturn() throws Exception { ret04EIdentityCase(12); }
+    @Test void qr07R25StrictRet04E13WrongWarehouse() throws Exception { ret04EIdentityCase(13); }
+    @Test void qr07R25StrictRet04E14InactiveWarehouse() throws Exception { ret04EIdentityCase(14); }
+    @Test void qr07R25StrictRet04E15MissingPostRestock() throws Exception { ret04EIdentityCase(15); }
+    @Test void qr07R25StrictRet04E16MissingPostDispose() throws Exception { ret04EIdentityCase(16); }
+    @Test void qr07R25StrictRet04E17MissingReceive() throws Exception { ret04EIdentityCase(17); }
+    @Test void qr07R25StrictRet04E18MissingAdjust() throws Exception { ret04EIdentityCase(18); }
+    @Test void qr07R25StrictRet04E19ReceivePostOnly() throws Exception { ret04EIdentityCase(19); }
+    @Test void qr07R25StrictRet04E20AdjustPostOnly() throws Exception { ret04EIdentityCase(20); }
+    @Test void qr07R25StrictRet04E21RoleUnassigned() throws Exception { ret04EIdentityCase(21); }
+    @Test void qr07R25StrictRet04E22RoleDeactivated() throws Exception { ret04EIdentityCase(22); }
+    @Test void qr07R25StrictRet04E23AccountSuspended() throws Exception { ret04EIdentityCase(23); }
+    @Test void qr07R25StrictRet04E24MembershipSuspended() throws Exception { ret04EIdentityCase(24); }
+
+    private VerifiedActor ret04EActor(String token){
+        return new OidcActorResolver(identityDecoder,users).resolve(token);
+    }
+
+    private SalesReturnQuarantineResolutionService.Resolved ret04ECommand(
+            Ret04B f,VerifiedActor actor,UUID tenant,UUID warehouse,UUID returnId,boolean restock){
+        return quarantineResolution.resolve(actor,tenant,warehouse,returnId,6,
+                restock?SalesReturnQuarantineResolutionService.Action.RESTOCK:
+                        SalesReturnQuarantineResolutionService.Action.DISPOSE,
+                "QA_B_EVIDENCE",f.requestKey());
+    }
+
+    private void ret04EDenied(org.assertj.core.api.ThrowableAssert.ThrowingCallable operation,String reason){
+        assertThatThrownBy(operation).isInstanceOf(SecurityException.class).hasMessage(reason);
+        System.out.println("RET04E3 denied reason="+reason);
+    }
+
+    private void ret04EDenyBoth(Ret04B f,VerifiedActor actor,String reason){
+        for(boolean restock:new boolean[]{true,false})
+            ret04EDenied(()->ret04ECommand(f,actor,f.c().tenant(),f.c().warehouse(),f.returnId(),restock),reason);
+    }
+
+    private void ret04EAllow(Ret04B f,VerifiedActor actor,boolean restock){
+        assertThat(actor.userId()).isEqualTo(f.c().staff().userId());
+        var result=ret04ECommand(f,actor,f.c().tenant(),f.c().warehouse(),f.returnId(),restock);
+        ret04BAssertResolved(f,restock,result);
+        var after=ret04BSnapshot(f.c());
+        assertThat(ret04ECommand(f,actor,f.c().tenant(),f.c().warehouse(),f.returnId(),restock)).isEqualTo(result);
+        ret04BAssertUnchanged(f,after);
+        System.out.println("RET04E3 allowed action="+(restock?"RESTOCK":"DISPOSE"));
+    }
+
+    private void ret04EIdentityCase(int scenario) throws Exception {
+        var f=ret04BFixture();var c=f.c();
+        UUID staff=c.staff().userId(),role=assignedRole(c);
+        String bearer=signedAccess(staff);
+        VerifiedActor actor=ret04EActor(bearer);
+        assertThat(actor.userId()).isEqualTo(staff);
+        if(scenario==1||scenario==2){
+            ret04EAllow(f,actor,scenario==1);
+            return;
+        }
+        if((scenario>=3&&scenario<=8)||scenario==10){
+            String subject=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                    String.class,staff);
+            String purpose=scenario==6?"ID":"Bearer";
+            String issuer=scenario==4?"https://wrong.example.test":SignedJwtTestAuthority.ISSUER;
+            String audience=scenario==5?"foreign-api":SignedJwtTestAuthority.AUDIENCE;
+            String use=scenario==7?"refresh":null;
+            long expiry=Instant.now().plusSeconds(scenario==8?-300:600).getEpochSecond();
+            String token=identityAuthority.issue(scenario==10?"unknown-"+UUID.randomUUID():subject,
+                    purpose,issuer,audience,expiry,scenario==3?SignedJwtTestAuthority.SigningKey.UNTRUSTED:
+                            SignedJwtTestAuthority.SigningKey.TRUSTED,use,null,null);
+            for(boolean restock:new boolean[]{true,false})
+                ret04EDenied(()->ret04ECommand(f,ret04EActor(token),c.tenant(),c.warehouse(),f.returnId(),restock),
+                        scenario==10?"OIDC principal not linked to RM":"OIDC token verification failed");
+            ret04BAssertUnchanged(f,f.before());
+            return;
+        }
+        if(scenario==9||scenario==11||scenario==12){
+            var other=ret04BFixture();var foreign=other.c();
+            if(scenario==9){
+                String subject=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                        String.class,staff);
+                String spoof=identityAuthority.issue(subject,"Bearer",SignedJwtTestAuthority.ISSUER,
+                        SignedJwtTestAuthority.AUDIENCE,Instant.now().plusSeconds(600).getEpochSecond(),
+                        SignedJwtTestAuthority.SigningKey.TRUSTED,null,foreign.owner().userId(),foreign.tenant());
+                var spoofActor=ret04EActor(spoof);
+                assertThat(spoofActor.userId()).isEqualTo(staff);
+                ret04EDenied(()->ret04ECommand(other,spoofActor,foreign.tenant(),foreign.warehouse(),
+                        other.returnId(),true),"Active organization membership required");
+                ret04BAssertUnchanged(other,other.before());
+                ret04EAllow(f,spoofActor,true);
+                return;
+            }
+            if(scenario==11){
+                for(boolean restock:new boolean[]{true,false})
+                    ret04EDenied(()->ret04ECommand(other,actor,foreign.tenant(),foreign.warehouse(),
+                            other.returnId(),restock),"Active organization membership required");
+            }else{
+                for(boolean restock:new boolean[]{true,false})
+                    ret04EDenied(()->ret04ECommand(f,actor,c.tenant(),c.warehouse(),other.returnId(),restock),
+                            "QUARANTINE_SOURCE_NOT_ACCESSIBLE");
+            }
+            ret04BAssertUnchanged(other,other.before());
+            ret04BAssertUnchanged(f,f.before());
+            return;
+        }
+        if(scenario==13){
+            for(boolean restock:new boolean[]{true,false})
+                ret04EDenied(()->ret04ECommand(f,actor,c.tenant(),c.otherWarehouse(),f.returnId(),restock),
+                        "QUARANTINE_SOURCE_NOT_ACCESSIBLE");
+            scopes.revoke(c.owner(),c.tenant(),c.warehouse(),staff);
+            assertThat(jdbc.queryForObject("""
+                    SELECT state FROM public.iam_warehouse_staff_scope
+                    WHERE tenant_id=? AND warehouse_id=? AND actor_user_id=?
+                    """,String.class,c.tenant(),c.warehouse(),staff)).isEqualTo("REVOKED");
+            ret04EDenyBoth(f,actor,"WAREHOUSE_SCOPE_REQUIRED");
+        }else if(scenario==14){
+            // Fixture-only status transition: the warehouse lifecycle service
+            // can reject deactivation with live inventory. Here qualify the
+            // resolution service's fail-closed behavior for an inactive source.
+            assertThat(jdbc.update("""
+                    UPDATE public.org_location SET status='INACTIVE',row_version=row_version+1
+                    WHERE workspace_id=? AND id=? AND status='ACTIVE'
+                    """,c.tenant(),c.warehouse())).isEqualTo(1);
+            ret04EDenyBoth(f,actor,"WAREHOUSE_INACTIVE");
+        }else if(scenario>=15&&scenario<=18){
+            DomainPermission permission=scenario<=16?DomainPermission.SALES_RETURN_POST:
+                    scenario==17?DomainPermission.INVENTORY_RECEIVE:DomainPermission.INVENTORY_ADJUST;
+            roles.revoke(c.owner(),c.tenant(),role,permission);
+            assertThat(roles.listGrants(c.owner(),c.tenant(),role)).doesNotContain(permission);
+            ret04EDenied(()->ret04ECommand(f,actor,c.tenant(),c.warehouse(),f.returnId(),
+                    scenario==15||scenario==17),"Tenant RBAC permission denied");
+        }else if(scenario==19||scenario==20){
+            boolean restock=scenario==19;
+            var action=restock?DomainPermission.INVENTORY_RECEIVE:DomainPermission.INVENTORY_ADJUST;
+            for(var permission:roles.listGrants(c.owner(),c.tenant(),role))
+                if(permission!=DomainPermission.SALES_RETURN_POST&&permission!=action)
+                    roles.revoke(c.owner(),c.tenant(),role,permission);
+            assertThat(roles.listGrants(c.owner(),c.tenant(),role))
+                    .containsExactlyInAnyOrder(DomainPermission.SALES_RETURN_POST,action);
+            ret04EDenied(()->ret04ECommand(f,actor,c.tenant(),c.warehouse(),f.returnId(),!restock),
+                    "Tenant RBAC permission denied");
+            ret04BAssertUnchanged(f,f.before());
+            ret04EAllow(f,actor,restock);
+            return;
+        }else if(scenario==21){
+            roles.unassign(c.owner(),c.tenant(),staff,role);
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM public.iam_tenant_user_role
+                    WHERE tenant_id=? AND user_id=? AND role_id=?
+                    """,Integer.class,c.tenant(),staff,role)).isZero();
+            ret04EDenyBoth(f,actor,"Tenant RBAC permission denied");
+            ret04EDenyBoth(f,ret04EActor(bearer),"Tenant RBAC permission denied");
+        }else if(scenario==22){
+            roles.activateRole(c.owner(),c.tenant(),role,false);
+            assertThat(jdbc.queryForObject("""
+                    SELECT active FROM public.iam_tenant_role WHERE tenant_id=? AND id=?
+                    """,Boolean.class,c.tenant(),role)).isFalse();
+            ret04EDenyBoth(f,actor,"Tenant RBAC permission denied");
+            ret04EDenyBoth(f,ret04EActor(bearer),"Tenant RBAC permission denied");
+        }else if(scenario==23){
+            UUID admin=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                    "ret04-admin-"+UUID.randomUUID(),"RET04 Admin")).getId();
+            globalRoles.saveAndFlush(new GlobalRoleAssignmentEntity(UUID.randomUUID(),admin,
+                    GlobalRoleAssignmentEntity.Role.PLATFORM_ADMIN));
+            globalAccountStatus.suspendAccount(verified(admin),staff);
+            assertThat(jdbc.queryForObject("SELECT status FROM public.iam_user_account WHERE id=?",
+                    String.class,staff)).isEqualTo("SUSPENDED");
+            ret04EDenyBoth(f,actor,"Actor inactive or unknown");
+            ret04EDenied(()->ret04EActor(bearer),"OIDC user inactive");
+        }else if(scenario==24){
+            tenantAccessStatus.suspendMember(c.owner(),c.tenant(),staff);
+            assertThat(jdbc.queryForObject("""
+                    SELECT m.status FROM public.iam_org_membership m JOIN public.iam_workspace w
+                    ON w.organization_id=m.organization_id WHERE w.id=? AND m.user_id=?
+                    """,String.class,c.tenant(),staff)).isEqualTo("SUSPENDED");
+            ret04EDenyBoth(f,actor,"Active organization membership required");
+            ret04EDenyBoth(f,ret04EActor(bearer),"Active organization membership required");
+        }else throw new AssertionError("Unknown E.3A case");
+        ret04BAssertUnchanged(f,f.before());
     }
 
     @Test void qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross()
