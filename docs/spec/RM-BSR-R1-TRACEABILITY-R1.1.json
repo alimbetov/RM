@@ -1,0 +1,4541 @@
+{
+  "schema": "RM-BSR-R1-STATIC-CROSSWALK/1.1",
+  "baselineSha": "a09c53fd301838e04e2ffe5e518346764a2c51ef",
+  "branch": "base_dev",
+  "reviewDate": "2026-11-24",
+  "purpose": "BSR-00 source inventory and BSR-10 candidate traceability. Not an execution manifest or replacement for existing CI. No automatic maturity promotion.",
+  "status": "STATIC_INVENTORY_COMPLETE; SEMANTIC_VARIANT_REVIEW_PENDING; QUALIFICATION_NOT_RUN; G1_HOLD",
+  "canonicalSource": "docs/spec/RM-CORE-FUNCTIONAL-CLOSURE-R1.md#116-detailed-mandatory-scenario-acceptance-catalogue-core-p0",
+  "priorExecutionMap": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+  "counts": {
+    "canonicalScenarios": 54,
+    "candidateOverlays": 10,
+    "testJavaFiles": 95,
+    "classesWithDeclaredTests": 92,
+    "declaredTestMethods": 866,
+    "workflows": 29,
+    "admissionRequiredWorkflows": 9,
+    "priorMappingWrongBehavior": 18,
+    "bsrPgQualified": 0,
+    "productionJavaFiles": 238
+  },
+  "ownerGroups": {
+    "IAM": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/iam/SelfServiceTenantOnboardingService.java",
+          "method": "createFirstTenant",
+          "line": 32,
+          "signature": "public OnboardedTenant createFirstTenant(VerifiedActor actor, UUID tenantId, String legalName, String displayName, String countryCode)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/SelfServiceTenantOnboardingService.java",
+          "method": "selectTenant",
+          "line": 134,
+          "signature": "public MyAccessService.Tenant selectTenant(VerifiedActor actor, UUID tenantId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/TenantMemberEnrollmentService.java",
+          "method": "invite",
+          "line": 30,
+          "signature": "public Member invite(VerifiedActor owner, UUID tenantId, UUID employeeUserId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/TenantMemberEnrollmentService.java",
+          "method": "accept",
+          "line": 69,
+          "signature": "public Member accept(VerifiedActor employee, UUID tenantId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java",
+          "method": "grant",
+          "line": 23,
+          "signature": "public void grant(VerifiedActor owner, UUID tenantId, UUID roleId, DomainPermission permission)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java",
+          "method": "revoke",
+          "line": 27,
+          "signature": "public void revoke(VerifiedActor owner, UUID tenantId, UUID roleId, DomainPermission permission)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java",
+          "method": "assign",
+          "line": 31,
+          "signature": "public void assign(VerifiedActor owner, UUID tenantId, UUID employeeId, UUID roleId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/OidcActorResolver.java",
+          "method": "resolve",
+          "line": 21,
+          "signature": "public VerifiedActor resolve(String accessToken)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "public.iam_user_account",
+        "public.iam_workspace",
+        "public.org_organization",
+        "public.iam_org_membership",
+        "public.iam_tenant_rbac_event",
+        "public.iam_tenant_role_permission",
+        "public.iam_tenant_user_role"
+      ]
+    },
+    "IDENTITY": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/iam/GlobalAccountStatusService.java",
+          "method": "suspendAccount",
+          "line": 26,
+          "signature": "public void suspendAccount(VerifiedActor admin, UUID targetUserId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/GlobalAccountDeletionService.java",
+          "method": "deleteAccount",
+          "line": 32,
+          "signature": "public void deleteAccount(VerifiedActor admin,UUID targetId,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "public.iam_user_account",
+        "public.iam_account_deletion_event",
+        "public.iam_deletion_oidc_revocation_outbox",
+        "public.iam_email_identity"
+      ]
+    },
+    "SCOPE": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java",
+          "method": "assign",
+          "line": 70,
+          "signature": "public void assign(VerifiedActor owner,UUID tenant,UUID warehouse,UUID staff)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java",
+          "method": "revoke",
+          "line": 114,
+          "signature": "public void revoke(VerifiedActor owner,UUID tenant,UUID warehouse,UUID staff)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "public.iam_warehouse_staff_scope",
+        "public.org_location"
+      ]
+    },
+    "ORG": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "create",
+          "line": 25,
+          "signature": "public LocationDto create(VerifiedActor actor,UUID tenant,LocationCreateRequest request)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "create",
+          "line": 30,
+          "signature": "public LocationDto create(VerifiedActor actor,UUID tenant,OrganizationLocationEntity.Type type, String name,String kato,String address)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "update",
+          "line": 33,
+          "signature": "public LocationDto update(VerifiedActor actor,UUID tenant,UUID location,LocationUpdateRequest request)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "deactivate",
+          "line": 36,
+          "signature": "public LocationDto deactivate(VerifiedActor actor,UUID tenant,UUID location,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "reactivate",
+          "line": 39,
+          "signature": "public LocationDto reactivate(VerifiedActor actor,UUID tenant,UUID location,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "close",
+          "line": 42,
+          "signature": "public LocationDto close(VerifiedActor actor,UUID tenant,UUID location,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "method": "search",
+          "line": 45,
+          "signature": "public Page<LocationDto> search(VerifiedActor actor,UUID tenant,LocationSearch filter,int page,int size)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "public.org_location",
+        "crm.audit_event"
+      ]
+    },
+    "CRM": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "method": "createPerson",
+          "line": 15,
+          "signature": "public CrmCustomerService.Customer createPerson(VerifiedActor actor,UUID tenant,String name,String kato)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "method": "createCompany",
+          "line": 18,
+          "signature": "public CrmCustomerService.Customer createCompany(VerifiedActor actor,UUID tenant,String name,String kato)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "method": "addContact",
+          "line": 21,
+          "signature": "public CrmCustomerService.Contact addContact(VerifiedActor actor,UUID tenant,UUID customer, String name,String email,String phone)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "method": "updatePerson",
+          "line": 41,
+          "signature": "public CrmCustomerService.Customer updatePerson(VerifiedActor actor, UUID tenant, UUID customer, String name, String kato, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "method": "updateContact",
+          "line": 48,
+          "signature": "public CrmCustomerService.Contact updateContact(VerifiedActor actor, UUID tenant, UUID contact, String name, String email, String phone, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "method": "archiveCustomer",
+          "line": 45,
+          "signature": "public void archiveCustomer(VerifiedActor actor, UUID tenant, UUID customer, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmQueries.java",
+          "method": "customers",
+          "line": 31,
+          "signature": "public Page<CustomerSummary> customers(VerifiedActor actor,UUID tenant,CustomerSearch filter, int page,int size)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmQueries.java",
+          "method": "contacts",
+          "line": 36,
+          "signature": "public Page<ContactSummary> contacts(VerifiedActor actor,UUID tenant,ContactSearch filter, int page,int size)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmContractService.java",
+          "method": "create",
+          "line": 51,
+          "signature": "public Contract create(VerifiedActor actor, UUID tenant, UUID customer, String code, LocalDate starts, LocalDate ends, LocalDate asOf)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmContractService.java",
+          "method": "changeStatus",
+          "line": 88,
+          "signature": "public Contract changeStatus(VerifiedActor actor, UUID tenant, UUID id, CustomerContractEntity.Status next, long expectedVersion, LocalDate asOf)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmContractService.java",
+          "method": "renew",
+          "line": 123,
+          "signature": "public Contract renew(VerifiedActor actor, UUID tenant, UUID id, LocalDate extendedEnd, long expectedVersion, LocalDate asOf)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.customer",
+        "crm.contact",
+        "crm.customer_contract",
+        "crm.contract_revision",
+        "crm.customer_change_event",
+        "crm.contact_change_event",
+        "crm_pii.customer_secret",
+        "crm_pii.contact_secret"
+      ]
+    },
+    "INTERACTION": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "method": "record",
+          "line": 54,
+          "signature": "public Interaction record(VerifiedActor actor, UUID tenant, UUID customer, UUID contact, Kind kind, UUID responsible, Instant occurredAt, Instant nextActionAt, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "method": "assignResponsible",
+          "line": 132,
+          "signature": "public Interaction assignResponsible(VerifiedActor actor, UUID tenant, UUID id, UUID responsible, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "method": "setNextAction",
+          "line": 139,
+          "signature": "public Interaction setNextAction(VerifiedActor actor, UUID tenant, UUID id, Instant nextActionAt, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "method": "complete",
+          "line": 146,
+          "signature": "public Interaction complete(VerifiedActor actor, UUID tenant, UUID id,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "method": "cancel",
+          "line": 151,
+          "signature": "public Interaction cancel(VerifiedActor actor, UUID tenant, UUID id,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "method": "history",
+          "line": 156,
+          "signature": "public List<Event> history(VerifiedActor actor, UUID tenant, UUID id,int limit)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.customer_interaction",
+        "crm.customer_interaction_event"
+      ]
+    },
+    "LINK": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "method": "propose",
+          "line": 54,
+          "signature": "public Link propose(VerifiedActor seller, UUID tenant, UUID customer, UUID buyer, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "method": "confirm",
+          "line": 102,
+          "signature": "public Link confirm(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "method": "orderHistory",
+          "line": 143,
+          "signature": "public List<BuyerOrder> orderHistory(VerifiedActor seller, UUID tenant, UUID customer, int limit)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "method": "revokeByBuyer",
+          "line": 196,
+          "signature": "public Link revokeByBuyer(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "method": "disputeByBuyer",
+          "line": 222,
+          "signature": "public Link disputeByBuyer(VerifiedActor buyer, UUID tenant, UUID linkId, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "method": "adjudicateDispute",
+          "line": 254,
+          "signature": "public Link adjudicateDispute(VerifiedActor reviewer, UUID tenant, UUID linkId, long expectedVersion, DisputeReason reason)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.customer_buyer_link",
+        "crm.customer_buyer_link_event",
+        "crm.customer_buyer_dispute_decision"
+      ]
+    },
+    "TASK": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskCrmFollowupService.java",
+          "method": "create",
+          "line": 43,
+          "signature": "public TaskService.Task create(VerifiedActor actor,UUID tenant,UUID interactionId, String approvedTitle,UUID assignee,Instant dueAt, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskCrmFollowupService.java",
+          "method": "getMine",
+          "line": 95,
+          "signature": "public Link getMine(VerifiedActor actor,UUID tenant,UUID taskId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "create",
+          "line": 65,
+          "signature": "public Task create(VerifiedActor actor, UUID tenant, String title, UUID assignee, Instant dueAt, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "assign",
+          "line": 102,
+          "signature": "public Task assign(VerifiedActor actor, UUID tenant, UUID id, UUID assignee, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "assign",
+          "line": 108,
+          "signature": "public Task assign(VerifiedActor actor, UUID tenant, UUID id, UUID assignee, long expectedVersion,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "start",
+          "line": 305,
+          "signature": "public Task start(VerifiedActor actor,UUID tenant,UUID id,long version)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "start",
+          "line": 310,
+          "signature": "public Task start(VerifiedActor actor,UUID tenant,UUID id,long version,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "reschedule",
+          "line": 151,
+          "signature": "public Task reschedule(VerifiedActor actor,UUID tenant,UUID id,Instant newDue, long expectedVersion,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "complete",
+          "line": 335,
+          "signature": "public Task complete(VerifiedActor actor,UUID tenant,UUID id,long version)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "complete",
+          "line": 340,
+          "signature": "public Task complete(VerifiedActor actor,UUID tenant,UUID id,long version,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "cancel",
+          "line": 237,
+          "signature": "public Task cancel(VerifiedActor actor,UUID tenant,UUID id,long expectedVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskService.java",
+          "method": "historyMine",
+          "line": 455,
+          "signature": "public List<Event> historyMine(VerifiedActor actor,UUID tenant,UUID id,int limit)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskCrmReconciliationService.java",
+          "method": "reconcileCancelled",
+          "line": 112,
+          "signature": "public TaskService.Task reconcileCancelled(VerifiedActor actor,UUID tenant, UUID interactionId,UUID taskId, long expectedVersion,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskReconciliationSnapshotService.java",
+          "method": "capture",
+          "line": 53,
+          "signature": "public Snapshot capture(VerifiedActor actor,UUID tenant,UUID interactionId, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskReconciliationSnapshotService.java",
+          "method": "page",
+          "line": 112,
+          "signature": "public Page page(VerifiedActor actor,UUID tenant,UUID snapshotId, UUID afterTaskId,int limit)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskReconciliationSnapshotService.java",
+          "method": "verifyIntegrity",
+          "line": 149,
+          "signature": "public boolean verifyIntegrity(VerifiedActor actor, UUID tenant, UUID snapshotId)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.task_item",
+        "crm.task_event",
+        "crm.task_crm_followup",
+        "crm.task_reconciliation_snapshot",
+        "crm.task_reconciliation_snapshot_item",
+        "crm.task_reconciliation_snapshot_seal"
+      ]
+    },
+    "CAT": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "method": "createDraft",
+          "line": 47,
+          "signature": "public Item createDraft(VerifiedActor actor, UUID tenant, String sku, CatalogItem.Kind kind, String sourceLocale, String sourceName, String modelCode)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "method": "upsertTranslation",
+          "line": 82,
+          "signature": "public Item upsertTranslation(VerifiedActor actor,UUID tenant,UUID itemId, String locale,String name,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "method": "addPriceRevision",
+          "line": 102,
+          "signature": "public Item addPriceRevision(VerifiedActor actor,UUID tenant,UUID itemId, BigDecimal amount,String currency,Instant validFrom, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "method": "publish",
+          "line": 129,
+          "signature": "public Item publish(VerifiedActor actor,UUID tenant,UUID itemId,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "method": "archive",
+          "line": 148,
+          "signature": "public Item archive(VerifiedActor actor,UUID tenant,UUID itemId,long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.cat_item",
+        "crm.cat_item_i18n",
+        "crm.cat_price",
+        "crm.cat_item_event"
+      ]
+    },
+    "STO": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+          "method": "createDraft",
+          "line": 37,
+          "signature": "public Storefront createDraft(VerifiedActor actor, UUID tenant, String slug)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+          "method": "publish",
+          "line": 51,
+          "signature": "public Storefront publish(VerifiedActor actor, UUID tenant, UUID storefront, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+          "method": "pause",
+          "line": 58,
+          "signature": "public Storefront pause(VerifiedActor actor, UUID tenant, UUID storefront, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "method": "createDraft",
+          "line": 58,
+          "signature": "public Offer createDraft(VerifiedActor actor, UUID tenant, UUID catalogItemId, String title, BigDecimal amount, String currency)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "method": "updatePrice",
+          "line": 79,
+          "signature": "public Offer updatePrice(VerifiedActor actor, UUID tenant, UUID offerId, String title, BigDecimal amount, String currency, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "method": "publish",
+          "line": 130,
+          "signature": "public Offer publish(VerifiedActor actor, UUID tenant, UUID offerId, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "method": "pause",
+          "line": 135,
+          "signature": "public Offer pause(VerifiedActor actor, UUID tenant, UUID offerId, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "method": "hide",
+          "line": 140,
+          "signature": "public Offer hide(VerifiedActor actor, UUID tenant, UUID offerId, long expectedVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "method": "priceHistory",
+          "line": 305,
+          "signature": "public List<PriceRevision> priceHistory(VerifiedActor actor,UUID tenant, UUID offerId,int page,int size)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.store_front",
+        "crm.store_offer",
+        "crm.store_offer_price_revision"
+      ]
+    },
+    "SAL": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "method": "checkout",
+          "line": 72,
+          "signature": "public CheckoutResult checkout(String slug,String email,String idempotencyKey,List<Line> lines)",
+          "boundary": "LEGACY_BUSINESS_EMAIL_ROUTE_NOT_QR_AUTHENTICATION"
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "method": "checkoutVerifiedPublishedQr",
+          "line": 87,
+          "signature": "public CheckoutResult checkoutVerifiedPublishedQr(VerifiedActor buyer,String slug, String idempotencyKey,Line line,QrPriceAcknowledgement acknowledged)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "method": "checkoutAcceptedQuote",
+          "line": 328,
+          "signature": "public CheckoutResult checkoutAcceptedQuote(VerifiedActor buyer,UUID tenant, UUID quoteId,AcceptedQuoteAck accepted, String idempotencyKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/PublishedQrCheckoutService.java",
+          "method": "checkoutVerified",
+          "line": 37,
+          "signature": "public AutoOrderService.CheckoutResult checkoutVerified(VerifiedActor buyer, String publicOfferRef,int quantity,long acceptedOfferVersion, BigDecimal acceptedUnitPrice,String acceptedCurrency,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/AuthenticatedSalesCommands.java",
+          "method": "confirm",
+          "line": 13,
+          "signature": "public SalesInventoryCommandService.CommandResult confirm( VerifiedActor actor,UUID tenant,UUID order,UUID warehouse)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/AuthenticatedSalesCommands.java",
+          "method": "cancel",
+          "line": 18,
+          "signature": "public SalesInventoryCommandService.CommandResult cancel( VerifiedActor actor,UUID tenant,UUID order)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/AuthenticatedSalesCommands.java",
+          "method": "fulfill",
+          "line": 23,
+          "signature": "public SalesInventoryCommandService.CommandResult fulfill( VerifiedActor actor,UUID tenant,UUID order)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.sales_order",
+        "crm.sales_order_line",
+        "crm.sales_checkout_receipt",
+        "crm.sales_order_status_event"
+      ]
+    },
+    "INV": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "receive",
+          "line": 17,
+          "signature": "public InventoryMovementService.Movement receive( VerifiedActor actor,UUID tenant,UUID location,UUID item,String key,BigDecimal qty)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "correct",
+          "line": 22,
+          "signature": "public InventoryMovementService.Movement correct( VerifiedActor actor,UUID tenant,UUID location,UUID item,String key,BigDecimal delta)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "writeOff",
+          "line": 27,
+          "signature": "public InventoryMovementService.Movement writeOff( VerifiedActor actor,UUID tenant,UUID location,UUID item,String key,BigDecimal qty, InventoryMovementService.WriteOffCause cause)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "transfer",
+          "line": 32,
+          "signature": "public StockTransferDto transfer(VerifiedActor actor,UUID tenant, UUID sourceLocation,UUID targetLocation,UUID item,BigDecimal qty,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "startStocktake",
+          "line": 37,
+          "signature": "public InventoryStocktakeDto startStocktake(VerifiedActor actor,UUID tenant, UUID location,List<UUID> items,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "recordCount",
+          "line": 41,
+          "signature": "public InventoryStocktakeDto recordCount(VerifiedActor actor,UUID tenant, UUID stocktake,UUID item,BigDecimal counted,long expectedLineVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryCommands.java",
+          "method": "postStocktake",
+          "line": 47,
+          "signature": "public InventoryStocktakeDto postStocktake(VerifiedActor actor,UUID tenant, UUID stocktake,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.inv_stock_balance",
+        "crm.inv_stock_movement",
+        "crm.inv_stock_reservation",
+        "crm.inv_reservation_event",
+        "crm.inv_stock_transfer",
+        "crm.inv_stocktake",
+        "crm.inv_stocktake_line"
+      ]
+    },
+    "RECON": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliation.java",
+          "method": "scan",
+          "line": 58,
+          "signature": "public Batch scan(VerifiedActor actor, UUID tenant, Cursor after, int size)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliation.java",
+          "method": "inspect",
+          "line": 130,
+          "signature": "public Result inspect(VerifiedActor actor, UUID tenant, UUID location, UUID item)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliationRuns.java",
+          "method": "start",
+          "line": 58,
+          "signature": "public Run start(VerifiedActor actor,UUID tenant)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliationRuns.java",
+          "method": "advance",
+          "line": 80,
+          "signature": "public Step advance(VerifiedActor actor,UUID tenant,UUID runId,int pageSize)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliationRuns.java",
+          "method": "findings",
+          "line": 166,
+          "signature": "public List<Finding> findings(VerifiedActor actor,UUID tenant,UUID runId,int page,int size)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.inv_reconciliation_run",
+        "crm.inv_reconciliation_finding"
+      ]
+    },
+    "QR": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "issueOrGet",
+          "line": 61,
+          "signature": "public Reference issueOrGet(VerifiedActor actor, UUID tenant, UUID offerId, long expectedOfferVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "issueOrGet",
+          "line": 136,
+          "signature": "public Reference issueOrGet(VerifiedActor actor, UUID tenant, UUID offerId, long expectedOfferVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "reprint",
+          "line": 77,
+          "signature": "public Reference reprint(VerifiedActor actor, UUID tenant, UUID offerId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "revoke",
+          "line": 87,
+          "signature": "public Reference revoke(VerifiedActor actor, UUID tenant, UUID offerId, long expectedQrVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "revoke",
+          "line": 144,
+          "signature": "public Reference revoke(VerifiedActor actor, UUID tenant, UUID offerId, long expectedQrVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "reissue",
+          "line": 111,
+          "signature": "public Reference reissue(VerifiedActor actor, UUID tenant, UUID offerId, long expectedOfferVersion)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "method": "reissue",
+          "line": 152,
+          "signature": "public Reference reissue(VerifiedActor actor, UUID tenant, UUID offerId, long expectedOfferVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferCardQuery.java",
+          "method": "findPublished",
+          "line": 52,
+          "signature": "public PublicCard findPublished(String publicRef, String locale)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferCardQuery.java",
+          "method": "findPublished",
+          "line": 108,
+          "signature": "public PublicCard findPublished(String publicRef,String locale, String exactKato,int requestedQuantity)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.store_offer_qr_ref",
+        "crm.store_offer_qr_receipt",
+        "crm.store_offer",
+        "crm.sales_order_qr_reference"
+      ]
+    },
+    "NEGOTIATION": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPriceProposalService.java",
+          "method": "submit",
+          "line": 75,
+          "signature": "public Result submit(VerifiedActor buyer,String offerPublicRef,int quantity, BigDecimal proposedUnitPrice,String currency,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPriceProposalService.java",
+          "method": "buyerRespond",
+          "line": 130,
+          "signature": "public Result buyerRespond(VerifiedActor buyer,UUID tenant,UUID proposalId, long expectedRevision,Action action, BigDecimal newPrice,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPriceProposalService.java",
+          "method": "sellerRespond",
+          "line": 138,
+          "signature": "public Result sellerRespond(VerifiedActor seller,UUID tenant,UUID proposalId, long expectedRevision,Action action, BigDecimal newPrice,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "method": "checkoutAcceptedQuote",
+          "line": 328,
+          "signature": "public CheckoutResult checkoutAcceptedQuote(VerifiedActor buyer,UUID tenant, UUID quoteId,AcceptedQuoteAck accepted, String idempotencyKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.sales_price_proposal",
+        "crm.sales_price_proposal_event",
+        "crm.sales_accepted_quote",
+        "crm.sales_proposal_command_receipt"
+      ]
+    },
+    "PICK": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+          "method": "startPreparing",
+          "line": 52,
+          "signature": "public Receipt startPreparing(VerifiedActor staff,UUID tenant,UUID orderId, UUID warehouseId,long expectedVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+          "method": "confirmPicked",
+          "line": 60,
+          "signature": "public Receipt confirmPicked(VerifiedActor staff,UUID tenant,UUID orderId, UUID warehouseId,UUID lineId,int quantity, long expectedVersion,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+          "method": "markReadyForPickup",
+          "line": 70,
+          "signature": "public Receipt markReadyForPickup(VerifiedActor staff,UUID tenant,UUID orderId, UUID warehouseId,long expectedVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+          "method": "issue",
+          "line": 90,
+          "signature": "public Issued issue(VerifiedActor buyer,String orderPublicRef,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+          "method": "preview",
+          "line": 152,
+          "signature": "public Preview preview(VerifiedActor staff,UUID tenant,UUID warehouse, String rawProof)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+          "method": "complete",
+          "line": 175,
+          "signature": "public Handover complete(VerifiedActor staff,UUID tenant,UUID warehouse, String rawProof,boolean explicitConfirm, long expectedOrderVersion,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.sales_order_pick_confirmation",
+        "crm.sales_preparation_receipt",
+        "crm.sales_pickup_credential",
+        "crm.sales_pickup_handover",
+        "crm.sales_pickup_handover_line"
+      ]
+    },
+    "RETURN": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnRequestService.java",
+          "method": "request",
+          "line": 42,
+          "signature": "public Created request(VerifiedActor buyer, String orderPublicRef, UUID lineId, int quantity, String reasonCode, String policyVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnReviewService.java",
+          "method": "startReview",
+          "line": 48,
+          "signature": "public Decision startReview(VerifiedActor reviewer, UUID tenant, UUID returnId, long expectedVersion, String policyVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnReviewService.java",
+          "method": "approve",
+          "line": 56,
+          "signature": "public Decision approve(VerifiedActor reviewer, UUID tenant, UUID returnId, long expectedVersion, String policyVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnReviewService.java",
+          "method": "reject",
+          "line": 64,
+          "signature": "public Decision reject(VerifiedActor reviewer, UUID tenant, UUID returnId, long expectedVersion, String policyVersion, String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnReceptionProofService.java",
+          "method": "issue",
+          "line": 35,
+          "signature": "public Issued issue(VerifiedActor buyer,UUID tenant,UUID returnId,String key)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
+          "method": "receive",
+          "line": 44,
+          "signature": "public Result receive(VerifiedActor actor,UUID tenant,UUID warehouse,UUID returnId, long version,String evidence,String key)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
+          "method": "inspect",
+          "line": 88,
+          "signature": "public Result inspect(VerifiedActor actor,UUID tenant,UUID warehouse,UUID returnId, long version,Disposition disposition,String evidence,String key)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
+          "method": "post",
+          "line": 121,
+          "signature": "public Result post(VerifiedActor actor,UUID tenant,UUID warehouse,UUID returnId, long version,String key)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnQuarantineResolutionService.java",
+          "method": "resolve",
+          "line": 49,
+          "signature": "public Resolved resolve(VerifiedActor actor,UUID tenant,UUID warehouse,UUID returnId, long expectedVersion,Action action,String evidence,String key)",
+          "boundary": "PRODUCTION_SERVICE"
+        }
+      ],
+      "tables": [
+        "crm.sales_return_request",
+        "crm.sales_return_line",
+        "crm.sales_return_event",
+        "crm.sales_return_reception_proof",
+        "crm.sales_return_reception",
+        "crm.sales_return_inspection",
+        "crm.sales_return_posting",
+        "crm.sales_return_quarantine_resolution",
+        "crm.inv_return_quarantine_balance",
+        "crm.inv_return_quarantine_movement"
+      ]
+    },
+    "FILES": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/files/AuthenticatedFilesCommands.java",
+          "method": "begin",
+          "line": 11,
+          "signature": "public FileUploadIntent begin(VerifiedActor actor,UUID tenant,String mime, long declaredSize,String requestKey)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/FileUploadCompletionService.java",
+          "method": "acceptAndComplete",
+          "line": 26,
+          "signature": "public FileUploadIntent acceptAndComplete(VerifiedActor actor,UUID tenant,UUID fileId, InputStream binary) throws IOException",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/AuthenticatedFilesAttachments.java",
+          "method": "attachCustomer",
+          "line": 12,
+          "signature": "public UUID attachCustomer(VerifiedActor actor,UUID tenant,UUID fileId, UUID customerId,String purpose)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/AuthenticatedFilesBinaryReads.java",
+          "method": "copyCustomerAttachment",
+          "line": 22,
+          "signature": "public long copyCustomerAttachment(VerifiedActor actor,UUID tenant, UUID attachmentId,OutputStream sink) throws IOException",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/CatalogPublicProductMedia.java",
+          "method": "publishSanitized",
+          "line": 56,
+          "signature": "public Image publishSanitized(VerifiedActor actor,UUID tenant,UUID itemId, UUID sourceFileId,int sortOrder,String requestKey, boolean sellerApproved) throws IOException",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/CatalogPublicProductMedia.java",
+          "method": "listPublished",
+          "line": 82,
+          "signature": "public List<Image> listPublished(String publishedOfferRef,int limit)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/CatalogPublicProductMedia.java",
+          "method": "copyPublished",
+          "line": 89,
+          "signature": "public long copyPublished(String publicMediaRef,OutputStream sink) throws IOException",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/FileRecoveryService.java",
+          "method": "reconcileOne",
+          "line": 81,
+          "signature": "Result reconcileOne(UUID tenant,UUID fileId) throws IOException",
+          "boundary": "TRUSTED_INTERNAL_WORKER"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/FileRecoveryService.java",
+          "method": "reconcileBatch",
+          "line": 42,
+          "signature": "BatchResult reconcileBatch(UUID tenant,int maxFiles) throws IOException",
+          "boundary": "TRUSTED_INTERNAL_WORKER"
+        },
+        {
+          "path": "src/main/java/kz/rm/files/FileRecoveryService.java",
+          "method": "reconcileBatch",
+          "line": 45,
+          "signature": "BatchResult reconcileBatch(UUID tenant,Instant afterCreatedAt,UUID afterId, int maxFiles) throws IOException",
+          "boundary": "TRUSTED_INTERNAL_WORKER"
+        }
+      ],
+      "tables": [
+        "crm.file_object",
+        "crm.file_storage",
+        "crm.file_attachment",
+        "crm.file_catalog_public_variant"
+      ]
+    },
+    "CURRENCY": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/organization/TenantCurrencyPolicyService.java",
+          "method": "initialize",
+          "line": 37,
+          "signature": "public Policy initialize(VerifiedActor actor, UUID tenantId)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/TenantCurrencyPolicyService.java",
+          "method": "requirePublicKzCurrency",
+          "line": 91,
+          "signature": "public void requirePublicKzCurrency(UUID tenantId,String currency)",
+          "boundary": "INTERNAL_OWNER_ADMISSION"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java",
+          "method": "lockKzMarket",
+          "line": 44,
+          "signature": "public void lockKzMarket(UUID tenant)",
+          "boundary": "INTERNAL_OWNER_ADMISSION"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java",
+          "method": "assertKzt",
+          "line": 71,
+          "signature": "public void assertKzt(String currency)",
+          "boundary": "INTERNAL_OWNER_ADMISSION"
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java",
+          "method": "assertPublicRead",
+          "line": 80,
+          "signature": "public void assertPublicRead(UUID tenant,String currency)",
+          "boundary": "INTERNAL_OWNER_ADMISSION"
+        }
+      ],
+      "tables": [
+        "public.tenant_currency_policy",
+        "public.tenant_allowed_currency",
+        "public.tenant_currency_policy_event"
+      ]
+    },
+    "FXAUTO": {
+      "source": [
+        {
+          "path": "src/main/java/kz/rm/fx/auto/FxAutoPolicyEnrollmentService.java",
+          "method": "createPolicyRevision",
+          "line": 78,
+          "signature": "public Receipt createPolicyRevision(VerifiedActor actor,UUID tenant,Command command)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/fx/auto/FxAutoDraftApprovalService.java",
+          "method": "approve",
+          "line": 48,
+          "signature": "public Receipt approve(VerifiedActor actor,UUID tenant,Command command)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/fx/auto/FxAutoConsentRevocationService.java",
+          "method": "revoke",
+          "line": 40,
+          "signature": "public Receipt revoke(VerifiedActor actor,UUID tenant,Command command)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/fx/auto/FxAutoPersistentDryRunService.java",
+          "method": "simulate",
+          "line": 54,
+          "signature": "public Receipt simulate(VerifiedActor actor,UUID tenant,Command c)",
+          "boundary": "PRODUCTION_SERVICE"
+        },
+        {
+          "path": "src/main/java/kz/rm/fx/auto/FxAutoExecutionPreparationService.java",
+          "method": "assess",
+          "line": 57,
+          "signature": "public Assessment assess(VerifiedActor actor,UUID tenant,Command c)",
+          "boundary": "DIAGNOSTIC_NO_EXECUTION_AUTHORITY"
+        }
+      ],
+      "tables": [
+        "crm.fx_auto_policy_revision",
+        "crm.fx_auto_policy_activation",
+        "crm.fx_auto_approval_evidence",
+        "crm.fx_auto_revocation_evidence",
+        "crm.fx_auto_budget_consumption",
+        "crm.fx_auto_execution_receipt",
+        "crm.fx_auto_tenant_budget_guard"
+      ]
+    },
+    "FIN": {
+      "source": [],
+      "tables": [
+        "crm.fin_invoice"
+      ]
+    },
+    "INSIGHT": {
+      "source": [],
+      "tables": []
+    },
+    "MIGRATION": {
+      "source": [],
+      "tables": []
+    },
+    "EVIDENCE": {
+      "source": [],
+      "tables": []
+    }
+  },
+  "scenarios": [
+    {
+      "id": "CORE-IAM-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IAM"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/iam/R4FirstTenantOnboardingQualificationTest.java",
+          "suite": "R4FirstTenantOnboardingQualificationTest",
+          "method": "verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent",
+          "line": 66,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/iam/R4FirstTenantOnboardingQualificationTest.java",
+          "suite": "R4FirstTenantOnboardingQualificationTest",
+          "method": "concurrentFirstTenantRequestsProduceOneOwnerAndNoOrphanRows",
+          "line": 135,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Signed access token → resolver → onboarding; restart/replay и независимый подсчёт org/member/orphan.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Verified account provisions exactly one first organization tenant",
+        "requiredProofs": [
+          {
+            "suite": "R4FirstTenantOnboardingQualificationTest",
+            "test": "verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-IAM-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IAM"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/iam/R4FirstTenantOnboardingQualificationTest.java",
+          "suite": "R4FirstTenantOnboardingQualificationTest",
+          "method": "unverifiedEmailSuspensionAndForeignTenantRejectWithoutWrites",
+          "line": 92,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/iam/IamSellerAuthenticatedTenantAdmissionQualificationTest.java",
+          "suite": "IamSellerAuthenticatedTenantAdmissionQualificationTest",
+          "method": "iamSellerR0SignedIdRefreshWrongPurposeAndBadJwtNeverMintActor",
+          "line": 222,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Отказы onboarding и JWT пока в разных тестах; проверить все owner-дельты.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Unverified suspended or foreign principal cannot provision or select tenant",
+        "requiredProofs": [
+          {
+            "suite": "R4FirstTenantOnboardingQualificationTest",
+            "test": "unverifiedEmailSuspensionAndForeignTenantRejectWithoutWrites"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-IAM-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IAM"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java",
+          "suite": "BusMvpServiceJourneyQualificationTest",
+          "method": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg",
+          "line": 92,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/iam/UserRoleMatrixR31QualificationTest.java",
+          "suite": "UserRoleMatrixR31QualificationTest",
+          "method": "urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal",
+          "line": 167,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Связать invite/accept/grants и бизнес-команду с signed identity и AB-grants в одном варианте.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Active tenant staff obtains only explicit functional grants",
+        "requiredProofs": [
+          {
+            "suite": "UserRoleMatrixR31QualificationTest",
+            "test": "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-IAM-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IAM",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "postgresSalesConfirmationFencesConcurrentPermissionRevocation",
+          "line": 525,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+          "suite": "TenantRbacRevocationQualificationTest",
+          "method": "commandCannotProceedUntilEarlierRevocationCommits",
+          "line": 115,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Текущая привязка проверяет STOREFRONT после SQL suspension, а не оба порядка revoke × confirm; дополнить verified SALES маршрут.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Revocation fences subsequent staff operations",
+        "requiredProofs": [
+          {
+            "suite": "UserRoleMatrixR31QualificationTest",
+            "test": "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-IAM-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IDENTITY",
+        "LINK",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "method": "qrMvpSuspendOrDeleteVersusCheckoutBothCommitOrders",
+          "line": 331,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "suite": "CrmBuyerLinkQualificationTest",
+          "method": "postgresBothCommitOrdersForDeleteVersusConfirm",
+          "line": 687,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к складу не относится к блокировке покупателя; раздельно checkout/link/read и retention.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Authorized staff operations require current selected warehouse assignment",
+        "requiredProofs": [
+          {
+            "suite": "MvpServiceWarehouseAdmissionQualificationTest",
+            "test": "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-IAM-06",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SCOPE",
+        "PICK"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06bPgHandoverCommitPrecedesConcurrentScopeRevocation",
+          "line": 562,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06bPgScopeRevocationCommitPrecedesHandoverAdmission",
+          "line": 615,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к общим grants не доказывает warehouse scope; отдельно оба порядка pick × revoke.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Cross tenant grants and revocation are isolated",
+        "requiredProofs": [
+          {
+            "suite": "UserRoleMatrixR31QualificationTest",
+            "test": "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-ORG-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "ORG"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/organization/OrganizationLocationLifecycleQualificationTest.java",
+          "suite": "OrganizationLocationLifecycleQualificationTest",
+          "method": "typedCreateUpdateNoOpStaleAndUnicodeAreAuditedAtomically",
+          "line": 145,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/organization/OrganizationLocationLifecycleQualificationTest.java",
+          "suite": "OrganizationLocationLifecycleQualificationTest",
+          "method": "stockBearingWarehouseCanPauseButCannotCloseUntilLawfulWriteOff",
+          "line": 186,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Разделить INACTIVE с остатком и CLOSED без остатка; нормативное расхождение §12.3.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "An active warehouse cannot be deactivated after reserved stock commits",
+        "requiredProofs": [
+          {
+            "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+            "test": "postgresConfirmedOrderWinsThenDeactivationIsBlockedByReservation"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-ORG-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "ORG",
+        "INV",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java",
+          "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+          "method": "postgresReceiptWinsThenDeactivationWaitsAndPreservesPostedMovement",
+          "line": 360,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java",
+          "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+          "method": "postgresDeactivationWinsThenReceiptCannotInitializeOrPost",
+          "line": 407,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Дополнить остальные пары transfer/confirm/close из того же класса; сохранить остаток при законной деактивации.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Deactivation first prevents later stock reservation",
+        "requiredProofs": [
+          {
+            "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+            "test": "postgresDeactivationWinsThenNewConfirmationRollsBackToPlaced"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-CRM-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CRM"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+          "suite": "CrmR1aQualificationTest",
+          "method": "personAndContactSecretsStayEncryptedAndReloadAcrossInstance",
+          "line": 212,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+          "suite": "CrmR1aQualificationTest",
+          "method": "tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped",
+          "line": 65,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Нужны PERSON и COMPANY, same-name без merge, независимые encrypted/foreign-row oracles.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Customer contact interaction and contract persisted tenant scoped",
+        "requiredProofs": [
+          {
+            "suite": "CrmInteractionQualificationTest",
+            "test": "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-CRM-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CRM"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+          "suite": "CrmR1aQualificationTest",
+          "method": "crmR14TwoWritersSameContactVersionExactlyOneCommits",
+          "line": 1147,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+          "suite": "CrmR1aQualificationTest",
+          "method": "customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized",
+          "line": 482,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к readonly interaction не доказывает customer/contact CAS и поиск.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Contact and interaction access limited by current CRM permission",
+        "requiredProofs": [
+          {
+            "suite": "CrmInteractionQualificationTest",
+            "test": "crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-CRM-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CRM",
+        "LINK",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "suite": "CrmInteractionQualificationTest",
+          "method": "crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline",
+          "line": 321,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "suite": "CrmBuyerLinkQualificationTest",
+          "method": "archivedCustomerCannotBeLinkedOrExposeOrderHistory",
+          "line": 175,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к consent ошибочна; заказ связан с IAM buyer, не прямо с CRM customer/contract; нужен контракт архивации и hash заказа.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Contact consent revocation overrides earlier grant",
+        "requiredProofs": [
+          {
+            "suite": "CrmInteractionQualificationTest",
+            "test": "crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-CRM-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "INTERACTION"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "suite": "CrmInteractionQualificationTest",
+          "method": "interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable",
+          "line": 64,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "suite": "CrmInteractionQualificationTest",
+          "method": "crmR21bPostgresBothTerminalCommitOrdersAreLinearizable",
+          "line": 865,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к архиву не покрывает record/assign/nextAction/complete; проверить каждый шаг и history.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Customer and contract archive preserves history but blocks prohibited work",
+        "requiredProofs": [
+          {
+            "suite": "CrmInteractionQualificationTest",
+            "test": "crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-CAT-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CAT"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/catalog/CatalogQualificationTest.java",
+          "suite": "CatalogQualificationTest",
+          "method": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary",
+          "line": 63,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/catalog/CatalogQualificationTest.java",
+          "suite": "CatalogQualificationTest",
+          "method": "draftTranslationsAndVersionCasCannotLeakOtherTenant",
+          "line": 122,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Дополнить точные price/quantity bounds, invalid currency и negative zero-effect oracles.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Published product SKU and price are tenant qualified",
+        "requiredProofs": [
+          {
+            "suite": "CatalogQualificationTest",
+            "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-CAT-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CAT",
+        "STO",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java",
+          "suite": "StorefrontManagementQualificationTest",
+          "method": "sellerEditR1CatalogPriceAndSellerOfferPriceHaveIndependentHistories",
+          "line": 280,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "acceptedOrderPriceAndSkuSurviveSellerPriceRevision",
+          "line": 575,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Catalog CAS сам по себе не доказывает коммерческую цену; проверить обе истории и old-order hash при drift.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Catalog version CAS prevents stale price revision and cross tenant write",
+        "requiredProofs": [
+          {
+            "suite": "CatalogQualificationTest",
+            "test": "draftTranslationsAndVersionCasCannotLeakOtherTenant"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-CAT-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CAT",
+        "INV",
+        "STO"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java",
+          "suite": "CommercialCoreE2EQualificationTest",
+          "method": "postgresArchiveAndOfferPublicationAreSerializedInBothOrders",
+          "line": 626,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java",
+          "suite": "CommercialCoreE2EQualificationTest",
+          "method": "postgresArchiveWinsThenConcurrentReceiptCannotStrandStock",
+          "line": 526,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "В том же классе есть receipt-first; stocktake race и обе стороны всех конфликтов требуют отдельной привязки.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Active sellable SKU cannot be archived across concurrent offers",
+        "requiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "postgresArchiveAndOfferPublicationAreSerializedInBothOrders"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-STO-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "STO"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java",
+          "suite": "StorefrontManagementQualificationTest",
+          "method": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck",
+          "line": 79,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "w1InactiveSellerWorkspaceRejectsNewCheckoutButPreservesExactReplay",
+          "line": 379,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Resume выполняется publish с актуальной версией; отдельно revoked role, inactive workspace и tenant.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Seller storefront publish pause resume preserve revision and audit",
+        "requiredProofs": [
+          {
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-STO-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "STO",
+        "CAT"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "r10PriceHistoryIsImmutableAndNoOpOrStaleCasCannotAppend",
+          "line": 93,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "draftPublicationPauseResumeAndCas",
+          "line": 536,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "У price update CAS/no-op, а не универсальный request-key receipt; привязать hide и invalid product.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Offer authoritative price version and accepted order snapshot are consistent",
+        "requiredProofs": [
+          {
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "offerVersionCasAndCheckoutSnapshotStayImmutable"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-STO-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "STO",
+        "SAL",
+        "IAM"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "postgresRevokeVersusSellerCommandHasOneAuthorizationOrder",
+          "line": 195,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "postgresCheckoutPauseSerializesWithoutPartialOrders",
+          "line": 502,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Оба теста кандидаты; доказать именно publication и оба управляемых порядка pause × checkout.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Paused storefront cannot accept new checkout",
+        "requiredProofs": [
+          {
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-SAL-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/autoorder/AutoOrderR1QualificationTest.java",
+          "suite": "AutoOrderR1QualificationTest",
+          "method": "retryIsIdempotentAndChangesAreRejected",
+          "line": 121,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/autoorder/AutoOrderR1QualificationTest.java",
+          "suite": "AutoOrderR1QualificationTest",
+          "method": "concurrentSameCheckoutKeyCreatesOneOrderAndOneIdentity",
+          "line": 183,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Сквозной happy path из старой карты не доказывает конфликт ключа; отдельно lost response и process restart.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Single seller checkout uses immutable accepted price and SKU snapshot",
+        "requiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-SAL-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "STO"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "method": "qr03SellerPriceChangeRejectsStaleAcceptanceBeforeBuyerProvisioning",
+          "line": 468,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+          "suite": "SellerOfferQualificationTest",
+          "method": "postgresCheckoutPauseSerializesWithoutPartialOrders",
+          "line": 502,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к duplicate checkout не покрывает stale price/pause; отдельно verified QR и обычный route.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Duplicate checkout request cannot produce duplicate orders or receipts",
+        "requiredProofs": [
+          {
+            "suite": "PublishedQrCheckoutQualificationTest",
+            "test": "qrMvpVerifiedConcurrentSameKeyHasOneOrderInPostgres"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-SAL-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "confirmAndCancelAreAtomicAndRetriesAreIdempotent",
+          "line": 150,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "sale08RemappedOfferCannotSubstituteSkuDuringOrderConfirmation",
+          "line": 942,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Кандидаты вызывают внутренние методы; нужен verified facade, multi-line snapshot и один склад в strict mode.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Full reserve only after seller confirmation",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-SAL-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "insufficientStockRollsBackStatusAndEveryReservation",
+          "line": 292,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "r13RollbackAfterSuccessfulDomainCallsCanBeSafelyRetried",
+          "line": 690,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Shortage/outer rollback не равны hard crash; подтвердить last-line failure и отсутствие всех success-эффектов.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Insufficient stock rolls back all reservations and status",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "insufficientStockRollsBackStatusAndEveryReservation"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-SAL-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand",
+          "line": 330,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "opposingMultiSkuOrdersReserveWithoutDeadlock",
+          "line": 356,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая проверка fulfillment не является hot-SKU race; нужны управляемые schedules и отрицательные ledger oracles.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Reserved stock and ledger remain atomic with order completion",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "fulfillmentDebitsOnceAndRequiresBothDomainPermissions"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-SAL-06",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome",
+          "line": 748,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "postgresMixedConcurrentOrderLifecyclePreservesLedgerAndIdempotency",
+          "line": 584,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к permission deny ошибочна; random race не заменяет оба заданных порядка cancel × confirm/fulfill.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Seller denial preserves state and order inventory history",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-SAL-07",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "PICK"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "fc40PickedOrderCannotCancelAndReservationStaysIntact",
+          "line": 223,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock",
+          "line": 233,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Есть последовательный picked-deny; не найден самостоятельный детерминированный pick × cancel в обоих порядках.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Cancellation before pick releases once and retries idempotently",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-SAL-08",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "PICK"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing",
+          "line": 176,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "method": "decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation",
+          "line": 402,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "SQL fixture proof-mode допустим для локального fence; полный путь должен создавать mode через verified QR checkout.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Proof-required QR order cannot use generic fulfillment",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-SAL-09",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "PICK"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+          "suite": "SalesInventoryRbacQualificationTest",
+          "method": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing",
+          "line": 176,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce",
+          "line": 394,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к BUS happy path неверна; double-scan не заменяет generic fulfill × secure pickup на одном заказе.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Order state and stock movement history trace each completed business order",
+        "requiredProofs": [
+          {
+            "suite": "BusMvpServiceJourneyQualificationTest",
+            "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-SAL-10",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "SCOPE",
+        "PICK"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java",
+          "suite": "MvpServiceWarehouseAdmissionQualificationTest",
+          "method": "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill",
+          "line": 133,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java",
+          "suite": "MvpServiceWarehouseAdmissionQualificationTest",
+          "method": "mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation",
+          "line": 167,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к picked cancel неверна; квалифицировать strict flag и оба revoke orders для каждой операции.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Partial physical pick prevents silent order cancellation",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "fc40PickedOrderCannotCancelAndReservationStaysIntact"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-INV-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/inventory/InventoryMovementQualificationTest.java",
+          "suite": "InventoryMovementQualificationTest",
+          "method": "cannotReduceBelowReservedOrCrossTenantReference",
+          "line": 109,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+          "suite": "InventoryTransferStocktakeQualificationTest",
+          "method": "stocktakePostsOnlyMeasuredDeltaAndRejectsStaleOrBelowReserved",
+          "line": 642,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Один same-key movement не покрывает transfer/stocktake; расширить реальные команды и ledger baseline.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Same request key stock posting records one movement",
+        "requiredProofs": [
+          {
+            "suite": "InventoryMovementQualificationTest",
+            "test": "concurrentSameKeyPostsExactlyOneMovement"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-INV-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "RECON",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+          "suite": "InventoryTransferStocktakeQualificationTest",
+          "method": "postgresInv16DurableAdvanceAndConcurrentReceivingHaveNoFalseDrift",
+          "line": 569,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+          "suite": "InventoryTransferStocktakeQualificationTest",
+          "method": "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings",
+          "line": 487,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Отличать per-page REPEATABLE_READ и durable cursor от tenant-wide immutable snapshot; foreign/empty/end cases.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Reserved on hand ledger conserves quantities under concurrent checkout and reconciliation",
+        "requiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-QR-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "QR",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/storefront/PublishedOfferQrQualificationTest.java",
+          "suite": "PublishedOfferQrQualificationTest",
+          "method": "qr01bRevokeReissueAndExactRetriesProduceOneGenerationEach",
+          "line": 262,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "method": "qr03RevokeBlocksNewCheckoutYetExactCommittedReplayWorks",
+          "line": 487,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Стабильный reprint недостаточен; два revoke × checkout schedules и exact committed replay.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Published product QR remains stable and reflects authoritative offer price",
+        "requiredProofs": [
+          {
+            "suite": "PublishedOfferQrQualificationTest",
+            "test": "qrP01StableReprintAndCurrentPublishedPriceAfterRevision"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-QR-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "QR",
+        "FILES"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/files/CatalogPublicProductMediaQualificationTest.java",
+          "suite": "CatalogPublicProductMediaQualificationTest",
+          "method": "qr02aApprovedDerivativeIsPublicPNGButOriginalStaysPrivate",
+          "line": 139,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/files/CatalogPublicProductMediaQualificationTest.java",
+          "suite": "CatalogPublicProductMediaQualificationTest",
+          "method": "qr02aSellerMustExplicitlyApproveAndNeverPublishCrmAttachment",
+          "line": 174,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка проверяет visibility без bytes; negative storage invocation и public derivative отделить от original.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Hidden unpublished and revoked references never expose public card",
+        "requiredProofs": [
+          {
+            "suite": "PublishedOfferQrQualificationTest",
+            "test": "qrP03PausedHiddenAndRevokedReferencesCannotExposeCard"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-QR-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "QR",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java",
+          "suite": "RegionalPublicAvailabilityQualificationTest",
+          "method": "qr02bQuantityMustFitOneWarehouseNotSumAcrossTwo",
+          "line": 122,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java",
+          "suite": "RegionalPublicAvailabilityQualificationTest",
+          "method": "qr02bUnknownKatoQtyAndRetiredQrCannotLeakInventory",
+          "line": 215,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к private order read не относится к regional advisory; проверить zero reservation и отсутствие warehouse leakage.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Public QR and cross tenant access never grant private order ownership",
+        "requiredProofs": [
+          {
+            "suite": "PublishedQrCheckoutQualificationTest",
+            "test": "qr03bCrossBuyerAndCrossTenantStaffCannotReadOrReprint"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-QR-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "QR",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "method": "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder",
+          "line": 160,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "method": "qrMvpStaleVersionRevokeCrossBuyerAndSuspendedReplayHaveZeroEffects",
+          "line": 226,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Основной entrypoint checkoutVerified; email-first checkout по умолчанию закрыт; price race отдельно.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "List price checkout requires active verified buyer and exact price/version",
+        "requiredProofs": [
+          {
+            "suite": "PublishedQrCheckoutQualificationTest",
+            "test": "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-QR-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "NEGOTIATION"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "method": "qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents",
+          "line": 161,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "method": "qr04aWrongTurnStaleRevisionAndImmutableTerminalStatesRejected",
+          "line": 189,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Добавить точную привязку reject, self-accept, request conflict и конкурентный revision CAS.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Buyer and seller alternate valid bargaining turns and persist agreement",
+        "requiredProofs": [
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-QR-06",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "NEGOTIATION",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "method": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres",
+          "line": 418,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "method": "qr04bQuoteConsumedOnceAndSharedCheckoutKeyConflictsAcrossModes",
+          "line": 371,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Accepted happy path не доказывает разные ключи/namespace/restart; scope receipt tenant+key, quote uniqueness отдельно.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Accepted quote creates an immutable priced order with buyer identity",
+        "requiredProofs": [
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-QR-07",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "NEGOTIATION",
+        "SAL",
+        "IDENTITY"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "method": "qr04bExpiredQuoteFailsWithoutAnyOrderOrReceipt",
+          "line": 391,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "method": "qr04aExpiredProposalEffectiveStateAndMaterialization",
+          "line": 264,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к double consumption ошибочна; для expire/withdraw/QR revoke/suspend нужны свои состояния и оба порядка.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Accepted quote can be consumed at most once across competing checkout requests",
+        "requiredProofs": [
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-PICK-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "PICK",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock",
+          "line": 233,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java",
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "method": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg",
+          "line": 247,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Полный pick/ready/no early debit есть как кандидат; сохранить отдельный incomplete-pick отрицательный oracle.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Order preparation requires full reserved pick before READY without stock debit",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-PICK-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "PICK",
+        "SCOPE"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06CredentialRequiresVerifiedBuyerAndReadyState",
+          "line": 285,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06PreviewDoesNotConsumeAndCompletedHandoverDebitsOnce",
+          "line": 307,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к preparation не доказывает issue/preview; wrong warehouse/expiry и zero IO/stock отдельно.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Warehouse scope revoke prevents unauthorized picking",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr05WrongWarehouseAndRevokedAssignmentBlockPreparation"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-PICK-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "PICK",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06ReissueInvalidatesOldSecretAndExpiredProofNeverDebits",
+          "line": 354,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06PreviewDoesNotConsumeAndCompletedHandoverDebitsOnce",
+          "line": 307,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Issue-only не доказывает debit; reissue через issue с новым ключом; старый proof, replay и unique receipt.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Only verified buyer can issue fresh one time pickup proof",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06CredentialRequiresVerifiedBuyerAndReadyState"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-PICK-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "PICK",
+        "SCOPE"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06bPgTwoIndependentJVMsCompeteForOneHandover",
+          "line": 1141,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06bPgScopeRevocationCommitPrecedesHandoverAdmission",
+          "line": 615,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Двухпоточный scan не равен two-JVM; добавить revoke-first и handover-first, account и permission variants.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Multiple simultaneous pickup scans produce one stock debit",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-PICK-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "PICK",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06bPgJVMKilledBeforeCommitRollsBackAndRetrySucceeds",
+          "line": 1073,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit",
+          "line": 1106,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Реальные Runtime.halt workers существуют; отдельно SQL fault при receipt/credential и run logs с кодами выхода.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Crash after commit and lost response cannot cause second stock debit",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-RET-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "RETURN"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity",
+          "line": 2346,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R0RejectsUncompletedOrForeignBuyerBeforeAnyReturnWrite",
+          "line": 2326,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Capacity учитывает все незакрытые claims кроме REJECTED/CANCELLED_BY_BUYER; проверить состояния и independent sum.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Return claims cannot exceed quantity in immutable completed handover",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-RET-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "RETURN"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R1ReviewApproveAndImmutableDecisionReplay",
+          "line": 2393,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R25ProofRejectsForgeryAndRotationAndConsumesOnce",
+          "line": 2901,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Review не равен physical reception; proof issue/consume, wrong warehouse, replay и no early stock.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Only authorized staff reviews and approves return with durable evidence",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R1ReviewApproveAndImmutableDecisionReplay"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-RET-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "RETURN",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection",
+          "line": 2606,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R2WriteOffAndQuarantineNeverIncreaseSellableStock",
+          "line": 2648,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Связать RESTOCK movement по posting.movement_id; QUARANTINE отдельный ledger, WRITE_OFF без sellable credit.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Receipt inspection and restock link one returned quantity to one stock movement",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-RET-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "RETURN",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R25ConcurrentQuarantineRestockVsDisposeSettlesExactlyOnce",
+          "line": 3156,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross",
+          "line": 3214,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая проверка disposition не доказывает resolution race; проверить два заданных порядка RESTOCK/DISPOSE и immutable original.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Damaged or quarantined returns never increase sellable stock",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R2WriteOffAndQuarantineNeverIncreaseSellableStock"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-RET-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "RETURN",
+        "INV"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R2JvmHardCrashBeforePostCommitRollsBackAndRetryPostsOnce",
+          "line": 2783,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "method": "qr07R2JvmHardCrashAfterPostCommitReplaysOriginalMovement",
+          "line": 2817,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Two-JVM duplicate не заменяет crash; добавить reception duplicate и исходный COMPLETED hash.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Repeated physical returns cannot post a second restock movement",
+        "requiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R2TwoIndependentJvmsCannotDoubleRestockOneReturn"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-CRM-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "LINK",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "suite": "CrmBuyerLinkQualificationTest",
+          "method": "verifiedBuyerConfirmsOrderAndSellerSeesOnlyTenantOrders",
+          "line": 131,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "suite": "CrmBuyerLinkQualificationTest",
+          "method": "tenantSeparationAndOneToOneConstraintsPreventSilentIdentityMerge",
+          "line": 154,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Проверить оба независимых CRM_READ/SALES_ORDER_READ и отсутствие infer-by-email; source test body не заменяет run.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Explicit verified buyer link is required to expose order history",
+        "requiredProofs": [
+          {
+            "suite": "CrmBuyerLinkQualificationTest",
+            "test": "verifiedBuyerConfirmsOrderAndSellerSeesOnlyTenantOrders"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-CRM-06",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "LINK",
+        "IDENTITY"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "suite": "CrmBuyerLinkQualificationTest",
+          "method": "postgresOrderedConfirmVersusRevokeAdmitsOneCoherentHistory",
+          "line": 387,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+          "suite": "CrmBuyerLinkQualificationTest",
+          "method": "deletedAccountFailClosedWithoutDeletingLinkedHistory",
+          "line": 464,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Последовательный dispute supporting; confirm × revoke не равен orderHistory × revoke; read linearization отдельно.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Dispute and revocation hide seller order history without mutating ledger",
+        "requiredProofs": [
+          {
+            "suite": "CrmBuyerLinkQualificationTest",
+            "test": "disputeFreezesSalesVisibilityAndSellerCanOnlyCloseFailClosed"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "BSR-TASK-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "TASK",
+        "INTERACTION"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/tasks/TaskServiceQualificationTest.java",
+          "suite": "TaskServiceQualificationTest",
+          "method": "t18CrmFollowupCreationRetryAndScopedLinkRead",
+          "line": 544,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/tasks/TaskServiceQualificationTest.java",
+          "suite": "TaskServiceQualificationTest",
+          "method": "t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory",
+          "line": 85,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "BUS-TASK-01 сохраняется как alias-support, не новый CORE; связать followup и весь lifecycle в BUS-J1.",
+      "priorTaskSupportId": "BUS-TASK-01"
+    },
+    {
+      "id": "BSR-TASK-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "TASK",
+        "INTERACTION"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/tasks/TaskServiceQualificationTest.java",
+          "suite": "TaskServiceQualificationTest",
+          "method": "t52PostgresqlCrmStatusRaceSerializesWithSnapshotCapture",
+          "line": 1634,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+          "suite": "CrmInteractionQualificationTest",
+          "method": "t00PgPortFailureRollsBackCancellationAndEvent",
+          "line": 1290,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "BUS-TASK-02 про revoked execute не эквивалентен CRM cancellation × TASK complete; T00 snapshot и явный reconcile без auto-cancel.",
+      "priorTaskSupportId": "BUS-TASK-02; not equivalent to cancellation/snapshot scenario"
+    },
+    {
+      "id": "BSR-FILES-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "FILES"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+          "suite": "FilesR10bQualificationTest",
+          "method": "crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions",
+          "line": 487,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+          "suite": "FilesR10bQualificationTest",
+          "method": "tcrud03BinaryReadDoesNotWriteAnyBytesForWrongOwnerOrMissingPiiPermission",
+          "line": 584,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "REQUIRED_IF_EXPOSED разрешён как REQUIRED_FOR_MVP для public photos; private CRM attachments — regression в имеющемся scope."
+    },
+    {
+      "id": "BSR-FILES-02",
+      "scope": "REGRESSION_IF_PRESENT",
+      "ownerGroups": [
+        "FILES"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+          "suite": "FilesR10bQualificationTest",
+          "method": "crashAfterPromoteBeforeSqlCommitIsReconciledAndRetrySucceeds",
+          "line": 343,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/files/RustFsLiveInfrastructureE2ETest.java",
+          "suite": "RustFsLiveInfrastructureE2ETest",
+          "method": "crashAfterCopyBeforeCommitSweepOldTokenAndCompleteRetry",
+          "line": 198,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Сверить simulated fault, process/container restart и реальный ClamAV отдельно; recovery — internal worker, не public facade."
+    },
+    {
+      "id": "BSR-FX-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "CURRENCY",
+        "STO",
+        "SAL"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/organization/CommerceCurrencyAdmissionQualificationTest.java",
+          "suite": "CommerceCurrencyAdmissionQualificationTest",
+          "method": "curc03UsdPublishedLegacyOfferRejectedWithoutOrder",
+          "line": 165,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java",
+          "suite": "MvpServiceCurrencyStartupQualificationTest",
+          "method": "mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled",
+          "line": 9,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "G1 профиль обязан включать service-mode и currency admission; populated preflight, public media-before-currency deny."
+    },
+    {
+      "id": "BSR-FX-02",
+      "scope": "REGRESSION_IF_PRESENT",
+      "ownerGroups": [
+        "FXAUTO",
+        "STO"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/fx/auto/FxAutoOwnerAdmissionQualificationTest.java",
+          "suite": "FxAutoOwnerAdmissionQualificationTest",
+          "method": "budgetTwoSixtyOperationsOneWinnerReplayRollbackAndPolicyChange",
+          "line": 839,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/fx/auto/FxAutoOwnerAdmissionQualificationTest.java",
+          "suite": "FxAutoOwnerAdmissionQualificationTest",
+          "method": "lifecycleApprovalAndGrantRevocationSerializeBothOrders",
+          "line": 617,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "ASSESSMENT_ONLY: assess не публикует, SYSTEM_AUTO запрещён 0171; direct assess integration test не найден. Будущий executor отдельно от existing regression."
+    },
+    {
+      "id": "BSR-FIN-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "SAL",
+        "RETURN",
+        "FIN"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/OrderPackagingQualificationTest.java",
+          "suite": "OrderPackagingQualificationTest",
+          "method": "r0PackagingAcceptRejectCancelCannotCreateInventoryOrFinancialPosting",
+          "line": 389,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java",
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "method": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg",
+          "line": 247,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "crm.fin_invoice уже есть, но negative finance oracle в handover/return ещё надо привязать; packaging test только supporting."
+    },
+    {
+      "id": "BSR-FIN-02",
+      "scope": "POST_MVP",
+      "ownerGroups": [
+        "FIN"
+      ],
+      "candidateTests": [],
+      "mappingVerdict": "GAP",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Только schema foundation crm.fin_invoice и Money, нет invoice/payment/allocation service route; POST_MVP, не N/A PASS."
+    },
+    {
+      "id": "BSR-INS-01",
+      "scope": "POST_MVP",
+      "ownerGroups": [
+        "INSIGHT"
+      ],
+      "candidateTests": [],
+      "mappingVerdict": "GAP",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Не найден production INSIGHT service; POST_MVP, утверждённая модель метрик отсутствует."
+    },
+    {
+      "id": "BSR-INS-02",
+      "scope": "POST_MVP",
+      "ownerGroups": [
+        "INSIGHT"
+      ],
+      "candidateTests": [],
+      "mappingVerdict": "GAP",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Не найден production projection/replay route; POST_MVP, не строить analytics ради BSR."
+    },
+    {
+      "id": "CORE-XD-01",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IAM",
+        "CRM",
+        "TASK",
+        "CAT",
+        "STO",
+        "SAL",
+        "INV",
+        "LINK"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java",
+          "suite": "BusMvpServiceJourneyQualificationTest",
+          "method": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg",
+          "line": 92,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/tasks/TaskServiceQualificationTest.java",
+          "suite": "TaskServiceQualificationTest",
+          "method": "t18CrmFollowupCreationRetryAndScopedLinkRead",
+          "line": 544,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "BUS использует new VerifiedActor, обычную TASK и email-first checkout; CRM buyer link, cancellation и signed chain не доказаны одним journey.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Business journey integrates IAM CRM TASK catalog stock and order",
+        "requiredProofs": [
+          {
+            "suite": "BusMvpServiceJourneyQualificationTest",
+            "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-XD-02",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "QR",
+        "NEGOTIATION",
+        "PICK",
+        "RETURN"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java",
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "method": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg",
+          "line": 247,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java",
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "method": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg",
+          "line": 270,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Два маршрута существуют, decoder stub; tenant/email/warehouse setup через SQL/repos; нет WRITE_OFF полного J1.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Verified QR list price reaches immutable pickup and returned stock",
+        "requiredProofs": [
+          {
+            "suite": "QrMvpServiceJourneyQualificationTest",
+            "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
+          }
+        ],
+        "relation": "SUPPORTING_PARTIAL"
+      }
+    },
+    {
+      "id": "CORE-XD-03",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "IAM",
+        "CRM",
+        "STO",
+        "SAL",
+        "INV",
+        "QR",
+        "FILES"
+      ],
+      "candidateTests": [
+        {
+          "path": "src/test/java/kz/rm/iam/UserRoleMatrixR31QualificationTest.java",
+          "suite": "UserRoleMatrixR31QualificationTest",
+          "method": "urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal",
+          "line": 167,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        },
+        {
+          "path": "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+          "suite": "FilesR10bQualificationTest",
+          "method": "tcrud03BinaryReadDoesNotWriteAnyBytesForWrongOwnerOrMissingPiiPermission",
+          "line": 584,
+          "review": "CANDIDATE_SOURCE_ANCHOR; full variant/body and runtime evidence review pending"
+        }
+      ],
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к negotiated happy path неверна; собрать A/B/AB по всем owner reads/list/count/history/bytes.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Negotiated quote reaches pickup and segregated quarantine",
+        "requiredProofs": [
+          {
+            "suite": "QrMvpServiceJourneyQualificationTest",
+            "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-XD-04",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "MIGRATION"
+      ],
+      "candidateTests": [],
+      "mappingVerdict": "GAP",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к oversell не относится к upgrade; использовать populated workflows, baseline schema/fixtures, restore и hash исторических rows.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Cross tenant stock and order commands have no side effects",
+        "requiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    },
+    {
+      "id": "CORE-XD-05",
+      "scope": "REQUIRED_FOR_MVP",
+      "ownerGroups": [
+        "EVIDENCE"
+      ],
+      "candidateTests": [],
+      "mappingVerdict": "GAP",
+      "maturity": "SPECIFIED",
+      "executionVerdict": "NOT_RUN",
+      "openRequirement": "Старая привязка к seller suspend × checkout неверна; gate является workflow+verifier+artifact set, не одним JUnit методом.",
+      "priorMapping": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "behavior": "Seller suspension and checkout in both commit orders preserve one order snapshot",
+        "requiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot"
+          },
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects"
+          }
+        ],
+        "relation": "GAP_WRONG_BEHAVIOR"
+      }
+    }
+  ],
+  "testInventory": [
+    {
+      "path": "src/test/java/kz/rm/RmApplicationTests.java",
+      "class": "RmApplicationTests",
+      "declaredTestMethods": 1,
+      "sha256": "693f1b6108306c4ce96edce8f0d8697af775f96b4a68ebd681fad4f65bebd93b",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/architecture/DomainCommandBoundaryQualificationTest.java",
+      "class": "DomainCommandBoundaryQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "b7e95e680148dc6c344a3928f3e61ec97b8cde6f502f32be71bb57cf57efce48",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/architecture/DomainModuleQualificationTest.java",
+      "class": "DomainModuleQualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "91cb275276dfdb4a43f236a63d78f8af6d085c4d4e9f1d1ab9edad68e7970849",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/architecture/DomainPersistenceBaselineQualificationTest.java",
+      "class": "DomainPersistenceBaselineQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "197b7af5014b9e42a53a09d411855596b0077b2a7bfddb7283072ade2d9ecb96",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/architecture/PostgresAuditPartitionQualificationTest.java",
+      "class": "PostgresAuditPartitionQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "afe57b55298dfeb0ebc6b4a05acaaba10e86fe2a393d23906387ba22bc3de102",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/architecture/Tcrud04VerifiedEntrypointQualificationTest.java",
+      "class": "Tcrud04VerifiedEntrypointQualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "facfaa5aa86af6574d880d89d49945f1f7a9c25a219ae1226254f0e030a17f39",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/audit/AuditRetentionPolicyTest.java",
+      "class": "AuditRetentionPolicyTest",
+      "declaredTestMethods": 1,
+      "sha256": "fbda6fe206898ce0c5e3e819c6e6d8a65b17b2ea53fcd6226b02c4e5099bb576",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/audit/AuditRetentionQualificationTest.java",
+      "class": "AuditRetentionQualificationTest",
+      "declaredTestMethods": 3,
+      "sha256": "32c909fdf56ae871ac40480f0c812cd84ca717c96cc57c89b4447834d5a01e2a",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/autoorder/AutoOrderR1QualificationTest.java",
+      "class": "AutoOrderR1QualificationTest",
+      "declaredTestMethods": 15,
+      "sha256": "f1a18f0df3b9502caf5faddcb30435a942109b5e64a0077dbc8ca81a61cfacac",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/autoorder/CommercialOidcHttpQualificationTest.java",
+      "class": "CommercialOidcHttpQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "70defd1000ece079adcab2874980b87c63009ad8dc0e3e7d96a94e8e1fa5b7fe",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+      "class": "PublishedQrCheckoutQualificationTest",
+      "declaredTestMethods": 23,
+      "sha256": "103a9083682287d4370702c17e90190f929f509fe53f164a65b40f099f18b1c2",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/autoorder/QrLegacyEmailFirstDisabledQualificationTest.java",
+      "class": "QrLegacyEmailFirstDisabledQualificationTest",
+      "declaredTestMethods": 1,
+      "sha256": "6104674974fe22aecf3b453d16cea122805ef90db7ad5d2e71f77adaec58f634",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/bootstrap/HealthControllerTest.java",
+      "class": "HealthControllerTest",
+      "declaredTestMethods": 1,
+      "sha256": "1726bf268a62610186c03b7689ca14c83185b1cab93e07f309c83a65a43bfcd2",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/catalog/CatalogQualificationTest.java",
+      "class": "CatalogQualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "3118da93a5d65fc07d93b26e4eba9ef2e2afcc6313188c69fe730524cfe0f7da",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+      "class": "CrmBuyerLinkQualificationTest",
+      "declaredTestMethods": 25,
+      "sha256": "0e3a623cc844a1aee6dd8d75e4bc37465e12eb68340aee70584a690262f6a775",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+      "class": "CrmInteractionQualificationTest",
+      "declaredTestMethods": 28,
+      "sha256": "266e7ca21cdfbb008ad3a416a6b6ec1bf40b5d4f8f6c4937b49645c2e88f5382",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+      "class": "CrmR1aQualificationTest",
+      "declaredTestMethods": 37,
+      "sha256": "ac8cc6512b61a7a9adc5024564974c10ecf0da3ffbb8272ee4bf2609274a32f7",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/CatalogPublicProductMediaQualificationTest.java",
+      "class": "CatalogPublicProductMediaQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "904e8951e0a2e3856fbb9895c25c61e6392cdd2e3e3596eba4c696f14b1773a3",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/ClamAvProtocolQualificationTest.java",
+      "class": "ClamAvProtocolQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "fcdd0b54f78e42bb535dcb636102dc619b9e945790fc52f91df4de271d319258",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/FilesR10aQualificationTest.java",
+      "class": "FilesR10aQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "4232727959791a3d07965e2e0361f4fe3f365b22ada5dd0db002bfe87cd59761",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+      "class": "FilesR10bQualificationTest",
+      "declaredTestMethods": 20,
+      "sha256": "20ca87453bf8b9cc6fed4be4966f6b629f2fb2f0c070306dd742ad2f5fc96d24",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/RustFsLiveInfrastructureE2ETest.java",
+      "class": "RustFsLiveInfrastructureE2ETest",
+      "declaredTestMethods": 3,
+      "sha256": "512909f2e2811fcd0fbfc380cfeafb35aea4fb5ba0170f9e8bf51bb2c48b210b",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/RustFsRealClamAvE2ETest.java",
+      "class": "RustFsRealClamAvE2ETest",
+      "declaredTestMethods": 1,
+      "sha256": "7dd1c789cc84f914fc434222a014a939ed0daa9fc3b5b12d2e1150ae74e01b6b",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/RustFsRestartProbeTest.java",
+      "class": "RustFsRestartProbeTest",
+      "declaredTestMethods": 3,
+      "sha256": "7d4acd3b3c2099bd965b093bbb8c4f68a2b6afdc22e88ab0046df7c749d88e6d",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/RustFsRestoredDatabaseE2ETest.java",
+      "class": "RustFsRestoredDatabaseE2ETest",
+      "declaredTestMethods": 1,
+      "sha256": "10323cac36237e651ecd389f344f04cbe66230efb362e2ac4e53e65cd6df4b85",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/files/RustFsStorageQualificationTest.java",
+      "class": "RustFsStorageQualificationTest",
+      "declaredTestMethods": 3,
+      "sha256": "73d0affeb7d45223c1489f1b5235d414c720b532b7e877381c4318d771884b02",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/FxRateRefreshMockQualificationTest.java",
+      "class": "FxRateRefreshMockQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "084b5b37d429639f4a426e0d3b9b16238eaf514459f0ca9b82ec53de7b0526f7",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/FxRateSnapshotQualificationTest.java",
+      "class": "FxRateSnapshotQualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "d612cd4481acb683bcf6a34dbf2993c2b490d8f64c416146991f3b3cb059a8b8",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/NbrkRssXmlParserQualificationTest.java",
+      "class": "NbrkRssXmlParserQualificationTest",
+      "declaredTestMethods": 8,
+      "sha256": "e76939dcad7637c90dbce6667a5d06c22da2330e8fdab7d75afd92062b34e450",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/NbrkTradingCalendarPolicyTest.java",
+      "class": "NbrkTradingCalendarPolicyTest",
+      "declaredTestMethods": 4,
+      "sha256": "b430ed4ca8752e934e7284db5593b7f8ecdfcb8422294282d72755b8a6bb9874",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/SkuFxCandidateCalculatorTest.java",
+      "class": "SkuFxCandidateCalculatorTest",
+      "declaredTestMethods": 9,
+      "sha256": "5302274eeaf1fd37693746efe9e990e2c83113c338636af6b06ffea25fb6eac9",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/SkuFxSellerApprovalQualificationTest.java",
+      "class": "SkuFxSellerApprovalQualificationTest",
+      "declaredTestMethods": 35,
+      "sha256": "7410d02cee59310cfa74479f587e2a8bff765c4d57afeacad292b13983d92aaa",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/TrustedKaseCalendarHttpClientTest.java",
+      "class": "TrustedKaseCalendarHttpClientTest",
+      "declaredTestMethods": 4,
+      "sha256": "47b37bf2f9893c8c4f8a96dbbec08f37ec2321e2024c19526193427cd1dbb567",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/TrustedNbrkHttpClientTransportQualificationTest.java",
+      "class": "TrustedNbrkHttpClientTransportQualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "0db2fa974cf196c23921cece251b697a42b50f6fa3396e3f3bd2e83be930be19",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/TrustedNbrkIngestionQualificationTest.java",
+      "class": "TrustedNbrkIngestionQualificationTest",
+      "declaredTestMethods": 15,
+      "sha256": "adcc143845aacd5568769c8b3fa027bd59a4ddf83ad66c984443b721df739dd7",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/auto/FxAutoDryRunTest.java",
+      "class": "FxAutoDryRunTest",
+      "declaredTestMethods": 6,
+      "sha256": "8ff68ff80c6360c7b676832afb2afedeed1726d345c613ce28a5cfd1be6512e7",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/auto/FxAutoOwnerAdmissionQualificationTest.java",
+      "class": "FxAutoOwnerAdmissionQualificationTest",
+      "declaredTestMethods": 34,
+      "sha256": "00162539e592b1e57891ba0740d8c61e3d677fa0aadc349b8efb703aac36045b",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/auto/FxAutoPolicySchemaPgTest.java",
+      "class": "FxAutoPolicySchemaPgTest",
+      "declaredTestMethods": 8,
+      "sha256": "03aacb09167a9bc9fc0b53f1cbe93746e5453f1111b4645541775a2903024601",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/fx/auto/FxAutoRollingLimitEvaluatorTest.java",
+      "class": "FxAutoRollingLimitEvaluatorTest",
+      "declaredTestMethods": 8,
+      "sha256": "34ab6ad8ce6a04f81fdbd11280c7c08a27a0bcc495ee915458e0ace8b93abd8c",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/geo/KatoTerritoryQualificationTest.java",
+      "class": "KatoTerritoryQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "c90b152070586f289c69cb3da3a6eb5bcc1f60140da4d53a02e31fc2dac96039",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java",
+      "class": "BusMvpServiceJourneyQualificationTest",
+      "declaredTestMethods": 1,
+      "sha256": "050514a83fb8d2d9c5b158a2dd3e6a1b3886b9677a30bb943d0cd4e7683b5a27",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamAccessStatusQualificationTest.java",
+      "class": "IamAccessStatusQualificationTest",
+      "declaredTestMethods": 11,
+      "sha256": "02307fefb34c12d4fad1682694fce8a87aff165458d106c902a29d7bb1d1d32d",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamAdminOwnerGovernanceQualificationTest.java",
+      "class": "IamAdminOwnerGovernanceQualificationTest",
+      "declaredTestMethods": 14,
+      "sha256": "e72e70096ca8917cb56a9eb7a0a22087ffb3938c5764a984e15681872cbf21ce",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": true
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamEmailChangeOrderHistoryQualificationTest.java",
+      "class": "IamEmailChangeOrderHistoryQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "3aee6c01fbdefdd2b0e565b374bd9f80ae4a7c9b5b8415d596048adb8b04f960",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamEmailChangeQualificationTest.java",
+      "class": "IamEmailChangeQualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "cf1840fa75cad753274bfa92e6965a96bd5e1347ab1f8ee4bcf9399b386b01c3",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamFoundationQualificationTest.java",
+      "class": "IamFoundationQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "9d19eb2256ac0c30bf0fc3fbe88030e8292598c909767c259a6031e60adae020",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamGlobalUserProfileQualificationTest.java",
+      "class": "IamGlobalUserProfileQualificationTest",
+      "declaredTestMethods": 8,
+      "sha256": "382ed686473346d84765300f6bf89e037e166273e67c964dddc82fae6c6807c8",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamInitialEmailRegistrationQualificationTest.java",
+      "class": "IamInitialEmailRegistrationQualificationTest",
+      "declaredTestMethods": 9,
+      "sha256": "8a814c790ffa112d56702e66db5ffcadb3ed35702599c0267a68051d573b1bdf",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamOidcRevocationOutboxQualificationTest.java",
+      "class": "IamOidcRevocationOutboxQualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "feea5a5c55019eef3ce458c09e736e4357093a4ad6c1dc6da0e5a8034f5da615",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamPiiPopulatedDatabaseQualificationTest.java",
+      "class": "IamPiiPopulatedDatabaseQualificationTest",
+      "declaredTestMethods": 10,
+      "sha256": "09beba859beaad10bc10d611fa941d1c05dc2c903fe6e4de957e3c80bbddb5bf",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": true
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamSellerAuthenticatedTenantAdmissionQualificationTest.java",
+      "class": "IamSellerAuthenticatedTenantAdmissionQualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "1749c1b43f87c5782cad1b03e4af74fe7e066c0bf2f8cccb080ba019d8f4a08e",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/IamUserOnboardingProcessQualificationTest.java",
+      "class": "IamUserOnboardingProcessQualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "d9b0237acf28f9ac1c0d91288d260ed82755667a78f02f62baeb077ffe3d90c8",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/OidcActorResolverQualificationTest.java",
+      "class": "OidcActorResolverQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "947fa126d3dfd99dfeab26ec6adba28d27c765a90771fef31b7b198c118d643b",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/OidcJwtCryptoQualificationTest.java",
+      "class": "OidcJwtCryptoQualificationTest",
+      "declaredTestMethods": 1,
+      "sha256": "89f5de575a169742a8ccf7909b088280ca0677605b812ded1f8302cdc628a15c",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/OidcTestDecoderSupport.java",
+      "class": "OidcTestDecoderSupport",
+      "declaredTestMethods": 0,
+      "sha256": "acf9a95d09219fa0112e555c59a06cd492c6561930e62182bd16c1bece057ed4",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/R4FirstTenantOnboardingQualificationTest.java",
+      "class": "R4FirstTenantOnboardingQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "6fd1174ca979b7f1a40db94844007dc48067e47199be6d217588b79ffe5f8d2d",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/R4LocalJwksIntegrationQualificationTest.java",
+      "class": "R4LocalJwksIntegrationQualificationTest",
+      "declaredTestMethods": 1,
+      "sha256": "b6845365c6833be42988745635c38548f003391bfc6dce2341f2e686068ed701",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/TenantRbacQualificationTest.java",
+      "class": "TenantRbacQualificationTest",
+      "declaredTestMethods": 8,
+      "sha256": "3b03a7d22335931025449403f9f7e1363432c2d6b2864cffe44665c5ed49600b",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+      "class": "TenantRbacRevocationQualificationTest",
+      "declaredTestMethods": 11,
+      "sha256": "9164f9f41e12962ff6204ba36a401973255ac753816c902fdc2fbf7ce0432771",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/UserRoleMatrixR31QualificationTest.java",
+      "class": "UserRoleMatrixR31QualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "8c69bc969ff48fc2f143672abedf960163f4313b666be73b52b2c4ceb04b62b8",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java",
+      "class": "CommercialCoreE2EQualificationTest",
+      "declaredTestMethods": 9,
+      "sha256": "c55e11c58226284beb10b8c2b1836876bb3c5734655daef848adcc7d158e29c1",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryMovementQualificationTest.java",
+      "class": "InventoryMovementQualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "69dfcf9e048738c2a01123ddf1d72c8c06e67250278e6daed4e102fc8f24223a",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryQ123QualificationTest.java",
+      "class": "InventoryQ123QualificationTest",
+      "declaredTestMethods": 9,
+      "sha256": "e34b6283f7d9993ec3e4e48596f5dda3f45281f9928871cf55538c1c34e255b6",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryReservationQualificationTest.java",
+      "class": "InventoryReservationQualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "364484cffc68c0d1f5db2aea53962c5774373ff1726e4369ef662fc8bef3574b",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryTenantSettingsQualificationTest.java",
+      "class": "InventoryTenantSettingsQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "3c99920e7d71e393f41c1cce5f37bc41480545380f04418ee32b44fa7f4a5210",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+      "class": "InventoryTransferStocktakeQualificationTest",
+      "declaredTestMethods": 19,
+      "sha256": "78c6b9b89a490f945e20fab6d40c151ba02e2b6f85a4ae94d632f4d141844c0b",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java",
+      "class": "RegionalPublicAvailabilityQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "72426d79767da2cdcdbfa15c6547da215011538dd6da5e3a7fd91825635e87f8",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/SellerWarehouseScopeR0QualificationTest.java",
+      "class": "SellerWarehouseScopeR0QualificationTest",
+      "declaredTestMethods": 7,
+      "sha256": "cf7ca20f315574b7da21a828578df08643fced7f5d1e7911ffa88717120bd937",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/StockBalanceQueryQualificationTest.java",
+      "class": "StockBalanceQueryQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "00bcd093eb030b4f83d8def36fe70d2e6c0e7de9443e40c5e613df9cde65ba8d",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/organization/CommerceCurrencyAdmissionQualificationTest.java",
+      "class": "CommerceCurrencyAdmissionQualificationTest",
+      "declaredTestMethods": 11,
+      "sha256": "6d2889b14aa096e6c60cb1b202de48d17c373ed48f52d4b6f1233e2f2a92f352",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java",
+      "class": "MvpServiceCurrencyStartupQualificationTest",
+      "declaredTestMethods": 1,
+      "sha256": "eafa3ead3815575e949a2105e34c2c4177664b913c0466ec835909db7900c05e",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/organization/OrganizationLocationLifecycleQualificationTest.java",
+      "class": "OrganizationLocationLifecycleQualificationTest",
+      "declaredTestMethods": 10,
+      "sha256": "559402f2db071b67f2e5bd07d11abd79bee472b1e6ca00f9d75bc677147fd3c6",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/organization/OrganizationLocationQueryQualificationTest.java",
+      "class": "OrganizationLocationQueryQualificationTest",
+      "declaredTestMethods": 5,
+      "sha256": "e6d62b2c3d69e1694e5dc8d94925395aee41b1d0cb88e1275cc1c51dc8842f15",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java",
+      "class": "OrganizationLocationR11ConcurrencyQualificationTest",
+      "declaredTestMethods": 8,
+      "sha256": "88d7ccd6b2fcd4946bec8ca142d557483965b8081a137471258fac3fe4b82052",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/organization/TenantCurrencyPolicyQualificationTest.java",
+      "class": "TenantCurrencyPolicyQualificationTest",
+      "declaredTestMethods": 14,
+      "sha256": "74b41b169c4d1691fbc434d1afcb32a51c216b36a420aeeb48ba4a4fe2916ff9",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java",
+      "class": "MvpServiceWarehouseAdmissionQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "3249e402e9c4dc4b06213efb239e79d527af28d00f61ffdad1946fcfd2d52876",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/OrderPackagingQualificationTest.java",
+      "class": "OrderPackagingQualificationTest",
+      "declaredTestMethods": 26,
+      "sha256": "e76fdea09f58bd6bd92a516b6a3b014e63804c8a165767ced6ac9cfff1f05ad3",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/PackagingServiceCatalogQualificationTest.java",
+      "class": "PackagingServiceCatalogQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "d7a644b9f7f359698ff97c7c830da6b23adfcb0c792d3737ae3225bb904b8c91",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/QrHandoverProcessWorker.java",
+      "class": "QrHandoverProcessWorker",
+      "declaredTestMethods": 0,
+      "sha256": "0d97597bb9849d79318b4c2694ada36546d43e9855a4ee44665c09180b31d9d9",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java",
+      "class": "QrMvpServiceJourneyQualificationTest",
+      "declaredTestMethods": 2,
+      "sha256": "fad7afcef86843b1740ed2667ffc4b63f30a082882a2e71fd64fc152ff2c9a4c",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+      "class": "QrNegotiatedCheckoutQualificationTest",
+      "declaredTestMethods": 14,
+      "sha256": "e22cfdf5529bfbb687c20421eccfd934d27f74819256e1373fecb78fc205454e",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/QrReturnProcessWorker.java",
+      "class": "QrReturnProcessWorker",
+      "declaredTestMethods": 0,
+      "sha256": "310461732a28ffd50e66151072487a6171e67fa1d5f3c5ff8b6b0cdeee36bd52",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+      "class": "QrWarehouseHandoverQualificationTest",
+      "declaredTestMethods": 58,
+      "sha256": "cebdde2c648dacce567fbdb554069f1d3f7f3f2180ef1de0ba0ca45f4c245902",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+      "class": "SalesInventoryRbacQualificationTest",
+      "declaredTestMethods": 25,
+      "sha256": "5d990b1d09426415e6f5de112cca5b6561c9caddd110c0879aea7b70535ad48f",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": true
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/SalesOrderQueryQualificationTest.java",
+      "class": "SalesOrderQueryQualificationTest",
+      "declaredTestMethods": 8,
+      "sha256": "2f58acd0eace1e6051a3f0251c889ecf4d21fd646b409f0c6e7a3cf93a0e7a1f",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/security/kms/KeyWrappingQualificationTest.java",
+      "class": "KeyWrappingQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "1920fe107dc2adc14619e7ddde68efa0c1be0249eb3b377b41f8539e3681d1f0",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/security/kms/KmsCryptoQualificationTest.java",
+      "class": "KmsCryptoQualificationTest",
+      "declaredTestMethods": 4,
+      "sha256": "5531a720612a73658982a5a2e3aa3153f2b39b432448b178db9d9d5702ffc0ba",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/security/kms/KmsDeploymentGuardTest.java",
+      "class": "KmsDeploymentGuardTest",
+      "declaredTestMethods": 5,
+      "sha256": "6008e2a9cc54419b2a5ca4991041a1b151baee5c2ec8ec5cc665e657bd177719",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/security/kms/KmsFencedJobQualificationTest.java",
+      "class": "KmsFencedJobQualificationTest",
+      "declaredTestMethods": 6,
+      "sha256": "ee4a0510951265ec9702a41e50a8bbf8676beac62e883ff870e2b08fa3beb4ec",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/security/kms/KmsPersistedRoundTripTest.java",
+      "class": "KmsPersistedRoundTripTest",
+      "declaredTestMethods": 4,
+      "sha256": "e60c909e22b68d2d628bac2bda68f694d20335a177dd516fa9009f1c7ae457d0",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/security/kms/TenantKeyServiceTest.java",
+      "class": "TenantKeyServiceTest",
+      "declaredTestMethods": 4,
+      "sha256": "c821a8675aea5668d85c07c35871590d0099eae5bcdf7d0f5803db5f0fb8b908",
+      "usesAssumptions": false,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/storefront/PublishedOfferQrQualificationTest.java",
+      "class": "PublishedOfferQrQualificationTest",
+      "declaredTestMethods": 11,
+      "sha256": "d1244e69580c9eec4d76ce373bbd8b6aac276c5e8dad5f943e7ddcfa3228c62a",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+      "class": "SellerOfferQualificationTest",
+      "declaredTestMethods": 20,
+      "sha256": "1e8c30a0f09ae3f36debf91459457c8954db0d68d7f98a2274d8a50db141708c",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java",
+      "class": "StorefrontManagementQualificationTest",
+      "declaredTestMethods": 16,
+      "sha256": "ed71573aee175425e5602c4f855d9cc0b8cb240a52063eed2ab33b9a96169ff5",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    },
+    {
+      "path": "src/test/java/kz/rm/tasks/TaskServiceQualificationTest.java",
+      "class": "TaskServiceQualificationTest",
+      "declaredTestMethods": 53,
+      "sha256": "0c12c9504ef1d69d746b82337063f79e3cfa9f0afc9eda170bf3b56b5400456a",
+      "usesAssumptions": true,
+      "hasTransactionalAnnotation": false
+    }
+  ],
+  "workflowInventory": [
+    {
+      "path": ".github/workflows/crm-r12-populated-upgrade.yml",
+      "name": "CRM R1.2 Populated PostgreSQL Upgrade Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "crm-r12-populated-upgrade-surefire"
+      ]
+    },
+    {
+      "path": ".github/workflows/crm-r21b-exact-sha.yml",
+      "name": "CRM-R2.1B Isolated Exact-SHA PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/crm-r22-buyer-link-pg.yml",
+      "name": "CRM-R2.2 Buyer Link PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/crm-r22c-populated-upgrade.yml",
+      "name": "CRM-R2.2C Populated PostgreSQL Upgrade",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/iam-r22f-oidc-revocation-pg.yml",
+      "name": "IAM-R2.2F OIDC Revocation PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/inventory-0081-populated-upgrade.yml",
+      "name": "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "inventory-0081-populated-postgresql"
+      ]
+    },
+    {
+      "path": ".github/workflows/kms-r1-qualification.yml",
+      "name": "RM Domain Security and PostgreSQL Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "kms-h2-surefire",
+        "kms-postgres-surefire",
+        "iam-pii-populated-pg-surefire"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-cur-r1c-commerce-admission.yml",
+      "name": "RM CUR-R1C Commerce Admission and PostgreSQL Race",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-cur-r2a-fx-approval.yml",
+      "name": "RM CUR-R2A/R2B Seller FX Approval Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-cur-r2c-policy-postgresql.yml",
+      "name": "RM CUR-R2C Policy Schema PostgreSQL Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "cur-r2c-policy-pg-{sha}",
+        "cur-r2c-populated-pg-{sha}",
+        "cur-r2c-anchor-populated-pg-{sha}",
+        "cur-r2c-revoke-populated-pg-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-currency-r1a-pg.yml",
+      "name": "RM Currency R1A Tenant Policy Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-exact-sha-admission.yml",
+      "name": "RM Exact-SHA Qualification Admission",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-fc40-order-execution-pg.yml",
+      "name": "RM FC-40 Order Execution PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-fx-r0-mock-qualification.yml",
+      "name": "RM FX R0 Mock Rate Refresh Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-fx-r1a-rate-persistence.yml",
+      "name": "RM FX R1A Rate Persistence Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-fx-r1a2-nbrk-xml-qualification.yml",
+      "name": "RM FX R1A.2 NBRK XML Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-fx-r1a3-trusted-nbrk.yml",
+      "name": "RM FX R1A.3 Trusted NBRK Ingestion Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-iam-seller-r0-postgresql.yml",
+      "name": "RM IAM Seller R0 Authenticated Tenant Service Admission PostgreSQL",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-manual-module-tests.yml",
+      "name": "RM Module JUnit - H2 and PostgreSQL",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-mvp-w23-service-strict-pg.yml",
+      "name": "RM MVP W2-W5 Service Journeys PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-qr06b-pg.yml",
+      "name": "RM QR-06B PostgreSQL Handover Race Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-qr07-r0-pg.yml",
+      "name": "RM QR-07 R0-R2 Physical Return PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-qr08-r0-pg.yml",
+      "name": "RM QR-08 R0 Packaging PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-seller-edit-r0-postgresql.yml",
+      "name": "RM Seller Edit R0 Tenant RBAC and Warehouse PostgreSQL Qualification",
+      "requiredByCurrentAdmission": false,
+      "artifacts": []
+    },
+    {
+      "path": ".github/workflows/rm-task-r2-service.yml",
+      "name": "RM TASK R2 Service Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "rm-task-h2-{sha}",
+        "rm-task-postgresql-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-task-r32a-populated-upgrade.yml",
+      "name": "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "rm-task-r32a-populated-pg-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-task-r32b-t00-postgresql.yml",
+      "name": "RM TASK R32B T00 PostgreSQL Contract Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "rm-task-t00-postgresql-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rustfs-real-infra-e2e.yml",
+      "name": "RustFS Real Infrastructure E2E",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "rustfs-real-infra-e2e-surefire"
+      ]
+    },
+    {
+      "path": ".github/workflows/sales-084-populated-upgrade.yml",
+      "name": "SALES 08.4 Populated PostgreSQL Upgrade Qualification",
+      "requiredByCurrentAdmission": true,
+      "artifacts": [
+        "sales-084-populated-postgresql"
+      ]
+    }
+  ],
+  "qualificationProfile": {
+    "java": "21",
+    "database": "PostgreSQL 17 (current CI baseline)",
+    "requiredProperties": {
+      "rm.mvp.service-mode.enabled": true,
+      "rm.currency.commerce-admission.enabled": true
+    },
+    "artifactRequiredFields": [
+      "scenarioId",
+      "variantId",
+      "sourceSha",
+      "testSha",
+      "buildSha",
+      "schemaFingerprint",
+      "configFingerprint",
+      "workflowPath",
+      "runId",
+      "runAttempt",
+      "jobId",
+      "junitClass",
+      "junitMethod",
+      "databaseProduct",
+      "databaseVersion",
+      "isolation",
+      "schedule",
+      "faultKind",
+      "sqlOracleRefs",
+      "artifactSha256",
+      "verdict"
+    ],
+    "notExecuted": true
+  }
+}
