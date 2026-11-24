@@ -98,6 +98,8 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: All Maven service tests against PostgreSQL 17
         env:
+          # Bound cached Spring contexts; child JVM load pools retain their own settings.
+          JAVA_TOOL_OPTIONS: '-Dspring.test.context.cache.maxSize=4'
           SPRING_PROFILES_ACTIVE: test
           RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
           RM_TEST_DB_USERNAME: rm

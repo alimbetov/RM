@@ -439,6 +439,27 @@ class SalesInventoryRbacQualificationTest {
             SELECT count(*) FROM crm.inv_stock_reservation
             WHERE tenant_id=? AND state='ACTIVE'
             """,Integer.class,c.tenant())).isEqualTo(4);
+        // The first line in the actual SQL lock order can reserve; the second
+        // cannot. The full transaction must undo even the first successful write.
+        UUID firstSku=jdbc.queryForList("SELECT id FROM crm.cat_item WHERE tenant_id=? ORDER BY id",UUID.class,c.tenant()).getFirst();
+        UUID firstOffer=firstSku.equals(c.item())?c.offer():otherOffer;
+        UUID secondOffer=firstSku.equals(c.item())?otherOffer:c.offer();
+        UUID failed=checkout.checkout(c.slug(),"buyer-"+UUID.randomUUID()+"@example.kz",
+            "checkout-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(firstOffer,1),
+                new AutoOrderService.Line(secondOffer,7))).order().orderId();
+        var balancesBefore=jdbc.queryForList("SELECT item_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? ORDER BY item_id",c.tenant());
+        var reservationsBefore=jdbc.queryForList("SELECT id,order_id,order_line_id,item_id,quantity,state FROM crm.inv_stock_reservation WHERE tenant_id=? ORDER BY id",c.tenant());
+        var before=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),failed,c.location(),c.item());
+        try(var issuer=new JourneySignedActorFixture()){
+            var staff=issuer.resolve(jdbc,users,c.staff());
+            assertThatThrownBy(()->authenticatedCommands.confirm(staff,c.tenant(),failed,c.location()))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Insufficient available inventory");
+        }
+        assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),failed,c.location(),c.item())).isEqualTo(before);
+        assertThat(jdbc.queryForList("SELECT item_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? ORDER BY item_id",c.tenant())).isEqualTo(balancesBefore);
+        assertThat(jdbc.queryForList("SELECT id,order_id,order_line_id,item_id,quantity,state FROM crm.inv_stock_reservation WHERE tenant_id=? ORDER BY id",c.tenant())).isEqualTo(reservationsBefore);
+        assertThat(status(c,failed)).isEqualTo("PLACED");
+        assertThat(eventCount(c,failed,"CONFIRMED")).isZero();
     }
 
     @Test void staleSalesAndStockPermitsCannotMutateAnotherTransaction() {

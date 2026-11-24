@@ -427,7 +427,16 @@
     {
       "id": "CORE-SAL-05",
       "behavior": "Two orders compete for last units and reversed SKU ordering → no oversell/deadlock leak",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand"
+        },
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "opposingMultiSkuOrdersReserveWithoutDeadlock"
+        }
+      ],
       "legacyBehavior": "Reserved stock and ledger remain atomic with order completion",
       "legacyProofs": [
         {
@@ -435,8 +444,8 @@
           "test": "fulfillmentDebitsOnceAndRequiresBothDomainPermissions"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Старая проверка fulfillment не является hot-SKU race; нужны управляемые schedules и отрицательные ledger oracles.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Deterministic hot-SKU A/B winner schedules with exact insufficient inventory denial, replay and multi-line rollback; PostgreSQL execution and strict warehouse scope variants pending.",
       "candidateProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
@@ -455,7 +464,12 @@
     {
       "id": "CORE-SAL-06",
       "behavior": "Cancel×confirm and cancel×fulfill both orders → one valid final state/release/debit",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome"
+        }
+      ],
       "legacyBehavior": "Seller denial preserves state and order inventory history",
       "legacyProofs": [
         {
@@ -463,8 +477,8 @@
           "test": "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Старая привязка к permission deny ошибочна; random race не заменяет оба заданных порядка cancel × confirm/fulfill.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Four deterministic STANDARD order cancel/confirm and cancel/fulfill commit orders, exact loser denial and terminal replay; strict pickup route and durable SQL artifacts remain open.",
       "candidateProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
