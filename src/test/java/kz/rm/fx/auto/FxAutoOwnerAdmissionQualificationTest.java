@@ -591,4 +591,90 @@ class FxAutoOwnerAdmissionQualificationTest {
         assertThat(jdbc.queryForObject("SELECT execution_epoch FROM crm.fx_auto_policy_activation WHERE tenant_id=? AND policy_id=?",Long.class,t.id(),approved.policyId())).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.store_offer_price_revision WHERE tenant_id=?",Integer.class,t.id())).isZero();
     }
+
+    @Test void lifecycleOwnershipTransferNeverInheritsApprovalAndSuccessorCanStop() throws Exception {
+        pg();var t=tenant(account());enable(t);var role=grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var former=verified(t.owner());var successor=verified(t.member());
+        var draft=enrollment.createPolicyRevision(former,t.id(),draftCommand(UUID.randomUUID(),0,"draft",draftTarget(t,"USD")));
+        var command=approvalCommand(t,draft,"approve");
+        var approved=approvals.approve(former,t.id(),command);
+        var transfer=transfers.requestTransfer(former,t.id(),t.member());
+        transfers.acceptTransfer(successor,t.id(),transfer.id());
+        roles.assign(verified(t.provisioningOwner()),t.id(),t.member(),role);
+        assertThatThrownBy(()->approvals.approve(former,t.id(),command)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->approvals.approve(successor,t.id(),command)).isInstanceOf(SecurityException.class);
+        var stop=new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),0);
+        assertThatThrownBy(()->revocations.revoke(former,t.id(),stop)).isInstanceOf(SecurityException.class);
+        assertThat(revocations.revoke(successor,t.id(),stop).executionEpoch()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT actor_user_id FROM crm.fx_auto_revocation_evidence WHERE tenant_id=? AND policy_id=?",UUID.class,t.id(),approved.policyId())).isEqualTo(t.member());
+    }
+
+    @Test void lifecycleApprovalAndGrantRevocationSerializeBothOrders() throws Exception {
+        pg();
+        for(boolean approveFirst:new boolean[]{true,false}){
+            var t=tenant(account());enable(t);var role=grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+            var actor=verified(t.owner());
+            var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft",draftTarget(t,"USD")));
+            var command=approvalCommand(t,draft,"approve");
+            var locked=new java.util.concurrent.CountDownLatch(1);
+            var release=new java.util.concurrent.CountDownLatch(1);
+            var pid=new java.util.concurrent.CompletableFuture<Integer>();
+            try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+                var first=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                    jdbc.execute("SET LOCAL lock_timeout='12s'");
+                    if(approveFirst)approvals.approve(actor,t.id(),command);
+                    else roles.revoke(actor,t.id(),role,DomainPermission.STOREFRONT_OFFER_MANAGE);
+                    locked.countDown();
+                    try{if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("release timeout");}
+                    catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+                }));
+                try {
+                    assertThat(locked.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                    var second=pool.submit(()->{
+                        try {
+                            new TransactionTemplate(txManager).executeWithoutResult(s->{
+                                jdbc.execute("SET LOCAL lock_timeout='12s'");
+                                pid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                                if(approveFirst)roles.revoke(actor,t.id(),role,DomainPermission.STOREFRONT_OFFER_MANAGE);
+                                else approvals.approve(actor,t.id(),command);
+                            });
+                            return true;
+                        } catch(SecurityException denied){return false;}
+                    });
+                    int backend=pid.get(5,java.util.concurrent.TimeUnit.SECONDS);
+                    boolean blocked=false;
+                    long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                    while(System.nanoTime()<deadline&&!second.isDone()){
+                        if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT cardinality(pg_blocking_pids(?))>0",Boolean.class,backend))){blocked=true;break;}
+                        Thread.sleep(20);
+                    }
+                    assertThat(blocked).isTrue();
+                    release.countDown();
+                    first.get(12,java.util.concurrent.TimeUnit.SECONDS);
+                    assertThat(second.get(12,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(approveFirst);
+                } finally {release.countDown();}
+            }
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_approval_evidence WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(approveFirst?1:0);
+            assertThatThrownBy(()->approvals.approve(actor,t.id(),command)).isInstanceOf(SecurityException.class);
+        }
+    }
+
+    @Test void lifecycleRollbackLeavesNoPartialApprovalSealOrRevocation() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft",draftTarget(t,"USD")));
+        var command=approvalCommand(t,draft,"approve");
+        new TransactionTemplate(txManager).executeWithoutResult(s->{approvals.approve(actor,t.id(),command);s.setRollbackOnly();});
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_approval_evidence WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_policy_activation WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT sealed FROM crm.fx_auto_scope_guard WHERE tenant_id=? AND policy_revision_id=?",Boolean.class,t.id(),draft.revisionId())).isFalse();
+        var approved=approvals.approve(actor,t.id(),command);
+        var stop=new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),0);
+        new TransactionTemplate(txManager).executeWithoutResult(s->{revocations.revoke(actor,t.id(),stop);s.setRollbackOnly();});
+        assertThat(jdbc.queryForObject("SELECT state FROM crm.fx_auto_policy_activation WHERE tenant_id=? AND policy_id=?",String.class,t.id(),draft.policyId())).isEqualTo("PAUSED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_revocation_evidence WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        revocations.revoke(actor,t.id(),stop);
+        assertThat(jdbc.queryForObject("SELECT trim(scope_sha256)=crm.fx_auto_scope_sha_v1(tenant_id,policy_revision_id) FROM crm.fx_auto_approval_evidence WHERE tenant_id=? AND id=?",Boolean.class,t.id(),approved.approvalId())).isTrue();
+        assertThat(jdbc.queryForObject("SELECT crm.fx_auto_sha_v1(CAST(payload AS jsonb))=payload_sha256 FROM crm.fx_auto_policy_revision WHERE tenant_id=? AND id=?",Boolean.class,t.id(),draft.revisionId())).isTrue();
+    }
 }

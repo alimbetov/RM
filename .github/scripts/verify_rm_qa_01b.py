@@ -27,7 +27,7 @@ REQUIRED = {
     "RM TASK R2 Service Qualification": ("rm-task-h2-{sha}", "rm-task-postgresql-{sha}"),
     "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification": ("rm-task-r32a-populated-pg-{sha}",),
     "RM TASK R32B T00 PostgreSQL Contract Qualification": ("rm-task-t00-postgresql-{sha}",),
-    "RM CUR-R2C Policy Schema PostgreSQL Qualification": ("cur-r2c-policy-pg-{sha}", "cur-r2c-populated-pg-{sha}", "cur-r2c-anchor-populated-pg-{sha}"),
+    "RM CUR-R2C Policy Schema PostgreSQL Qualification": ("cur-r2c-policy-pg-{sha}", "cur-r2c-populated-pg-{sha}", "cur-r2c-anchor-populated-pg-{sha}", "cur-r2c-revoke-populated-pg-{sha}"),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
@@ -376,17 +376,20 @@ def verify():
                         problems.append(f"{artifact_name}: nine T00 PostgreSQL cases must execute without skips")
                 if artifact_name == "cur-r2c-policy-pg-" + sha:
                     expected = {"FxAutoPolicySchemaPgTest": 8, "FxAutoRollingLimitEvaluatorTest": 8,
-                                "FxAutoDryRunTest": 6, "FxAutoOwnerAdmissionQualificationTest": 21,
+                                "FxAutoDryRunTest": 6, "FxAutoOwnerAdmissionQualificationTest": 24,
                                 "TenantCurrencyPolicyQualificationTest": 14, "SkuFxSellerApprovalQualificationTest": 35}
                     actual = {suite: sum(1 for s, _ in executed_cases if s == suite) for suite in expected}
-                    if actual != expected or counts != {"tests": 92, "failures": 0, "errors": 0, "skipped": 0}:
-                        problems.append(f"{artifact_name}: expected 92 exact executed R2C cases; actual {actual}, {counts}")
+                    if actual != expected or counts != {"tests": 95, "failures": 0, "errors": 0, "skipped": 0}:
+                        problems.append(f"{artifact_name}: expected 95 exact executed R2C cases; actual {actual}, {counts}")
                 elif artifact_name == "cur-r2c-populated-pg-" + sha:
                     if counts != {"tests": 8, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "FxAutoPolicySchemaPgTest" for s, _ in executed_cases) != 8:
                         problems.append(f"{artifact_name}: expected eight executed schema cases")
                 elif artifact_name == "cur-r2c-anchor-populated-pg-" + sha:
                     if counts != {"tests": 49, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "TenantCurrencyPolicyQualificationTest" for s, _ in executed_cases) != 14 or sum(s == "SkuFxSellerApprovalQualificationTest" for s, _ in executed_cases) != 35:
                         problems.append(f"{artifact_name}: expected 49 executed currency and legacy FX cases")
+                elif artifact_name == "cur-r2c-revoke-populated-pg-" + sha:
+                    if counts != {"tests": 24, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "FxAutoOwnerAdmissionQualificationTest" for s, _ in executed_cases) != 24:
+                        problems.append(f"{artifact_name}: expected 24 executed lifecycle cases")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
