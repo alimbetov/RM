@@ -50,6 +50,15 @@ class QrWarehouseHandoverQualificationTest {
     @Autowired SalesOrderQrReferenceService orderRefs;
     @Autowired WarehouseStaffScopeService scopes;
     @Autowired AutoOrderService checkout;
+    @Autowired kz.rm.autoorder.PublishedQrCheckoutService verifiedCheckout;
+    @Autowired AuthenticatedSalesCommands authenticatedSales;
+    @Autowired kz.rm.catalog.CatalogItemService catalog;
+    @Autowired kz.rm.storefront.StorefrontManagementService stores;
+    @Autowired kz.rm.storefront.StorefrontOfferService offers;
+    @Autowired kz.rm.storefront.PublishedOfferQrService offerQr;
+    @Autowired kz.rm.storefront.PublishedOfferCardQuery publicCards;
+    @Autowired kz.rm.organization.TenantCurrencyPolicyService currencies;
+    @Autowired kz.rm.security.kms.TenantKeyService tenantKeys;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
@@ -69,7 +78,7 @@ class QrWarehouseHandoverQualificationTest {
     private record Context(UUID tenant,UUID warehouse,UUID otherWarehouse,
                            UUID itemOne,UUID itemTwo,UUID offerOne,UUID offerTwo,
                            String storeSlug,VerifiedActor owner,
-                           VerifiedActor staff,VerifiedActor buyer,String buyerEmail) {}
+                           VerifiedActor staff,VerifiedActor buyer,String buyerEmail,String strictQrRef) {}
     private record Order(UUID id,List<UUID> lines,String publicRef) {}
 
     private static SignedJwtTestAuthority identityAuthority;
@@ -151,6 +160,12 @@ class QrWarehouseHandoverQualificationTest {
                 DomainPermission.SALES_ORDER_READ,DomainPermission.INVENTORY_STOCK_READ,
                 DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL})
             roles.grant(ownerActor,tenant,role.id(),perm);
+        if(strictEmail){
+            for(var permission:List.of(DomainPermission.CATALOG_WRITE,DomainPermission.CATALOG_PRICE_MANAGE,
+                    DomainPermission.CATALOG_PUBLISH,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                    DomainPermission.STOREFRONT_OFFER_PUBLISH,DomainPermission.INVENTORY_RECEIVE))
+                roles.grant(ownerActor,tenant,role.id(),permission);
+        }
         roles.assign(ownerActor,tenant,staff,role.id());
         roles.enable(ownerActor,tenant);
         String kato=jdbc.queryForObject("""
@@ -167,6 +182,34 @@ class QrWarehouseHandoverQualificationTest {
                     """,w,tenant,kato,now,now);
         }
         scopes.assign(ownerActor,tenant,warehouse,staff);
+        if(strictEmail){
+            currencies.initialize(ownerActor,tenant);
+            tenantKeys.provision(tenant);
+            String slug="qr-pick-"+UUID.randomUUID();
+            var sf=stores.createDraft(staffActor,tenant,slug);
+            stores.publish(staffActor,tenant,sf.id(),sf.rowVersion());
+            List<UUID> items=new ArrayList<>(),offerIds=new ArrayList<>();
+            List<String> refs=new ArrayList<>();
+            for(int i=0;i<2;i++){
+                var draft=catalog.createDraft(staffActor,tenant,"SKU-"+UUID.randomUUID(),
+                        kz.rm.catalog.CatalogItem.Kind.PRODUCT,"ru","Item",null);
+                var priced=catalog.addPriceRevision(staffActor,tenant,draft.id(),
+                        new BigDecimal("100.0000"),"KZT",Instant.now().minusSeconds(100),draft.rowVersion());
+                var product=catalog.publish(staffActor,tenant,priced.id(),priced.rowVersion());
+                var offer=offers.createDraft(staffActor,tenant,product.id(),"Item",
+                        new BigDecimal("100.0000"),"KZT");
+                var published=offers.publish(staffActor,tenant,offer.id(),offer.rowVersion());
+                inventoryCommands.receive(staffActor,tenant,warehouse,product.id(),key(),new BigDecimal("20"));
+                var qr=offerQr.issueOrGet(staffActor,tenant,published.id(),published.rowVersion(),key());
+                var card=publicCards.findPublished(qr.publicRef(),"ru");
+                assertThat(card.storeSlug()).isEqualTo(slug);
+                assertThat(card.unitPrice()).isEqualByComparingTo("100.0000");
+                assertThat(card.currency()).isEqualTo("KZT");
+                items.add(product.id());offerIds.add(published.id());refs.add(qr.publicRef());
+            }
+            return new Context(tenant,warehouse,other,items.get(0),items.get(1),offerIds.get(0),offerIds.get(1),
+                    slug,ownerActor,staffActor,buyerActor,buyerEmail,refs.getFirst());
+        }
         UUID one=UUID.randomUUID(),two=UUID.randomUUID();
         UUID offerOne=UUID.randomUUID(),offerTwo=UUID.randomUUID();
         String slug="qr-pick-"+UUID.randomUUID();
@@ -195,9 +238,10 @@ class QrWarehouseHandoverQualificationTest {
                     """,tenant,i==0?offerOne:offerTwo,i==0?one:two);
         }
         return new Context(tenant,warehouse,other,one,two,offerOne,offerTwo,
-                slug,ownerActor,staffActor,buyerActor,buyerEmail);
+                slug,ownerActor,staffActor,buyerActor,buyerEmail,null);
     }
     private Order order(Context c,boolean twoLines){
+        if(c.strictQrRef()!=null)return strictRet04Order(c,twoLines);
         var basket=twoLines?List.of(new AutoOrderService.Line(c.offerOne(),5),
                 new AutoOrderService.Line(c.offerTwo(),3))
                 :List.of(new AutoOrderService.Line(c.offerOne(),5));
@@ -217,6 +261,52 @@ class QrWarehouseHandoverQualificationTest {
                 """,byte[].class,challenge);
         UUID verifiedBuyer=checkout.verifyEmail(challenge,crypto.decrypt(envelope));
         assertThat(verifiedBuyer).isEqualTo(c.buyer().userId());
+        return loadOrder(c,id);
+    }
+
+    private Order strictRet04Order(Context c,boolean twoLines){
+        if(twoLines)throw new AssertionError("Strict published QR checkout is single product");
+        var card=publicCards.findPublished(c.strictQrRef(),"ru");
+        assertThat(card.storeSlug()).isEqualTo(c.storeSlug());
+        assertThat(card.currency()).isEqualTo("KZT");
+        assertThat(card.unitPrice()).isEqualByComparingTo("100.0000");
+        String request=key();
+        var receipt=verifiedCheckout.checkoutVerified(c.buyer(),card.publicRef(),5,
+                card.offerRowVersion(),card.unitPrice(),card.currency(),request);
+        UUID id=receipt.order().orderId();
+        assertThat(verifiedCheckout.checkoutVerified(c.buyer(),card.publicRef(),5,
+                card.offerRowVersion(),card.unitPrice(),card.currency(),request).order().orderId()).isEqualTo(id);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order o
+                JOIN public.iam_email_identity e ON e.id=o.pending_email_identity_id
+                WHERE o.tenant_id=? AND o.id=? AND o.buyer_user_id=?
+                  AND e.user_id=o.buyer_user_id AND e.current_owner_id=o.buyer_user_id
+                  AND e.lifecycle_state='CURRENT' AND e.verified_at IS NOT NULL
+                  AND o.status='PLACED' AND o.currency='KZT' AND o.total_amount=500
+                  AND o.fulfillment_mode='PICKUP_PROOF_REQUIRED'
+                """,Integer.class,c.tenant(),id,c.buyer().userId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_checkout_receipt
+                WHERE tenant_id=? AND idempotency_key=? AND order_id=?
+                """,Integer.class,c.tenant(),request,id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=? AND offer_id=? AND catalog_item_id_snapshot=?
+                  AND quantity=5 AND unit_price_snapshot=100 AND currency='KZT'
+                """,Integer.class,c.tenant(),id,c.offerOne(),c.itemOne())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_verification_challenge c
+                JOIN public.iam_email_identity e ON e.id=c.email_identity_id
+                WHERE e.user_id=? AND c.purpose='CHECKOUT'
+                """,Integer.class,c.tenant(),c.buyer().userId())).isZero();
+        var order=loadOrder(c,id);
+        assertThat(order.lines()).hasSize(1);
+        System.out.println("RET04E6B verified checkout tenant="+c.tenant()+" buyer="+c.buyer().userId()+
+                " order="+id+" offer="+c.offerOne()+" sku="+c.itemOne());
+        return order;
+    }
+
+    private Order loadOrder(Context c,UUID id){
         List<UUID> lines=jdbc.query("""
                 SELECT id FROM crm.sales_order_line
                 WHERE tenant_id=? AND order_id=?
@@ -247,7 +337,9 @@ class QrWarehouseHandoverQualificationTest {
     }
     private Order ready(Context c,boolean two){
         Order o=order(c,two);
-        sales.confirm(c.staff().userId(),c.tenant(),o.id(),c.warehouse());
+        if(c.strictQrRef()!=null)
+            assertThat(authenticatedSales.confirm(c.staff(),c.tenant(),o.id(),c.warehouse()).status()).isEqualTo("CONFIRMED");
+        else sales.confirm(c.staff().userId(),c.tenant(),o.id(),c.warehouse());
         var start=prep.startPreparing(c.staff(),c.tenant(),o.id(),c.warehouse(),
                 version(c,o),key());
         assertThat(start.status()).isEqualTo("PREPARING");

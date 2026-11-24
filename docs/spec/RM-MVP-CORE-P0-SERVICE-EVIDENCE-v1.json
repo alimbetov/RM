@@ -1025,7 +1025,7 @@
         }
       ],
       "mappingVerdict": "SUPPORTING_PARTIAL",
-      "openRequirement": "56/56 dedicated PostgreSQL scenarios and three manifests verified and globally reverified on E.5 SHA. E.6A replaces seeded verified buyer email with production REGISTRATION challenge proof in all 56 scenarios; new exact-SHA execution, verified published QR checkout fixture, durable proof binding and normative variant review remain open. Partial verdict is intentional.",
+      "openRequirement": "56/56 dedicated PostgreSQL scenarios and three manifests globally reverified on prior SHA. E.6A production registration proof qualified; E.6B replaces seeded catalog, storefront, offer, stock and legacy email-first checkout with production publication, inventory receipt and verified published QR checkout in all 56 scenarios. E.6B exact-SHA execution, durable registration/checkout proof binding and normative variant review remain open. Partial verdict is intentional.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
