@@ -13,6 +13,7 @@ on:
       - 'src/test/java/kz/rm/catalog/CatalogQualificationTest.java'
       - 'src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java'
       - '.github/scripts/verify_rm_qa_01b.py'
+      - 'docs/reviews/RM-SELLER-EDIT-R0-DIAGNOSTIC-2026-11-24.md'
       - '.github/workflows/rm-seller-edit-r0-postgresql.yml'
   workflow_dispatch:
 
