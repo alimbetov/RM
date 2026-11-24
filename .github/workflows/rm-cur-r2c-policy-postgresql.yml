@@ -52,7 +52,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
-          for name, expected in [('FxAutoPolicySchemaPgTest',8),('FxAutoRollingLimitEvaluatorTest',8),('FxAutoDryRunTest',6),('FxAutoOwnerAdmissionQualificationTest',8)]:
+          for name, expected in [('FxAutoPolicySchemaPgTest',8),('FxAutoRollingLimitEvaluatorTest',8),('FxAutoDryRunTest',6),('FxAutoOwnerAdmissionQualificationTest',11)]:
               p=Path('target/surefire-reports/TEST-kz.rm.fx.auto.'+name+'.xml')
               cases=list(E.parse(p).getroot().iter('testcase'))
               assert len(cases)==expected,(name,len(cases))
