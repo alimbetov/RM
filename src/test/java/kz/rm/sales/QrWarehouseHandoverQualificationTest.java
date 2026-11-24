@@ -3241,6 +3241,99 @@ class QrWarehouseHandoverQualificationTest {
         assertExactlyOneHandover(c,order,1);
     }
 
+    @Test void coreRet04RestockFirst() throws Exception {
+        coreRet04CommitOrder(true);
+    }
+
+    @Test void coreRet04DisposeFirst() throws Exception {
+        coreRet04CommitOrder(false);
+    }
+
+    private void coreRet04CommitOrder(boolean restockFirst) throws Exception {
+        requirePostgres();
+        var c=context();var order=ready(c,false);
+        var claim=qr07R25Quarantined(c,order);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.INVENTORY_ADJUST);
+        UUID sku=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        BigDecimal stockBefore=stock(c,sku,"on_hand");
+        BigDecimal quarantineBefore=jdbc.queryForObject("""
+                SELECT quantity FROM crm.inv_return_quarantine_balance
+                WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),sku);
+        assertThat(quarantineBefore).isEqualByComparingTo("2");
+        String restockKey=key(),disposeKey=key();
+        var originalPosting=jdbc.queryForList("""
+                SELECT id::text AS posting_id, disposition, movement_id, quarantine_movement_id FROM crm.sales_return_posting WHERE tenant_id=? AND return_id=?
+                """,c.tenant(),claim.requestId());
+        var originalIntake=jdbc.queryForList("""
+                SELECT * FROM crm.inv_return_quarantine_movement WHERE tenant_id=? AND return_id=?
+                """,c.tenant(),claim.requestId());
+        assertThat(originalPosting).hasSize(1);
+        assertThat(originalIntake).hasSize(1);
+        int movementsBefore=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+                """,Integer.class,c.tenant());
+        Runnable restock=()->quarantineResolution.resolve(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.RESTOCK,"QA_RELEASE",restockKey);
+        Runnable dispose=()->quarantineResolution.resolve(c.staff(),c.tenant(),
+                c.warehouse(),claim.requestId(),6,
+                SalesReturnQuarantineResolutionService.Action.DISPOSE,"QA_DISPOSAL",disposeKey);
+        PgCommitOrderEvidence.run(jdbc,transactionManager,
+                restockFirst?restock:dispose,restockFirst?dispose:restock,
+                IllegalStateException.class,"QUARANTINE_REPLAY_CONFLICT");
+        String target=restockFirst?"RESTOCKED":"DISPOSED";
+        assertThat(jdbc.queryForMap("""
+                SELECT state,row_version FROM crm.sales_return_request
+                WHERE tenant_id=? AND id=?
+                """,c.tenant(),claim.requestId())).containsEntry("state",target);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),claim.requestId())).isEqualTo(7L);
+        var resolutions=jdbc.queryForList("""
+                SELECT action_code,request_key,quantity,before_quantity,after_quantity,stock_movement_id
+                FROM crm.sales_return_quarantine_resolution WHERE tenant_id=? AND return_id=?
+                """,c.tenant(),claim.requestId());
+        assertThat(resolutions).hasSize(1);
+        var resolution=resolutions.get(0);
+        assertThat(resolution).containsEntry("action_code",restockFirst?"RESTOCK":"DISPOSE")
+                .containsEntry("request_key",restockFirst?restockKey:disposeKey);
+        assertThat((BigDecimal)resolution.get("quantity")).isEqualByComparingTo("2");
+        assertThat((BigDecimal)resolution.get("before_quantity")).isEqualByComparingTo(quarantineBefore);
+        assertThat((BigDecimal)resolution.get("after_quantity")).isEqualByComparingTo("0");
+        if(restockFirst)assertThat(resolution.get("stock_movement_id")).isNotNull();
+        else assertThat(resolution.get("stock_movement_id")).isNull();
+        assertThat(jdbc.queryForObject("""
+                SELECT quantity FROM crm.inv_return_quarantine_balance
+                WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),sku)).isEqualByComparingTo("0");
+        assertThat(stock(c,sku,"on_hand")).isEqualByComparingTo(
+                stockBefore.add(BigDecimal.valueOf(restockFirst?2:0)));
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
+                """,Integer.class,c.tenant())).isEqualTo(movementsBefore+(restockFirst?1:0));
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=? AND from_state='QUARANTINED'
+                """,Integer.class,c.tenant(),claim.requestId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=? AND from_state='QUARANTINED'
+                  AND to_state=? AND request_key=? AND expected_row_version=6
+                """,Integer.class,c.tenant(),claim.requestId(),target,
+                restockFirst?restockKey:disposeKey)).isEqualTo(1);
+        assertThat(jdbc.queryForList("""
+                SELECT * FROM crm.sales_return_posting WHERE tenant_id=? AND return_id=?
+                """,c.tenant(),claim.requestId())).isEqualTo(originalPosting);
+        assertThat(jdbc.queryForList("""
+                SELECT * FROM crm.inv_return_quarantine_movement WHERE tenant_id=? AND return_id=?
+                """,c.tenant(),claim.requestId())).isEqualTo(originalIntake);
+        assertExactlyOneHandover(c,order,1);
+    }
+
     @Test void qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross()
             throws Exception {
         requirePostgres();
