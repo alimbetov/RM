@@ -13,7 +13,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import javax.sql.DataSource;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -221,11 +221,14 @@ class TaskRadarSqlFailureQualificationTest {
     @Test void c218SignalDtoUsesStrictAllowlistNoTitleOrActorFields()throws Exception{
         var t=tenant();create(t,past());
         var signal=radar.listMine(t.staff(),t.id(),10,null).items().getFirst();
-        var mapper=new ObjectMapper().findAndRegisterModules();
-        var node=mapper.readTree(mapper.writeValueAsString(signal));
-        Set<String> keys=new HashSet<>();node.fieldNames().forEachRemaining(keys::add);
+        // Spring Boot 4 uses Jackson 3 (tools.jackson), including java.time support.
+        var mapper=JsonMapper.builder().build();
+        String json=mapper.writeValueAsString(signal);
+        Map<?,?> payload=mapper.readValue(json,Map.class);
+        Set<String> keys=new HashSet<>();
+        payload.keySet().forEach(k->keys.add((String)k));
         assertThat(keys).containsExactlyInAnyOrder("taskId","type","state","dueAt","sourceVersion","overdueSeconds","severity","reasonCode");
-        assertThat(node.toString()).doesNotContain(t.staff().userId().toString(),t.manager().userId().toString(),"Review order");
+        assertThat(json).doesNotContain(t.staff().userId().toString(),t.manager().userId().toString(),"Review order");
     }
     private UUID interaction(Tenant t){
         UUID customer=UUID.randomUUID(),interaction=UUID.randomUUID();Timestamp now=Timestamp.from(Instant.now());
