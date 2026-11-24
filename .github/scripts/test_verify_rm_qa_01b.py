@@ -151,6 +151,27 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                     suite_cases.setdefault(required_suite, [])
                     if required_method not in suite_cases[required_suite]:
                         suite_cases[required_suite].append(required_method)
+                # R2C artifacts have distinct strict per-suite contracts.
+                # Replace generic smoke fixtures rather than appending suites.
+                r2c_counts = {
+                    "cur-r2c-policy-pg-": {
+                        "FxAutoPolicySchemaPgTest": 8,
+                        "FxAutoRollingLimitEvaluatorTest": 8,
+                        "FxAutoDryRunTest": 6,
+                        "FxAutoOwnerAdmissionQualificationTest": 13,
+                        "TenantCurrencyPolicyQualificationTest": 14,
+                        "SkuFxSellerApprovalQualificationTest": 35,
+                    },
+                    "cur-r2c-populated-pg-": {"FxAutoPolicySchemaPgTest": 8},
+                    "cur-r2c-anchor-populated-pg-": {
+                        "TenantCurrencyPolicyQualificationTest": 14,
+                        "SkuFxSellerApprovalQualificationTest": 35,
+                    },
+                }
+                for prefix, expected in r2c_counts.items():
+                    if artifact_name.startswith(prefix):
+                        suite_cases = {suite: [f"syntheticCase{i}" for i in range(count)]
+                                       for suite, count in expected.items()}
                 self.artifact_bytes[artifact_id] = self.make_zip(suite_cases, skipped)
                 group["artifacts"].append({"name": artifact_name, "id": artifact_id})
                 artifact_id += 1
@@ -244,6 +265,45 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         self.artifact_bytes[artifact_id] = self.make_zip(cases, missing)
         self.assertEqual(gate.verify(), 1)
         self.assertIn("missing/skipped", json.loads(self.manifest_path.read_text())["evidenceErrors"][0])
+
+    def test_r2c_missing_artifact_fails_closed(self):
+        group = next(g for g in self.manifest["required"] if g["name"] ==
+                     "RM CUR-R2C Policy Schema PostgreSQL Qualification")
+        group["artifacts"] = group["artifacts"][:-1]
+        self.save()
+        self.assertEqual(gate.verify(), 1)
+        self.assertTrue(any("missing/duplicate artifact declarations" in e for e in
+                            json.loads(self.manifest_path.read_text())["evidenceErrors"]))
+
+    def test_r2c_incomplete_or_skipped_evidence_fails_closed(self):
+        group = next(g for g in self.manifest["required"] if g["name"] ==
+                     "RM CUR-R2C Policy Schema PostgreSQL Qualification")
+        for prefix in ("cur-r2c-policy-pg-", "cur-r2c-populated-pg-", "cur-r2c-anchor-populated-pg-"):
+            artifact_id = next(a["id"] for a in group["artifacts"] if a["name"].startswith(prefix))
+            original = self.artifact_bytes[artifact_id]
+            with self.subTest(artifact=prefix):
+                try:
+                    self.artifact_bytes[artifact_id] = self.make_zip(
+                        {"FxAutoPolicySchemaPgTest": ["onlyOne"]})
+                    self.save()
+                    self.assertEqual(gate.verify(), 1)
+                    self.assertTrue(any(e.startswith(prefix) for e in
+                                        json.loads(self.manifest_path.read_text())["evidenceErrors"]))
+                    with zipfile.ZipFile(io.BytesIO(original)) as archive:
+                        suites = {}
+                        for member in archive.namelist():
+                            root = ET.fromstring(archive.read(member))
+                            suites[root.attrib["name"].split(".")[-1]] = [
+                                case.attrib["name"] for case in root.findall("testcase")]
+                    suite = next(iter(suites))
+                    self.artifact_bytes[artifact_id] = self.make_zip(
+                        suites, {(suite, suites[suite][0])})
+                    self.save()
+                    self.assertEqual(gate.verify(), 1)
+                    self.assertTrue(any(e.startswith(prefix) for e in
+                                        json.loads(self.manifest_path.read_text())["evidenceErrors"]))
+                finally:
+                    self.artifact_bytes[artifact_id] = original
 
 
 if __name__ == "__main__":
