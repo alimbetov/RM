@@ -183,7 +183,7 @@ class CatalogQualificationTest {
                 """,Integer.class,b.tenant(),productB.id())).isZero();
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.cat_item WHERE sku=? AND tenant_id IN (?,?)
-                """,Integer.class,sku,a.tenant(),b.tenant())).isEqualTo(2);
+                """,Integer.class,productA.sku(),a.tenant(),b.tenant())).isEqualTo(2);
     }
 
     @Test void sellerEditR0RevokedPriceGrantCannotAppendAnotherRevision() {
