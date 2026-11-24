@@ -6,8 +6,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.sun.net.httpserver.HttpServer;
-import kz.rm.catalog.CatalogItem;
-import kz.rm.catalog.CatalogItemService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -55,6 +53,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired FxAutoOwnerConsentService consent;
+    @Autowired TenantOwnershipTransferService transfers;
     @Autowired TenantCurrencyPolicyService currencies;
     @Autowired PlatformTransactionManager txManager;
 
@@ -296,6 +295,65 @@ class FxAutoOwnerAdmissionQualificationTest {
                     noWrites(t);
                 } finally {release.countDown();}
             }
+        }
+    }
+
+    @Test void ownershipTransferDoesNotTransferDomainGrant() throws Exception {
+        pg();var t=tenant(account());enable(t);
+        var role=grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var former=verified(t.owner());var successor=verified(t.member());
+        admit(former,t,"USD");
+        var request=transfers.requestTransfer(former,t.id(),t.member());
+        assertThat(transfers.acceptTransfer(successor,t.id(),request.id()).state()).isEqualTo("ACCEPTED");
+        assertThatThrownBy(()->admit(former,t,"USD")).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->admit(successor,t,"USD")).isInstanceOf(SecurityException.class);
+        roles.assign(successor,t.id(),t.member(),role);
+        admit(successor,t,"USD");
+        assertThatThrownBy(()->admit(former,t,"USD")).isInstanceOf(SecurityException.class);
+        noWrites(t);
+    }
+
+    @Test void adminAndPlatformAdminCannotSubstituteForOwner() throws Exception {
+        pg();var t=tenant(account());enable(t);
+        grants(t,t.member(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var staff=verified(t.member());
+        jdbc.update("UPDATE public.iam_org_membership SET role='ADMIN' WHERE organization_id=? AND user_id=?",t.org(),t.member());
+        assertThatThrownBy(()->admit(staff,t,"USD")).isInstanceOf(SecurityException.class);
+        jdbc.update("INSERT INTO public.iam_global_role_assignment(id,user_id,role,granted_at) VALUES (?,?,'PLATFORM_ADMIN',CURRENT_TIMESTAMP)",UUID.randomUUID(),t.member());
+        assertThatThrownBy(()->admit(staff,t,"USD")).isInstanceOf(SecurityException.class);
+        noWrites(t);
+    }
+
+    @Test void principalExpiresWhileWaitingForCurrencyLock() throws Exception {
+        pg();var t=tenant(account());enable(t);
+        grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        try(var blocker=dataSource.getConnection();var pool=java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            blocker.setAutoCommit(false);
+            try(var stmt=blocker.prepareStatement("SELECT tenant_id FROM public.tenant_currency_policy WHERE tenant_id=? FOR UPDATE")){
+                stmt.setObject(1,t.id());try(var rs=stmt.executeQuery()){assertThat(rs.next()).isTrue();}
+            }
+            try {
+                long expiry=Instant.now().plusSeconds(8).getEpochSecond();
+                var actor=new OidcActorResolver(decoder,users).resolve(signed(subject(t.owner()),"Bearer",ISSUER,AUDIENCE,expiry,trusted.getPrivate(),null,null,null));
+                var pid=new java.util.concurrent.CompletableFuture<Integer>();
+                var waiting=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                    pid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                    consent.requireProductConsentAuthority(actor,t.id(),java.util.List.of("USD"));
+                }));
+                int backend=pid.get(3,java.util.concurrent.TimeUnit.SECONDS);
+                boolean blocked=false;
+                long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+                while(System.nanoTime()<deadline&&!waiting.isDone()){
+                    if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT cardinality(pg_blocking_pids(?))>0",Boolean.class,backend))){blocked=true;break;}
+                    Thread.sleep(20);
+                }
+                assertThat(blocked).isTrue();
+                while(Instant.now().isBefore(Instant.ofEpochSecond(expiry)))Thread.sleep(25);
+                blocker.commit();
+                assertThatThrownBy(()->waiting.get(10,java.util.concurrent.TimeUnit.SECONDS)).hasRootCauseMessage("Authenticated principal expired");
+                admit(verified(t.owner()),t,"USD");
+                noWrites(t);
+            } finally {blocker.rollback();}
         }
     }
 }
