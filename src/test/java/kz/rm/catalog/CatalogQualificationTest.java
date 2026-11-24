@@ -140,6 +140,118 @@ class CatalogQualificationTest {
     }
 
 
+
+    @Test void sellerEditR1SplitEmployeeGrantsPreserveCatalogVersionsAndImmutablePriceHistory() {
+        var t=tenant();
+        UUID editorId=user(),pricerId=user(),publisherId=user(),viewerId=user();
+        for(UUID id:new UUID[]{editorId,pricerId,publisherId,viewerId})member(t,id);
+        grant(t,editorId,DomainPermission.CATALOG_WRITE);
+        grant(t,pricerId,DomainPermission.CATALOG_PRICE_MANAGE);
+        grant(t,publisherId,DomainPermission.CATALOG_PUBLISH);
+        grant(t,viewerId,DomainPermission.CATALOG_READ);
+        var editor=verified(editorId);
+        var pricer=verified(pricerId);
+        var publisher=verified(publisherId);
+        var viewer=verified(viewerId);
+        var owner=verified(t.owner());
+
+        assertThat(jdbc.queryForObject("""
+                SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
+                """,Boolean.class,t.tenant())).isTrue();
+        assertThatThrownBy(()->commands.createDraft(owner,t.tenant(),"OWNER-UNAUTHORIZED",
+                CatalogItem.Kind.PRODUCT,"ru","Owner cannot bypass grants",null))
+                .isInstanceOf(SecurityException.class);
+        var created=commands.createDraft(editor,t.tenant()," EDIT-"+UUID.randomUUID(),
+                CatalogItem.Kind.PRODUCT,"ru","Original name",null);
+        var model=commands.updateModelCode(editor,t.tenant(),created.id(),"model-a",0);
+        var kk=commands.upsertTranslation(editor,t.tenant(),created.id(),"kk","Құрал",1);
+        var renamed=commands.upsertTranslation(editor,t.tenant(),created.id(),"ru",
+                "Edited catalog title",2);
+        assertThat(model.rowVersion()).isEqualTo(1);
+        assertThat(kk.rowVersion()).isEqualTo(2);
+        assertThat(renamed.rowVersion()).isEqualTo(3);
+        assertThatThrownBy(()->commands.addPriceRevision(editor,t.tenant(),created.id(),
+                new BigDecimal("600.0000"),"KZT",Instant.parse("2026-11-01T00:00:00Z"),3))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->commands.publish(editor,t.tenant(),created.id(),3))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->commands.updateModelCode(pricer,t.tenant(),created.id(),
+                "PRICER-NOT-EDITOR",3)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->commands.upsertTranslation(publisher,t.tenant(),created.id(),
+                "kk","Denied",3)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->commands.updateModelCode(viewer,t.tenant(),created.id(),
+                "READONLY",3)).isInstanceOf(SecurityException.class);
+
+        var firstPrice=commands.addPriceRevision(pricer,t.tenant(),created.id(),
+                new BigDecimal("700.0000"),"KZT",Instant.parse("2026-11-01T00:00:00Z"),3);
+        assertThat(firstPrice.rowVersion()).isEqualTo(4);
+        assertThatThrownBy(()->commands.publish(pricer,t.tenant(),created.id(),4))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->commands.addPriceRevision(publisher,t.tenant(),created.id(),
+                new BigDecimal("800.0000"),"KZT",Instant.parse("2026-11-02T00:00:00Z"),4))
+                .isInstanceOf(SecurityException.class);
+        var published=commands.publish(publisher,t.tenant(),created.id(),4);
+        assertThat(published.state()).isEqualTo(CatalogItem.State.PUBLISHED);
+        assertThat(published.rowVersion()).isEqualTo(5);
+        assertThatThrownBy(()->commands.upsertTranslation(editor,t.tenant(),created.id(),
+                "ru","Not allowed after publish",5))
+                .isInstanceOf(IllegalStateException.class);
+
+        var secondPrice=commands.addPriceRevision(pricer,t.tenant(),created.id(),
+                new BigDecimal("900.0000"),"KZT",Instant.parse("2026-11-02T00:00:00Z"),5);
+        assertThat(secondPrice.rowVersion()).isEqualTo(6);
+        assertThatThrownBy(()->commands.addPriceRevision(pricer,t.tenant(),created.id(),
+                BigDecimal.ONE,"KZT",Instant.parse("2026-11-03T00:00:00Z"),5))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(()->commands.createDraft(viewer,t.tenant(),"VIEWER-DENIED",
+                CatalogItem.Kind.PRODUCT,"ru","Denied",null))
+                .isInstanceOf(SecurityException.class);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT name FROM crm.cat_item_i18n
+                WHERE tenant_id=? AND item_id=? AND locale='ru'
+                """,String.class,t.tenant(),created.id())).isEqualTo("Edited catalog title");
+        assertThat(jdbc.queryForObject("""
+                SELECT name FROM crm.cat_item_i18n
+                WHERE tenant_id=? AND item_id=? AND locale='kk'
+                """,String.class,t.tenant(),created.id())).isEqualTo("Құрал");
+        assertThat(jdbc.queryForObject("""
+                SELECT model_code FROM crm.cat_item WHERE tenant_id=? AND id=?
+                """,String.class,t.tenant(),created.id())).isEqualTo("MODEL-A");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price
+                WHERE tenant_id=? AND item_id=?
+                """,Integer.class,t.tenant(),created.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price
+                WHERE tenant_id=? AND item_id=? AND unit_price=700.0000
+                  AND currency='KZT'
+                """,Integer.class,t.tenant(),created.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price
+                WHERE tenant_id=? AND item_id=? AND unit_price=900.0000
+                  AND currency='KZT'
+                """,Integer.class,t.tenant(),created.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=?
+                """,Integer.class,t.tenant(),created.id())).isEqualTo(7);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action_code='PRICE_REVISED'
+                  AND actor_id=?
+                """,Integer.class,t.tenant(),created.id(),pricerId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action_code='PUBLISHED'
+                  AND actor_id=? AND previous_version=4 AND new_version=5
+                """,Integer.class,t.tenant(),created.id(),publisherId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.cat_item
+                WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),created.id())).isEqualTo(6);
+    }
+
     @Test void sellerEditR0SameSkuAcrossTenantsUsesEmployeeSpecificGrants() {
         var a=tenant();
         var b=tenant();
