@@ -543,6 +543,10 @@
         {
           "suite": "CommercialCoreE2EQualificationTest",
           "test": "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot"
+        },
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "postgresSec09SuspendCommitsBeforeCheckoutMustFailWithoutOrderEffects"
         }
       ]
     }
