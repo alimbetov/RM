@@ -3266,7 +3266,7 @@ class QrWarehouseHandoverQualificationTest {
         assertThat(quarantineBefore).isEqualByComparingTo("2");
         String restockKey=key(),disposeKey=key();
         var originalPosting=jdbc.queryForList("""
-                SELECT id::text AS posting_id, disposition, movement_id, quarantine_movement_id FROM crm.sales_return_posting WHERE tenant_id=? AND return_id=?
+                SELECT * FROM crm.sales_return_posting WHERE tenant_id=? AND return_id=?
                 """,c.tenant(),claim.requestId());
         var originalIntake=jdbc.queryForList("""
                 SELECT * FROM crm.inv_return_quarantine_movement WHERE tenant_id=? AND return_id=?
