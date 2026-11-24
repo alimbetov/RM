@@ -54,6 +54,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired FxAutoOwnerConsentService consent;
     @Autowired FxAutoPolicyEnrollmentService enrollment;
+    @Autowired FxAutoDraftApprovalService approvals;
     @Autowired TenantOwnershipTransferService transfers;
     @Autowired TenantAccessStatusService accessStatus;
     @Autowired TenantCurrencyPolicyService currencies;
@@ -521,5 +522,35 @@ class FxAutoOwnerAdmissionQualificationTest {
         }
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_policy_revision WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_target_enrollment WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+    }
+
+    private FxAutoDraftApprovalService.Command approvalCommand(Tenant t,FxAutoPolicyEnrollmentService.Receipt draft,String key) {
+        String scope=jdbc.queryForObject("SELECT crm.fx_auto_scope_sha_v1(?,?)",String.class,t.id(),draft.revisionId());
+        return new FxAutoDraftApprovalService.Command(draft.revisionId(),key,draft.payloadSha256(),scope,
+                Instant.now().plusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+    }
+    @Test void approvalSealsExactDraftAndCreatesOnlyPausedActivation() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var target=draftTarget(t,"USD");
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft",target));
+        var command=approvalCommand(t,draft,"approve");
+        var receipt=approvals.approve(actor,t.id(),command);
+        assertThat(approvals.approve(actor,t.id(),command)).isEqualTo(receipt);
+        assertThat(jdbc.queryForObject("SELECT state FROM crm.fx_auto_policy_activation WHERE tenant_id=? AND policy_id=?",String.class,t.id(),draft.policyId())).isEqualTo("PAUSED");
+        assertThat(jdbc.queryForObject("SELECT execution_epoch FROM crm.fx_auto_policy_activation WHERE tenant_id=? AND policy_id=?",Long.class,t.id(),draft.policyId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT sealed FROM crm.fx_auto_scope_guard WHERE tenant_id=? AND policy_revision_id=?",Boolean.class,t.id(),draft.revisionId())).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.store_offer_price_revision WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThatThrownBy(()->approvals.approve(actor,t.id(),new FxAutoDraftApprovalService.Command(command.revisionId(),command.requestKey(),command.payloadSha256(),command.scopeSha256(),command.expiresAt().plusSeconds(1)))).hasMessageContaining("FX_AUTO_IDEMPOTENCY_CONFLICT");
+    }
+    @Test void approvalRejectsWrongDigestAndNonOwnerWithoutEvidence() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft",draftTarget(t,"USD")));
+        var command=approvalCommand(t,draft,"approve");
+        assertThatThrownBy(()->approvals.approve(actor,t.id(),new FxAutoDraftApprovalService.Command(command.revisionId(),command.requestKey(),"a".repeat(64),command.scopeSha256(),command.expiresAt()))).hasMessageContaining("FX_AUTO_APPROVAL_DIGEST_MISMATCH");
+        var member=verified(t.member());
+        assertThatThrownBy(()->approvals.approve(member,t.id(),command)).isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_approval_evidence WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_policy_activation WHERE tenant_id=?",Integer.class,t.id())).isZero();
     }
 }
