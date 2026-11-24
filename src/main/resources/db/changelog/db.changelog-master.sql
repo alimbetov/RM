@@ -4890,3 +4890,17 @@ CREATE TRIGGER trg_fx_auto_activation_verified_approval BEFORE INSERT ON crm.fx_
 --rollback DROP FUNCTION crm.fx_auto_sim_sha_v1(uuid,uuid);
 --rollback DROP FUNCTION crm.fx_auto_scope_sha_v1(uuid,uuid);
 --rollback DROP FUNCTION crm.fx_auto_sha_v1(jsonb);
+
+
+--changeset rm:0160-cur-r2c-pricing-anchor-purpose
+-- Independent opt-in; deliberately no backfill from PURCHASE or SALES_INTERNAL.
+ALTER TABLE public.tenant_allowed_currency DROP CONSTRAINT ck_cur_allowed_purpose;
+ALTER TABLE public.tenant_allowed_currency ADD CONSTRAINT ck_cur_allowed_purpose
+ CHECK(purpose IN ('PURCHASE','ACCOUNTING','INVENTORY_VALUATION','SALES_INTERNAL','PUBLIC_PRICE','PRICING_ANCHOR'));
+ALTER TABLE public.tenant_allowed_currency ADD CONSTRAINT ck_cur_allowed_pricing_anchor
+ CHECK(purpose<>'PRICING_ANCHOR' OR currency_code IN ('USD','EUR','CNY'));
+-- Rollback intentionally fails if any anchor configuration exists: no silent loss of consent.
+--rollback ALTER TABLE public.tenant_allowed_currency ADD CONSTRAINT ck_cur_allowed_pre_anchor CHECK(purpose IN ('PURCHASE','ACCOUNTING','INVENTORY_VALUATION','SALES_INTERNAL','PUBLIC_PRICE'));
+--rollback ALTER TABLE public.tenant_allowed_currency DROP CONSTRAINT ck_cur_allowed_pricing_anchor;
+--rollback ALTER TABLE public.tenant_allowed_currency DROP CONSTRAINT ck_cur_allowed_purpose;
+--rollback ALTER TABLE public.tenant_allowed_currency RENAME CONSTRAINT ck_cur_allowed_pre_anchor TO ck_cur_allowed_purpose;
