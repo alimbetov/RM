@@ -57,7 +57,7 @@ jobs:
         run: >-
           mvn -B -ntp clean test
           '-Dtest=SellerWarehouseScopeR0QualificationTest,CatalogQualificationTest,StorefrontManagementQualificationTest'
-      - name: Require all 10 R0 diagnostic cases executed without skips or failures
+      - name: Require all 12 R0 diagnostic cases executed without skips or failures
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
@@ -68,6 +68,8 @@ jobs:
               'sellerEditR0PostgresTwoEditorsOneCatalogPriceRevisionWins',
               'sellerR0ReceiptAndCorrectionRequireAssignedWarehouseDespiteTenantGrants',
               'sellerR0WarehouseScopeAndRoleRevocationBothBlockNewInventoryWrites',
+              'sellerR0AllInventoryMutationsRespectWarehouseAssignment',
+              'sellerR0ForeignTenantWarehouseAndSkuCannotBeUsedWithOwnGrants',
               'sellerR0PostgresAdmittedReceiptCommitsBeforeWarehouseScopeRevocation',
               'sellerR0PostgresScopeRevocationCommitsBeforeReceiptWithZeroLedger',
               'sellerR0PostgresRoleRevocationCommitsBeforeReceiptWithZeroLedger',
@@ -83,7 +85,7 @@ jobs:
               if c.get('name') not in names: continue
               assert not any(c.find(k) is not None for k in ('failure','error','skipped')), (
                   'SELLER_R0_FAILED_OR_SKIPPED: '+str(c.get('name')))
-          print('SELLER_EDIT_R0_10_OF_10_REAL_POSTGRESQL_EXECUTED')
+          print('SELLER_EDIT_R0_12_OF_12_REAL_POSTGRESQL_EXECUTED')
           PY
       - name: Preserve R0 PostgreSQL evidence
         if: always()
