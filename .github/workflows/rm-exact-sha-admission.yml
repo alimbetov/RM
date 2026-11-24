@@ -34,12 +34,15 @@ jobs:
         run: python3 .github/scripts/verify_rm_r4_priority.py
       - name: Validate UR-R3.0 75-capability JUnit-only crosswalk
         run: python3 .github/scripts/verify_rm_user_role_crosswalk.py --output rm-user-role-crosswalk-validation.json
+      - name: Self-test exact-SHA polling state machine
+        run: node --test .github/scripts/test_rm_exact_sha_polling.cjs
       - name: Aggregate mandatory results for the current base_dev SHA
         id: qualify
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const {classifyGate, pollDecision} = require(process.cwd()+'/.github/scripts/rm_exact_sha_polling.cjs');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const branch = 'base_dev';
@@ -67,6 +70,7 @@ jobs:
               testCounts:'NOT_YET_AGGREGATED',migrationFingerprint:'NOT_YET_VERIFIED'
             };
             let allGreen=false;
+            let decision='WAIT';
             // Workflows run concurrently. Wait for all exact-SHA evidence rather
             // than turning early queued jobs into an artificial admission failure.
             for(let attempt=0;attempt<170;attempt++) {
@@ -85,7 +89,8 @@ jobs:
                   r.head_sha===sha && r.event==='push').sort((a,b)=>b.id-a.id);
                 const run=matches[0];
                 if (!run) {
-                  manifest.required.push({name:gate.name,status:'MISSING',conclusion:null});
+                  manifest.required.push({name:gate.name,status:'MISSING',conclusion:null,
+                    ...classifyGate(null,[],[],gate.artifacts,sha)});
                   continue;
                 }
                 const evidence={
@@ -94,16 +99,17 @@ jobs:
                   run_attempt:run.run_attempt,jobs:[],artifacts:[]
                 };
                 if (run.status==='completed' && run.conclusion==='success') {
-                  const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRun,{
-                    owner,repo,run_id:run.id,per_page:100
+                  // The attempt-specific endpoint avoids stale jobs from a
+                  // previous failed attempt after a rerun.
+                  const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,{
+                    owner,repo,run_id:run.id,attempt_number:run.run_attempt,per_page:100
                   });
                   evidence.jobs=jobs.map(j=>({
                     name:j.name,status:j.status,conclusion:j.conclusion,
                     skippedSteps:(j.steps||[]).filter(st=>st.conclusion==='skipped' &&
                       !['Post','Complete job'].some(prefix=>st.name.startsWith(prefix))).map(st=>st.name)
                   }));
-                  if (!jobs.length || jobs.some(j=>j.status!=='completed' ||
-                      j.conclusion!=='success')) evidence.conclusion='incomplete-jobs';
+                  // Workflow and jobs endpoints can converge at different times.
                   const artifacts=await github.paginate(
                     github.rest.actions.listWorkflowRunArtifacts,
                     {owner,repo,run_id:run.id,per_page:100}
@@ -115,27 +121,38 @@ jobs:
                     evidence.artifacts.push(a ?
                       {name:a.name,id:a.id,bytes:a.size_in_bytes} :
                       {name:expected,status:'MISSING'});
-                    if(!a) evidence.conclusion='missing-test-artifact';
                   }
+                  Object.assign(evidence,classifyGate(run,jobs,artifacts,gate.artifacts,sha));
+                } else {
+                  Object.assign(evidence,classifyGate(run,[],[],gate.artifacts,sha));
                 }
                 manifest.required.push(evidence);
               }
-              allGreen=manifest.required.every(r=>
-                r.status==='completed' && r.conclusion==='success' && r.sha===sha);
-              if(allGreen) break;
-              if(manifest.required.some(r=>
-                  r.status==='completed' &&
-                  r.conclusion!=='success' && r.conclusion!==null)) break;
+              manifest.observed_at=new Date().toISOString();
+              manifest.pollAttempt=attempt+1;
+              decision=pollDecision(manifest.required,required.length);
+              core.info('Exact-SHA poll '+(attempt+1)+': '+manifest.required.map(r=>
+                r.name+'='+r.qualificationState+' ('+r.qualificationReason+')').join('; '));
+              allGreen=decision==='PASS';
+              if(decision!=='WAIT') break;
               if(attempt<169) await new Promise(resolve=>setTimeout(resolve,30000));
             }
             // Workflow execution proof is not a full release qualification.
+            // A final branch read fences a SHA change during the last poll.
+            const {data: finalBranch} = await github.rest.repos.getBranch({owner,repo,branch});
+            if(finalBranch.commit.sha!==sha) {
+              allGreen=false;
+              decision='STALE_SHA';
+            }
             manifest.workflowGate = allGreen?'PASS':'FAIL';
+            manifest.workflowGateReason = allGreen?'ALL_EVIDENCE_READY':
+              decision==='WAIT'?'POLL_DEADLINE_EXCEEDED':decision;
             manifest.admission = 'HOLD';
             fs.writeFileSync('rm-exact-sha-manifest.json',
               JSON.stringify(manifest,null,2)+'\n');
             core.info(JSON.stringify(manifest,null,2));
             if(!allGreen)
-              core.setFailed('RM-QA-01B: missing/failed required jobs or artifacts at exact SHA');
+              core.setFailed('RM-QA-01B: '+manifest.workflowGateReason+' at exact SHA');
             else
               core.info('Exact-SHA workflow gate PASS; full qualification remains HOLD pending Surefire counts and migration fingerprints');
       - name: Self-test fail-closed qualification verifier
