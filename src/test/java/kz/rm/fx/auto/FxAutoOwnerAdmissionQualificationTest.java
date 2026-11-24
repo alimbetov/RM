@@ -58,7 +58,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired TenantCurrencyPolicyService currencies;
     @Autowired PlatformTransactionManager txManager;
 
-    private record Tenant(UUID id,UUID org,UUID owner,UUID member) {}
+    private record Tenant(UUID id,UUID org,UUID owner,UUID member,UUID provisioningOwner) {}
 
     @BeforeAll static void localJwks() throws Exception {
         KeyPairGenerator generator=KeyPairGenerator.getInstance("RSA");
@@ -150,11 +150,14 @@ class FxAutoOwnerAdmissionQualificationTest {
         memberships.saveAndFlush(new OrganizationMembershipEntity(
                 UUID.randomUUID(),org.getId(),staff,OrganizationMembershipEntity.Role.MEMBER));
         jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",workspace);
-        return new Tenant(workspace,org.getId(),owner,staff);
+        UUID provisioningOwner=account();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(
+                UUID.randomUUID(),org.getId(),provisioningOwner,OrganizationMembershipEntity.Role.OWNER));
+        return new Tenant(workspace,org.getId(),owner,staff,provisioningOwner);
     }
 
     private UUID grants(Tenant tenant,UUID assignee,DomainPermission... grants) throws Exception {
-        VerifiedActor owner=verified(tenant.owner());
+        VerifiedActor owner=verified(tenant.provisioningOwner());
         var role=roles.createRole(owner,tenant.id(),
                 "JWTR0_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
                 "JWT seller admission role");
@@ -308,7 +311,7 @@ class FxAutoOwnerAdmissionQualificationTest {
         assertThat(transfers.acceptTransfer(successor,t.id(),request.id()).state()).isEqualTo("ACCEPTED");
         assertThatThrownBy(()->admit(former,t,"USD")).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->admit(successor,t,"USD")).isInstanceOf(SecurityException.class);
-        roles.assign(successor,t.id(),t.member(),role);
+        roles.assign(verified(t.provisioningOwner()),t.id(),t.member(),role);
         admit(successor,t,"USD");
         assertThatThrownBy(()->admit(former,t,"USD")).isInstanceOf(SecurityException.class);
         noWrites(t);
