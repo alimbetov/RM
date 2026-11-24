@@ -7,13 +7,15 @@ import kz.rm.iam.VerifiedActor;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
+import kz.rm.iam.SignedJwtTestAuthority;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -29,19 +31,27 @@ public final class QrReturnProcessWorker {
         long version=Long.parseLong(args[5]);
         String key=args[6];
         Path ready=Path.of(args[7]),release=Path.of(args[8]);
+        String jwks,bearer;
+        try(var input=new BufferedReader(new InputStreamReader(System.in,StandardCharsets.UTF_8))){
+            jwks=input.readLine();bearer=input.readLine();
+        }
+        if(jwks==null||bearer==null||bearer.isBlank())
+            throw new IllegalStateException("Signed worker identity input missing");
         try(var app=new SpringApplicationBuilder(RmApplication.class)
                 .web(WebApplicationType.SERVLET).profiles("test")
                 .run("--server.port=-1")){
             JdbcTemplate jdbc=app.getBean(JdbcTemplate.class);
-            String subject=jdbc.queryForObject("""
-                    SELECT external_subject FROM public.iam_user_account WHERE id=?
-                    """,String.class,staff);
-            JwtDecoder decoder=t->Jwt.withTokenValue(t).header("alg","RS256")
-                    .subject(subject).issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(600)).build();
-            VerifiedActor principal=new OidcActorResolver(
-                    decoder,app.getBean(UserAccountRepository.class))
-                    .resolve("synthetic-return-process");
+            VerifiedActor principal;
+            try{
+                var decoder=SignedJwtTestAuthority.decoder(URI.create(jwks));
+                principal=new OidcActorResolver(decoder,app.getBean(UserAccountRepository.class)).resolve(bearer);
+            }catch(RuntimeException failure){
+                throw new IllegalStateException("Signed worker identity denied");
+            }
+            if(!principal.userId().equals(staff))
+                throw new SecurityException("Signed worker actor mismatch");
+            System.out.println("RET04E child signed identity pid="+ProcessHandle.current().pid()+" actor="+principal.userId());
+            System.out.flush();
             if(mode.startsWith("RESOLVE_")){
                 var resolver=app.getBean(SalesReturnQuarantineResolutionService.class);
                 var tx=new TransactionTemplate(app.getBean(PlatformTransactionManager.class));

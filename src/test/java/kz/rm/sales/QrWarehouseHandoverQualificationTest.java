@@ -7,8 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -28,8 +29,8 @@ import java.util.concurrent.TimeoutException;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * QR-05/06 real H2/PostgreSQL owner tests. Synthetic actors/owned mailbox are
- * deliberate service fixtures, NOT external OIDC, cameras or infrastructure.
+ * QR-05/06 real H2/PostgreSQL owner tests. Ephemeral signed access tokens and
+ * fixture-owned mailbox are service evidence, NOT live external OIDC or HTTP.
  */
 @SpringBootTest
 @TestPropertySource(properties={
@@ -67,14 +68,36 @@ class QrWarehouseHandoverQualificationTest {
                            VerifiedActor staff,VerifiedActor buyer,String buyerEmail) {}
     private record Order(UUID id,List<UUID> lines,String publicRef) {}
 
-    private VerifiedActor verified(UUID id){
+    private static SignedJwtTestAuthority identityAuthority;
+    private static NimbusJwtDecoder identityDecoder;
+
+    @BeforeAll static void startIdentityAuthority() throws Exception {
+        identityAuthority=SignedJwtTestAuthority.start();
+        try{identityDecoder=identityAuthority.decoder();}
+        catch(RuntimeException|Error failure){identityAuthority.close();throw failure;}
+    }
+
+    @AfterAll static void stopIdentityAuthority(){
+        if(identityAuthority!=null)identityAuthority.close();
+    }
+
+    private String signedAccess(UUID id) throws Exception {
         String subject=jdbc.queryForObject("""
                 SELECT external_subject FROM public.iam_user_account WHERE id=?
                 """,String.class,id);
-        JwtDecoder decoder=token->Jwt.withTokenValue(token)
-                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(600)).build();
-        return new OidcActorResolver(decoder,users).resolve("synthetic-warehouse");
+        if(subject==null||subject.isBlank())throw new AssertionError("RM test subject missing");
+        return identityAuthority.access(subject);
+    }
+
+    private VerifiedActor verified(UUID id){
+        try{
+            var actor=new OidcActorResolver(identityDecoder,users).resolve(signedAccess(id));
+            assertThat(actor.userId()).isEqualTo(id);
+            System.out.println("RET04E parent signed identity actor="+actor.userId());
+            return actor;
+        }catch(Exception failure){
+            throw new AssertionError("Signed test identity admission failed: "+failure.getClass().getSimpleName());
+        }
     }
     private static String key(){return "PICK_"+UUID.randomUUID().toString().replace("-","");}
     private Context context(){
@@ -2802,12 +2825,25 @@ class QrWarehouseHandoverQualificationTest {
             throw new IllegalStateException("QR07_R2_PROCESS_CLASSPATH_REQUIRED");
         String javaExecutable=java.nio.file.Path.of(System.getProperty("java.home"),
                 "bin","java").toString();
-        return new ProcessBuilder(javaExecutable,"-cp",cp,
+        // UUID in argv is only an expected-actor assertion; the worker derives
+        // identity from a signed bearer and loopback JWKS received over stdin.
+        String token=signedAccess(c.staff().userId());
+        Process worker=new ProcessBuilder(javaExecutable,"-cp",cp,
                 "kz.rm.sales.QrReturnProcessWorker",mode,c.tenant().toString(),
                 c.warehouse().toString(),c.staff().userId().toString(),
                 returnId.toString(),Long.toString(revision),requestKey,
                 ready.toString(),release.toString())
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        try(var input=new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                worker.getOutputStream(),java.nio.charset.StandardCharsets.UTF_8))){
+            input.write(identityAuthority.jwksUri().toString());input.newLine();
+            input.write(token);input.newLine();
+        }catch(Exception failure){
+            worker.destroyForcibly();
+            worker.waitFor(15,TimeUnit.SECONDS);
+            throw new AssertionError("Signed worker input failed: "+failure.getClass().getSimpleName());
+        }
+        return worker;
     }
 
     @Test void qr07R2JvmHardCrashBeforePostCommitRollsBackAndRetryPostsOnce()
@@ -3398,6 +3434,10 @@ class QrWarehouseHandoverQualificationTest {
             lines.add("method\t"+method);
             lines.add("postgres\t"+jdbc.queryForObject("SELECT current_setting('server_version_num')",String.class));
             lines.add("tenant\t"+c.tenant());
+            lines.add("identity\tRS256_LOOPBACK_JWKS");
+            lines.add("owner\t"+c.owner().userId());
+            lines.add("staff\t"+c.staff().userId());
+            lines.add("buyer\t"+c.buyer().userId());
             var digest=java.security.MessageDigest.getInstance("SHA-256");
             for(var entry:snapshot.entrySet()){
                 digest.reset();
@@ -3414,9 +3454,9 @@ class QrWarehouseHandoverQualificationTest {
                     "SELECT id,state,row_version FROM crm.sales_return_request WHERE tenant_id=?",
                     "SELECT location_id,item_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=?",
                     "SELECT warehouse_id,item_id,quantity,row_version FROM crm.inv_return_quarantine_balance WHERE tenant_id=?",
-                    "SELECT return_id,warehouse_id,item_id,quantity,before_quantity,after_quantity,action_code,stock_movement_id FROM crm.sales_return_quarantine_resolution WHERE tenant_id=?",
+                    "SELECT return_id,warehouse_id,item_id,quantity,before_quantity,after_quantity,action_code,stock_movement_id,actor_user_id FROM crm.sales_return_quarantine_resolution WHERE tenant_id=?",
                     "SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after FROM crm.inv_stock_movement WHERE tenant_id=?",
-                    "SELECT return_id,from_state,to_state,expected_row_version FROM crm.sales_return_event WHERE tenant_id=?")){
+                    "SELECT return_id,from_state,to_state,expected_row_version,actor_user_id FROM crm.sales_return_event WHERE tenant_id=?")){
                 String table=projection.substring(projection.indexOf("FROM crm.")+9,projection.indexOf(" WHERE"));
                 for(String row:jdbc.queryForList("SELECT row_to_json(p)::text FROM ("+projection+") p ORDER BY 1",
                         String.class,c.tenant()))lines.add("row\t"+table+"\t"+row);
@@ -3664,6 +3704,7 @@ class QrWarehouseHandoverQualificationTest {
                     f.c(),f.returnId(),6,f.requestKey(),java.nio.file.Path.of("-"),java.nio.file.Path.of("-"),log);
             assertThat(waitQr06bProcess(worker,log,120)).isEqualTo(precommit?86:87);
             String output=java.nio.file.Files.readString(log);
+            ret04EAssertChildIdentity(worker,output,f.c().staff().userId());
             SalesReturnQuarantineResolutionService.Resolved result;
             if(precommit){
                 var marker=java.util.regex.Pattern.compile("RET04C_PRECOMMIT pid=(\\d+) ").matcher(output);
@@ -3689,6 +3730,13 @@ class QrWarehouseHandoverQualificationTest {
             System.out.printf("RET04C crash precommit=%s restock=%s exit=%d resolution=%s%n",
                     precommit,restock,precommit?86:87,result.resolutionId());
         }finally{ret04CCleanup(dir,worker);}
+    }
+
+    private void ret04EAssertChildIdentity(Process worker,String output,UUID expectedActor){
+        String marker="RET04E child signed identity pid="+worker.pid()+" actor="+expectedActor;
+        assertThat(output.lines().filter(marker::equals).count())
+                .as("child validated signed bearer through JWKS").isEqualTo(1);
+        System.out.println(marker);
     }
 
     private void ret04CCleanup(java.nio.file.Path dir,Process... workers) throws Exception {
@@ -3742,8 +3790,11 @@ class QrWarehouseHandoverQualificationTest {
             assertThat(waitQr06bProcess(a,logA,120)).isZero();
             assertThat(waitQr06bProcess(b,logB,120)).isEqualTo(replay?0:88);
             var result=ret04CDurableResult(f);
-            assertThat(java.nio.file.Files.readString(logA)).contains("RET04C_COMMITTED "+result);
-            assertThat(java.nio.file.Files.readString(logB)).contains(replay?
+            String outputA=java.nio.file.Files.readString(logA),outputB=java.nio.file.Files.readString(logB);
+            ret04EAssertChildIdentity(a,outputA,f.c().staff().userId());
+            ret04EAssertChildIdentity(b,outputB,f.c().staff().userId());
+            assertThat(outputA).contains("RET04C_COMMITTED "+result);
+            assertThat(outputB).contains(replay?
                     "RET04C_COMMITTED "+result:"RET04C_DENIED QUARANTINE_REPLAY_CONFLICT");
             ret04BAssertResolved(f,true,result);
             System.out.printf("RET04C JVM schedule blocker=%d waiter=%d observed=true first=COMMITTED second=%s%n",

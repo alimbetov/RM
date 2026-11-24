@@ -4,9 +4,13 @@ from pathlib import Path
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
-from verify_ret04_evidence import verify, snapshot, METHODS, TABLES, SUITE
+from verify_ret04_evidence import verify, snapshot, verify_identity, verify_actor_bindings, METHODS, TABLES, SUITE
 
 SHA = "a"*40
+IDENTITY = {"identity":"RS256_LOOPBACK_JWKS",
+            "owner":"00000000-0000-0000-0000-000000000002",
+            "staff":"00000000-0000-0000-0000-000000000003",
+            "buyer":"00000000-0000-0000-0000-000000000004"}
 
 class Ret04EvidenceTest(unittest.TestCase):
     def setUp(self):
@@ -52,6 +56,7 @@ class Ret04EvidenceTest(unittest.TestCase):
         path = self.dir / "sample.tsv"
         lines = ["sha\t"+SHA, "method\t"+METHODS[0], "postgres\t170000",
                  "tenant\t00000000-0000-0000-0000-000000000001"]
+        lines += [k+"\t"+v for k,v in IDENTITY.items()]
         lines += ["table\t"+t+"\t0\t"+"0"*64 for t in sorted(TABLES)]
         path.write_text("\n".join(lines))
         meta, tables, rows = snapshot(path, SHA, METHODS[0])
@@ -61,6 +66,30 @@ class Ret04EvidenceTest(unittest.TestCase):
         path.write_text("\n".join(lines[:-1]))
         with self.assertRaisesRegex(ValueError, "missing SQL projection"):
             snapshot(path, SHA, METHODS[0])
+
+    def test_signed_parent_and_child_identity(self):
+        log = "\n".join("RET04E parent signed identity actor="+IDENTITY[k] for k in ("owner","staff","buyer"))
+        child = "\nRET04E child signed identity pid=123 actor="+IDENTITY["staff"]
+        self.assertEqual(verify_identity(log+child, IDENTITY, "C01")["childPids"], [123])
+        with self.assertRaisesRegex(ValueError, "signed parent"):
+            verify_identity(child, IDENTITY, "C01")
+        with self.assertRaisesRegex(ValueError, "signed child"):
+            verify_identity(log, IDENTITY, "C01")
+        with self.assertRaisesRegex(ValueError, "signed child"):
+            verify_identity(log+child+child, IDENTITY, "C05")
+        with self.assertRaisesRegex(ValueError, "signed child"):
+            verify_identity(log+child.replace(IDENTITY["staff"],IDENTITY["owner"]), IDENTITY, "C01")
+
+    def test_signed_actor_must_match_sql_resolution_and_terminal_event(self):
+        resolved = [{"return_id":"r1","actor_user_id":IDENTITY["staff"]}]
+        events = [{"return_id":"r1","from_state":"QUARANTINED","actor_user_id":IDENTITY["staff"]}]
+        verify_actor_bindings(IDENTITY, resolved, events, 1)
+        with self.assertRaisesRegex(ValueError, "resolution actor mismatch"):
+            verify_actor_bindings(IDENTITY, [dict(resolved[0], actor_user_id=IDENTITY["owner"])], events, 1)
+        with self.assertRaisesRegex(ValueError, "terminal event actor mismatch"):
+            verify_actor_bindings(IDENTITY, resolved, [dict(events[0], actor_user_id=IDENTITY["buyer"])], 1)
+        with self.assertRaisesRegex(ValueError, "terminal event return mismatch"):
+            verify_actor_bindings(IDENTITY, resolved, [dict(events[0], return_id="r2")], 1)
 
 if __name__ == "__main__":
     unittest.main()

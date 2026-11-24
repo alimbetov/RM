@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import uuid
 import xml.etree.ElementTree as ET
 from decimal import Decimal
 
@@ -63,16 +64,49 @@ def snapshot(path, sha, method):
             require(isinstance(row, dict), "invalid SQL row")
             rows[parts[1]].append(row)
         else:
-            require(len(parts) == 2 and parts[0] in {"sha", "method", "postgres", "tenant"}
+            require(len(parts) == 2 and parts[0] in {"sha", "method", "postgres", "tenant", "identity", "owner", "staff", "buyer"}
                     and parts[0] not in meta, "invalid snapshot metadata")
             meta[parts[0]] = parts[1]
     require(meta.get("sha") == sha and meta.get("method") == method
             and re.fullmatch(r"[0-9a-f-]{36}", meta.get("tenant", ""))
             and int(meta.get("postgres", "0")) >= 170000, "snapshot provenance mismatch")
+    require(meta.get("identity") == "RS256_LOOPBACK_JWKS", "missing strict identity provenance")
+    actors = [meta.get(k, "") for k in ("owner", "staff", "buyer")]
+    try:
+        canonical = [str(uuid.UUID(a)) for a in actors]
+    except ValueError as exc:
+        raise ValueError("invalid strict identity actor") from exc
+    require(actors == canonical and len(set(actors)) == 3, "invalid strict identity actor")
     require(set(tables) == TABLES, "missing SQL projection digest")
     for t in PROJECTED:
         require(len(rows[t]) == tables[t][0], "projection count mismatch: " + t)
     return meta, tables, rows
+
+
+def verify_identity(log, metadata, suffix):
+    actors = {metadata[k] for k in ("owner", "staff", "buyer")}
+    parents = set(re.findall(r"(?m)^RET04E parent signed identity actor=([0-9a-f-]{36})$", log))
+    require(actors <= parents, "missing signed parent actor evidence")
+    children = re.findall(r"(?m)^RET04E child signed identity pid=(\d+) actor=([0-9a-f-]{36})$", log)
+    expected = 2 if suffix.startswith(("C05", "C06")) else 1 if suffix.startswith(("C01", "C02", "C03", "C04")) else 0
+    require(len(children) == expected and len({pid for pid, _ in children}) == expected
+            and all(int(pid) > 0 and actor == metadata["staff"] for pid, actor in children),
+            "missing or invalid signed child actor evidence")
+    return {"scheme": metadata["identity"], "owner": metadata["owner"],
+            "staff": metadata["staff"], "buyer": metadata["buyer"],
+            "childPids": [int(pid) for pid, _ in children]}
+
+
+def verify_actor_bindings(identity, resolved, events, expected):
+    terminal = [x for x in events if x["from_state"] == "QUARANTINED"]
+    require(len(resolved) == len(terminal) == expected and
+            len({x["return_id"] for x in terminal}) == expected and
+            all(x["actor_user_id"] == identity["staff"] for x in terminal),
+            "terminal event actor mismatch")
+    require({x["return_id"] for x in terminal} == {x["return_id"] for x in resolved},
+            "terminal event return mismatch")
+    require(all(x["actor_user_id"] == identity["staff"] for x in resolved),
+            "resolution actor mismatch")
 
 
 def verify(xml_path, evidence, sha):
@@ -117,8 +151,9 @@ def verify(xml_path, evidence, sha):
         require(len(files) >= 2 and [p.name for p in files] == [
                 f"snapshot-{i:03d}.tsv" for i in range(len(files))], "missing/invalid snapshot sequence: " + name)
         data = [snapshot(p, sha, name) for p in files]
-        require(len({d[0]["tenant"] for d in data}) == 1, "tenant changed: " + name)
+        require(all(d[0] == data[0][0] for d in data), "snapshot identity or tenant changed: " + name)
         first, last = data[0], data[-1]
+        identity = verify_identity(log, first[0], suffix)
         require(all(first[1][t] == last[1][t] for t in TABLES - MUTABLE), "immutable SQL evidence changed: " + name)
         if suffix.startswith(("B07", "B09", "B10", "B11", "B12", "C01", "C03")):
             require(data[0][1] == data[1][1] and data[0][2] == data[1][2], "rollback evidence changed: " + name)
@@ -137,6 +172,7 @@ def verify(xml_path, evidence, sha):
                     and Decimal(q2[0]["quantity"]) == 0, "quarantine conservation failed")
             require(last[1]["sales_return_event"][0] == first[1]["sales_return_event"][0]+expected, "wrong event delta")
             resolved = last[2]["sales_return_quarantine_resolution"]
+            verify_actor_bindings(identity, resolved, last[2]["sales_return_event"], expected)
             for row in resolved:
                 require(Decimal(row["before_quantity"])-Decimal(row["quantity"]) == Decimal(row["after_quantity"])
                         and Decimal(row["after_quantity"]) >= 0
@@ -156,11 +192,11 @@ def verify(xml_path, evidence, sha):
                     sum(x["action_code"] == "RESTOCK" for x in resolved), "movement delta mismatch")
         if suffix.startswith(("B05","B06","B08","B11","B12","C01","C02","C03","C04","C07","C08","C09","C10")):
             require(data[-2][1:] == data[-1][1:], "replay changed SQL evidence: " + name)
-        report.append({"method":name,"snapshots":[{"file":str(p.relative_to(evidence)),
+        report.append({"method":name,"identity":identity,"snapshots":[{"file":str(p.relative_to(evidence)),
                       "sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in files]})
     return {"schema":"RET04-D/v1","sha":sha,"status":"PASS","cases":len(report),
             "surefireSha256":hashlib.sha256(xml_path.read_bytes()).hexdigest(),"evidence":report,
-            "mappingVerdict":"SUPPORTING_PARTIAL","productionAdmission":"HOLD"}
+            "identityProfile":"RS256_LOOPBACK_JWKS","mappingVerdict":"SUPPORTING_PARTIAL","productionAdmission":"HOLD"}
 
 
 def main():

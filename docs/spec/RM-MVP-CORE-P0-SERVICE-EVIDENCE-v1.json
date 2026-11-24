@@ -1025,7 +1025,7 @@
         }
       ],
       "mappingVerdict": "SUPPORTING_PARTIAL",
-      "openRequirement": "A–C: 24 PostgreSQL methods mapped; dedicated per-case SQL snapshot and exact-SHA verifier added. Strict signed IAM/verified QR fixture, durable artifact ingestion into global admission and complete normative variant review remain open.",
+      "openRequirement": "A–C: 24 PostgreSQL methods mapped. E.2 migrates owner/staff/buyer and child JVMs to RS256 loopback JWKS with signed identity evidence and SQL actor binding; new exact-SHA execution, strict negative IAM/RBAC/revocation variants, verified QR fixture, global artifact ingestion and normative variant review remain open.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
