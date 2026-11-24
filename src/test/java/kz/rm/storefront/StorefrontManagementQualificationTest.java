@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.*;
 class StorefrontManagementQualificationTest {
     @Autowired StorefrontManagementService storefronts;
     @Autowired StorefrontOfferService offers;
+    @Autowired kz.rm.catalog.CatalogItemService catalog;
     @Autowired kz.rm.autoorder.AutoOrderService autoOrders;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired OrganizationRepository organizations;
@@ -274,6 +275,91 @@ class StorefrontManagementQualificationTest {
                 .isEqualTo(StorefrontOfferService.State.DRAFT);
     }
 
+
+
+    @Test void sellerEditR1CatalogPriceAndSellerOfferPriceHaveIndependentHistories() {
+        var t=fixture();
+        grant(t,DomainPermission.CATALOG_WRITE,
+                DomainPermission.CATALOG_PRICE_MANAGE,DomainPermission.CATALOG_PUBLISH,
+                DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller=verified(t.staff());
+        var draft=catalog.createDraft(seller,t.tenant(),
+                "R1-CAT-"+UUID.randomUUID(),kz.rm.catalog.CatalogItem.Kind.PRODUCT,
+                "ru","Independent catalog price",null);
+        var first=catalog.addPriceRevision(seller,t.tenant(),draft.id(),
+                new java.math.BigDecimal("100.0000"),"KZT",
+                Instant.parse("2026-11-01T00:00:00Z"),0);
+        var product=catalog.publish(seller,t.tenant(),first.id(),first.rowVersion());
+        var storeDraft=storefronts.createDraft(seller,t.tenant(),
+                "r1-independent-"+UUID.randomUUID());
+        var store=storefronts.publish(seller,t.tenant(),storeDraft.id(),
+                storeDraft.rowVersion());
+        var offerDraft=offers.createDraft(seller,t.tenant(),product.id(),
+                "Independent public offer",new java.math.BigDecimal("400.0000"),"KZT");
+        var offer=offers.publish(seller,t.tenant(),offerDraft.id(),offerDraft.rowVersion());
+
+        UUID oldOrder=autoOrders.checkout(store.slug(),
+                "r1-old-"+UUID.randomUUID()+"@example.kz","r1-cat-first-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),1)))
+                .order().orderId();
+
+        var catalogRepriced=catalog.addPriceRevision(seller,t.tenant(),product.id(),
+                new java.math.BigDecimal("150.0000"),"KZT",
+                Instant.parse("2026-11-02T00:00:00Z"),product.rowVersion());
+        assertThat(catalogRepriced.rowVersion()).isEqualTo(product.rowVersion()+1);
+        assertThat(offers.get(seller,t.tenant(),offer.id()).unitPrice())
+                .isEqualByComparingTo("400.0000");
+        assertThat(offers.get(seller,t.tenant(),offer.id()).rowVersion())
+                .isEqualTo(offer.rowVersion());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,t.tenant(),offer.id())).isEqualTo(1);
+
+        var sellerRepriced=offers.updatePrice(seller,t.tenant(),offer.id(),
+                "Independent public offer",new java.math.BigDecimal("450.0000"),
+                "KZT",offer.rowVersion());
+        UUID newOrder=autoOrders.checkout(store.slug(),
+                "r1-new-"+UUID.randomUUID()+"@example.kz","r1-cat-second-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),1)))
+                .order().orderId();
+
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),oldOrder))
+                .isEqualByComparingTo("400.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),newOrder))
+                .isEqualByComparingTo("450.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,t.tenant(),oldOrder)).isEqualTo(product.id());
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,t.tenant(),newOrder)).isEqualTo(product.id());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price
+                WHERE tenant_id=? AND item_id=?
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,t.tenant(),offer.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=? AND new_price=450.0000
+                """,Integer.class,t.tenant(),offer.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action_code='PRICE_REVISED'
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(2);
+        assertThat(sellerRepriced.rowVersion()).isEqualTo(offer.rowVersion()+1);
+    }
 
     @Test void sellerEditR1EmployeePriceAndPublisherRolesCannotRewriteCommittedOrders() {
         var t=fixture();
