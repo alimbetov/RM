@@ -42,6 +42,7 @@
 | **IDEA-14** | **Sales KPI / Role Dashboards** | Обзоры продаж, продавцов, склада и customer segments | IDEA / INSIGHT + UI | INSIGHT-R1 / P1 CRM |
 | **IDEA-15** | **KF-01 InstantDeal & KF-02 Promise Engine** | Быстрый B2B offer→order и достоверное обещание доступности | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
 | **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
+| **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | SPEC_EXISTS / Post-MVP, F2R-00 documentation only | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
 
 **Неактивные направления:** Business Network / межорганизационная торговая сеть (старый KF-05), полный бухгалтерский/налоговый ledger, масштабная маркетинговая платформа без канонических данных, автономное изменение остатков ML — **не включать в текущий план**.
 
@@ -205,6 +206,23 @@ RM-INSIGHT-R5: проверенные аналитические события 
 
 **Первые 4 измеримые исхода будущих пилотов:** (1) Customer 360 отвечает на запрос клиента быстрее ручной выгрузки; (2) Warehouse 360 достоверен по каждому складу; (3) ABC/XYZ и Tribuo действительно улучшают качество решений относительно SQL-only baseline; (4) EVT уведомления не создают спам и не отправляются по устаревшему или чужому источнику.
 
+## 13A. IDEA-17 — FIN → RM reusable analytics patterns
+
+**Решение пользователя:** FIN Analyzer и RM остаются отдельными продуктами. Для RM Intelligence берутся небольшие архитектурные механизмы FIN, но **никакой обязательной зависимости от FIN runtime, схем БД, IAM, FIN Form Library или financial S2**. Все новые контракты адаптируются к существующим доменным владельцам RM.
+
+**Девять логических компонентов RM Intelligence:** Metric Registry; Period Resolver; Source / Context Admission; Native SQL Aggregation; Methodology & Result Versioning; Metric Dependency Graph; Customer / Warehouse Analytics; Report & Export; Tribuo Feature Adapter. **Это не девять новых микросервисов.** INSIGHT-R1 сохраняет SALES/INVENTORY domain ownership и независимый read composition.
+
+**Отобранные FIN исходники и варианты:**
+- **P1:** реальный \`PeriodResolver\` (D/W/DEC/M/Q/H/Y) и \`PeriodBatchPlanner\`; типизированные агрегатные SQL/JDBC-паттерны; source/method SHA и контракты Metric Registry/Derived Totals.
+- **P2:** dependency graph только для действительно сложных KPI; \`FactMonthlyPartitionService\` как шаблон после SQL benchmark; отчётные grid/export с pinned metadata.
+- **P3:** versioned Tribuo Feature Adapter и UX-идеи KPI Navigator, после проверенной SQL-аналитики.
+- **Explicit rejection:** 166 FIN форм, \`fin_lib/fin_intake/fin_fact/fin_calc\` миграции, FIN controllers, FIN JWT/ACL, FIN UAT worker как production, A05/credit/ECL, второй владелец SALES/INVENTORY.
+- **Бизнес-полезность:** Customer 360, Warehouse 360, ABC/Pareto/XYZ, недельные/декадные/месячные агрегаты, аналитические отчёты с explainable source lineage.
+
+**Спецификация с полным code-review, контрактами, 32 запланированными проверками и этапами F2R-00…07:** [RM-INSIGHT-FIN-ADAPT-R1](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md).
+
+**Текущий статус:** \`SPEC_EXISTS / POST-MVP PARKED\`. Квалификация FIN компонентов не переносится автоматически в RM. Текущая задача только документальная, без Java/SQL/REST/Tribuo изменений.
+
 ## 14. Связанные документы и история решений
 
 - [Активная стратегия RM Business + QR Commerce](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md)
@@ -223,5 +241,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | Дата | Ревизия | Изменение |
 |---|---|---|
 | 2026-11-24 | R1.0 | Создан единый банк 16 направлений: Customer 360, L1/L2, Warehouse 360, Pareto/ABC/XYZ, Tribuo, EVT, Auction, Deal Chat, FX_AUTO и CRM improvements. Объединены ранее обсуждённые идеи без изменения MVP. |
+| 2026-11-24 | R1.1 | Добавлена IDEA-17: техническая адаптация FIN Analyzer → RM Intelligence (9 логических компонентов, P1/P2/P3, независимые продукты, 32 сценария будущей приёмки); отдельный документ FIN-ADAPT-R1. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.
