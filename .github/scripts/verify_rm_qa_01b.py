@@ -41,6 +41,7 @@ SUITES = {
          "KmsFencedJobQualificationTest", "AuditRetentionQualificationTest",
          "SalesOrderQueryQualificationTest", "UserRoleMatrixR31QualificationTest",
          "MvpServiceWarehouseAdmissionQualificationTest",
+         "IamSellerAuthenticatedTenantAdmissionQualificationTest",
          "MvpServiceCurrencyStartupQualificationTest",
          "BusMvpServiceJourneyQualificationTest",
          "QrMvpServiceJourneyQualificationTest"),
@@ -82,6 +83,20 @@ REQUIRED_CASES = {
          "sellerR0PgPriceUpdateCommitsBeforeRoleRevokeKeepsOneRevision"),
         ("StorefrontManagementQualificationTest",
          "sellerR0PgRoleRevokeCommitsBeforePriceUpdateWithoutHistory"),
+        # Cryptographic access-token purpose -> verified RM user -> tenant RBAC
+        # -> actual CATALOG write; these cases must run on real PostgreSQL.
+        ("IamSellerAuthenticatedTenantAdmissionQualificationTest",
+         "iamSellerR0RealBearerSubCannotBeOverriddenByActorOrTenantClaims"),
+        ("IamSellerAuthenticatedTenantAdmissionQualificationTest",
+         "iamSellerR0SignedIdRefreshWrongPurposeAndBadJwtNeverMintActor"),
+        ("IamSellerAuthenticatedTenantAdmissionQualificationTest",
+         "iamSellerR0RoleRevokedAfterSignedTokenAndTenantSelectionDeniesWrite"),
+        ("IamSellerAuthenticatedTenantAdmissionQualificationTest",
+         "iamSellerR0MembershipSuspendedAfterBearerBlocksSelectAndMutation"),
+        ("IamSellerAuthenticatedTenantAdmissionQualificationTest",
+         "iamSellerR0SuspendedAccountRejectsExistingAndFreshBearer"),
+        ("IamSellerAuthenticatedTenantAdmissionQualificationTest",
+         "iamSellerR0TenantSuspendedAfterAccessTokenDeniesCurrentSelectionAndWrite"),
         # Keep preparatory coverage mandatory without enabling XLSX imports.
         ("CatalogQualificationTest",
          "sellerEditR0SameSkuAcrossTenantsUsesEmployeeSpecificGrants"),
