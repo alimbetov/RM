@@ -4735,3 +4735,158 @@ CREATE TRIGGER trg_fx_auto_activation_fence BEFORE INSERT OR UPDATE OR DELETE ON
 --rollback DROP FUNCTION crm.fx_auto_init_guard();
 --rollback DROP TABLE crm.fx_auto_simulation_guard;
 --rollback DROP TABLE crm.fx_auto_scope_guard;
+
+
+--changeset rm:0157-fx-auto-guard-tamper-protection dbms:postgresql splitStatements:false
+-- Protect against ordinary direct DML, not a superuser or DDL-capable adversary.
+CREATE FUNCTION crm.fx_auto_guard_internal_only() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF pg_trigger_depth()<>2 OR TG_OP='DELETE' THEN
+  RAISE EXCEPTION 'FX_AUTO_GUARD_DIRECT_MUTATION';
+ END IF;
+ IF TG_OP='INSERT' THEN
+  IF NEW.sealed OR NEW.generation<>0 THEN RAISE EXCEPTION 'FX_AUTO_GUARD_INITIAL_STATE'; END IF;
+ ELSE
+  IF OLD.sealed OR NEW.generation<>OLD.generation+1
+     OR (to_jsonb(NEW)-'sealed'-'generation')<>(to_jsonb(OLD)-'sealed'-'generation')
+  THEN RAISE EXCEPTION 'FX_AUTO_GUARD_TRANSITION_INVALID'; END IF;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_scope_guard_internal BEFORE INSERT OR UPDATE OR DELETE ON crm.fx_auto_scope_guard
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_guard_internal_only();
+CREATE TRIGGER trg_fx_auto_sim_guard_internal BEFORE INSERT OR UPDATE OR DELETE ON crm.fx_auto_simulation_guard
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_guard_internal_only();
+CREATE TRIGGER trg_fx_auto_limit_policy_version_no_truncate BEFORE TRUNCATE ON crm.fx_auto_limit_policy_version
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_policy_revision_no_truncate BEFORE TRUNCATE ON crm.fx_auto_policy_revision
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_target_enrollment_no_truncate BEFORE TRUNCATE ON crm.fx_auto_target_enrollment
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_approval_evidence_no_truncate BEFORE TRUNCATE ON crm.fx_auto_approval_evidence
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_no_truncate BEFORE TRUNCATE ON crm.fx_auto_simulation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_item_no_truncate BEFORE TRUNCATE ON crm.fx_auto_simulation_item
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_seal_no_truncate BEFORE TRUNCATE ON crm.fx_auto_simulation_seal
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_scope_guard_no_truncate BEFORE TRUNCATE ON crm.fx_auto_scope_guard
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_guard_no_truncate BEFORE TRUNCATE ON crm.fx_auto_simulation_guard
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_policy_activation_no_truncate BEFORE TRUNCATE ON crm.fx_auto_policy_activation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_fx_auto_policy_activation_no_truncate ON crm.fx_auto_policy_activation;
+--rollback DROP TRIGGER trg_fx_auto_simulation_guard_no_truncate ON crm.fx_auto_simulation_guard;
+--rollback DROP TRIGGER trg_fx_auto_scope_guard_no_truncate ON crm.fx_auto_scope_guard;
+--rollback DROP TRIGGER trg_fx_auto_simulation_seal_no_truncate ON crm.fx_auto_simulation_seal;
+--rollback DROP TRIGGER trg_fx_auto_simulation_item_no_truncate ON crm.fx_auto_simulation_item;
+--rollback DROP TRIGGER trg_fx_auto_simulation_no_truncate ON crm.fx_auto_simulation;
+--rollback DROP TRIGGER trg_fx_auto_approval_evidence_no_truncate ON crm.fx_auto_approval_evidence;
+--rollback DROP TRIGGER trg_fx_auto_target_enrollment_no_truncate ON crm.fx_auto_target_enrollment;
+--rollback DROP TRIGGER trg_fx_auto_policy_revision_no_truncate ON crm.fx_auto_policy_revision;
+--rollback DROP TRIGGER trg_fx_auto_limit_policy_version_no_truncate ON crm.fx_auto_limit_policy_version;
+--rollback DROP TRIGGER trg_fx_auto_sim_guard_internal ON crm.fx_auto_simulation_guard;
+--rollback DROP TRIGGER trg_fx_auto_scope_guard_internal ON crm.fx_auto_scope_guard;
+--rollback DROP FUNCTION crm.fx_auto_guard_internal_only();
+
+--changeset rm:0158-fx-auto-canonical-digest-columns
+-- Legacy evidence remains readable but is not upgraded by fabricating consent.
+ALTER TABLE crm.fx_auto_approval_evidence ADD COLUMN scope_sha256 CHAR(64);
+--rollback ALTER TABLE crm.fx_auto_approval_evidence DROP COLUMN scope_sha256;
+
+--changeset rm:0159-fx-auto-canonical-digest-validation dbms:postgresql splitStatements:false
+-- PG JSONB text serialization, UTF-8, SHA-256. Versioned database-local format,
+-- not RFC 8785/JCS; JSON object payloads only. No implicit timezone dependence.
+CREATE FUNCTION crm.fx_auto_sha_v1(value jsonb) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
+ SELECT encode(sha256(convert_to(value::text,'UTF8')),'hex')
+$$;
+CREATE FUNCTION crm.fx_auto_scope_sha_v1(t uuid,p uuid) RETURNS text LANGUAGE sql STABLE AS $$
+ SELECT crm.fx_auto_sha_v1(jsonb_build_object(
+  'schema','FX_AUTO_SCOPE_PG_V1','tenant',p0.tenant_id,'revision',p0.id,
+  'policy',p0.policy_id,'revisionNo',p0.revision,'payloadSha',trim(p0.payload_sha256),
+  'limits',to_jsonb(l),
+  'targets',COALESCE((SELECT jsonb_agg(jsonb_build_object(
+   'offer',e.offer_id,'anchor',e.anchor_id,'guardrail',e.guardrail_id,
+   'reviewDueEpoch',extract(epoch FROM e.anchor_review_due_at),
+   'unit',e.unit_code,'tax',e.tax_basis) ORDER BY e.offer_id)
+   FROM crm.fx_auto_target_enrollment e WHERE e.tenant_id=t AND e.policy_revision_id=p),'[]'::jsonb)))
+ FROM crm.fx_auto_policy_revision p0 JOIN crm.fx_auto_limit_policy_version l
+ ON l.tenant_id=p0.tenant_id AND l.id=p0.limit_id WHERE p0.tenant_id=t AND p0.id=p
+$$;
+CREATE FUNCTION crm.fx_auto_sim_sha_v1(t uuid,s uuid) RETURNS text LANGUAGE sql STABLE AS $$
+ SELECT crm.fx_auto_sha_v1(jsonb_build_object(
+  'schema','FX_AUTO_SIM_PG_V1','tenant',h.tenant_id,'simulation',h.id,
+  'policy',h.policy_revision_id,'approval',h.approval_id,'source',h.source_snapshot_id,
+  'request',h.request_key,'asOfEpoch',extract(epoch FROM h.evaluation_as_of),
+  'inputSha',trim(h.input_sha256),'count',h.item_count,
+  'items',COALESCE((SELECT jsonb_agg(jsonb_build_object(
+   'offer',i.offer_id,'priceRevision',i.price_revision_id,'input',i.input_payload::jsonb,
+   'outcome',i.outcome,'delta',i.virtual_delta_kzt) ORDER BY i.offer_id)
+   FROM crm.fx_auto_simulation_item i WHERE i.tenant_id=t AND i.simulation_id=s),'[]'::jsonb)))
+ FROM crm.fx_auto_simulation h WHERE h.tenant_id=t AND h.id=s
+$$;
+CREATE FUNCTION crm.fx_auto_payload_check() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE p jsonb; h text;
+BEGIN
+ IF TG_TABLE_NAME='fx_auto_policy_revision' THEN
+  p=NEW.payload::jsonb; h=trim(NEW.payload_sha256);
+ ELSIF TG_TABLE_NAME='fx_auto_simulation' THEN
+  p=NEW.input_payload::jsonb; h=trim(NEW.input_sha256);
+ ELSE
+  p=NEW.input_payload::jsonb;
+ END IF;
+ IF jsonb_typeof(p)<>'object' THEN RAISE EXCEPTION 'FX_AUTO_PAYLOAD_OBJECT_REQUIRED'; END IF;
+ IF TG_TABLE_NAME<>'fx_auto_simulation_item' AND h IS DISTINCT FROM crm.fx_auto_sha_v1(p)
+ THEN RAISE EXCEPTION 'FX_AUTO_PAYLOAD_DIGEST_MISMATCH'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_policy_payload BEFORE INSERT ON crm.fx_auto_policy_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_payload_check();
+CREATE TRIGGER trg_fx_auto_sim_payload BEFORE INSERT ON crm.fx_auto_simulation
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_payload_check();
+CREATE TRIGGER trg_fx_auto_item_payload BEFORE INSERT ON crm.fx_auto_simulation_item
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_payload_check();
+-- AFTER INSERT runs after the existing BEFORE fence has serialized writers.
+CREATE FUNCTION crm.fx_auto_seal_digest_check() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='fx_auto_approval_evidence' THEN
+  IF trim(NEW.scope_sha256) IS DISTINCT FROM crm.fx_auto_scope_sha_v1(NEW.tenant_id,NEW.policy_revision_id)
+  THEN RAISE EXCEPTION 'FX_AUTO_SCOPE_DIGEST_MISMATCH'; END IF;
+ ELSE
+  IF trim(NEW.result_sha256) IS DISTINCT FROM crm.fx_auto_sim_sha_v1(NEW.tenant_id,NEW.simulation_id)
+  THEN RAISE EXCEPTION 'FX_AUTO_SIM_DIGEST_MISMATCH'; END IF;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_scope_digest AFTER INSERT ON crm.fx_auto_approval_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_seal_digest_check();
+CREATE TRIGGER trg_fx_auto_sim_digest AFTER INSERT ON crm.fx_auto_simulation_seal
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_seal_digest_check();
+CREATE FUNCTION crm.fx_auto_verified_approval_only() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM crm.fx_auto_approval_evidence a
+  WHERE a.tenant_id=NEW.tenant_id AND a.id=NEW.approval_id
+   AND a.scope_sha256 IS NOT NULL
+   AND trim(a.scope_sha256)=crm.fx_auto_scope_sha_v1(a.tenant_id,a.policy_revision_id))
+ THEN RAISE EXCEPTION 'FX_AUTO_UNVERIFIED_LEGACY_APPROVAL'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_sim_verified_approval BEFORE INSERT ON crm.fx_auto_simulation
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_verified_approval_only();
+CREATE TRIGGER trg_fx_auto_activation_verified_approval BEFORE INSERT ON crm.fx_auto_policy_activation
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_verified_approval_only();
+--rollback DROP TRIGGER trg_fx_auto_activation_verified_approval ON crm.fx_auto_policy_activation;
+--rollback DROP TRIGGER trg_fx_auto_sim_verified_approval ON crm.fx_auto_simulation;
+--rollback DROP FUNCTION crm.fx_auto_verified_approval_only();
+--rollback DROP TRIGGER trg_fx_auto_sim_digest ON crm.fx_auto_simulation_seal;
+--rollback DROP TRIGGER trg_fx_auto_scope_digest ON crm.fx_auto_approval_evidence;
+--rollback DROP FUNCTION crm.fx_auto_seal_digest_check();
+--rollback DROP TRIGGER trg_fx_auto_item_payload ON crm.fx_auto_simulation_item;
+--rollback DROP TRIGGER trg_fx_auto_sim_payload ON crm.fx_auto_simulation;
+--rollback DROP TRIGGER trg_fx_auto_policy_payload ON crm.fx_auto_policy_revision;
+--rollback DROP FUNCTION crm.fx_auto_payload_check();
+--rollback DROP FUNCTION crm.fx_auto_sim_sha_v1(uuid,uuid);
+--rollback DROP FUNCTION crm.fx_auto_scope_sha_v1(uuid,uuid);
+--rollback DROP FUNCTION crm.fx_auto_sha_v1(jsonb);
