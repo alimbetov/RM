@@ -158,7 +158,7 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "FxAutoPolicySchemaPgTest": 8,
                         "FxAutoRollingLimitEvaluatorTest": 8,
                         "FxAutoDryRunTest": 6,
-                        "FxAutoOwnerAdmissionQualificationTest": 14,
+                        "FxAutoOwnerAdmissionQualificationTest": 17,
                         "TenantCurrencyPolicyQualificationTest": 14,
                         "SkuFxSellerApprovalQualificationTest": 35,
                     },

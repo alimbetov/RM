@@ -53,6 +53,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired FxAutoOwnerConsentService consent;
+    @Autowired FxAutoPolicyEnrollmentService enrollment;
     @Autowired TenantOwnershipTransferService transfers;
     @Autowired TenantAccessStatusService accessStatus;
     @Autowired TenantCurrencyPolicyService currencies;
@@ -461,5 +462,64 @@ class FxAutoOwnerAdmissionQualificationTest {
                 admit(target,t,"USD");noWrites(t);
             } finally {blocker.rollback();}
         }
+    }
+
+    private FxAutoPolicyEnrollmentService.Target draftTarget(Tenant t,String currency) {
+        UUID item=UUID.randomUUID(),offer=UUID.randomUUID(),anchor=UUID.randomUUID(),guard=UUID.randomUUID();
+        if(jdbc.queryForObject("SELECT count(*) FROM crm.store_front WHERE tenant_id=?",Integer.class,t.id())==0)
+            jdbc.update("INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at) VALUES (?,?,?,'PUBLISHED',now())",t.id(),UUID.randomUUID(),"draft-"+UUID.randomUUID());
+        jdbc.update("INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at) VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',now())",t.id(),item,"draft-"+item);
+        jdbc.update("INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state,catalog_item_id,row_version) VALUES (?,?,'FX draft',100,'KZT','PUBLISHED',?,0)",t.id(),offer,item);
+        jdbc.update("INSERT INTO crm.sku_fx_policy_version(tenant_id,id,offer_id,revision,anchor_currency,anchor_amount,buffer_pct,markup_pct,rounding_step_kzt,approved_by,created_at) VALUES (?,?,?,1,?,1,0,0,1,?,now())",t.id(),anchor,offer,currency,t.owner());
+        jdbc.update("INSERT INTO crm.sku_fx_guardrail_version(tenant_id,id,offer_id,revision,max_increase_pct,max_decrease_pct,min_price_kzt,max_price_kzt,max_rate_calendar_days,calculation_ttl_seconds,approved_by,created_at) VALUES (?,?,?,1,10,10,1,1000,3,60,?,now())",t.id(),guard,offer,t.owner());
+        return new FxAutoPolicyEnrollmentService.Target(offer,anchor,guard,
+                Instant.now().plusSeconds(86400).truncatedTo(java.time.temporal.ChronoUnit.MICROS),
+                "EA",FxAutoPolicyEnrollmentService.TaxBasis.NONE);
+    }
+    private FxAutoPolicyEnrollmentService.Command draftCommand(UUID policy,long expected,String key,
+            FxAutoPolicyEnrollmentService.Target... targets) {
+        var n=java.math.BigDecimal.TEN;
+        return new FxAutoPolicyEnrollmentService.Command(policy,expected,key,
+                new FxAutoPolicyEnrollmentService.Limits(86400,n,n,n,10,86400,n,10,n,10,100),
+                java.util.List.of(targets));
+    }
+    @Test void draftPersistsCanonicalDigestAndExactReplayWithoutCommercialWrites() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var a=draftTarget(t,"USD");var b=draftTarget(t,"USD");
+        UUID policy=UUID.randomUUID();
+        var command=draftCommand(policy,0,"draft-1",a,b);
+        var first=enrollment.createPolicyRevision(actor,t.id(),command);
+        assertThat(enrollment.createPolicyRevision(actor,t.id(),draftCommand(policy,0,"draft-1",b,a))).isEqualTo(first);
+        assertThat(first.revision()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT crm.fx_auto_sha_v1(CAST(payload AS jsonb))=payload_sha256 FROM crm.fx_auto_policy_revision WHERE tenant_id=? AND id=?",Boolean.class,t.id(),first.revisionId())).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_target_enrollment WHERE tenant_id=? AND policy_revision_id=?",Integer.class,t.id(),first.revisionId())).isEqualTo(2);
+        assertThatThrownBy(()->enrollment.createPolicyRevision(actor,t.id(),draftCommand(policy,0,"draft-1",a))).hasMessageContaining("FX_AUTO_IDEMPOTENCY_CONFLICT");
+        assertThatThrownBy(()->enrollment.createPolicyRevision(actor,t.id(),draftCommand(policy,0,"draft-2",a))).hasMessageContaining("FX_AUTO_STALE_POLICY_REVISION");
+        assertThat(enrollment.createPolicyRevision(actor,t.id(),draftCommand(policy,1,"draft-2",a)).revision()).isEqualTo(2);
+        for(String table:java.util.List.of("fx_auto_approval_evidence","fx_auto_policy_activation","fx_auto_simulation","store_offer_price_revision"))
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm."+table+" WHERE tenant_id=?",Integer.class,t.id())).isZero();
+    }
+    @Test void draftRejectsForeignBindingsMissingCurrencyAndInvalidTargetWithoutPartialWrites() throws Exception {
+        pg();var t=tenant(account());var foreign=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var usd=draftTarget(t,"USD");var eur=draftTarget(t,"EUR");var other=draftTarget(foreign,"USD");
+        assertThatThrownBy(()->enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"foreign",usd,other))).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"currency",usd,eur))).isInstanceOfAny(SecurityException.class,IllegalStateException.class,IllegalArgumentException.class);
+        jdbc.update("UPDATE crm.store_offer SET state='HIDDEN' WHERE tenant_id=? AND id=?",t.id(),usd.offerId());
+        assertThatThrownBy(()->enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"hidden",usd))).hasMessageContaining("FX_AUTO_TARGET_BINDING_INVALID");
+        noWrites(t);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_limit_policy_version WHERE tenant_id=?",Integer.class,t.id())).isZero();
+    }
+    @Test void concurrentDraftReplayCreatesOneRevisionAcrossTransactions() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var command=draftCommand(UUID.randomUUID(),0,"race",draftTarget(t,"USD"));
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var a=pool.submit(()->{start.await();return enrollment.createPolicyRevision(actor,t.id(),command);});
+            var b=pool.submit(()->{start.await();return enrollment.createPolicyRevision(actor,t.id(),command);});
+            start.countDown();
+            assertThat(a.get(20,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(b.get(20,java.util.concurrent.TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_policy_revision WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_target_enrollment WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
     }
 }
