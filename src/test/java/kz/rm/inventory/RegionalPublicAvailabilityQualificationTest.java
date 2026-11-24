@@ -171,6 +171,28 @@ class RegionalPublicAvailabilityQualificationTest {
                 .hasMessage("QR_UNAVAILABLE");
     }
 
+    private List<RegionalPublicAvailabilityPort.RegionalOffer> allRegionalOffers(String kato,int quantity){
+        var result=new java.util.ArrayList<RegionalPublicAvailabilityPort.RegionalOffer>();
+        var seen=new java.util.HashSet<String>();
+        String cursor=null;
+        // The public search is global. Walk the actual SQL sort order rather
+        // than Java String order (which differs under PostgreSQL collation).
+        // Bound traversal and reject any duplicate or non-advancing cursor.
+        for(int page=0;page<2000;page++){
+            var batch=regional.search(kato,"ru",quantity,cursor,50);
+            for(var offer:batch){
+                assertThat(seen.add(offer.publicOfferRef())).as("unique offer across pages").isTrue();
+                if(cursor!=null)
+                    assertThat(jdbc.queryForObject("SELECT CASE WHEN CAST(? AS varchar)>CAST(? AS varchar) THEN 1 ELSE 0 END",
+                            Integer.class,offer.publicOfferRef(),cursor)).as("database keyset order").isEqualTo(1);
+            }
+            result.addAll(batch);
+            if(batch.size()<50)return result;
+            cursor=batch.getLast().publicOfferRef();
+        }
+        throw new AssertionError("Regional keyset traversal exceeded fixture safety bound");
+    }
+
     @Test void qr02bRegionSearchHasKeysetPaginationAndNoCrossSellerSkuMerge() {
         String kato=katoCodes().getFirst();
         String sameSku="REGION-SKU";
@@ -178,8 +200,7 @@ class RegionalPublicAvailabilityQualificationTest {
         var b=setup(sameSku);
         warehouse(a,kato,20,1);
         warehouse(b,kato,40,30);
-        List<RegionalPublicAvailabilityPort.RegionalOffer> found=
-                regional.search(kato,"ru",5,null,50);
+        List<RegionalPublicAvailabilityPort.RegionalOffer> found=allRegionalOffers(kato,5);
         assertThat(found).extracting(
                 RegionalPublicAvailabilityPort.RegionalOffer::publicOfferRef)
                 .contains(a.publicRef(),b.publicRef());
@@ -196,17 +217,15 @@ class RegionalPublicAvailabilityQualificationTest {
         assertThat(selected).extracting(
                 RegionalPublicAvailabilityPort.RegionalOffer::unitPrice)
                 .containsOnly(new BigDecimal("2000.0000"));
-        String first=found.stream().map(
-                RegionalPublicAvailabilityPort.RegionalOffer::publicOfferRef)
-                .sorted().findFirst().orElseThrow();
+        String first=found.getFirst().publicOfferRef();
         var next=regional.search(kato,"ru",5,first,50);
-        assertThat(next).allSatisfy(x->assertThat(x.publicOfferRef()).isGreaterThan(first));
+        assertThat(next).containsExactlyElementsOf(found.subList(1,Math.min(51,found.size())));
         // Tenant A goes out of stock; tenant B's published offer remains.
         jdbc.update("""
                 UPDATE crm.inv_stock_balance SET reserved=on_hand,row_version=row_version+1
                 WHERE tenant_id=? AND item_id=?
                 """,a.tenant(),a.item());
-        var now=regional.search(kato,"ru",5,null,50);
+        var now=allRegionalOffers(kato,5);
         assertThat(now).extracting(
                 RegionalPublicAvailabilityPort.RegionalOffer::publicOfferRef)
                 .contains(b.publicRef()).doesNotContain(a.publicRef());

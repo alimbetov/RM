@@ -298,7 +298,7 @@ class QrWarehouseHandoverQualificationTest {
                 SELECT count(*) FROM public.iam_email_verification_challenge c
                 JOIN public.iam_email_identity e ON e.id=c.email_identity_id
                 WHERE e.user_id=? AND c.purpose='CHECKOUT'
-                """,Integer.class,c.tenant(),c.buyer().userId())).isZero();
+                """,Integer.class,c.buyer().userId())).isZero();
         var order=loadOrder(c,id);
         assertThat(order.lines()).hasSize(1);
         System.out.println("RET04E6B verified checkout tenant="+c.tenant()+" buyer="+c.buyer().userId()+

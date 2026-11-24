@@ -37,7 +37,38 @@ class TaskCalendarPgPerformanceQualificationTest {
     @BeforeEach void startAuthority() throws Exception { authority=SignedJwtTestAuthority.start(); }
     @AfterEach void closeAuthority() { if(authority!=null)authority.close(); }
 
-    private record Tenant(UUID id, VerifiedActor manager,VerifiedActor staff,UUID orgId,VerifiedActor owner) {}
+    // Keep fixture identity IDs separate from expiring, request-scoped
+    // principals. Reauthenticate through the real signed-token resolver
+    // outside measured service calls; never extend production token TTL.
+    private final class Tenant {
+        private final UUID id,managerId,staffId;
+        private final Principal manager,staff;
+        Tenant(UUID id,UUID managerId,UUID staffId){
+            this.id=id;this.managerId=managerId;this.staffId=staffId;
+            this.manager=new Principal(managerId);this.staff=new Principal(staffId);
+        }
+        UUID id(){return id;}
+        UUID managerId(){return managerId;}
+        UUID staffId(){return staffId;}
+        VerifiedActor manager(){return manager.current();}
+        VerifiedActor staff(){return staff.current();}
+    }
+    private final class Principal {
+        private final UUID id;
+        private VerifiedActor actor;
+        private Instant refreshAt=Instant.EPOCH;
+        Principal(UUID id){this.id=id;}
+        synchronized VerifiedActor current(){
+            if(actor==null||!Instant.now().isBefore(refreshAt)){
+                Instant mintedAt=Instant.now();
+                try{actor=verified(id);}
+                catch(Exception failure){throw new AssertionError("Signed fixture reauthentication failed",failure);}
+                assertThat(actor.userId()).isEqualTo(id);
+                refreshAt=mintedAt.plusSeconds(240);
+            }
+            return actor;
+        }
+    }
     private VerifiedActor verified(UUID user) throws Exception {
         String subject=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",String.class,user);
         return new OidcActorResolver(authority.decoder(),users).resolve(authority.access(subject));
@@ -75,12 +106,12 @@ class TaskCalendarPgPerformanceQualificationTest {
         roles.grant(a,tenant,employee.id(),DomainPermission.TASK_READ);
         roles.assign(a,tenant,staff,employee.id());
         roles.enable(a,tenant);
-        return new Tenant(tenant,verified(manager),b,org,a);
+        return new Tenant(tenant,manager,staff);
     }
 
 
     private TaskService.Task create(Tenant t,Instant due) {
-        return tasks.create(t.manager(),t.id(),"Review order",t.staff().userId(),due,
+        return tasks.create(t.manager(),t.id(),"Review order",t.staffId(),due,
             "radar-"+UUID.randomUUID());
     }
     private List<UUID> ids(TaskOverdueQueryService.OverdueSignalPage p) {
@@ -124,7 +155,7 @@ class TaskCalendarPgPerformanceQualificationTest {
                      ELSE base+INTERVAL '2 days'+(g%3600)*INTERVAL '1 second' END,
                 base,CASE WHEN g%19=0 THEN 4 WHEN g%5=0 THEN 3 WHEN g%7=0 THEN 1 ELSE 0 END,'Review order'
             FROM p CROSS JOIN LATERAL generate_series(1,p.n) AS g
-            """,t.id(),t.staff().userId(),t.manager().userId(),java.sql.Timestamp.from(BASE),count);
+            """,t.id(),t.staffId(),t.managerId(),java.sql.Timestamp.from(BASE),count);
         assertThat(n).isEqualTo(count);
         jdbc.update("""
             WITH p AS (SELECT CAST(? AS uuid) tenant,CAST(? AS timestamptz) base,CAST(? AS integer) n,CAST(? AS boolean) dense),
@@ -180,7 +211,7 @@ class TaskCalendarPgPerformanceQualificationTest {
             (completed?"AND t.status IN ('COMPLETED','ARCHIVED') AND e.occurred_at<=t.created_at+(t.due_at-t.created_at)/2 ":"AND t.status<>'ARCHIVED' ")+
             "AND "+date+">=? AND "+date+"<? "+
             (cursor==null?"":"AND ("+date+">? OR ("+date+"=? AND t.id>?)) ")+" ORDER BY "+date+",t.id LIMIT ?";
-        List<Object> args=new ArrayList<>(List.of(t.id(),t.staff().userId(),java.sql.Timestamp.from(BASE),java.sql.Timestamp.from(BASE.plusSeconds(30*86400))));
+        List<Object> args=new ArrayList<>(List.of(t.id(),t.staffId(),java.sql.Timestamp.from(BASE),java.sql.Timestamp.from(BASE.plusSeconds(30*86400))));
         if(cursor!=null){args.add(java.sql.Timestamp.from(cursor.lastDate()));args.add(java.sql.Timestamp.from(cursor.lastDate()));args.add(cursor.lastTaskId());}
         args.add(limit+1);
         return jdbc.query(sql,(rs,n)->new Expected(rs.getObject(1,UUID.class),rs.getTimestamp(2).toInstant(),rs.getLong(3),rs.getString(4),
@@ -196,7 +227,7 @@ class TaskCalendarPgPerformanceQualificationTest {
     }
     private void explain(Tenant t,Page p,int limit,Cursor cursor,String label)throws Exception{
         var q=TaskCalendarQueryService.prepareQuery(TaskTimingEngine.fullRelation(true,false),p.appliedFilter(),
-            p.evaluatedAt(),t.id(),t.staff().userId(),limit,cursor);
+            p.evaluatedAt(),t.id(),t.staffId(),limit,cursor);
         String plan=jdbc.query("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+q.sql(),q.bind(),
             rs->{if(!rs.next())throw new IllegalStateException("no plan");return rs.getString(1);});
         assertThat(plan).contains("Execution Time","Shared Hit Blocks");
@@ -225,7 +256,8 @@ class TaskCalendarPgPerformanceQualificationTest {
         for(int i=0;i<10;i++)page(t,f,limit,cursor);
         List<Long> values=new ArrayList<>();
         for(int i=0;i<50;i++){
-            long start=System.nanoTime();var observed=page(t,f,limit,cursor);values.add(System.nanoTime()-start);
+            var actor=t.staff();
+            long start=System.nanoTime();var observed=calendar.listMine(actor,t.id(),f,limit,cursor);values.add(System.nanoTime()-start);
             assertThat(observed.items()).isEqualTo(first.items());
         }
         save(label,values);explain(t,first,limit,cursor,label);
@@ -251,7 +283,8 @@ class TaskCalendarPgPerformanceQualificationTest {
                 List<Long> reads=new ArrayList<>();
                 if(!mixed){started.countDown();return reads;}
                 while(!stop.get()){
-                    long start=System.nanoTime();var p=page(t,filter(true),100,null);reads.add(System.nanoTime()-start);
+                    var actor=t.staff();var f=filter(true);
+                    long start=System.nanoTime();var p=calendar.listMine(actor,t.id(),f,100,null);reads.add(System.nanoTime()-start);
                     assertThat(p.items()).hasSize(100);started.countDown();
                 }
                 return reads;
@@ -268,7 +301,9 @@ class TaskCalendarPgPerformanceQualificationTest {
                 assertThat(started.await(30,TimeUnit.SECONDS)).isTrue();
                 for(int i=0;i<count;i++){
                     long v=version[0];Instant due=BASE.plusSeconds(40*86400+(v%2==0?10:20));
-                    long start=System.nanoTime();var next=tasks.reschedule(t.manager(),t.id(),task,due,v,"f2-mix-"+UUID.randomUUID());
+                    var actor=t.manager();
+                    String request="f2-mix-"+UUID.randomUUID();
+                    long start=System.nanoTime();var next=tasks.reschedule(actor,t.id(),task,due,v,request);
                     times.add(System.nanoTime()-start);assertThat(next.version()).isEqualTo(v+1);version[0]=next.version();
                 }
             }finally{stop.set(true);}
