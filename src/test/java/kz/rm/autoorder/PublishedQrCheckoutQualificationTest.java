@@ -15,6 +15,7 @@ import org.springframework.test.context.TestPropertySource;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +34,8 @@ import static org.assertj.core.api.Assertions.*;
 @TestPropertySource(properties={
     "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "rm.qr.legacy-email-first-checkout.enabled=true"
 })
 class PublishedQrCheckoutQualificationTest {
     @Autowired PublishedQrCheckoutService qrCheckout;
@@ -120,6 +122,152 @@ class PublishedQrCheckoutQualificationTest {
         return jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
                 """,Integer.class,f.tenant());
+    }
+
+    private record MvpBuyer(VerifiedActor actor,UUID userId,UUID emailId) {}
+    private MvpBuyer mvpBuyer(boolean hasVerifiedEmail) {
+        UUID userId=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "qrmvp-"+UUID.randomUUID(),"QR Buyer")).getId();
+        UUID emailId=null;
+        if(hasVerifiedEmail) {
+            String address="qrmvp-"+UUID.randomUUID()+"@example.kz";
+            emailId=UUID.randomUUID();
+            Timestamp now=Timestamp.from(Instant.now());
+            jdbc.update("""
+                INSERT INTO public.iam_email_identity
+                  (id,user_id,lookup_hmac,email_envelope,verified_at,created_at,
+                   lifecycle_state,active_lookup_hmac,current_owner_id)
+                VALUES (?,?,?,?,?,?,'CURRENT',?,?)
+                """,emailId,userId,crypto.lookup(address),crypto.encrypt(address),
+                now,now,crypto.lookup(address),userId);
+        }
+        return new MvpBuyer(verified(userId),userId,emailId);
+    }
+
+    @Test void qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder() {
+        var f=setup(); var buyer=mvpBuyer(true); String requestKey=key();
+        int challenges=jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_verification_challenge
+                """,Integer.class);
+        int messages=jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_delivery_outbox
+                """,Integer.class);
+        var placed=qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),2,0,
+                new BigDecimal("250"),"KZT",requestKey);
+        UUID order=placed.order().orderId();
+        assertThat(placed.order().status()).isEqualTo("PLACED");
+        assertThat(orders(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order
+                WHERE tenant_id=? AND id=? AND buyer_user_id=?
+                  AND pending_email_identity_id=?
+                  AND status='PLACED' AND fulfillment_mode='PICKUP_PROOF_REQUIRED'
+                  AND total_amount=500 AND currency='KZT'
+                """,Integer.class,f.tenant(),order,buyer.userId(),buyer.emailId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=? AND offer_id=?
+                  AND catalog_item_id_snapshot=? AND quantity=2
+                  AND unit_price_snapshot=250 AND currency='KZT'
+                """,Integer.class,f.tenant(),order,f.offer(),f.item())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order_status_event
+                WHERE tenant_id=? AND order_id=? AND event_type='PLACED'
+                """,Integer.class,f.tenant(),order)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_checkout_receipt
+                WHERE tenant_id=? AND order_id=?
+                """,Integer.class,f.tenant(),order)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=?
+                """,Integer.class,f.tenant())).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_verification_challenge
+                """,Integer.class)).isEqualTo(challenges);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM public.iam_email_delivery_outbox
+                """,Integer.class)).isEqualTo(messages);
+        assertThat(qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),2,0,
+                new BigDecimal("250"),"KZT",requestKey).order().orderId()).isEqualTo(order);
+        assertThat(orders(f)).isEqualTo(1);
+    }
+
+    @Test void qrMvpAnonymousAndUnverifiedEmailCannotCreateNewOrder() {
+        var f=setup(); var buyer=mvpBuyer(false);
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(null,f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",key()))
+                .isInstanceOf(SecurityException.class).hasMessage("QR_VERIFIED_BUYER_REQUIRED");
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",key()))
+                .isInstanceOf(SecurityException.class).hasMessage("VERIFIED_EMAIL_REQUIRED");
+        assertThat(orders(f)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
+                """,Integer.class,f.tenant())).isZero();
+    }
+
+    @Test void qrMvpStaleVersionRevokeCrossBuyerAndSuspendedReplayHaveZeroEffects() {
+        var f=setup(); var buyer=mvpBuyer(true); var stranger=mvpBuyer(true);
+        String requestKey=key();
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("251"),"KZT",requestKey))
+                .hasMessage("PRICE_RECONFIRM_REQUIRED");
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"USD",requestKey))
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+        assertThat(orders(f)).isZero();
+        UUID order=qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",requestKey).order().orderId();
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(stranger.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",requestKey))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Idempotency key reused");
+        qr.revoke(f.seller(),f.tenant(),f.offer(),0,
+                "QCO_"+UUID.randomUUID().toString().replace("-",""));
+        assertThat(qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",requestKey).order().orderId()).isEqualTo(order);
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",key()))
+                .hasMessage("QR_UNAVAILABLE");
+        jdbc.update("""
+                UPDATE public.iam_user_account SET status='SUSPENDED',
+                  row_version=row_version+1 WHERE id=?
+                """,buyer.userId());
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
+                new BigDecimal("250"),"KZT",requestKey))
+                .isInstanceOf(SecurityException.class).hasMessage("VERIFIED_BUYER_REQUIRED");
+        assertThat(orders(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
+                """,Integer.class,f.tenant())).isEqualTo(1);
+    }
+
+    @Test void qrMvpVerifiedConcurrentSameKeyHasOneOrderInPostgres() throws Exception {
+        try(var c=dataSource.getConnection()) {
+            Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        var f=setup(); var buyer=mvpBuyer(true); String requestKey=key();
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var one=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),2,0,
+                        new BigDecimal("250"),"KZT",requestKey);
+            });
+            var two=pool.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                return qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),2,0,
+                        new BigDecimal("250"),"KZT",requestKey);
+            });
+            start.countDown();
+            assertThat(one.get(30,TimeUnit.SECONDS).order().orderId())
+                    .isEqualTo(two.get(30,TimeUnit.SECONDS).order().orderId());
+        }
+        assertThat(orders(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
+                """,Integer.class,f.tenant())).isEqualTo(1);
     }
 
     @Test void decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation() {
