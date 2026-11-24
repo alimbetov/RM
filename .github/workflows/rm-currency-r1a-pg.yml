@@ -38,8 +38,8 @@ jobs:
           p=pathlib.Path('target/surefire-reports/TEST-kz.rm.organization.TenantCurrencyPolicyQualificationTest.xml')
           assert p.is_file()
           cases=list(ET.parse(p).getroot().iter('testcase'))
-          assert len(cases)==7
-          assert sum(c.find('skipped') is not None for c in cases)==1
+          assert len(cases)==14
+          assert {c.attrib['name'] for c in cases if c.find('skipped') is not None}=={'cur05PostgresCurrencyAuditIsAppendOnly','pa07ConcurrentAdmissionAndRevoke'}
           assert not any(c.find('error') is not None or c.find('failure') is not None for c in cases)
           PY
       - name: Preserve test evidence
@@ -85,14 +85,14 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify tenant currency policy on PostgreSQL 17
         run: mvn -B -ntp -Dtest=TenantCurrencyPolicyQualificationTest test
-      - name: Validate full seven-case Surefire XML
+      - name: Validate full fourteen-case Surefire XML
         run: |
           python3 - <<'PY'
           import pathlib,xml.etree.ElementTree as ET
           p=pathlib.Path('target/surefire-reports/TEST-kz.rm.organization.TenantCurrencyPolicyQualificationTest.xml')
           assert p.is_file()
           cases=list(ET.parse(p).getroot().iter('testcase'))
-          assert len(cases)==7
+          assert len(cases)==14
           assert not any(c.find(x) is not None for c in cases for x in ('error','failure','skipped'))
           PY
       - name: Preserve test evidence
