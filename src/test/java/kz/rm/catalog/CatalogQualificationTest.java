@@ -179,7 +179,7 @@ class CatalogQualificationTest {
                 """,Long.class,b.tenant(),productB.id())).isZero();
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.cat_item_event
-                WHERE tenant_id=? AND item_id=? AND action='PRICE_REVISED'
+                WHERE tenant_id=? AND item_id=? AND action_code='PRICE_REVISED'
                 """,Integer.class,b.tenant(),productB.id())).isZero();
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.cat_item WHERE sku=? AND tenant_id IN (?,?)
@@ -222,7 +222,7 @@ class CatalogQualificationTest {
                 """,Long.class,t.tenant(),product.id())).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.cat_item_event
-                WHERE tenant_id=? AND item_id=? AND action='PRICE_REVISED'
+                WHERE tenant_id=? AND item_id=? AND action_code='PRICE_REVISED'
                 """,Integer.class,t.tenant(),product.id())).isEqualTo(1);
         // A stale actor is not a stored capability: ordinary catalog edits
         // remain allowed only because this employee retains CATALOG_WRITE.
@@ -286,7 +286,7 @@ class CatalogQualificationTest {
                 """,Long.class,t.tenant(),product.id())).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.cat_item_event
-                WHERE tenant_id=? AND item_id=? AND action='PRICE_REVISED'
+                WHERE tenant_id=? AND item_id=? AND action_code='PRICE_REVISED'
                 """,Integer.class,t.tenant(),product.id())).isEqualTo(1);
     }
 
