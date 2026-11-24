@@ -186,7 +186,14 @@ class RegionalPublicAvailabilityQualificationTest {
         assertThat(found).extracting(
                 RegionalPublicAvailabilityPort.RegionalOffer::currency)
                 .containsOnly("KZT");
-        assertThat(found).extracting(
+        // Regional discovery is intentionally global: other published sellers
+        // may be present from independent service-journey fixtures. Verify
+        // exactly the two selected seller refs, never assert global isolation.
+        var selected=found.stream().filter(x->
+                x.publicOfferRef().equals(a.publicRef())
+                || x.publicOfferRef().equals(b.publicRef())).toList();
+        assertThat(selected).hasSize(2);
+        assertThat(selected).extracting(
                 RegionalPublicAvailabilityPort.RegionalOffer::unitPrice)
                 .containsOnly(new BigDecimal("2000.0000"));
         String first=found.stream().map(
