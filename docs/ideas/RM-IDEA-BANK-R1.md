@@ -213,15 +213,15 @@ RM-INSIGHT-R5: проверенные аналитические события 
 **Девять логических компонентов RM Intelligence:** Metric Registry; Period Resolver; Source / Context Admission; Native SQL Aggregation; Methodology & Result Versioning; Metric Dependency Graph; Customer / Warehouse Analytics; Report & Export; Tribuo Feature Adapter. **Это не девять новых микросервисов.** INSIGHT-R1 сохраняет SALES/INVENTORY domain ownership и независимый read composition.
 
 **Отобранные FIN исходники и варианты:**
-- **P1:** реальный \`PeriodResolver\` (D/W/DEC/M/Q/H/Y) и \`PeriodBatchPlanner\`; типизированные агрегатные SQL/JDBC-паттерны; source/method SHA и контракты Metric Registry/Derived Totals.
-- **P2:** dependency graph только для действительно сложных KPI; \`FactMonthlyPartitionService\` как шаблон после SQL benchmark; отчётные grid/export с pinned metadata.
+- **P1:** реальный `PeriodResolver` (D/W/DEC/M/Q/H/Y) и `PeriodBatchPlanner`; типизированные агрегатные SQL/JDBC-паттерны; source/method SHA и контракты Metric Registry/Derived Totals.
+- **P2:** dependency graph только для действительно сложных KPI; `FactMonthlyPartitionService` как шаблон после SQL benchmark; отчётные grid/export с pinned metadata.
 - **P3:** versioned Tribuo Feature Adapter и UX-идеи KPI Navigator, после проверенной SQL-аналитики.
-- **Explicit rejection:** 166 FIN форм, \`fin_lib/fin_intake/fin_fact/fin_calc\` миграции, FIN controllers, FIN JWT/ACL, FIN UAT worker как production, A05/credit/ECL, второй владелец SALES/INVENTORY.
+- **Explicit rejection:** 166 FIN форм, `fin_lib/fin_intake/fin_fact/fin_calc` миграции, FIN controllers, FIN JWT/ACL, FIN UAT worker как production, A05/credit/ECL, второй владелец SALES/INVENTORY.
 - **Бизнес-полезность:** Customer 360, Warehouse 360, ABC/Pareto/XYZ, недельные/декадные/месячные агрегаты, аналитические отчёты с explainable source lineage.
 
 **Спецификация с полным code-review, контрактами, 32 запланированными проверками и этапами F2R-00…07:** [RM-INSIGHT-FIN-ADAPT-R1](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md).
 
-**Текущий статус:** \`SPEC_EXISTS / POST-MVP PARKED\`. Квалификация FIN компонентов не переносится автоматически в RM. Текущая задача только документальная, без Java/SQL/REST/Tribuo изменений.
+**Текущий статус:** `SPEC_EXISTS / POST-MVP PARKED`. Квалификация FIN компонентов не переносится автоматически в RM. Текущая задача только документальная, без Java/SQL/REST/Tribuo изменений.
 
 ## 14. Связанные документы и история решений
 
