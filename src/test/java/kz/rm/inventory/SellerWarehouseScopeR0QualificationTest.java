@@ -189,6 +189,74 @@ class SellerWarehouseScopeR0QualificationTest {
         assertThat(onHand(f,f.warehouseA())).isEqualByComparingTo("3");
     }
 
+    @Test void sellerR0AllInventoryMutationsRespectWarehouseAssignment() {
+        Fixture f=setup();
+        scopes.assign(f.owner(),f.tenant(),f.warehouseA(),f.staffId());
+        assertThat(inventory.receive(f.staff(),f.tenant(),f.warehouseA(),f.itemId(),
+                key(),new BigDecimal("10")).after()).isEqualByComparingTo("10");
+
+        assertThatThrownBy(()->inventory.writeOff(f.staff(),f.tenant(),
+                f.warehouseB(),f.itemId(),key(),BigDecimal.ONE,
+                InventoryMovementService.WriteOffCause.DAMAGE))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThatThrownBy(()->inventory.transfer(f.staff(),f.tenant(),
+                f.warehouseA(),f.warehouseB(),f.itemId(),BigDecimal.ONE,key()))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThatThrownBy(()->inventory.startStocktake(f.staff(),f.tenant(),
+                f.warehouseB(),java.util.List.of(f.itemId()),key()))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThat(onHand(f,f.warehouseA())).isEqualByComparingTo("10");
+        assertThat(onHand(f,f.warehouseB())).isEqualByComparingTo("0");
+        assertThat(movementCount(f)).isEqualTo(1);
+
+        var stocktake=inventory.startStocktake(f.staff(),f.tenant(),f.warehouseA(),
+                java.util.List.of(f.itemId()),key());
+        long expectedLineVersion=stocktake.lines().getFirst().rowVersion();
+        scopes.revoke(f.owner(),f.tenant(),f.warehouseA(),f.staffId());
+        assertThatThrownBy(()->inventory.recordCount(f.staff(),f.tenant(),
+                stocktake.id(),f.itemId(),new BigDecimal("10"),expectedLineVersion))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThatThrownBy(()->inventory.postStocktake(f.staff(),f.tenant(),
+                stocktake.id(),key()))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThatThrownBy(()->inventory.cancelStocktake(f.staff(),f.tenant(),
+                stocktake.id()))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+
+        scopes.assign(f.owner(),f.tenant(),f.warehouseA(),f.staffId());
+        inventory.recordCount(f.staff(),f.tenant(),stocktake.id(),f.itemId(),
+                new BigDecimal("10"),expectedLineVersion);
+        assertThat(inventory.postStocktake(f.staff(),f.tenant(),stocktake.id(),key())
+                .status()).isEqualTo("POSTED");
+
+        scopes.assign(f.owner(),f.tenant(),f.warehouseB(),f.staffId());
+        inventory.transfer(f.staff(),f.tenant(),f.warehouseA(),f.warehouseB(),
+                f.itemId(),new BigDecimal("2"),key());
+        inventory.writeOff(f.staff(),f.tenant(),f.warehouseB(),f.itemId(),key(),
+                BigDecimal.ONE,InventoryMovementService.WriteOffCause.DAMAGE);
+        assertThat(onHand(f,f.warehouseA())).isEqualByComparingTo("8");
+        assertThat(onHand(f,f.warehouseB())).isEqualByComparingTo("1");
+        assertThat(movementCount(f)).isEqualTo(4);
+    }
+
+    @Test void sellerR0ForeignTenantWarehouseAndSkuCannotBeUsedWithOwnGrants() {
+        Fixture a=setup(),b=setup();
+        scopes.assign(a.owner(),a.tenant(),a.warehouseA(),a.staffId());
+        assertThatThrownBy(()->inventory.receive(a.staff(),b.tenant(),b.warehouseA(),
+                b.itemId(),key(),BigDecimal.ONE))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->inventory.receive(a.staff(),a.tenant(),b.warehouseA(),
+                a.itemId(),key(),BigDecimal.ONE))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+        assertThatThrownBy(()->inventory.correct(a.staff(),a.tenant(),a.warehouseA(),
+                b.itemId(),key(),BigDecimal.ONE))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(movementCount(a)).isZero();
+        assertThat(movementCount(b)).isZero();
+        assertThat(onHand(a,a.warehouseA())).isEqualByComparingTo("0");
+        assertThat(onHand(b,b.warehouseA())).isEqualByComparingTo("0");
+    }
+
     @Test void sellerR0PostgresAdmittedReceiptCommitsBeforeWarehouseScopeRevocation() throws Exception {
         pgOnly();
         Fixture f=setup();
