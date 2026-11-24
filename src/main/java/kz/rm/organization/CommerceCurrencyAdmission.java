@@ -1,6 +1,7 @@
 package kz.rm.organization;
 
 import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -18,6 +19,19 @@ public class CommerceCurrencyAdmission {
     private final JdbcTemplate jdbc;
     private final TenantCurrencyPolicyService policies;
     private final boolean enabled;
+
+    @Value("${rm.mvp.service-mode.enabled:false}")
+    private boolean mvpServiceMode;
+
+    @PostConstruct
+    void requireStrictMvpCurrencyPolicy() {
+        requireStrictMvpCurrencyPolicy(mvpServiceMode, enabled);
+    }
+
+    static void requireStrictMvpCurrencyPolicy(boolean mvpServiceMode, boolean enabled) {
+        if (mvpServiceMode && !enabled)
+            throw new IllegalStateException("MVP_PUBLIC_KZT_ADMISSION_REQUIRED");
+    }
 
     public CommerceCurrencyAdmission(JdbcTemplate jdbc, TenantCurrencyPolicyService policies,
             @Value("${rm.currency.commerce-admission.enabled:false}") boolean enabled) {
