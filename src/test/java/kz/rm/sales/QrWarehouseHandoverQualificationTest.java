@@ -3334,6 +3334,251 @@ class QrWarehouseHandoverQualificationTest {
         assertExactlyOneHandover(c,order,1);
     }
 
+    // BSR-30A.5B: independent fixtures and durable SQL oracles for each case.
+    private record Ret04B(Context c,Order order,UUID returnId,UUID sku,
+                          BigDecimal stockBefore,String requestKey,
+                          java.util.Map<String,List<String>> before) {}
+
+    private Ret04B ret04BFixture() throws Exception {
+        requirePostgres();
+        var c=context();var order=ready(c,false);
+        var claim=qr07R25Quarantined(c,order);
+        roles.grant(c.owner(),c.tenant(),assignedRole(c),DomainPermission.INVENTORY_ADJUST);
+        UUID sku=jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND id=?
+                """,UUID.class,c.tenant(),claim.orderLineId());
+        var before=ret04BSnapshot(c);
+        assertThat(before.get("sales_return_quarantine_resolution")).isEmpty();
+        assertThat(ret04BQuarantine(c,sku)).isEqualByComparingTo("2");
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),claim.requestId())).isEqualTo(6L);
+        return new Ret04B(c,order,claim.requestId(),sku,stock(c,sku,"on_hand"),key(),before);
+    }
+
+    private java.util.Map<String,List<String>> ret04BSnapshot(Context c) {
+        var out=new java.util.LinkedHashMap<String,List<String>>();
+        // Table names are a closed test-owned allowlist. JSON text preserves
+        // versions, audit fields, IDs, and timestamps without JDBC array equality.
+        for(String table:List.of("inv_stock_balance","inv_stock_movement",
+                "inv_stock_reservation","inv_reservation_event",
+                "inv_return_quarantine_balance","inv_return_quarantine_movement",
+                "sales_return_request","sales_return_posting","sales_return_event",
+                "sales_return_quarantine_resolution","sales_order","sales_order_line",
+                "sales_order_status_event","sales_pickup_handover",
+                "sales_pickup_handover_line","sales_pickup_credential","fin_invoice")){
+            out.put(table,jdbc.queryForList("SELECT row_to_json(t)::text FROM crm."+table+
+                    " t WHERE tenant_id=? ORDER BY 1",String.class,c.tenant()));
+        }
+        return out;
+    }
+
+    private BigDecimal ret04BQuarantine(Context c,UUID sku) {
+        return jdbc.queryForObject("""
+                SELECT quantity FROM crm.inv_return_quarantine_balance
+                WHERE tenant_id=? AND warehouse_id=? AND item_id=?
+                """,BigDecimal.class,c.tenant(),c.warehouse(),sku);
+    }
+
+    private SalesReturnQuarantineResolutionService.Resolved ret04BResolve(Ret04B f,
+            boolean restock,long version,String evidence,String requestKey) {
+        var c=f.c();
+        return quarantineResolution.resolve(c.staff(),c.tenant(),c.warehouse(),f.returnId(),
+                version,restock?SalesReturnQuarantineResolutionService.Action.RESTOCK:
+                        SalesReturnQuarantineResolutionService.Action.DISPOSE,evidence,requestKey);
+    }
+
+    private void ret04BAssertUnchanged(Ret04B f,
+            java.util.Map<String,List<String>> expected) {
+        assertThat(ret04BSnapshot(f.c())).isEqualTo(expected);
+        assertExactlyOneHandover(f.c(),f.order(),1);
+    }
+
+    private void ret04BAssertResolved(Ret04B f,boolean restock,
+            SalesReturnQuarantineResolutionService.Resolved result) {
+        var c=f.c();String target=restock?"RESTOCKED":"DISPOSED";
+        assertThat(result.returnId()).isEqualTo(f.returnId());
+        assertThat(result.state()).isEqualTo(target);
+        assertThat(result.version()).isEqualTo(7L);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,String.class,c.tenant(),f.returnId())).isEqualTo(target);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.sales_return_request WHERE tenant_id=? AND id=?
+                """,Long.class,c.tenant(),f.returnId())).isEqualTo(7L);
+        var rows=jdbc.queryForList("""
+                SELECT id,action_code,request_key,evidence_ref,stock_movement_id,
+                       quantity,before_quantity,after_quantity
+                FROM crm.sales_return_quarantine_resolution WHERE tenant_id=? AND return_id=?
+                """,c.tenant(),f.returnId());
+        assertThat(rows).hasSize(1);
+        var row=rows.getFirst();
+        assertThat(row).containsEntry("id",result.resolutionId())
+                .containsEntry("action_code",restock?"RESTOCK":"DISPOSE")
+                .containsEntry("request_key",f.requestKey()).containsEntry("evidence_ref","QA_B_EVIDENCE");
+        assertThat(row.get("stock_movement_id")).isEqualTo(result.stockMovementId());
+        assertThat((BigDecimal)row.get("quantity")).isEqualByComparingTo("2");
+        assertThat((BigDecimal)row.get("before_quantity")).isEqualByComparingTo("2");
+        assertThat((BigDecimal)row.get("after_quantity")).isEqualByComparingTo("0");
+        assertThat(ret04BQuarantine(c,f.sku())).isEqualByComparingTo("0");
+        assertThat(stock(c,f.sku(),"on_hand")).isEqualByComparingTo(
+                f.stockBefore().add(BigDecimal.valueOf(restock?2:0)));
+        String movementKey="R07_"+f.returnId().toString().replace("-","");
+        var movements=jdbc.queryForList("""
+                SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after
+                FROM crm.inv_stock_movement WHERE tenant_id=? AND request_key=?
+                """,c.tenant(),movementKey);
+        if(restock){
+            assertThat(result.stockMovementId()).isNotNull();
+            assertThat(movements).hasSize(1);
+            var m=movements.getFirst();
+            assertThat(m).containsEntry("id",result.stockMovementId())
+                    .containsEntry("location_id",c.warehouse()).containsEntry("item_id",f.sku());
+            assertThat((BigDecimal)m.get("delta_quantity")).isEqualByComparingTo("2");
+            assertThat((BigDecimal)m.get("balance_before")).isEqualByComparingTo(f.stockBefore());
+            assertThat((BigDecimal)m.get("balance_after")).isEqualByComparingTo(f.stockBefore().add(BigDecimal.valueOf(2)));
+        }else{
+            assertThat(result.stockMovementId()).isNull();
+            assertThat(movements).isEmpty();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=? AND from_state='QUARANTINED'
+                """,Integer.class,c.tenant(),f.returnId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_return_event
+                WHERE tenant_id=? AND return_id=? AND from_state='QUARANTINED'
+                  AND to_state=? AND request_key=? AND expected_row_version=6
+                """,Integer.class,c.tenant(),f.returnId(),target,f.requestKey())).isEqualTo(1);
+        var after=ret04BSnapshot(c);
+        assertThat(after.get("inv_stock_movement")).hasSize(
+                f.before().get("inv_stock_movement").size()+(restock?1:0));
+        assertThat(after.get("inv_stock_movement")).containsAll(f.before().get("inv_stock_movement"));
+        assertThat(after.get("sales_return_event")).hasSize(f.before().get("sales_return_event").size()+1);
+        assertThat(after.get("sales_return_event")).containsAll(f.before().get("sales_return_event"));
+        assertThat(after.get("sales_return_quarantine_resolution")).hasSize(1);
+        for(String table:f.before().keySet()){
+            if(!List.of("inv_stock_balance","inv_stock_movement","inv_return_quarantine_balance",
+                    "sales_return_request","sales_return_event","sales_return_quarantine_resolution").contains(table))
+                assertThat(after.get(table)).as("immutable "+table).isEqualTo(f.before().get(table));
+        }
+        if(!restock)assertThat(after.get("inv_stock_balance")).isEqualTo(f.before().get("inv_stock_balance"));
+        assertExactlyOneHandover(c,f.order(),1);
+    }
+
+    @Test void qr07R25CoreRet04B01RestockDistinctKeys() throws Exception { ret04BRace(true,false); }
+    @Test void qr07R25CoreRet04B02DisposeDistinctKeys() throws Exception { ret04BRace(false,false); }
+    @Test void qr07R25CoreRet04B03RestockIdenticalReplay() throws Exception { ret04BRace(true,true); }
+    @Test void qr07R25CoreRet04B04DisposeIdenticalReplay() throws Exception { ret04BRace(false,true); }
+
+    private void ret04BRace(boolean restock,boolean replay) throws Exception {
+        var f=ret04BFixture();
+        var first=new java.util.concurrent.atomic.AtomicReference<SalesReturnQuarantineResolutionService.Resolved>();
+        var second=new java.util.concurrent.atomic.AtomicReference<SalesReturnQuarantineResolutionService.Resolved>();
+        String otherKey=replay?f.requestKey():key();
+        PgCommitOrderEvidence.run(jdbc,transactionManager,
+                ()->first.set(ret04BResolve(f,restock,6,"QA_B_EVIDENCE",f.requestKey())),
+                ()->second.set(ret04BResolve(f,restock,6,"QA_B_EVIDENCE",otherKey)),
+                IllegalStateException.class,replay?null:"QUARANTINE_REPLAY_CONFLICT");
+        assertThat(first.get()).isNotNull();
+        if(replay)assertThat(second.get()).isEqualTo(first.get());
+        else assertThat(second.get()).isNull();
+        ret04BAssertResolved(f,restock,first.get());
+    }
+
+    @Test void qr07R25CoreRet04B05ChangedAction() throws Exception { ret04BConflict(5); }
+    @Test void qr07R25CoreRet04B06ChangedEvidence() throws Exception { ret04BConflict(6); }
+    @Test void qr07R25CoreRet04B07StaleVersionBeforeResolution() throws Exception {
+        var f=ret04BFixture();
+        assertThatThrownBy(()->ret04BResolve(f,true,5,"QA_B_EVIDENCE",f.requestKey()))
+                .isInstanceOf(IllegalStateException.class).hasMessage("QUARANTINE_STATE_VERSION_CONFLICT");
+        ret04BAssertUnchanged(f,f.before());
+    }
+    @Test void qr07R25CoreRet04B08ChangedVersionAfterResolution() throws Exception { ret04BConflict(8); }
+
+    private void ret04BConflict(int variant) throws Exception {
+        var f=ret04BFixture();
+        var first=ret04BResolve(f,true,6,"QA_B_EVIDENCE",f.requestKey());
+        ret04BAssertResolved(f,true,first);
+        var after=ret04BSnapshot(f.c());
+        assertThatThrownBy(()->ret04BResolve(f,variant!=5,variant==8?7:6,
+                variant==6?"QA_B_CHANGED":"QA_B_EVIDENCE",f.requestKey()))
+                .isInstanceOf(IllegalStateException.class).hasMessage("QUARANTINE_REPLAY_CONFLICT");
+        ret04BAssertUnchanged(f,after);
+    }
+
+    @Test void qr07R25CoreRet04B09ResolutionInsertRollback() throws Exception { ret04BFault(false,false); }
+    @Test void qr07R25CoreRet04B10TerminalEventInsertRollback() throws Exception { ret04BFault(true,false); }
+    @Test void qr07R25CoreRet04B11ResolutionInsertSameKeyRetry() throws Exception { ret04BFault(false,true); }
+    @Test void qr07R25CoreRet04B12TerminalEventInsertSameKeyRetry() throws Exception { ret04BFault(true,true); }
+
+    private void ret04BFault(boolean terminalEvent,boolean retry) throws Exception {
+        var f=ret04BFixture();var c=f.c();
+        String suffix=UUID.randomUUID().toString().replace("-","");
+        String fn="ret04b_fn_"+suffix,trg="ret04b_tr_"+suffix;
+        String table=terminalEvent?"sales_return_event":"sales_return_quarantine_resolution";
+        String marker=terminalEvent?"RET04B_TERMINAL_EVENT_FAULT":"RET04B_RESOLUTION_FAULT";
+        // The failure marker is reachable only after independent in-transaction
+        // SQL has observed the stock credit, movement, quarantine debit and
+        // (at the later failpoint) saved resolution and terminal state.
+        String function="""
+                CREATE FUNCTION crm.%s() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                  IF NEW.tenant_id='%s'::uuid AND NEW.return_id='%s'::uuid THEN
+                    IF NOT EXISTS (SELECT 1 FROM crm.inv_stock_movement
+                        WHERE tenant_id=NEW.tenant_id AND request_key='%s'
+                          AND item_id='%s'::uuid AND location_id='%s'::uuid AND delta_quantity=2)
+                       OR NOT EXISTS (SELECT 1 FROM crm.inv_stock_balance
+                        WHERE tenant_id=NEW.tenant_id AND location_id='%s'::uuid
+                          AND item_id='%s'::uuid AND on_hand=%s)
+                       OR NOT EXISTS (SELECT 1 FROM crm.inv_return_quarantine_balance
+                        WHERE tenant_id=NEW.tenant_id AND warehouse_id='%s'::uuid
+                          AND item_id='%s'::uuid AND quantity=0)
+                       OR NOT EXISTS (SELECT 1 FROM crm.sales_return_request
+                        WHERE tenant_id=NEW.tenant_id AND id=NEW.return_id
+                          AND state='%s' AND row_version=%d)
+                       OR (SELECT count(*) FROM crm.sales_return_quarantine_resolution
+                        WHERE tenant_id=NEW.tenant_id AND return_id=NEW.return_id)<>%d
+                    THEN RAISE EXCEPTION 'RET04B_FAILPOINT_PRECONDITION_MISSING'; END IF;
+                    RAISE EXCEPTION '%s';
+                  END IF;
+                  RETURN NEW;
+                END; $$
+                """.formatted(fn,c.tenant(),f.returnId(),
+                "R07_"+f.returnId().toString().replace("-",""),f.sku(),c.warehouse(),
+                c.warehouse(),f.sku(),f.stockBefore().add(BigDecimal.valueOf(2)).toPlainString(),
+                c.warehouse(),f.sku(),terminalEvent?"RESTOCKED":"QUARANTINED",
+                terminalEvent?7:6,terminalEvent?1:0,marker);
+        jdbc.execute(function);
+        try {
+            jdbc.execute("CREATE TRIGGER "+trg+" BEFORE INSERT ON crm."+table+
+                    " FOR EACH ROW EXECUTE FUNCTION crm."+fn+"()");
+            assertThatThrownBy(()->ret04BResolve(f,true,6,"QA_B_EVIDENCE",f.requestKey()))
+                    .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                    .satisfies(ex->{
+                        Throwable root=ex;
+                        while(root.getCause()!=null)root=root.getCause();
+                        assertThat(root).isInstanceOf(java.sql.SQLException.class);
+                        var sql=(java.sql.SQLException)root;
+                        assertThat(sql.getSQLState()).isEqualTo("P0001");
+                        assertThat(sql.getMessage()).contains(marker)
+                                .doesNotContain("RET04B_FAILPOINT_PRECONDITION_MISSING");
+                    });
+            ret04BAssertUnchanged(f,f.before());
+        }finally{
+            try{jdbc.execute("DROP TRIGGER IF EXISTS "+trg+" ON crm."+table);}
+            finally{jdbc.execute("DROP FUNCTION IF EXISTS crm."+fn+"()");}
+        }
+        if(retry){
+            var resolved=ret04BResolve(f,true,6,"QA_B_EVIDENCE",f.requestKey());
+            ret04BAssertResolved(f,true,resolved);
+            var after=ret04BSnapshot(c);
+            assertThat(ret04BResolve(f,true,6,"QA_B_EVIDENCE",f.requestKey())).isEqualTo(resolved);
+            ret04BAssertUnchanged(f,after);
+        }
+    }
+
     @Test void qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross()
             throws Exception {
         requirePostgres();
