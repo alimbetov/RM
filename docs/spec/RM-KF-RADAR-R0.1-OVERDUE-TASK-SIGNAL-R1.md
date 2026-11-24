@@ -253,3 +253,6 @@ R0.1A–D original OverdueSignalPage unchanged and may be qualified independentl
 User-confirmed: green for completed 50% early and on time, filters, pagination, Outlook-style calendar. Proposed pending review: createdAt/effective deadline formula, original-deadline parallel indicator, dark vs light green, other colors, due-soon 24h, range limits, perspective and view defaults, no calendar drag/drop or external sync. No automatic employee KPI or SLA claim.
 
 **Revision R1.1:** additive section 11; 36 original + 24 new scenario families; narrow read-only extension, UI design deferred. No Java/SQL/CI changes.
+
+
+**Связанное ТЗ (документальный задел, без изменения R0.1 scope):** [RM-KF-RADAR-R0.2 — Smart Deadline Reminder Text](RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md) добавляет проектирование текстовых индикаторов срока. Прежнее обозначение R0.2 для истечения CRM-договоров не означает его активацию; отдельное решение и идентификатор требуются. R0.2 implementation remains PARKED pending explicit scope decision.

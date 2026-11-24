@@ -246,5 +246,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | 2026-11-24 | R1.1 | Добавлена IDEA-17: техническая адаптация FIN Analyzer → RM Intelligence (9 логических компонентов, P1/P2/P3, независимые продукты, 32 сценария будущей приёмки); отдельный документ FIN-ADAPT-R1. |
 | 2026-11-24 | R1.2 | CR-MVP-KF-RADAR-01: только R0.1 Overdue Task Signal разрешён к сервисной реализации, все прочие идеи остаются PARKED. |
 | 2026-11-24 | R1.3 | CR-MVP-KF-RADAR-01A: зелёные классы досрочного/своевременного выполнения, фильтры, пагинация, календарный read contract R1.1; UI design only until G2. |
+| 2026-11-24 | R1.4 | Создано [RM-KF-RADAR-R0.2 — Smart Deadline Reminder Text](../spec/RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md), SPECIFIED / DOC-ONLY, отдельный допуск реализации требуется. CRM contract-expiration остаётся PARKED. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.
