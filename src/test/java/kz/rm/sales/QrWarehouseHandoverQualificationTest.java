@@ -3423,12 +3423,14 @@ class QrWarehouseHandoverQualificationTest {
         if(directory==null||directory.isBlank())return;
         String method=StackWalker.getInstance().walk(frames->frames
                 .map(StackWalker.StackFrame::getMethodName)
-                .filter(name->name.startsWith("qr07R25CoreRet04")||name.startsWith("qr07R25StrictRet04E")).findFirst().orElse(null));
+                .filter(name->name.startsWith("qr07R25CoreRet04")||name.startsWith("qr07R25StrictRet04E")||name.startsWith("qr07R25ConcurrentRet04E")).findFirst().orElse(null));
         if(method==null)return;
         String sha=System.getenv("GITHUB_SHA");
         if(sha==null||!sha.matches("[0-9a-f]{40}"))throw new AssertionError("RET04D SHA missing");
         try{
-            var dir=method.startsWith("qr07R25StrictRet04E")
+            var dir=method.startsWith("qr07R25ConcurrentRet04E")
+                    ?java.nio.file.Path.of(directory).resolveSibling("revocation-e3b").resolve(method)
+                    :method.startsWith("qr07R25StrictRet04E")
                     ?java.nio.file.Path.of(directory).resolveSibling("identity-e3").resolve(method)
                     :java.nio.file.Path.of(directory,method);
             java.nio.file.Files.createDirectories(dir);
@@ -4101,6 +4103,137 @@ class QrWarehouseHandoverQualificationTest {
             ret04EDenyBoth(f,ret04EActor(bearer),"Active organization membership required");
         }else throw new AssertionError("Unknown E.3A case");
         ret04BAssertUnchanged(f,f.before());
+    }
+
+    // E.3B: both committed orders of action-specific IAM revocation.
+    @Test void qr07R25ConcurrentRet04E25RestockThenWarehouseRevoke() throws Exception { ret04EConcurrentRevocation(25); }
+    @Test void qr07R25ConcurrentRet04E26WarehouseRevokeThenRestock() throws Exception { ret04EConcurrentRevocation(26); }
+    @Test void qr07R25ConcurrentRet04E27DisposeThenWarehouseRevoke() throws Exception { ret04EConcurrentRevocation(27); }
+    @Test void qr07R25ConcurrentRet04E28WarehouseRevokeThenDispose() throws Exception { ret04EConcurrentRevocation(28); }
+    @Test void qr07R25ConcurrentRet04E29RestockThenPermissionRevoke() throws Exception { ret04EConcurrentRevocation(29); }
+    @Test void qr07R25ConcurrentRet04E30PermissionRevokeThenRestock() throws Exception { ret04EConcurrentRevocation(30); }
+    @Test void qr07R25ConcurrentRet04E31DisposeThenPermissionRevoke() throws Exception { ret04EConcurrentRevocation(31); }
+    @Test void qr07R25ConcurrentRet04E32PermissionRevokeThenDispose() throws Exception { ret04EConcurrentRevocation(32); }
+
+    private record Ret04RevocationState(String scope,long scopeVersion,int grant,int postGrant,
+                                        int otherGrant,int warehouseEvents,int warehouseOwnerEvents,
+                                        int permissionEvents,int permissionOwnerEvents) {}
+
+    private Ret04RevocationState ret04ERevocationState(Context c,UUID role,DomainPermission permission){
+        UUID tenant=c.tenant(),warehouse=c.warehouse(),staff=c.staff().userId(),owner=c.owner().userId();
+        var scope=jdbc.queryForMap("""
+                SELECT state,row_version FROM public.iam_warehouse_staff_scope
+                WHERE tenant_id=? AND warehouse_id=? AND actor_user_id=?
+                """,tenant,warehouse,staff);
+        String grantSql="""
+                SELECT count(*) FROM public.iam_tenant_role_permission
+                WHERE tenant_id=? AND role_id=? AND permission_code=?
+                """;
+        String warehouseSql="""
+                SELECT count(*) FROM crm.audit_event
+                WHERE tenant_id=? AND entity_id=? AND action_code='WAREHOUSE_SCOPE_REVOKED'
+                """;
+        String eventSql="""
+                SELECT count(*) FROM public.iam_tenant_rbac_event
+                WHERE tenant_id=? AND role_id=? AND permission_code=? AND action_code='GRANT_REVOKED'
+                """;
+        return new Ret04RevocationState((String)scope.get("state"),((Number)scope.get("row_version")).longValue(),
+                jdbc.queryForObject(grantSql,Integer.class,tenant,role,permission.name()),
+                jdbc.queryForObject(grantSql,Integer.class,tenant,role,DomainPermission.SALES_RETURN_POST.name()),
+                jdbc.queryForObject(grantSql,Integer.class,tenant,role,
+                        (permission==DomainPermission.INVENTORY_RECEIVE?DomainPermission.INVENTORY_ADJUST:
+                                DomainPermission.INVENTORY_RECEIVE).name()),
+                jdbc.queryForObject(warehouseSql,Integer.class,tenant,warehouse),
+                jdbc.queryForObject(warehouseSql+" AND actor_user_id=?",Integer.class,tenant,warehouse,owner),
+                jdbc.queryForObject(eventSql,Integer.class,tenant,role,permission.name()),
+                jdbc.queryForObject(eventSql+" AND actor_user_id=?",Integer.class,tenant,role,permission.name(),owner));
+    }
+
+    private void ret04ERecordRevocation(Context c,UUID role,DomainPermission permission,
+                                       String phase,Ret04RevocationState state){
+        String directory=System.getenv("RM_RET04_EVIDENCE_DIR");
+        if(directory==null||directory.isBlank())return;
+        String method=StackWalker.getInstance().walk(frames->frames.map(StackWalker.StackFrame::getMethodName)
+                .filter(name->name.startsWith("qr07R25ConcurrentRet04E")).findFirst().orElseThrow());
+        String sha=System.getenv("GITHUB_SHA");
+        if(sha==null||!sha.matches("[0-9a-f]{40}"))throw new AssertionError("RET04E3B SHA missing");
+        try{
+            var dir=java.nio.file.Path.of(directory).resolveSibling("revocation-iam").resolve(method);
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.write(dir.resolve(phase+".tsv"),List.of(
+                    "sha\t"+sha,"method\t"+method,"phase\t"+phase,"tenant\t"+c.tenant(),
+                    "owner\t"+c.owner().userId(),"staff\t"+c.staff().userId(),"warehouse\t"+c.warehouse(),
+                    "role\t"+role,"permission\t"+permission.name(),
+                    "scope\t"+state.scope(),"scopeVersion\t"+state.scopeVersion(),
+                    "grant\t"+state.grant(),"postGrant\t"+state.postGrant(),"otherGrant\t"+state.otherGrant(),
+                    "warehouseEvents\t"+state.warehouseEvents(),"warehouseOwnerEvents\t"+state.warehouseOwnerEvents(),
+                    "permissionEvents\t"+state.permissionEvents(),"permissionOwnerEvents\t"+state.permissionOwnerEvents()),
+                    java.nio.charset.StandardCharsets.UTF_8,java.nio.file.StandardOpenOption.CREATE_NEW);
+        }catch(java.io.IOException ex){throw new AssertionError("RET04E3B IAM evidence write failed",ex);}
+    }
+
+    private void ret04EConcurrentRevocation(int scenario) throws Exception {
+        var f=ret04BFixture();var c=f.c();
+        boolean restock=scenario==25||scenario==26||scenario==29||scenario==30;
+        boolean resolutionFirst=scenario%2==1;
+        boolean warehouseRevoke=scenario<=28;
+        UUID staff=c.staff().userId(),role=assignedRole(c);
+        DomainPermission permission=restock?DomainPermission.INVENTORY_RECEIVE:DomainPermission.INVENTORY_ADJUST;
+        String reason=warehouseRevoke?"WAREHOUSE_SCOPE_REQUIRED":"Tenant RBAC permission denied";
+        String bearer=signedAccess(staff);
+        var actor=ret04EActor(bearer);
+        assertThat(actor.userId()).isEqualTo(staff);
+        var initial=ret04ERevocationState(c,role,permission);
+        assertThat(initial).isEqualTo(new Ret04RevocationState("ACTIVE",initial.scopeVersion(),1,1,1,0,0,0,0));
+        ret04ERecordRevocation(c,role,permission,"before",initial);
+        var result=new java.util.concurrent.atomic.AtomicReference<SalesReturnQuarantineResolutionService.Resolved>();
+        Runnable resolve=()->result.set(ret04ECommand(f,actor,c.tenant(),c.warehouse(),f.returnId(),restock));
+        Runnable revoke=()->{
+            if(warehouseRevoke)scopes.revoke(c.owner(),c.tenant(),c.warehouse(),staff);
+            else roles.revoke(c.owner(),c.tenant(),role,permission);
+        };
+        PgCommitOrderEvidence.runWithObservation(jdbc,transactionManager,
+                resolutionFirst?resolve:revoke,resolutionFirst?revoke:resolve,
+                resolutionFirst?null:reason,()->{
+                    // Independent parent backend sees only committed rows while first
+                    // transaction holds the second at its actual PostgreSQL lock.
+                    ret04BAssertUnchanged(f,f.before());
+                    var blocked=ret04ERevocationState(c,role,permission);
+                    assertThat(blocked).isEqualTo(initial);
+                    ret04ERecordRevocation(c,role,permission,"blocked",blocked);
+                });
+        if(resolutionFirst){
+            assertThat(result.get()).isNotNull();
+            ret04BAssertResolved(f,restock,result.get());
+        }else{
+            assertThat(result.get()).isNull();
+            ret04BAssertUnchanged(f,f.before());
+        }
+        var committed=ret04ERevocationState(c,role,permission);
+        assertThat(committed).isEqualTo(warehouseRevoke
+                ?new Ret04RevocationState("REVOKED",initial.scopeVersion()+1,1,1,1,1,1,0,0)
+                :new Ret04RevocationState("ACTIVE",initial.scopeVersion(),0,1,1,0,0,1,1));
+        ret04ERecordRevocation(c,role,permission,"committed",committed);
+        var after=ret04BSnapshot(c);
+        String subject=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,staff);
+        // Explicit token_use ensures a distinct, valid newly issued bearer even
+        // when the original and fresh token were minted within the same second.
+        String fresh=identityAuthority.issue(subject,"Bearer",SignedJwtTestAuthority.ISSUER,
+                SignedJwtTestAuthority.AUDIENCE,Instant.now().plusSeconds(600).getEpochSecond(),
+                SignedJwtTestAuthority.SigningKey.TRUSTED,"access",null,null);
+        if(fresh.equals(bearer))throw new AssertionError("Distinct access token required");
+        var principals=List.of(actor,ret04EActor(bearer),ret04EActor(fresh));
+        var variants=List.of("existing-principal","original-bearer","fresh-bearer");
+        for(int i=0;i<principals.size();i++){
+            var principal=principals.get(i);
+            assertThat(principal.userId()).isEqualTo(staff);
+            ret04EDenied(()->ret04ECommand(f,principal,c.tenant(),c.warehouse(),f.returnId(),restock),reason);
+            ret04BAssertUnchanged(f,after);
+            assertThat(ret04ERevocationState(c,role,permission)).isEqualTo(committed);
+            System.out.println("RET04E3B replay="+variants.get(i)+" denied reason="+reason);
+        }
+        ret04ERecordRevocation(c,role,permission,"after-replay",ret04ERevocationState(c,role,permission));
     }
 
     @Test void qr07R25QuarantineResolutionTenantAndWarehouseScopeCannotCross()

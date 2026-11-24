@@ -18,6 +18,11 @@ final class PgCommitOrderEvidence {
             Runnable first,Runnable second,Class<? extends RuntimeException> denialType,String expectedDenial) throws Exception {
         runBoth(jdbc,manager,first,second,denialType,null,expectedDenial);
     }
+    /** Read committed SQL oracles while the two transactions are visibly blocked. */
+    static void runWithObservation(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            Runnable first,Runnable second,String expectedDenial,Runnable observe) throws Exception {
+        runBoth(jdbc,manager,first,second,SecurityException.class,null,expectedDenial,observe);
+    }
     static void runDeniedFirst(JdbcTemplate jdbc,PlatformTransactionManager manager,
             Runnable first,Runnable second,Class<? extends RuntimeException> denialType,String firstDenial) throws Exception {
         runBoth(jdbc,manager,first,second,denialType,java.util.Objects.requireNonNull(firstDenial),null);

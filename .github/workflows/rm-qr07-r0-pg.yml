@@ -20,6 +20,9 @@ on:
       - '.github/scripts/test_verify_ret04_evidence.py'
       - '.github/scripts/verify_ret04_identity_e3a.py'
       - '.github/scripts/test_verify_ret04_identity_e3a.py'
+      - '.github/scripts/verify_ret04_revocation_e3b.py'
+      - '.github/scripts/test_verify_ret04_revocation_e3b.py'
+      - 'src/test/java/kz/rm/sales/PgCommitOrderEvidence.java'
       - 'src/main/java/kz/rm/iam/GlobalAccountStatusService.java'
       - 'src/main/java/kz/rm/iam/TenantAccessStatusService.java'
       - 'src/main/java/kz/rm/iam/TenantRoleService.java'
@@ -84,6 +87,10 @@ jobs:
         run: |
           python3 -m unittest discover -s .github/scripts -p 'test_verify_ret04_identity_e3a.py' -v
           python3 .github/scripts/verify_ret04_identity_e3a.py --evidence target/qr07-r0-evidence --xml target/surefire-reports/TEST-kz.rm.sales.QrWarehouseHandoverQualificationTest.xml
+      - name: Verify E3B concurrent revocation evidence
+        run: |
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_ret04_revocation_e3b.py' -v
+          python3 .github/scripts/verify_ret04_revocation_e3b.py --evidence target/qr07-r0-evidence --xml target/surefire-reports/TEST-kz.rm.sales.QrWarehouseHandoverQualificationTest.xml
       - name: Preserve migration and service test evidence
         if: always()
         uses: actions/upload-artifact@v4
