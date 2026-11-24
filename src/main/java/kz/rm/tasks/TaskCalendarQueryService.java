@@ -137,16 +137,21 @@ public class TaskCalendarQueryService {
     record QueryPlan(String sql,org.springframework.jdbc.core.PreparedStatementSetter bind){}
     static QueryPlan prepareQuery(boolean pg,AppliedFilter f,Instant cutoff,UUID tenant,
                                   UUID user,int limit,Cursor after){
+        return prepareQuery(pg,pg,f,cutoff,tenant,user,limit,after);
+    }
+    static QueryPlan prepareQuery(boolean pg,boolean optimize,AppliedFilter f,Instant cutoff,UUID tenant,
+                                  UUID user,int limit,Cursor after){
+        if(optimize&&!pg)throw new IllegalArgumentException("PG_OPTIMIZATION_ONLY");
         String date=f.dateBasis()==DateBasis.DUE?"due_at":"completed_at";
         // Only closed enum-selected SQL fragments. All values bound.
         var states=f.states().stream().sorted().toList();
         var timing=f.timeliness()==null?List.<TaskTimingSnapshot.Timeliness>of():f.timeliness().stream().sorted().toList();
         // DUE without a timing predicate needs no history for membership.
-        boolean simple=pg&&f.dateBasis()==DateBasis.DUE&&timing.isEmpty();
-        String relation=pg?(simple?
+        boolean simple=optimize&&f.dateBasis()==DateBasis.DUE&&timing.isEmpty();
+        String relation=optimize?(simple?
             "SELECT t.id,t.status,t.due_at,t.created_by,t.assignee_user_id FROM crm.task_item t WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)":
-            TaskTimingEngine.calendarMembershipRelation()):TaskTimingEngine.fullRelation(false,false);
-        StringBuilder sql=new StringBuilder("SELECT "+(pg?"cal.id":"cal.*")+", "+date+
+            TaskTimingEngine.calendarMembershipRelation()):TaskTimingEngine.fullRelation(pg,false);
+        StringBuilder sql=new StringBuilder("SELECT "+(optimize?"cal.id":"cal.*")+", "+date+
             " AS selected_date FROM ("+relation+") cal WHERE status IN ("+marks(states.size())+")");
         if(f.perspective()==Perspective.MINE_CREATED)sql.append(" AND created_by=?");
         else if(f.perspective()==Perspective.MINE_ASSIGNED)sql.append(" AND assignee_user_id=?");
@@ -163,7 +168,7 @@ public class TaskCalendarQueryService {
         sql.append(" LIMIT ?");
         // Materialize fully filtered keys; reconstruct full history for
         // those keys in the same PostgreSQL statement and MVCC snapshot.
-        String statement=pg?
+        String statement=optimize?
             "SELECT result.* FROM (WITH page_keys AS MATERIALIZED ("+sql+"), enriched AS MATERIALIZED ("+
                 TaskTimingEngine.fullRelation(true,false,true)+") "+
                 "SELECT enriched.*,k.selected_date FROM page_keys k JOIN enriched ON enriched.id=k.id) result "+
@@ -186,7 +191,7 @@ public class TaskCalendarQueryService {
                 }
             }
             ps.setInt(i++,limit+1);
-            if(pg){timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);ps.setObject(i++,tenant);
+            if(optimize){timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);ps.setObject(i++,tenant);
                 ps.setObject(i++,user);ps.setObject(i,user);}
         });
     }

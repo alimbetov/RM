@@ -137,7 +137,10 @@ class TaskCalendarQualificationTest {
             DateBasis.DUE,LocalDate.of(2026,11,1),LocalDate.of(2026,11,30),"UTC",false);
         var p=page(t,f,1,null);
         assertThat(pageIds(p)).containsExactly(first);assertThat(p.hasMore()).isTrue();
-        assertThat(pageIds(page(t,f,1,p.nextCursor()))).containsExactly(second);
+        var next=page(t,f,1,p.nextCursor());
+        assertThat(pageIds(next)).containsExactly(second);
+        assertSameAsFullPg(t,p,1,null);
+        assertSameAsFullPg(t,next,1,p.nextCursor());
     }
     @Test void f02PerspectiveAndDefaultArchivedExclusion()throws Exception{
         var t=tenant();var due=BASE.plusSeconds(100);
@@ -155,6 +158,18 @@ class TaskCalendarQualificationTest {
         var onlyArchive=new Filter(null,Set.of(TaskState.ARCHIVED),null,n.dateBasis(),n.dateFrom(),n.dateTo(),n.zone(),false);
         assertThat(pageIds(page(t,onlyArchive,100,null))).containsExactly(archived);
     }
+    private void assertSameAsFullPg(Tenant t,Page optimized,int limit,Cursor after)throws Exception{
+        try(var connection=dataSource.getConnection()){
+            if(!"PostgreSQL".equals(connection.getMetaData().getDatabaseProductName()))return;
+        }
+        var query=TaskCalendarQueryService.prepareQuery(true,false,optimized.appliedFilter(),
+            optimized.evaluatedAt(),t.id(),t.staff().userId(),limit,after);
+        List<Item> full=jdbc.query(query.sql(),query.bind(),(rs,n)->new Item(
+            TaskTimingQueryService.map(rs),TaskTitlePolicy.calendarCode(rs.getString("title")),
+            TaskTimingQueryService.instant(rs,"selected_date")));
+        assertThat(optimized.items()).containsExactlyElementsOf(full.subList(0,Math.min(limit,full.size())));
+        assertThat(optimized.hasMore()).isEqualTo(full.size()>limit);
+    }
     @Test void f03DueVersusCompletedDateAndEvidence()throws Exception{
         var t=tenant();Instant due=BASE.plusSeconds(3*86400);
         UUID done=completed(t,due,BASE.plusSeconds(86400));
@@ -167,6 +182,11 @@ class TaskCalendarQualificationTest {
         assertThat(pageIds(p)).containsExactly(done);
         assertThat(p.items().getFirst().selectedDate()).isEqualTo(BASE.plusSeconds(86400));
         assertThat(p.items().getFirst().timing()).isEqualTo(timing.getMine(t.staff(),t.id(),done).timing());
+        assertSameAsFullPg(t,p,100,null);
+        assertSameAsFullPg(t,page(t,d,100,null),100,null);
+        var early=new Filter(null,null,Set.of(EARLY_50),DateBasis.COMPLETED,
+            f.dateFrom(),f.dateTo(),f.zone(),false);
+        assertSameAsFullPg(t,page(t,early,100,null),100,null);
     }
     @Test void f04HalfOpenLeapYearAndMonthBoundaries()throws Exception{
         var t=tenant();Instant start=Instant.parse("2028-02-29T00:00:00Z"),end=Instant.parse("2028-03-01T00:00:00Z");

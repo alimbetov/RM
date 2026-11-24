@@ -15,6 +15,11 @@ final class TaskTimingEngine {
               +b+" AT TIME ZONE 'UTC') AS NUMERIC(30,6))";
     }
 
+    private static String activeOverduePredicate() {
+        return "status IN ('OPEN','IN_PROGRESS','BLOCKED') AND assignee_user_id IS NOT NULL "+
+               "AND due_at<evaluated_at";
+    }
+
     static String activeClassification() {
         return """
             CASE WHEN status='CANCELLED' THEN 'CANCELLED'
@@ -22,11 +27,11 @@ final class TaskTimingEngine {
                  WHEN status='QUEUED' THEN 'QUEUED'
                  WHEN status NOT IN ('OPEN','IN_PROGRESS','BLOCKED') THEN 'UNKNOWN'
                  WHEN due_at IS NULL OR assignee_user_id IS NULL THEN 'UNSCHEDULED'
-                 WHEN d<0 THEN 'OVERDUE'
+                 WHEN %s THEN 'OVERDUE'
                  WHEN d<=86400000000 THEN 'DUE_SOON'
                  WHEN d>86400000000 THEN 'ACTIVE'
                  ELSE 'UNKNOWN' END
-            """;
+            """.formatted(activeOverduePredicate());
     }
 
     static String activeRelation(boolean pg) {
@@ -38,17 +43,35 @@ final class TaskTimingEngine {
             FROM (
                 SELECT f.*, %s AS timeliness
                 FROM (
-                    SELECT id,status,due_at,row_version,assignee_user_id,CAST(NULL AS NUMERIC(30,6)) AS saved,
-                           %s AS d
+                    SELECT id,status,due_at,row_version,assignee_user_id,c.evaluated_at,
+                           CAST(NULL AS NUMERIC(30,6)) AS saved,%s AS d
                     FROM crm.task_item
+                    CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
                     WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)
                 ) AS f
             ) AS classified
             """.formatted(direction(), magnitude(), severity(), activeClassification(),
-                signedMicros(pg,"CAST(? AS TIMESTAMP(6) WITH TIME ZONE)","due_at"));
+                signedMicros(pg,"evaluated_at","due_at"));
     }
 
     static String overduePage(boolean pg, boolean hasCursor) {
+        if(pg){
+            // Exact membership predicate before LIMIT; duration only for returned
+            // keys. Native timestamp comparison avoids numeric interval arithmetic
+            // and repeated CASE evaluation over every candidate.
+            return """
+                SELECT id,status,due_at,row_version,-d AS magnitude_micros,%s AS severity
+                FROM (SELECT keys.*, 'OVERDUE' AS timeliness,%s AS d
+                      FROM (SELECT id,status,due_at,row_version,c.evaluated_at
+                            FROM crm.task_item
+                            CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
+                            WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)
+                              AND (%s) %s
+                            ORDER BY due_at,id LIMIT ?) keys) timing
+                ORDER BY due_at,id
+                """.formatted(severity(),signedMicros(true,"evaluated_at","due_at"),
+                    activeOverduePredicate(),hasCursor?" AND (due_at>? OR (due_at=? AND id>?)) ":"");
+        }
         return "SELECT id,status,due_at,row_version,magnitude_micros,severity FROM ("+
             activeRelation(pg)+") AS timing WHERE timeliness='OVERDUE' "+
             (hasCursor?" AND (due_at>? OR (due_at=? AND id>?)) ":"")+
@@ -87,7 +110,21 @@ final class TaskTimingEngine {
     // Scope event evidence before windowing. Composite tenant/task is mandatory.
     // The previous due-change pointer ignores intervening non-deadline events.
     private static String eventSummary(boolean point,boolean pageOnly) {
-        return """
+        // For PG page enrichment, bound both the history window and previous
+        // change join to a materialized event set. The composite-key join uses
+        // existing indexes when selected by the planner. Still one statement;
+        // no client-side per-card query and no OFFSET.
+        String source=pageOnly?"page_events":"crm.task_event";
+        String scope=pageOnly?"":(" WHERE tenant_id=? "+(point?"AND task_id=?":""));
+        String prefix=pageOnly?"""
+            WITH page_events AS MATERIALIZED (
+                SELECT x.* FROM page_keys k CROSS JOIN LATERAL (
+                    SELECT ev.* FROM crm.task_event ev
+                    WHERE ev.tenant_id=? AND ev.task_id=k.id
+                ) x
+            )
+            """:"";
+        return prefix+"""
             SELECT e.tenant_id,e.task_id,COUNT(*) AS event_count,
                    MIN(e.new_version) AS first_version,MAX(e.new_version) AS last_version,
                    MAX(CASE WHEN e.new_version=e.max_version THEN e.to_state END) AS last_state,
@@ -130,11 +167,11 @@ final class TaskTimingEngine {
                              ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_change,
                     MAX(CASE WHEN action_code='DUE_DATE_CHANGED' THEN new_version END)
                         OVER(PARTITION BY tenant_id,task_id) AS last_change
-                FROM crm.task_event x WHERE tenant_id=? %s
-            ) e LEFT JOIN crm.task_event prior ON prior.tenant_id=e.tenant_id
+                FROM %s x %s
+            ) e LEFT JOIN %s prior ON prior.tenant_id=e.tenant_id
                 AND prior.task_id=e.task_id AND prior.new_version=e.prev_change
             GROUP BY e.tenant_id,e.task_id
-            """.formatted(transition(),terminalAggregates(),point?"AND task_id=?":pageOnly?"AND task_id IN (SELECT id FROM page_keys)":"");
+            """.formatted(transition(),terminalAggregates(),source,scope,source);
     }
 
 
