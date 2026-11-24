@@ -274,6 +274,125 @@ class StorefrontManagementQualificationTest {
                 .isEqualTo(StorefrontOfferService.State.DRAFT);
     }
 
+
+    @Test void sellerEditR1EmployeePriceAndPublisherRolesCannotRewriteCommittedOrders() {
+        var t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var manager=verified(t.staff());
+        var owner=verified(t.owner());
+        UUID publisherId=users.saveAndFlush(new UserAccountEntity(
+                UUID.randomUUID(),"r1-publisher-"+UUID.randomUUID(),"Publisher")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                t.organization(),publisherId,OrganizationMembershipEntity.Role.MEMBER));
+        var publishRole=roles.createRole(owner,t.tenant(),
+                "PUBR1_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Publish only");
+        roles.grant(owner,t.tenant(),publishRole.id(),
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        roles.assign(owner,t.tenant(),publisherId,publishRole.id());
+        var publisher=verified(publisherId);
+        assertThat(jdbc.queryForObject("""
+                SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
+                """,Boolean.class,t.tenant())).isTrue();
+
+        var storeDraft=storefronts.createDraft(manager,t.tenant(),
+                "r1-editor-"+UUID.randomUUID());
+        assertThatThrownBy(()->storefronts.publish(manager,t.tenant(),storeDraft.id(),0))
+                .isInstanceOf(SecurityException.class);
+        var storefront=storefronts.publish(publisher,t.tenant(),storeDraft.id(),
+                storeDraft.rowVersion());
+        UUID productId=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,t.tenant(),productId,"R1-"+UUID.randomUUID());
+        var draft=offers.createDraft(manager,t.tenant(),productId,
+                "Original offer",new java.math.BigDecimal("10.0000"),"KZT");
+        assertThatThrownBy(()->offers.publish(manager,t.tenant(),draft.id(),0))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->offers.updatePrice(publisher,t.tenant(),draft.id(),
+                "Unauthorized",new java.math.BigDecimal("11.0000"),"KZT",0))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->offers.updatePrice(owner,t.tenant(),draft.id(),
+                "Owner bypass",new java.math.BigDecimal("11.0000"),"KZT",0))
+                .isInstanceOf(SecurityException.class);
+        var live=offers.publish(publisher,t.tenant(),draft.id(),0);
+        assertThat(live.rowVersion()).isEqualTo(1);
+
+        UUID originalOrder=autoOrders.checkout(storefront.slug(),
+                "r1-buyer-"+UUID.randomUUID()+"@example.kz","r1-order-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(live.id(),2)))
+                .order().orderId();
+        var repriced=offers.updatePrice(manager,t.tenant(),live.id(),
+                "Updated offer",new java.math.BigDecimal("20.0000"),"KZT",1);
+        assertThat(repriced.rowVersion()).isEqualTo(2);
+        assertThat(offers.updatePrice(manager,t.tenant(),live.id(),
+                "Updated offer",new java.math.BigDecimal("20.00"),"KZT",2).rowVersion())
+                .isEqualTo(2);
+        var titleOnly=offers.updatePrice(manager,t.tenant(),live.id(),
+                "Updated title only",new java.math.BigDecimal("20.0000"),"KZT",2);
+        assertThat(titleOnly.rowVersion()).isEqualTo(3);
+        assertThatThrownBy(()->offers.updatePrice(manager,t.tenant(),live.id(),
+                "Stale price",new java.math.BigDecimal("99.0000"),"KZT",1))
+                .isInstanceOf(IllegalStateException.class);
+
+        UUID newOrder=autoOrders.checkout(storefront.slug(),
+                "r1-new-buyer-"+UUID.randomUUID()+"@example.kz",
+                "r1-new-order-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(live.id(),1)))
+                .order().orderId();
+
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),originalOrder))
+                .isEqualByComparingTo("10.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT title_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,String.class,t.tenant(),originalOrder)).isEqualTo("Original offer");
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),newOrder))
+                .isEqualByComparingTo("20.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT title_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,String.class,t.tenant(),newOrder)).isEqualTo("Updated title only");
+        assertThat(jdbc.queryForObject("""
+                SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,java.math.BigDecimal.class,t.tenant(),originalOrder))
+                .isEqualByComparingTo("20.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,java.math.BigDecimal.class,t.tenant(),newOrder))
+                .isEqualByComparingTo("20.0000");
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,t.tenant(),live.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=? AND old_price=10.0000
+                  AND new_price=20.0000 AND actor_user_id=?
+                """,Integer.class,t.tenant(),live.id(),t.staff())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.audit_event
+                WHERE tenant_id=? AND entity_id=?
+                  AND action_code='STOREFRONT_OFFER_PRICE_UPDATED'
+                """,Integer.class,t.tenant(),live.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),live.id())).isEqualTo(3);
+        assertThatThrownBy(()->offers.pause(publisher,t.tenant(),live.id(),3))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,String.class,t.tenant(),live.id())).isEqualTo("PUBLISHED");
+    }
+
     @Test void concurrentSellerPriceUpdateAndCheckoutCannotMixCommercialSnapshot() throws Exception {
         var t = fixture();
         grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
