@@ -1,0 +1,572 @@
+{
+  "schema": "RM-MVP-CORE-P0-EVIDENCE/v1",
+  "sourceRegistry": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+  "evidenceArtifact": "kms-postgres-surefire",
+  "scope": "SERVICE_ONLY_NO_HTTP_OR_LIVE_OIDC",
+  "admissionPolicy": "PASS only when every named PostgreSQL JUnit method actually executed on exact SHA with no failure/error/skip and all mandatory G1 workflows pass; test-name mapping remains explicitly scoped to stated behavior",
+  "reviewBasis": "Source method test review and MVP W1-W6 specification at 2026-11-24",
+  "scenarios": [
+    {
+      "id": "CORE-IAM-01",
+      "behavior": "Verified account provisions exactly one first organization tenant",
+      "requiredProofs": [
+        {
+          "suite": "R4FirstTenantOnboardingQualificationTest",
+          "test": "verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+        }
+      ]
+    },
+    {
+      "id": "CORE-IAM-02",
+      "behavior": "Unverified suspended or foreign principal cannot provision or select tenant",
+      "requiredProofs": [
+        {
+          "suite": "R4FirstTenantOnboardingQualificationTest",
+          "test": "unverifiedEmailSuspensionAndForeignTenantRejectWithoutWrites"
+        }
+      ]
+    },
+    {
+      "id": "CORE-IAM-03",
+      "behavior": "Active tenant staff obtains only explicit functional grants",
+      "requiredProofs": [
+        {
+          "suite": "UserRoleMatrixR31QualificationTest",
+          "test": "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand"
+        }
+      ]
+    },
+    {
+      "id": "CORE-IAM-04",
+      "behavior": "Revocation fences subsequent staff operations",
+      "requiredProofs": [
+        {
+          "suite": "UserRoleMatrixR31QualificationTest",
+          "test": "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant"
+        }
+      ]
+    },
+    {
+      "id": "CORE-IAM-05",
+      "behavior": "Authorized staff operations require current selected warehouse assignment",
+      "requiredProofs": [
+        {
+          "suite": "MvpServiceWarehouseAdmissionQualificationTest",
+          "test": "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"
+        }
+      ]
+    },
+    {
+      "id": "CORE-IAM-06",
+      "behavior": "Cross tenant grants and revocation are isolated",
+      "requiredProofs": [
+        {
+          "suite": "UserRoleMatrixR31QualificationTest",
+          "test": "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites"
+        }
+      ]
+    },
+    {
+      "id": "CORE-ORG-01",
+      "behavior": "An active warehouse cannot be deactivated after reserved stock commits",
+      "requiredProofs": [
+        {
+          "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+          "test": "postgresConfirmedOrderWinsThenDeactivationIsBlockedByReservation"
+        }
+      ]
+    },
+    {
+      "id": "CORE-ORG-02",
+      "behavior": "Deactivation first prevents later stock reservation",
+      "requiredProofs": [
+        {
+          "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+          "test": "postgresDeactivationWinsThenNewConfirmationRollsBackToPlaced"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CRM-01",
+      "behavior": "Customer contact interaction and contract persisted tenant scoped",
+      "requiredProofs": [
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CRM-02",
+      "behavior": "Contact and interaction access limited by current CRM permission",
+      "requiredProofs": [
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CRM-03",
+      "behavior": "Contact consent revocation overrides earlier grant",
+      "requiredProofs": [
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CRM-04",
+      "behavior": "Customer and contract archive preserves history but blocks prohibited work",
+      "requiredProofs": [
+        {
+          "suite": "CrmInteractionQualificationTest",
+          "test": "crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CRM-05",
+      "behavior": "Explicit verified buyer link is required to expose order history",
+      "requiredProofs": [
+        {
+          "suite": "CrmBuyerLinkQualificationTest",
+          "test": "verifiedBuyerConfirmsOrderAndSellerSeesOnlyTenantOrders"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CRM-06",
+      "behavior": "Dispute and revocation hide seller order history without mutating ledger",
+      "requiredProofs": [
+        {
+          "suite": "CrmBuyerLinkQualificationTest",
+          "test": "disputeFreezesSalesVisibilityAndSellerCanOnlyCloseFailClosed"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CAT-01",
+      "behavior": "Published product SKU and price are tenant qualified",
+      "requiredProofs": [
+        {
+          "suite": "CatalogQualificationTest",
+          "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CAT-02",
+      "behavior": "Catalog version CAS prevents stale price revision and cross tenant write",
+      "requiredProofs": [
+        {
+          "suite": "CatalogQualificationTest",
+          "test": "draftTranslationsAndVersionCasCannotLeakOtherTenant"
+        }
+      ]
+    },
+    {
+      "id": "CORE-CAT-03",
+      "behavior": "Active sellable SKU cannot be archived across concurrent offers",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "postgresArchiveAndOfferPublicationAreSerializedInBothOrders"
+        }
+      ]
+    },
+    {
+      "id": "CORE-STO-01",
+      "behavior": "Seller storefront publish pause resume preserve revision and audit",
+      "requiredProofs": [
+        {
+          "suite": "StorefrontManagementQualificationTest",
+          "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+        }
+      ]
+    },
+    {
+      "id": "CORE-STO-02",
+      "behavior": "Offer authoritative price version and accepted order snapshot are consistent",
+      "requiredProofs": [
+        {
+          "suite": "StorefrontManagementQualificationTest",
+          "test": "offerVersionCasAndCheckoutSnapshotStayImmutable"
+        }
+      ]
+    },
+    {
+      "id": "CORE-STO-03",
+      "behavior": "Paused storefront cannot accept new checkout",
+      "requiredProofs": [
+        {
+          "suite": "StorefrontManagementQualificationTest",
+          "test": "postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-01",
+      "behavior": "Single seller checkout uses immutable accepted price and SKU snapshot",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-02",
+      "behavior": "Duplicate checkout request cannot produce duplicate orders or receipts",
+      "requiredProofs": [
+        {
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "test": "qrMvpVerifiedConcurrentSameKeyHasOneOrderInPostgres"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-03",
+      "behavior": "Full reserve only after seller confirmation",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-04",
+      "behavior": "Insufficient stock rolls back all reservations and status",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "insufficientStockRollsBackStatusAndEveryReservation"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-05",
+      "behavior": "Reserved stock and ledger remain atomic with order completion",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "fulfillmentDebitsOnceAndRequiresBothDomainPermissions"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-06",
+      "behavior": "Seller denial preserves state and order inventory history",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-07",
+      "behavior": "Cancellation before pick releases once and retries idempotently",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-08",
+      "behavior": "Proof-required QR order cannot use generic fulfillment",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-09",
+      "behavior": "Order state and stock movement history trace each completed business order",
+      "requiredProofs": [
+        {
+          "suite": "BusMvpServiceJourneyQualificationTest",
+          "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
+        }
+      ]
+    },
+    {
+      "id": "CORE-SAL-10",
+      "behavior": "Partial physical pick prevents silent order cancellation",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "fc40PickedOrderCannotCancelAndReservationStaysIntact"
+        }
+      ]
+    },
+    {
+      "id": "CORE-INV-01",
+      "behavior": "Same request key stock posting records one movement",
+      "requiredProofs": [
+        {
+          "suite": "InventoryMovementQualificationTest",
+          "test": "concurrentSameKeyPostsExactlyOneMovement"
+        }
+      ]
+    },
+    {
+      "id": "CORE-INV-02",
+      "behavior": "Reserved on hand ledger conserves quantities under concurrent checkout and reconciliation",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-01",
+      "behavior": "Published product QR remains stable and reflects authoritative offer price",
+      "requiredProofs": [
+        {
+          "suite": "PublishedOfferQrQualificationTest",
+          "test": "qrP01StableReprintAndCurrentPublishedPriceAfterRevision"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-02",
+      "behavior": "Hidden unpublished and revoked references never expose public card",
+      "requiredProofs": [
+        {
+          "suite": "PublishedOfferQrQualificationTest",
+          "test": "qrP03PausedHiddenAndRevokedReferencesCannotExposeCard"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-03",
+      "behavior": "Public QR and cross tenant access never grant private order ownership",
+      "requiredProofs": [
+        {
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "test": "qr03bCrossBuyerAndCrossTenantStaffCannotReadOrReprint"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-04",
+      "behavior": "List price checkout requires active verified buyer and exact price/version",
+      "requiredProofs": [
+        {
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "test": "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-05",
+      "behavior": "Buyer and seller alternate valid bargaining turns and persist agreement",
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-06",
+      "behavior": "Accepted quote creates an immutable priced order with buyer identity",
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource"
+        }
+      ]
+    },
+    {
+      "id": "CORE-QR-07",
+      "behavior": "Accepted quote can be consumed at most once across competing checkout requests",
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        }
+      ]
+    },
+    {
+      "id": "CORE-PICK-01",
+      "behavior": "Order preparation requires full reserved pick before READY without stock debit",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock"
+        }
+      ]
+    },
+    {
+      "id": "CORE-PICK-02",
+      "behavior": "Warehouse scope revoke prevents unauthorized picking",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr05WrongWarehouseAndRevokedAssignmentBlockPreparation"
+        }
+      ]
+    },
+    {
+      "id": "CORE-PICK-03",
+      "behavior": "Only verified buyer can issue fresh one time pickup proof",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06CredentialRequiresVerifiedBuyerAndReadyState"
+        }
+      ]
+    },
+    {
+      "id": "CORE-PICK-04",
+      "behavior": "Multiple simultaneous pickup scans produce one stock debit",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce"
+        }
+      ]
+    },
+    {
+      "id": "CORE-PICK-05",
+      "behavior": "Crash after commit and lost response cannot cause second stock debit",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit"
+        }
+      ]
+    },
+    {
+      "id": "CORE-RET-01",
+      "behavior": "Return claims cannot exceed quantity in immutable completed handover",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity"
+        }
+      ]
+    },
+    {
+      "id": "CORE-RET-02",
+      "behavior": "Only authorized staff reviews and approves return with durable evidence",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R1ReviewApproveAndImmutableDecisionReplay"
+        }
+      ]
+    },
+    {
+      "id": "CORE-RET-03",
+      "behavior": "Receipt inspection and restock link one returned quantity to one stock movement",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection"
+        }
+      ]
+    },
+    {
+      "id": "CORE-RET-04",
+      "behavior": "Damaged or quarantined returns never increase sellable stock",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R2WriteOffAndQuarantineNeverIncreaseSellableStock"
+        }
+      ]
+    },
+    {
+      "id": "CORE-RET-05",
+      "behavior": "Repeated physical returns cannot post a second restock movement",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R2TwoIndependentJvmsCannotDoubleRestockOneReturn"
+        }
+      ]
+    },
+    {
+      "id": "CORE-XD-01",
+      "behavior": "Business journey integrates IAM CRM TASK catalog stock and order",
+      "requiredProofs": [
+        {
+          "suite": "BusMvpServiceJourneyQualificationTest",
+          "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
+        }
+      ]
+    },
+    {
+      "id": "CORE-XD-02",
+      "behavior": "Verified QR list price reaches immutable pickup and returned stock",
+      "requiredProofs": [
+        {
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
+        }
+      ]
+    },
+    {
+      "id": "CORE-XD-03",
+      "behavior": "Negotiated quote reaches pickup and segregated quarantine",
+      "requiredProofs": [
+        {
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"
+        }
+      ]
+    },
+    {
+      "id": "CORE-XD-04",
+      "behavior": "Cross tenant stock and order commands have no side effects",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand"
+        }
+      ]
+    },
+    {
+      "id": "CORE-XD-05",
+      "behavior": "Seller suspension and checkout in both commit orders preserve one order snapshot",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "postgresSec09CheckoutCommitsBeforeSuspendKeepsOneAcceptedSnapshot"
+        }
+      ]
+    }
+  ],
+  "taskAddendum": [
+    {
+      "id": "BUS-TASK-01",
+      "behavior": "Task creation assignment execution and immutable history",
+      "requiredProofs": [
+        {
+          "suite": "TaskServiceQualificationTest",
+          "test": "t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory"
+        }
+      ]
+    },
+    {
+      "id": "BUS-TASK-02",
+      "behavior": "Task tenant permission and revoked employee do not mutate unauthorized state",
+      "requiredProofs": [
+        {
+          "suite": "TaskServiceQualificationTest",
+          "test": "t12EarlierTaskPermissionRevocationDeniesExecutionWithoutWrites"
+        }
+      ]
+    }
+  ]
+}
