@@ -61,6 +61,14 @@ SUITES = {
 REQUIRED_CASES = {
     "kms-postgres-surefire": {
         # MVP six-pack gates: require named cases from real PostgreSQL XML.
+        # SELLER-EDIT-R0 preparation: identity, tenant, revoke and catalog CAS.
+        # Keep preparatory coverage mandatory without enabling XLSX imports.
+        ("CatalogQualificationTest",
+         "sellerEditR0SameSkuAcrossTenantsUsesEmployeeSpecificGrants"),
+        ("CatalogQualificationTest",
+         "sellerEditR0RevokedPriceGrantCannotAppendAnotherRevision"),
+        ("CatalogQualificationTest",
+         "sellerEditR0PostgresTwoEditorsOneCatalogPriceRevisionWins"),
         ("PublishedQrCheckoutQualificationTest",
          "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"),
         ("PublishedQrCheckoutQualificationTest",
