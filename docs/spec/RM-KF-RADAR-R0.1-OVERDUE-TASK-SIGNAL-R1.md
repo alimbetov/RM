@@ -1,9 +1,11 @@
 # RM-KF-RADAR-R0.1 — Overdue Task Signal
-## R1.1 — сервисный контракт, Task Performance & Calendar View
+## R1.2 — сервисный контракт, Task Performance & Calendar View
 
 **Дата:** 2026-11-24. **Ветка:** base_dev. **Source review SHA:** a15670566912e9c60e0ede52af489e72a58077ca.
-**Статус:** SPEC R1.1 / OWNER SCOPE EXCEPTION — R0.1 IMPLEMENTATION AUTHORIZED / NOT IMPLEMENTED / PRODUCTION HOLD.
+**Статус:** SPEC R1.2 / OWNER SCOPE EXCEPTION — R0.1 IMPLEMENTATION AUTHORIZED / NOT IMPLEMENTED / PRODUCTION HOLD.
 **Decision:** CR-MVP-KF-RADAR-01. Владелец продукта явно снял freeze только для R0.1; техническая редакция R1.0 предъявляется на review. R1.1 добавляет только §11 (CR-MVP-KF-RADAR-01A). Не считать этот документ разрешением R0.2+, реализации UI/внешнего API до G2, пилота или production.
+
+**R1.2 joint review:** [Shared Task Timing Contract R1](RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md) resolves all conflicting calculation, evidence, filter, DTO, pagination and sequencing wording in this document. SQL is the single runtime classifier; Java oracle is test-only. Original RAD/CAL IDs and security/scope gates remain. R0.2 remains separately parked.
 
 ## 0. Scope, normative sources and change control
 
@@ -202,10 +204,10 @@ Proposed entrypoint inside TASKS: TaskCalendarQueryService.listMine(VerifiedActo
 
 Filter allowlist:
 - viewDateBasis DUE (default) or COMPLETED; no joining separate unscoped feeds. dateFrom inclusive, dateTo exclusive, IANA ZoneId for display; convert local date boundaries with atStartOfDay(zone) to Instants (DST safe). Date basis and display zone do not influence overdue/early arithmetic. Range required for calendar, max 93 local calendar days per request, supports 42-cell month; optional list date range uses same bound, default current month proposed. Single explicit undated list mode only: DUE null, no date range, no calendar placement. COMPLETED basis includes only rows with validated completion evidence; UNKNOWN evidence available on due/undated views.
-- lifecycleStates multi-select; default all except ARCHIVED. timelinessCodes multi-select; assignment perspective; original deadline changed / original outcome optional filter only if supported by same evidence query. AND across categories, OR within category; absent category means all allowed, explicit empty rejected or normalized by documented contract (proposed reject). Typed enum validation, bounded date range, zone validation. No arbitrary SQL, free-text filters or new PII. No hidden client-side filtering after LIMIT.
+- lifecycleStates multi-select; default all except ARCHIVED. timelinessCodes multi-select; assignment perspective; original deadline changed / original outcome display only in initial scope; filter deferred. AND across categories, OR within category; absent category means all allowed, explicit empty rejected or normalized by documented contract (proposed reject). Typed enum validation, bounded date range, zone validation. No arbitrary SQL, free-text filters or new PII. No hidden client-side filtering after LIMIT.
 - Sort selected date ASC, task_id ASC, both using DB-native ordering; undated mode id ASC. Stable ties for unchanged fixture. No arbitrary sort expression. SQL limit+1, pageSize 1..100 (suggested default 20); nextCursor only if extra row; return immutable items, evaluatedAt, appliedFilter, nextCursor, hasMore. Previous page by client cursor stack with refresh semantics; no total pages/COUNT requirement; no OFFSET. Cursor bound to tenant/actor, date basis, normalized filter/range/zone, sort and page size (canonical hash or typed immutable values), plus last key; invalid/mismatched cursor rejected before task rows. Reset cursor when changing filters/view/range; each request reauthorizes and recalculates now. Live pages are not snapshot/export; concurrent edits may move rows across cursor; explicit refresh. No fabricated count for partially loaded day.
-- SQL candidate view: owner-scoped crm.task_item joined/aggregated with only its task_event rows. Apply date/filter predicates including computed timeliness before ORDER BY/LIMIT; one set-based statement, no N+1, no fetch-all or app-side postfilter. SQL exact threshold and Java evaluator must agree against independent oracle on PG/H2; dialect-specific typed static variants only if necessary. Filter by task/date early where safe, inspect plan for event joins; no migrations/index additions without separate CR.
-- Minimal DTO: taskId, state, sourceVersion, createdAt, effectiveDueAt, completedAt, timeliness, savingsPercent nullable, originalDueAt nullable, originalDeadlineOutcome, originalEvidenceQuality, deadlineChanged nullable/known flag, reasonCode. Do not return title/PII/assignee or creator identifiers, raw event payload or token; authorized detail via existing getMine. Calendar color/icon resolved from timeliness code, not persisted.
+- SQL candidate view: owner-scoped crm.task_item joined/aggregated with only its task_event rows. Apply date/filter predicates including computed timeliness before ORDER BY/LIMIT; one set-based statement, no N+1, no fetch-all or app-side postfilter. Shared SQL classifier is authoritative; independent Java/math evaluator is test-only, not runtime. Exact dialect primitives must agree on PG/H2. Filter by task/date early where safe, inspect plan for event joins; no migrations/index additions without separate CR.
+- Minimal DTO: taskId, state, sourceVersion, createdAt, effectiveDueAt, completedAt, timeliness, savingsPercent nullable, originalDueAt nullable, originalDeadlineOutcome, originalEvidenceQuality, deadlineChanged nullable/known flag, reasonCode. No raw title/PII/assignee or creator identifiers, raw event payload or token. Calendar-only approved titleCode via existing TaskTitlePolicy, neutral fallback for legacy/unapproved; see shared contract. Authorized detail via existing getMine, not per-card reads. Calendar color/icon resolved from timeliness code, not persisted.
 
 ### 11.4. Outlook-style Calendar UX contract (design only until G2)
 
@@ -256,3 +258,6 @@ User-confirmed: green for completed 50% early and on time, filters, pagination, 
 
 
 **Связанное ТЗ (документальный задел, без изменения R0.1 scope):** [RM-KF-RADAR-R0.2 — Smart Deadline Reminder Text](RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md) добавляет проектирование текстовых индикаторов срока. Прежнее обозначение R0.2 для истечения CRM-договоров не означает его активацию; отдельное решение и идентификатор требуются. R0.2 implementation remains PARKED pending explicit scope decision.
+
+
+**Revision R1.2:** joint review and shared authoritative timing policy; [review](../reviews/RM-KF-RADAR-R0.1-R0.2-JOINT-TECHNICAL-REVIEW-2026-11-24.md). No implementation, no test verdict, no additional scope authorization.
