@@ -57,6 +57,8 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired FxAutoDraftApprovalService approvals;
     @Autowired FxAutoConsentRevocationService revocations;
     @Autowired FxAutoPersistentDryRunService simulations;
+    @Autowired FxAutoTenantBudgetLedger budgetLedger;
+    @Autowired kz.rm.storefront.StorefrontOfferService storefront;
     @Autowired kz.rm.fx.NbrkRateRevisionWriter rateWriter;
     @Autowired kz.rm.fx.FxCalendarEvidenceService calendar;
     @Autowired TenantOwnershipTransferService transfers;
@@ -781,5 +783,87 @@ class FxAutoOwnerAdmissionQualificationTest {
         }
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_simulation WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_simulation_seal WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+    }
+
+    private FxAutoPolicyEnrollmentService.Target bindContext(Tenant t,VerifiedActor actor,FxAutoPolicyEnrollmentService.Target target){
+        var context=storefront.confirmCommercialContext(actor,t.id(),target.offerId(),0,0,"EA",kz.rm.storefront.StorefrontOfferService.TaxBasis.NONE);
+        return new FxAutoPolicyEnrollmentService.Target(target.offerId(),target.anchorId(),target.guardrailId(),
+            target.reviewDueAt(),target.unitCode(),target.taxBasis(),context.id());
+    }
+    @Test void commercialBindingRejectsChangedContextWithoutRewritingConsent() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var target=bindContext(t,actor,draftTarget(t,"USD"));
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"bound",target));
+        var command=approvalCommand(t,draft,"bound-approval");
+        var approved=approvals.approve(actor,t.id(),command);
+        storefront.confirmCommercialContext(actor,t.id(),target.offerId(),0,1,"BOX",kz.rm.storefront.StorefrontOfferService.TaxBasis.TAX_INCLUDED);
+        assertThatThrownBy(()->approvals.approve(actor,t.id(),command)).hasMessageContaining("FX_AUTO_COMMERCIAL_CONTEXT_STALE");
+        assertThat(jdbc.queryForObject("SELECT trim(scope_sha256)=crm.fx_auto_scope_sha_v1(tenant_id,policy_revision_id) FROM crm.fx_auto_approval_evidence WHERE tenant_id=? AND id=?",Boolean.class,t.id(),approved.approvalId())).isTrue();
+    }
+
+    private FxAutoPolicyEnrollmentService.Command budgetCommand(UUID policy,long version,String key,int cap,FxAutoPolicyEnrollmentService.Target... targets){
+        var n=java.math.BigDecimal.valueOf(cap);
+        return new FxAutoPolicyEnrollmentService.Command(policy,version,key,
+            new FxAutoPolicyEnrollmentService.Limits(86400,n,n,n,10,86400,n,10,n,10,100),java.util.List.of(targets));
+    }
+
+    // Test-only synthetic owner mutation. No production AUTO port or fabricated
+    // system identity is registered. Existing owner service writes the price.
+    private UUID fixtureBudgetWrite(Tenant t,VerifiedActor actor,FxAutoDraftApprovalService.Receipt approval,
+            FxAutoPolicyEnrollmentService.Target target,UUID source,String event){
+        return new TransactionTemplate(txManager).execute(status->{
+            // Maintain IAM -> currency -> budget -> storefront order.
+            consent.requireProductConsentAuthority(actor,t.id(),java.util.List.of("USD"));
+            var balance=budgetLedger.balance(t.id(),approval.revisionId());
+            UUID replay=jdbc.query("SELECT id FROM crm.fx_auto_execution_receipt WHERE tenant_id=? AND semantic_event_key=?",
+                rs->rs.next()?rs.getObject(1,UUID.class):null,t.id(),event);
+            if(replay!=null)return replay;
+            var delta=new java.math.BigDecimal("60");
+            if(!balance.fits(delta))return null;
+            storefront.approveSuggestedKzt(actor,t.id(),target.offerId(),new java.math.BigDecimal("160"),0);
+            UUID revision=jdbc.queryForObject("SELECT id FROM crm.store_offer_price_revision WHERE tenant_id=? AND offer_id=? AND offer_row_version=1",UUID.class,t.id(),target.offerId());
+            UUID consumption=UUID.randomUUID(),receipt=UUID.randomUUID();
+            jdbc.update("""
+                INSERT INTO crm.fx_auto_budget_consumption(tenant_id,id,offer_id,price_revision_id,policy_revision_id,approval_id,delta_kzt,recorded_at)
+                VALUES (?,?,?,?,?,?,?,clock_timestamp())
+                """,t.id(),consumption,target.offerId(),revision,approval.revisionId(),approval.approvalId(),delta);
+            jdbc.update("""
+                INSERT INTO crm.fx_auto_execution_receipt(tenant_id,id,semantic_event_key,consumption_id,offer_id,price_revision_id,
+                policy_revision_id,approval_id,commercial_context_id,source_snapshot_id,execution_epoch,recorded_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,0,clock_timestamp())
+                """,t.id(),receipt,event,consumption,target.offerId(),revision,approval.revisionId(),approval.approvalId(),target.commercialContextId(),source);
+            return receipt;
+        });
+    }
+    @Test void budgetTwoSixtyOperationsOneWinnerReplayRollbackAndPolicyChange() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var a=bindContext(t,actor,draftTarget(t,"USD"));var b=bindContext(t,actor,draftTarget(t,"USD"));
+        diagnosticHistory(t,a,100,100,false);diagnosticHistory(t,b,100,100,false);
+        var draft=enrollment.createPolicyRevision(actor,t.id(),budgetCommand(UUID.randomUUID(),0,"budget-draft",100,a,b));
+        var approval=approvals.approve(actor,t.id(),approvalCommand(t,draft,"budget-approval"));
+        var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Almaty"));
+        UUID source=diagnosticSource(t,actor,date,"160");
+        new TransactionTemplate(txManager).executeWithoutResult(status->{
+            assertThat(fixtureBudgetWrite(t,actor,approval,a,source,"c".repeat(64))).isNotNull();
+            status.setRollbackOnly();
+        });
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_budget_consumption WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_execution_receipt WHERE tenant_id=?",Integer.class,t.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT unit_price FROM crm.store_offer WHERE tenant_id=? AND id=?",java.math.BigDecimal.class,t.id(),a.offerId())).isEqualByComparingTo("100");
+        var start=new java.util.concurrent.CountDownLatch(1);
+        UUID first,second;
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var f=pool.submit(()->{start.await();return fixtureBudgetWrite(t,actor,approval,a,source,"d".repeat(64));});
+            var g=pool.submit(()->{start.await();return fixtureBudgetWrite(t,actor,approval,b,source,"e".repeat(64));});
+            start.countDown();first=f.get(20,java.util.concurrent.TimeUnit.SECONDS);second=g.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        }
+        assertThat((first!=null)^(second!=null)).isTrue();
+        UUID winner=first!=null?first:second;
+        assertThat(fixtureBudgetWrite(t,actor,approval,first!=null?a:b,source,(first!=null?"d":"e").repeat(64))).isEqualTo(winner);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_execution_receipt WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT sum(delta_kzt) FROM crm.fx_auto_budget_consumption WHERE tenant_id=?",java.math.BigDecimal.class,t.id())).isEqualByComparingTo("60");
+        var next=enrollment.createPolicyRevision(actor,t.id(),budgetCommand(draft.policyId(),1,"budget-next",200,a,b));
+        var remaining=new TransactionTemplate(txManager).execute(status->budgetLedger.balance(t.id(),next.revisionId()));
+        assertThat(remaining.remainingKzt()).isEqualByComparingTo("40");
     }
 }

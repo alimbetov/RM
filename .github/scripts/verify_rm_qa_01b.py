@@ -376,11 +376,11 @@ def verify():
                         problems.append(f"{artifact_name}: nine T00 PostgreSQL cases must execute without skips")
                 if artifact_name == "cur-r2c-policy-pg-" + sha:
                     expected = {"FxAutoPolicySchemaPgTest": 8, "FxAutoRollingLimitEvaluatorTest": 8,
-                                "FxAutoDryRunTest": 6, "FxAutoOwnerAdmissionQualificationTest": 28,
+                                "FxAutoDryRunTest": 6, "FxAutoOwnerAdmissionQualificationTest": 30,
                                 "TenantCurrencyPolicyQualificationTest": 14, "SkuFxSellerApprovalQualificationTest": 35}
                     actual = {suite: sum(1 for s, _ in executed_cases if s == suite) for suite in expected}
-                    if actual != expected or counts != {"tests": 99, "failures": 0, "errors": 0, "skipped": 0}:
-                        problems.append(f"{artifact_name}: expected 99 exact executed R2C cases; actual {actual}, {counts}")
+                    if actual != expected or counts != {"tests": 101, "failures": 0, "errors": 0, "skipped": 0}:
+                        problems.append(f"{artifact_name}: expected 101 exact executed R2C cases; actual {actual}, {counts}")
                 elif artifact_name == "cur-r2c-populated-pg-" + sha:
                     if counts != {"tests": 8, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "FxAutoPolicySchemaPgTest" for s, _ in executed_cases) != 8:
                         problems.append(f"{artifact_name}: expected eight executed schema cases")
@@ -388,8 +388,8 @@ def verify():
                     if counts != {"tests": 49, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "TenantCurrencyPolicyQualificationTest" for s, _ in executed_cases) != 14 or sum(s == "SkuFxSellerApprovalQualificationTest" for s, _ in executed_cases) != 35:
                         problems.append(f"{artifact_name}: expected 49 executed currency and legacy FX cases")
                 elif artifact_name == "cur-r2c-revoke-populated-pg-" + sha:
-                    if counts != {"tests": 28, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "FxAutoOwnerAdmissionQualificationTest" for s, _ in executed_cases) != 28:
-                        problems.append(f"{artifact_name}: expected 28 executed lifecycle cases")
+                    if counts != {"tests": 30, "failures": 0, "errors": 0, "skipped": 0} or sum(s == "FxAutoOwnerAdmissionQualificationTest" for s, _ in executed_cases) != 30:
+                        problems.append(f"{artifact_name}: expected 30 executed lifecycle cases")
                 missing_cases = required_cases - executed_cases
                 if missing_cases:
                     problems.append(f"{artifact_name}: required PostgreSQL tests missing/skipped: {sorted(missing_cases)}")
