@@ -523,58 +523,41 @@ class SalesInventoryRbacQualificationTest {
     }
 
     @Test void postgresSalesConfirmationFencesConcurrentPermissionRevocation() throws Exception {
-        try (var connection=dataSource.getConnection()) {
+        try(var connection=dataSource.getConnection()){
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
-                    .toLowerCase().contains("postgresql"));
+                .toLowerCase(java.util.Locale.ROOT).contains("postgresql"));
         }
-        Context c=context(8);
-        UUID id=order(c,2);
-        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
-        UUID role=jdbc.queryForObject("""
-                SELECT id FROM public.iam_tenant_role
-                WHERE tenant_id=? AND role_code LIKE 'OPS_%'
-                """,UUID.class,c.tenant());
-        var commandAdmitted=new CountDownLatch(1);
-        var commitCommand=new CountDownLatch(1);
-        var tx=new TransactionTemplate(transactionManager);
-        try(var pool=Executors.newFixedThreadPool(2)) {
-            var confirm=pool.submit(()->tx.execute(status->{
-                authenticatedCommands.confirm(verified(c.staff()),c.tenant(),id,c.location());
-                commandAdmitted.countDown();
-                try {
-                    if(!commitCommand.await(15,TimeUnit.SECONDS))
-                        throw new IllegalStateException("Confirmation latch timed out");
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException(e);
+        try(var issuer=new JourneySignedActorFixture()){
+            for(boolean revokeFirst:List.of(false,true)){
+                Context c=context(8);
+                UUID id=order(c,2);
+                allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+                UUID role=jdbc.queryForObject("SELECT id FROM public.iam_tenant_role WHERE tenant_id=? AND role_code LIKE 'OPS_%'",UUID.class,c.tenant());
+                var owner=issuer.resolve(jdbc,users,c.owner());
+                var staff=issuer.resolve(jdbc,users,c.staff());
+                var before=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item());
+                Runnable confirm=()->assertThat(authenticatedCommands.confirm(staff,c.tenant(),id,c.location()).status()).isEqualTo("CONFIRMED");
+                Runnable revoke=()->roles.revoke(owner,c.tenant(),role,DomainPermission.SALES_ORDER_CONFIRM);
+                PgCommitOrderEvidence.run(jdbc,transactionManager,revokeFirst?revoke:confirm,revokeFirst?confirm:revoke,
+                    revokeFirst?"Tenant RBAC permission denied":null);
+                if(revokeFirst){
+                    assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item())).isEqualTo(before);
+                    assertThat(status(c,id)).isEqualTo("PLACED");
+                    assertThat(reservationCount(c,id,"ACTIVE")).isZero();
+                }else{
+                    assertThat(status(c,id)).isEqualTo("CONFIRMED");
+                    assertThat(scalar(c,"reserved")).isEqualByComparingTo("2");
+                    assertThat(reservationCount(c,id,"ACTIVE")).isEqualTo(1);
+                    assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='CONFIRMED'",Integer.class,c.tenant(),id)).isEqualTo(1);
                 }
-                return true;
-            }));
-            assertThat(commandAdmitted.await(10,TimeUnit.SECONDS)).isTrue();
-            var revoke=pool.submit(()->{
-                roles.revoke(verified(c.owner()),c.tenant(),role,DomainPermission.SALES_ORDER_CONFIRM);
-                return true;
-            });
-            try {
-                assertThatThrownBy(()->revoke.get(300,TimeUnit.MILLISECONDS))
-                        .isInstanceOf(TimeoutException.class);
-            } finally {
-                commitCommand.countDown();
+                assertThat(scalar(c,"on_hand")).isEqualByComparingTo("8");
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?",Integer.class,c.tenant())).isZero();
+                var after=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item());
+                assertThatThrownBy(confirm::run).isInstanceOf(SecurityException.class).hasMessage("Tenant RBAC permission denied");
+                assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item())).isEqualTo(after);
             }
-            assertThat(confirm.get(20,TimeUnit.SECONDS)).isTrue();
-            assertThat(revoke.get(20,TimeUnit.SECONDS)).isTrue();
         }
-        assertThat(status(c,id)).isEqualTo("CONFIRMED");
-        assertThat(scalar(c,"reserved")).isEqualByComparingTo("2");
-        assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM crm.inv_stock_reservation
-                WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
-                """,Integer.class,c.tenant(),id)).isEqualTo(1);
-        assertThatThrownBy(()->authenticatedCommands.confirm(
-                verified(c.staff()),c.tenant(),id,c.location()))
-                .isInstanceOf(SecurityException.class);
     }
-
 
     /**
      * R1.2 synthetic contention qualification: actual PostgreSQL row locks,
