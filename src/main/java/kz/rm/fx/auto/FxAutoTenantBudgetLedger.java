@@ -41,7 +41,26 @@ public class FxAutoTenantBudgetLedger {
             """,rs->rs.next()?new Limit(rs.getLong(1),rs.getBigDecimal(2),rs.getLong(3)):null,tenant,policyRevision);
         if(limit==null)throw new IllegalArgumentException("FX_AUTO_BUDGET_POLICY_UNAVAILABLE");
         Instant now=jdbc.queryForObject("SELECT clock_timestamp()",Timestamp.class).toInstant();
-        return balanceAt(tenant,now,limit.seconds(),limit.cap(),limit.count());
+        Balance selected=balanceAt(tenant,now,limit.seconds(),limit.cap(),limit.count());
+        // Each previous policy whose consumption is still inside its original
+        // window remains a constraint. Never reset capacity by switching policy.
+        var historical=jdbc.query("""
+            SELECT DISTINCT l.tenant_window_seconds,l.tenant_delta_cap_kzt,l.tenant_count_cap
+            FROM crm.fx_auto_budget_consumption c
+            JOIN crm.fx_auto_policy_revision p ON p.tenant_id=c.tenant_id AND p.id=c.policy_revision_id
+            JOIN crm.fx_auto_limit_policy_version l ON l.tenant_id=p.tenant_id AND l.id=p.limit_id
+            WHERE c.tenant_id=? AND c.recorded_at<=?
+              AND c.recorded_at > CAST(? AS timestamptz)-l.tenant_window_seconds*interval '1 second'
+            """,(rs,n)->new Limit(rs.getLong(1),rs.getBigDecimal(2),rs.getLong(3)),
+            tenant,Timestamp.from(now),Timestamp.from(now));
+        BigDecimal remaining=selected.remainingKzt();
+        long remainingCount=selected.remainingCount();
+        for(Limit old:historical){
+            Balance previous=balanceAt(tenant,now,old.seconds(),old.cap(),old.count());
+            remaining=remaining.min(previous.remainingKzt());
+            remainingCount=Math.min(remainingCount,previous.remainingCount());
+        }
+        return new Balance(now,selected.consumedKzt(),selected.consumedCount(),remaining,remainingCount);
     }
 
     private Balance balanceAt(UUID tenant,Instant now,long seconds,BigDecimal cap,long count){

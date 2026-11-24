@@ -5002,3 +5002,42 @@ CREATE TRIGGER trg_fx_auto_budget_guard_no_truncate BEFORE TRUNCATE ON crm.fx_au
 --rollback DROP TRIGGER trg_fx_auto_budget_guard_immutable ON crm.fx_auto_tenant_budget_guard;
 --rollback DROP TRIGGER trg_fx_auto_budget_consumption_no_truncate ON crm.fx_auto_budget_consumption;
 --rollback DROP TRIGGER trg_fx_auto_budget_consumption_immutable ON crm.fx_auto_budget_consumption;
+
+
+--changeset rm:0168-fx-auto-execution-receipt-foundation
+-- Receipt and consumption must identify the very same canonical price revision.
+-- No ACTIVE state or executable AUTO port is enabled by this migration.
+ALTER TABLE crm.fx_auto_budget_consumption ADD CONSTRAINT uq_fx_auto_consumption_binding
+ UNIQUE(tenant_id,id,offer_id,price_revision_id,policy_revision_id,approval_id);
+CREATE TABLE crm.fx_auto_execution_receipt (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ semantic_event_key CHAR(64) NOT NULL,
+ consumption_id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ price_revision_id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ approval_id UUID NOT NULL,
+ commercial_context_id UUID NOT NULL,
+ source_snapshot_id UUID NOT NULL REFERENCES crm.fx_official_rate_snapshot(id),
+ execution_epoch BIGINT NOT NULL CHECK(execution_epoch>=0),
+ recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,semantic_event_key),
+ UNIQUE(tenant_id,consumption_id),
+ UNIQUE(tenant_id,price_revision_id),
+ FOREIGN KEY(tenant_id,consumption_id,offer_id,price_revision_id,policy_revision_id,approval_id)
+ REFERENCES crm.fx_auto_budget_consumption(tenant_id,id,offer_id,price_revision_id,policy_revision_id,approval_id),
+ FOREIGN KEY(tenant_id,commercial_context_id,offer_id)
+ REFERENCES crm.store_offer_commercial_context(tenant_id,id,offer_id)
+);
+--rollback DROP TABLE crm.fx_auto_execution_receipt;
+--rollback ALTER TABLE crm.fx_auto_budget_consumption DROP CONSTRAINT uq_fx_auto_consumption_binding;
+
+--changeset rm:0169-fx-auto-execution-receipt-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_fx_auto_execution_receipt_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_execution_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_execution_receipt_no_truncate BEFORE TRUNCATE ON crm.fx_auto_execution_receipt
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_fx_auto_execution_receipt_no_truncate ON crm.fx_auto_execution_receipt;
+--rollback DROP TRIGGER trg_fx_auto_execution_receipt_immutable ON crm.fx_auto_execution_receipt;
