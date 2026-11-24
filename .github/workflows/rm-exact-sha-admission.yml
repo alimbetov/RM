@@ -160,5 +160,6 @@ jobs:
             rm-user-role-crosswalk-validation.json
             rm-user-role-scenario-results.json
             rm-r3-maturity-report.json
+            rm-mvp-service-coverage.json
             rm-r3-maturity-report.md
           if-no-files-found: error
