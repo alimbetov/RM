@@ -16,7 +16,7 @@ class FxAutoPolicySchemaPgTest {
     private static UUID id(){return UUID.randomUUID();}
     private F fixture() throws Exception {
         try(var c=dataSource.getConnection()){
-            assertThat(c.getMetaData().getDatabaseProductName()).isEqualTo("PostgreSQL");
+            org.junit.jupiter.api.Assumptions.assumeTrue("PostgreSQL".equals(c.getMetaData().getDatabaseProductName()), "PostgreSQL-specific constraints");
         }
         var f=new F(id(),id(),id(),id(),id(),id(),id(),id(),id());
         UUID org=id(), item=id();
