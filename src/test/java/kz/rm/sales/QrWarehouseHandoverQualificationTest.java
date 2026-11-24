@@ -3241,11 +3241,11 @@ class QrWarehouseHandoverQualificationTest {
         assertExactlyOneHandover(c,order,1);
     }
 
-    @Test void coreRet04RestockFirst() throws Exception {
+    @Test void qr07R25CoreRet04RestockFirst() throws Exception {
         coreRet04CommitOrder(true);
     }
 
-    @Test void coreRet04DisposeFirst() throws Exception {
+    @Test void qr07R25CoreRet04DisposeFirst() throws Exception {
         coreRet04CommitOrder(false);
     }
 
