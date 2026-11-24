@@ -4965,3 +4965,40 @@ CREATE TABLE crm.fx_auto_tenant_budget_guard (
  created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 --rollback DROP TABLE crm.fx_auto_tenant_budget_guard;
+
+
+--changeset rm:0166-fx-auto-budget-ledger-foundation
+-- Successful consumption is tied to a canonical price revision. No live writer
+-- is enabled here; execution receipt and system provenance are the next gate.
+CREATE TABLE crm.fx_auto_budget_consumption (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ price_revision_id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ approval_id UUID NOT NULL,
+ delta_kzt NUMERIC(19,4) NOT NULL CHECK(delta_kzt>0),
+ recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,price_revision_id),
+ FOREIGN KEY(tenant_id) REFERENCES crm.fx_auto_tenant_budget_guard(tenant_id),
+ FOREIGN KEY(tenant_id,price_revision_id,offer_id) REFERENCES crm.store_offer_price_revision(tenant_id,id,offer_id),
+ FOREIGN KEY(tenant_id,policy_revision_id,offer_id) REFERENCES crm.fx_auto_target_enrollment(tenant_id,policy_revision_id,offer_id),
+ FOREIGN KEY(tenant_id,approval_id,policy_revision_id) REFERENCES crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id)
+);
+CREATE INDEX ix_fx_auto_budget_window ON crm.fx_auto_budget_consumption(tenant_id,recorded_at);
+--rollback DROP TABLE crm.fx_auto_budget_consumption;
+
+--changeset rm:0167-fx-auto-budget-ledger-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_fx_auto_budget_consumption_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_budget_consumption
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_budget_consumption_no_truncate BEFORE TRUNCATE ON crm.fx_auto_budget_consumption
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_budget_guard_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_tenant_budget_guard
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_budget_guard_no_truncate BEFORE TRUNCATE ON crm.fx_auto_tenant_budget_guard
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_fx_auto_budget_guard_no_truncate ON crm.fx_auto_tenant_budget_guard;
+--rollback DROP TRIGGER trg_fx_auto_budget_guard_immutable ON crm.fx_auto_tenant_budget_guard;
+--rollback DROP TRIGGER trg_fx_auto_budget_consumption_no_truncate ON crm.fx_auto_budget_consumption;
+--rollback DROP TRIGGER trg_fx_auto_budget_consumption_immutable ON crm.fx_auto_budget_consumption;
