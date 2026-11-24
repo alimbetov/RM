@@ -58,6 +58,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired FxAutoConsentRevocationService revocations;
     @Autowired FxAutoPersistentDryRunService simulations;
     @Autowired kz.rm.fx.NbrkRateRevisionWriter rateWriter;
+    @Autowired kz.rm.fx.FxCalendarEvidenceService calendar;
     @Autowired TenantOwnershipTransferService transfers;
     @Autowired TenantAccessStatusService accessStatus;
     @Autowired TenantCurrencyPolicyService currencies;
@@ -704,5 +705,81 @@ class FxAutoOwnerAdmissionQualificationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_simulation WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
         revocations.revoke(actor,t.id(),new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),0));
         assertThatThrownBy(()->simulations.simulate(actor,t.id(),second)).hasMessageContaining("FX_AUTO_AUTHORITY_HOLD");
+    }
+
+    // All rate and calendar inputs below are synthetic fixtures in an isolated
+    // PostgreSQL test database; they do not qualify a real external source.
+    private UUID diagnosticSource(Tenant t,VerifiedActor actor,java.time.LocalDate date,String price) throws Exception {
+        byte[] raw=("isolated calendar fixture "+UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        String sha=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(raw));
+        String url="https://kase.kz/";
+        UUID evidence=calendar.stageSource(url,raw,sha,java.util.List.of(
+            new kz.rm.fx.NbrkTradingCalendarPolicy.Day(date,"USD/KZT",kz.rm.fx.NbrkTradingCalendarPolicy.TradingStatus.TRADING,url,sha)));
+        calendar.enableForTenant(actor,t.id(),evidence,1);
+        rateWriter.persist(date,java.util.List.of(new kz.rm.fx.FxRateProvider.Rate("USD","KZT",new java.math.BigDecimal(price),
+            java.math.BigDecimal.ONE,date,"NBRK")),"b".repeat(64));
+        return jdbc.queryForObject("SELECT id FROM crm.fx_official_rate_snapshot WHERE provider_code='NBRK' AND base_currency='USD' AND valid_date=? ORDER BY source_revision DESC LIMIT 1",UUID.class,java.sql.Date.valueOf(date));
+    }
+    private void diagnosticHistory(Tenant t,FxAutoPolicyEnrollmentService.Target target,int initial,int current,boolean insideWindow){
+        jdbc.update("INSERT INTO crm.store_offer_price_revision(tenant_id,id,offer_id,offer_row_version,new_price,new_currency,actor_user_id,recorded_at) VALUES (?,?,?,0,?,'KZT',?,now()-interval '2 days')",t.id(),UUID.randomUUID(),target.offerId(),initial,t.owner());
+        if(initial!=current){
+            jdbc.update("INSERT INTO crm.store_offer_price_revision(tenant_id,id,offer_id,offer_row_version,old_price,new_price,old_currency,new_currency,actor_user_id,recorded_at) VALUES (?,?,?,1,?,?,'KZT','KZT',?,now()-CAST(? AS interval))",t.id(),UUID.randomUUID(),target.offerId(),initial,current,t.owner(),insideWindow?"1 hour":"25 hours");
+            jdbc.update("UPDATE crm.store_offer SET unit_price=?,row_version=1 WHERE tenant_id=? AND id=?",current,t.id(),target.offerId());
+        }
+    }
+    @Test void diagnosticAdmittedCalendarAllocatesBudgetDeterministicallyAcrossProducts() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var a=draftTarget(t,"USD");var b=draftTarget(t,"USD");
+        diagnosticHistory(t,a,100,100,false);diagnosticHistory(t,b,100,100,false);
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft-budget",b,a));
+        var approved=approvals.approve(actor,t.id(),approvalCommand(t,draft,"approve-budget"));
+        var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Almaty"));
+        UUID source=diagnosticSource(t,actor,date,"106");
+        var command=new FxAutoPersistentDryRunService.Command(approved.policyId(),approved.approvalId(),0,"USD",date,source,"budget");
+        var receipt=simulations.simulate(actor,t.id(),command);
+        var rows=jdbc.queryForList("""
+            SELECT offer_id,outcome,CAST(input_payload AS jsonb)->>'hypotheticalOutcome' AS hypothetical,
+              CAST(CAST(input_payload AS jsonb)->>'hypotheticalDeltaKzt' AS numeric) AS delta,
+              CAST(CAST(input_payload AS jsonb)->>'candidateKzt' AS numeric) AS candidate
+            FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=? ORDER BY offer_id::text
+            """,t.id(),receipt.simulationId());
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).get("hypothetical")).isEqualTo("WOULD_UPDATE");
+        assertThat((java.math.BigDecimal)rows.get(0).get("delta")).isEqualByComparingTo("6");
+        assertThat(rows.get(0).get("outcome")).isEqualTo("BLOCKED_POLICY_CONFLICT");
+        assertThat(rows.get(1).get("hypothetical")).isEqualTo("BLOCKED_BUDGET_EXHAUSTED");
+        assertThat((java.math.BigDecimal)rows.get(1).get("delta")).isEqualByComparingTo("0");
+        for(var row:rows)assertThat((java.math.BigDecimal)row.get("candidate")).isEqualByComparingTo("106");
+        assertThat(jdbc.queryForObject("SELECT sum(virtual_delta_kzt) FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=?",java.math.BigDecimal.class,t.id(),receipt.simulationId())).isEqualByComparingTo("0");
+    }
+    @Test void diagnosticRollingHistoryIncludesInsideWindowAndExcludesEarlierChange() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var inside=draftTarget(t,"USD");var outside=draftTarget(t,"USD");
+        diagnosticHistory(t,inside,94,100,true);diagnosticHistory(t,outside,94,100,false);
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft-window",inside,outside));
+        var approved=approvals.approve(actor,t.id(),approvalCommand(t,draft,"approve-window"));
+        var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Almaty"));
+        UUID source=diagnosticSource(t,actor,date,"106");
+        var receipt=simulations.simulate(actor,t.id(),new FxAutoPersistentDryRunService.Command(approved.policyId(),approved.approvalId(),0,"USD",date,source,"window"));
+        assertThat(jdbc.queryForObject("SELECT outcome FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=? AND offer_id=?",String.class,t.id(),receipt.simulationId(),inside.offerId())).isEqualTo("BLOCKED_ROLLING_LIMIT");
+        assertThat(jdbc.queryForObject("SELECT CAST(input_payload AS jsonb)->>'hypotheticalOutcome' FROM crm.fx_auto_simulation_item WHERE tenant_id=? AND simulation_id=? AND offer_id=?",String.class,t.id(),receipt.simulationId(),outside.offerId())).isEqualTo("WOULD_UPDATE");
+    }
+    @Test void diagnosticConcurrentExactReplayProducesOneSealedReport() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var target=draftTarget(t,"USD");diagnosticHistory(t,target,100,100,false);
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft-race",target));
+        var approved=approvals.approve(actor,t.id(),approvalCommand(t,draft,"approve-race"));
+        var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Almaty"));
+        UUID source=diagnosticSource(t,actor,date,"106");
+        var command=new FxAutoPersistentDryRunService.Command(approved.policyId(),approved.approvalId(),0,"USD",date,source,"sim-race");
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var a=pool.submit(()->{start.await();return simulations.simulate(actor,t.id(),command);});
+            var b=pool.submit(()->{start.await();return simulations.simulate(actor,t.id(),command);});
+            start.countDown();
+            assertThat(a.get(20,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(b.get(20,java.util.concurrent.TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_simulation WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_simulation_seal WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
     }
 }
