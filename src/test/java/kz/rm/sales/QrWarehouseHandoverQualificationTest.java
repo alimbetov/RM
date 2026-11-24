@@ -3264,6 +3264,7 @@ class QrWarehouseHandoverQualificationTest {
                 WHERE tenant_id=? AND warehouse_id=? AND item_id=?
                 """,BigDecimal.class,c.tenant(),c.warehouse(),sku);
         assertThat(quarantineBefore).isEqualByComparingTo("2");
+        ret04BSnapshot(c);
         String restockKey=key(),disposeKey=key();
         var originalPosting=jdbc.queryForList("""
                 SELECT * FROM crm.sales_return_posting WHERE tenant_id=? AND return_id=?
@@ -3332,6 +3333,7 @@ class QrWarehouseHandoverQualificationTest {
                 SELECT * FROM crm.inv_return_quarantine_movement WHERE tenant_id=? AND return_id=?
                 """,c.tenant(),claim.requestId())).isEqualTo(originalIntake);
         assertExactlyOneHandover(c,order,1);
+        ret04BSnapshot(c);
     }
 
     // BSR-30A.5B: independent fixtures and durable SQL oracles for each case.
@@ -3371,7 +3373,59 @@ class QrWarehouseHandoverQualificationTest {
             out.put(table,jdbc.queryForList("SELECT row_to_json(t)::text FROM crm."+table+
                     " t WHERE tenant_id=? ORDER BY 1",String.class,c.tenant()));
         }
+        ret04DRecordSnapshot(c,out);
         return out;
+    }
+
+    /** Test-only evidence: full-row digests plus independent numeric/state SQL projections.
+     * No raw credentials, user information or token material is exported. */
+    private void ret04DRecordSnapshot(Context c,java.util.Map<String,List<String>> snapshot) {
+        String directory=System.getenv("RM_RET04_EVIDENCE_DIR");
+        if(directory==null||directory.isBlank())return;
+        String method=StackWalker.getInstance().walk(frames->frames
+                .map(StackWalker.StackFrame::getMethodName)
+                .filter(name->name.startsWith("qr07R25CoreRet04")).findFirst().orElse(null));
+        if(method==null)return;
+        String sha=System.getenv("GITHUB_SHA");
+        if(sha==null||!sha.matches("[0-9a-f]{40}"))throw new AssertionError("RET04D SHA missing");
+        try{
+            var dir=java.nio.file.Path.of(directory,method);
+            java.nio.file.Files.createDirectories(dir);
+            long sequence;
+            try(var files=java.nio.file.Files.list(dir)){sequence=files.count();}
+            var lines=new ArrayList<String>();
+            lines.add("sha\t"+sha);
+            lines.add("method\t"+method);
+            lines.add("postgres\t"+jdbc.queryForObject("SELECT current_setting('server_version_num')",String.class));
+            lines.add("tenant\t"+c.tenant());
+            var digest=java.security.MessageDigest.getInstance("SHA-256");
+            for(var entry:snapshot.entrySet()){
+                digest.reset();
+                for(String row:entry.getValue()){
+                    byte[] bytes=row.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.length).array());
+                    digest.update(bytes);
+                }
+                lines.add("table\t"+entry.getKey()+"\t"+entry.getValue().size()+"\t"+
+                        java.util.HexFormat.of().formatHex(digest.digest()));
+            }
+            // Explicit projections are independent reads, not service return values.
+            for(String projection:List.of(
+                    "SELECT id,state,row_version FROM crm.sales_return_request WHERE tenant_id=?",
+                    "SELECT location_id,item_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=?",
+                    "SELECT warehouse_id,item_id,quantity,row_version FROM crm.inv_return_quarantine_balance WHERE tenant_id=?",
+                    "SELECT return_id,warehouse_id,item_id,quantity,before_quantity,after_quantity,action_code,stock_movement_id FROM crm.sales_return_quarantine_resolution WHERE tenant_id=?",
+                    "SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after FROM crm.inv_stock_movement WHERE tenant_id=?",
+                    "SELECT return_id,from_state,to_state,expected_row_version FROM crm.sales_return_event WHERE tenant_id=?")){
+                String table=projection.substring(projection.indexOf("FROM crm.")+9,projection.indexOf(" WHERE"));
+                for(String row:jdbc.queryForList("SELECT row_to_json(p)::text FROM ("+projection+") p ORDER BY 1",
+                        String.class,c.tenant()))lines.add("row\t"+table+"\t"+row);
+            }
+            java.nio.file.Files.write(dir.resolve(String.format(java.util.Locale.ROOT,"snapshot-%03d.tsv",sequence)),
+                    lines,java.nio.charset.StandardCharsets.UTF_8,java.nio.file.StandardOpenOption.CREATE_NEW);
+        }catch(java.io.IOException|java.security.NoSuchAlgorithmException e){
+            throw new AssertionError("RET04D evidence write failed",e);
+        }
     }
 
     private BigDecimal ret04BQuarantine(Context c,UUID sku) {
@@ -3564,6 +3618,7 @@ class QrWarehouseHandoverQualificationTest {
                         assertThat(sql.getSQLState()).isEqualTo("P0001");
                         assertThat(sql.getMessage()).contains(marker)
                                 .doesNotContain("RET04B_FAILPOINT_PRECONDITION_MISSING");
+                        System.out.println("RET04D verified SQLSTATE P0001 "+marker);
                     });
             ret04BAssertUnchanged(f,f.before());
         }finally{

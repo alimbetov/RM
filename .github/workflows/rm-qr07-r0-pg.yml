@@ -11,6 +11,9 @@ on:
       - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
       - 'src/main/resources/db/changelog/db.changelog-master.sql'
       - 'src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java'
+      - '.github/scripts/verify_ret04_evidence.py'
+      - '.github/scripts/test_verify_ret04_evidence.py'
+      - 'docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json'
       - '.github/workflows/rm-qr07-r0-pg.yml'
   workflow_dispatch:
 
@@ -55,11 +58,16 @@ jobs:
           RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
         run: |
           mkdir -p target/qr07-r0-evidence
+          export RM_RET04_EVIDENCE_DIR="$PWD/target/qr07-r0-evidence/sql"
           set -o pipefail
           mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr07-classpath.txt
           export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr07-classpath.txt)"
           mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr07R*' test 2>&1 | tee target/qr07-r0-evidence/console.log
           printf '%s\n' "${GITHUB_SHA}" > target/qr07-r0-evidence/exact-sha.txt
+      - name: Verify RET04 exact-SHA SQL and testcase evidence
+        run: |
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_ret04_evidence.py' -v
+          python3 .github/scripts/verify_ret04_evidence.py --evidence target/qr07-r0-evidence --xml target/surefire-reports/TEST-kz.rm.sales.QrWarehouseHandoverQualificationTest.xml
       - name: Preserve migration and service test evidence
         if: always()
         uses: actions/upload-artifact@v4

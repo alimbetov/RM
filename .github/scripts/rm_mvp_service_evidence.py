@@ -4,6 +4,7 @@
 The mapping is a reviewed SERVICE-only business crosswalk, not a claim about
 real OIDC, HTTP, web, payments, production or live customer operations.
 """
+from verify_ret04_evidence import METHODS as RET04_METHODS
 import hashlib
 import json
 from pathlib import Path
@@ -70,6 +71,12 @@ def assess(root, passed_cases, sha, admission_pass, write=True):
             require(isinstance(entry.get("openRequirement"), str) and entry["openRequirement"].strip(),
                     "W6 semantic gap reason absent: " + str(ident))
             mapping_gaps.append({"id": ident, "verdict": verdict, "reason": entry["openRequirement"]})
+        if ident == "CORE-RET-04":
+            require(entry.get("evidenceProfile") == "RET04-D/v1" and
+                    verdict == "SUPPORTING_PARTIAL" and
+                    {(p.get("suite"), p.get("test")) for p in proofs} ==
+                    {("QrWarehouseHandoverQualificationTest", m) for m in RET04_METHODS},
+                    "RET04-D requires all 24 methods and partial verdict until global artifact integration")
         seen = set()
         bound = []
         for proof in proofs:

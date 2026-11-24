@@ -50,10 +50,24 @@ class MvpServiceEvidenceContractTest(unittest.TestCase):
 
     def test_wrong_behavior_bindings_are_explicit_gaps(self):
         gaps = [x for x in self.registry["scenarios"] if x["mappingVerdict"] == "GAP"]
-        self.assertEqual(len(gaps), 12)
+        self.assertEqual(len(gaps), 11)
         self.assertTrue(all(not x["requiredProofs"] and x["legacyProofs"] for x in gaps))
         report = assess(self.root, self.passed, self.sha, True, write=False)
         self.assertEqual(report["gate"], "HOLD")
+
+    def test_ret04_mapping_cannot_drop_method_or_claim_exact(self):
+        row = next(x for x in self.registry["scenarios"] if x["id"] == "CORE-RET-04")
+        original = copy.deepcopy(row)
+        for mutation in ("missing", "exact"):
+            row.clear()
+            row.update(copy.deepcopy(original))
+            if mutation == "missing":
+                row["requiredProofs"].pop()
+            else:
+                row["mappingVerdict"] = "EXACT"
+            (self.root / MAPPING).write_text(json.dumps(self.registry))
+            with self.assertRaisesRegex(ValueError, "RET04-D"):
+                assess(self.root, self.passed, self.sha, True, write=False)
 
     def test_exact_empty_mapping_fails_closed(self):
         row = next(x for x in self.registry["scenarios"] if x["mappingVerdict"] == "GAP")

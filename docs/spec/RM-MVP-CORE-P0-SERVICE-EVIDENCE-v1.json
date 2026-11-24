@@ -919,7 +919,104 @@
     {
       "id": "CORE-RET-04",
       "behavior": "Concurrent quarantine resolution in both orders → one resolution/conserved qty",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04RestockFirst"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04DisposeFirst"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B01RestockDistinctKeys"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B02DisposeDistinctKeys"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B03RestockIdenticalReplay"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B04DisposeIdenticalReplay"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B05ChangedAction"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B06ChangedEvidence"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B07StaleVersionBeforeResolution"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B08ChangedVersionAfterResolution"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B09ResolutionInsertRollback"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B10TerminalEventInsertRollback"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B11ResolutionInsertSameKeyRetry"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B12TerminalEventInsertSameKeyRetry"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C01RestockCrashBeforeCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C02RestockCrashAfterCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C03DisposeCrashBeforeCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C04DisposeCrashAfterCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C05TwoJvmIdenticalRestock"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C06TwoJvmRestockVsDispose"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C07SharedSkuRestockRestock"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C08SharedSkuDisposeDispose"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C09SharedSkuRestockDispose"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C10SharedSkuDisposeRestock"
+        }
+      ],
       "legacyBehavior": "Damaged or quarantined returns never increase sellable stock",
       "legacyProofs": [
         {
@@ -927,8 +1024,8 @@
           "test": "qr07R2WriteOffAndQuarantineNeverIncreaseSellableStock"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Старая проверка disposition не доказывает resolution race; проверить два заданных порядка RESTOCK/DISPOSE и immutable original.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "A–C: 24 PostgreSQL methods mapped; dedicated per-case SQL snapshot and exact-SHA verifier added. Strict signed IAM/verified QR fixture, durable artifact ingestion into global admission and complete normative variant review remain open.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",
@@ -942,7 +1039,8 @@
           "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
           "review": "CANDIDATE_ONLY"
         }
-      ]
+      ],
+      "evidenceProfile": "RET04-D/v1"
     },
     {
       "id": "CORE-RET-05",
