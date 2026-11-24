@@ -54,6 +54,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired VerifiedTenantRoleCommands roles;
     @Autowired FxAutoOwnerConsentService consent;
     @Autowired TenantOwnershipTransferService transfers;
+    @Autowired TenantAccessStatusService accessStatus;
     @Autowired TenantCurrencyPolicyService currencies;
     @Autowired PlatformTransactionManager txManager;
 
@@ -354,6 +355,71 @@ class FxAutoOwnerAdmissionQualificationTest {
                 admit(verified(t.owner()),t,"USD");
                 noWrites(t);
             } finally {blocker.rollback();}
+        }
+    }
+
+    // The mutation and admission are real services; the test controls only commit order.
+    private void lifecycleRace(Tenant t,VerifiedActor actor,Runnable mutation,boolean admitFirst) throws Exception {
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var pid=new java.util.concurrent.CompletableFuture<Integer>();
+        Runnable admission=()->consent.requireProductConsentAuthority(actor,t.id(),java.util.List.of("USD"));
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var first=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                jdbc.execute("SET LOCAL lock_timeout='12s'");
+                (admitFirst?admission:mutation).run();
+                entered.countDown();
+                try {
+                    if(!release.await(12,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("race timeout");
+                }catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+            }));
+            try {
+                assertThat(entered.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                var second=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                    jdbc.execute("SET LOCAL lock_timeout='12s'");
+                    pid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                    (admitFirst?mutation:admission).run();
+                }));
+                int backend=pid.get(5,java.util.concurrent.TimeUnit.SECONDS);
+                boolean blocked=false;
+                long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                while(System.nanoTime()<deadline&&!second.isDone()){
+                    if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT cardinality(pg_blocking_pids(?))>0",Boolean.class,backend))){blocked=true;break;}
+                    Thread.sleep(20);
+                }
+                assertThat(blocked).as("exact backend waits for competing lifecycle transaction").isTrue();
+                release.countDown();
+                first.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                if(admitFirst)second.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                else assertThatThrownBy(()->second.get(10,java.util.concurrent.TimeUnit.SECONDS)).hasRootCauseInstanceOf(SecurityException.class);
+                assertThatThrownBy(()->admit(actor,t,"USD")).isInstanceOf(SecurityException.class);
+                noWrites(t);
+            } finally {release.countDown();}
+        }
+    }
+
+    @Test void ownershipTransferAndAdmissionBothOrders() throws Exception {
+        pg();
+        for(boolean admitFirst:new boolean[]{true,false}){
+            var t=tenant(account());enable(t);
+            grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+            var former=verified(t.owner());var successor=verified(t.member());
+            var request=transfers.requestTransfer(former,t.id(),t.member());
+            lifecycleRace(t,former,()->transfers.acceptTransfer(successor,t.id(),request.id()),admitFirst);
+            assertThatThrownBy(()->admit(successor,t,"USD")).isInstanceOf(SecurityException.class);
+        }
+    }
+
+    @Test void ownerMembershipSuspensionAndAdmissionBothOrders() throws Exception {
+        pg();
+        for(boolean admitFirst:new boolean[]{true,false}){
+            var t=tenant(account());enable(t);
+            grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+            // Fixture: two active owners, so the real suspension command is legal.
+            jdbc.update("UPDATE public.iam_org_membership SET role='OWNER' WHERE organization_id=? AND user_id=?",t.org(),t.member());
+            var actor=verified(t.owner());var other=verified(t.member());
+            lifecycleRace(t,actor,()->accessStatus.suspendMember(other,t.id(),t.owner()),admitFirst);
+            assertThat(jdbc.queryForObject("SELECT status FROM public.iam_org_membership WHERE organization_id=? AND user_id=?",String.class,t.org(),t.owner())).isEqualTo("SUSPENDED");
         }
     }
 }
