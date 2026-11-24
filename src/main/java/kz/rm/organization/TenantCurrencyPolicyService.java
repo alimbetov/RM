@@ -114,8 +114,9 @@ public class TenantCurrencyPolicyService {
         UUID user=actorId(actor);
         if(tenantId==null || currency==null || !currency.matches("[A-Z]{3}")
                 || purpose==null || !List.of("PURCHASE","ACCOUNTING","INVENTORY_VALUATION",
-                    "SALES_INTERNAL","PUBLIC_PRICE").contains(purpose) || expectedVersion<0)
+                    "SALES_INTERNAL","PUBLIC_PRICE","PRICING_ANCHOR").contains(purpose) || expectedVersion<0)
             throw new IllegalArgumentException("TENANT_CURRENCY_CHANGE_INVALID");
+        validateAnchorCurrency(currency,purpose);
         try { java.util.Currency.getInstance(currency); }
         catch(IllegalArgumentException invalid) {
             throw new IllegalArgumentException("TENANT_CURRENCY_ISO_INVALID",invalid);
@@ -175,8 +176,9 @@ public class TenantCurrencyPolicyService {
     public void requireCurrencyForPurpose(UUID tenantId,String currency,String purpose) {
         if(tenantId==null||currency==null||!currency.matches("[A-Z]{3}")||
                 purpose==null||!List.of("PURCHASE","ACCOUNTING","INVENTORY_VALUATION",
-                    "SALES_INTERNAL","PUBLIC_PRICE").contains(purpose))
+                    "SALES_INTERNAL","PUBLIC_PRICE","PRICING_ANCHOR").contains(purpose))
             throw new IllegalArgumentException("TENANT_CURRENCY_PURPOSE_INVALID");
+        validateAnchorCurrency(currency,purpose);
         if("PUBLIC_PRICE".equals(purpose)) {
             requirePublicKzCurrency(tenantId,currency);
             return;
@@ -190,6 +192,27 @@ public class TenantCurrencyPolicyService {
             """,Integer.class,tenantId,currency,purpose);
         if(count==null||count!=1)
             throw new IllegalStateException("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+    }
+
+    /** Owner-only opt-in. No implicit grant from PURCHASE or legacy SALES_INTERNAL. */
+    @Transactional
+    public Policy setPricingAnchorEnabled(VerifiedActor actor, UUID tenantId, String currency,
+                                          boolean enabled, long expectedVersion) {
+        return setCurrencyEnabled(actor,tenantId,currency,"PRICING_ANCHOR",enabled,expectedVersion);
+    }
+
+    /** Internal admission retains the shared tenant currency lock until outer commit.
+     * This is not an authorization to publish, nor a substitute for OWNER consent.
+     */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void requirePricingAnchor(UUID tenantId,String currency) {
+        requireCurrencyForPurpose(tenantId,currency,"PRICING_ANCHOR");
+        requirePublicKzCurrency(tenantId,"KZT");
+    }
+
+    private static void validateAnchorCurrency(String currency,String purpose) {
+        if ("PRICING_ANCHOR".equals(purpose) && !List.of("USD","EUR","CNY").contains(currency))
+            throw new IllegalArgumentException("TENANT_PRICING_ANCHOR_CURRENCY_INVALID");
     }
 
     private Policy loadRequired(UUID tenantId,boolean lock) {
