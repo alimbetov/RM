@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.*;
 class FxAutoPolicySchemaPgTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired kz.rm.fx.NbrkRateRevisionWriter writer;
     record F(UUID tenant, UUID user, UUID member, UUID offer, UUID anchor, UUID guard, UUID limit, UUID policy, UUID revision) {}
     private static UUID id(){return UUID.randomUUID();}
     private F fixture() throws Exception {
@@ -79,5 +80,95 @@ class FxAutoPolicySchemaPgTest {
         enroll(f,f.offer(),f.anchor(),f.guard());
         assertThatThrownBy(()->jdbc.update("INSERT INTO crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id,payload_sha256,owner_user_id,membership_id,request_key,approved_at,expires_at,target_count,scope_sha256) VALUES (?,?,?,crm.fx_auto_sha_v1('{}'::jsonb),?,?,?,now(),now()+interval '1 day',1,?)",f.tenant(),id(),f.revision(),f.user(),f.member(),id().toString(),"b".repeat(64))).hasMessageContaining("FX_AUTO_SCOPE_DIGEST_MISMATCH");
         approve(f,f.user(),f.member(),1);
+    }
+
+    private record Sql(String text,Object... args) {}
+    private Sql enrollmentSql(F f) {
+        return new Sql("INSERT INTO crm.fx_auto_target_enrollment VALUES (?,?,?,?,?,now()+interval '1 day','EA','NONE')",f.tenant(),f.revision(),f.offer(),f.anchor(),f.guard());
+    }
+    private Sql approvalSql(F f) {
+        return new Sql("INSERT INTO crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id,payload_sha256,owner_user_id,membership_id,request_key,approved_at,expires_at,target_count,scope_sha256) VALUES (?,?,?,crm.fx_auto_sha_v1('{}'::jsonb),?,?,?,now(),now()+interval '1 day',1,crm.fx_auto_scope_sha_v1(?,?))",f.tenant(),id(),f.revision(),f.user(),f.member(),id().toString(),f.tenant(),f.revision());
+    }
+    private record Sim(UUID id, UUID price) {}
+    private Sim simulation(F f) {
+        var approval=approve(f,f.user(),f.member(),1);
+        var date=java.time.LocalDate.of(2026,11,20);
+        writer.persist(date,java.util.List.of(new kz.rm.fx.FxRateProvider.Rate("USD","KZT",new java.math.BigDecimal("500"),java.math.BigDecimal.ONE,date,"NBRK")),"f".repeat(64));
+        UUID rate=jdbc.queryForObject("SELECT id FROM crm.fx_official_rate_snapshot WHERE provider_code='NBRK' AND base_currency='USD' AND valid_date=? ORDER BY source_revision DESC LIMIT 1",UUID.class,java.sql.Date.valueOf(date));
+        UUID price=id(), sim=id();
+        jdbc.update("INSERT INTO crm.store_offer_price_revision(tenant_id,id,offer_id,offer_row_version,new_price,new_currency,actor_user_id,recorded_at) VALUES (?,?,?,0,100,'KZT',?,now())",f.tenant(),price,f.offer(),f.user());
+        jdbc.update("INSERT INTO crm.fx_auto_simulation(tenant_id,id,policy_revision_id,approval_id,source_snapshot_id,request_key,evaluation_as_of,input_payload,input_sha256,item_count) VALUES (?,?,?,?,?,?,now(),'{}',crm.fx_auto_sha_v1('{}'::jsonb),1)",f.tenant(),sim,f.revision(),approval,rate,id().toString());
+        return new Sim(sim,price);
+    }
+    private Sql itemSql(F f,Sim s) {
+        return new Sql("INSERT INTO crm.fx_auto_simulation_item VALUES (?,?,?,?,?,'{}','WOULD_UPDATE',10)",f.tenant(),s.id(),f.revision(),f.offer(),s.price());
+    }
+    private Sql sealSql(F f,Sim s) {
+        return new Sql("INSERT INTO crm.fx_auto_simulation_seal VALUES (?,?,crm.fx_auto_sim_sha_v1(?,?))",f.tenant(),s.id(),f.tenant(),s.id());
+    }
+    private void execute(Sql sql) {jdbc.update(sql.text(),sql.args());}
+    private static void execute(java.sql.Connection c,Sql sql) throws java.sql.SQLException {
+        try(var p=c.prepareStatement(sql.text())){
+            for(int i=0;i<sql.args().length;i++)p.setObject(i+1,sql.args()[i]);
+            p.executeUpdate();
+        }
+    }
+    // Establish an actual blocked PostgreSQL backend before committing the winner.
+    private String race(int isolation,Sql winner,Sql loser) throws Exception {
+        try(var a=dataSource.getConnection();var b=dataSource.getConnection()){
+            a.setTransactionIsolation(isolation); b.setTransactionIsolation(isolation);
+            a.setAutoCommit(false); b.setAutoCommit(false);
+            int pid;
+            try(var st=b.createStatement();var rs=st.executeQuery("SELECT pg_backend_pid()")){rs.next();pid=rs.getInt(1);}
+            try(var st=b.createStatement()){st.execute("SET LOCAL lock_timeout='10s'");}
+            execute(a,winner);
+            var executor=java.util.concurrent.Executors.newSingleThreadExecutor();
+            try {
+                var future=executor.submit(()->{
+                    try {execute(b,loser);b.commit();return "COMMITTED";}
+                    catch(java.sql.SQLException ex){b.rollback();return ex.getSQLState()+":"+ex.getMessage();}
+                });
+                boolean blocked=false;
+                long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                while(System.nanoTime()<deadline && !future.isDone()){
+                    if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT cardinality(pg_blocking_pids(?))>0",Boolean.class,pid))){blocked=true;break;}
+                    Thread.sleep(20);
+                }
+                assertThat(blocked).as("real PostgreSQL lock wait").isTrue();
+                a.commit();
+                return future.get(12,java.util.concurrent.TimeUnit.SECONDS);
+            } finally {a.rollback();executor.shutdownNow();}
+        }
+    }
+    @Test void enrollmentApprovalBothOrdersAndIsolationLevels() throws Exception {
+        for(int iso:new int[]{java.sql.Connection.TRANSACTION_READ_COMMITTED,java.sql.Connection.TRANSACTION_REPEATABLE_READ}){
+            var f=fixture();execute(enrollmentSql(f));
+            String late=race(iso,approvalSql(f),enrollmentSql(f));
+            assertThat(late).containsAnyOf("FX_AUTO_SCOPE_SEALED_OR_MISSING","40001");
+            var g=fixture();
+            String stale=race(iso,enrollmentSql(g),approvalSql(g));
+            // The digest argument may be evaluated against a pre-wait snapshot.
+            // Either a consistent commit or fail-closed rejection followed by fresh retry is valid.
+            if(!stale.equals("COMMITTED")){
+                assertThat(stale).containsAnyOf("FX_AUTO_SCOPE_DIGEST_MISMATCH","FX_AUTO_SCOPE_COUNT_MISMATCH","40001");
+                execute(approvalSql(g));
+            }
+            assertThat(jdbc.queryForObject("SELECT sealed FROM crm.fx_auto_scope_guard WHERE tenant_id=? AND policy_revision_id=?",Boolean.class,g.tenant(),g.revision())).isTrue();
+        }
+    }
+    @Test void simulationSealBothOrdersAndIsolationLevels() throws Exception {
+        for(int iso:new int[]{java.sql.Connection.TRANSACTION_READ_COMMITTED,java.sql.Connection.TRANSACTION_REPEATABLE_READ}){
+            var f=fixture();execute(enrollmentSql(f));var s=simulation(f);execute(itemSql(f,s));
+            String late=race(iso,sealSql(f,s),itemSql(f,s));
+            assertThat(late).containsAnyOf("FX_AUTO_SIM_SEALED_OR_MISSING","40001");
+            var g=fixture();execute(enrollmentSql(g));var t=simulation(g);
+            String stale=race(iso,itemSql(g,t),sealSql(g,t));
+            if(!stale.equals("COMMITTED")){
+                assertThat(stale).containsAnyOf("FX_AUTO_SIM_DIGEST_MISMATCH","FX_AUTO_SIM_COUNT_MISMATCH","40001");
+                execute(sealSql(g,t));
+            }
+            assertThat(jdbc.queryForObject("SELECT sealed FROM crm.fx_auto_simulation_guard WHERE tenant_id=? AND simulation_id=?",Boolean.class,g.tenant(),t.id())).isTrue();
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.fx_auto_simulation_guard SET sealed=false WHERE tenant_id=? AND simulation_id=?",g.tenant(),t.id())).hasMessageContaining("FX_AUTO_GUARD_DIRECT_MUTATION");
+        }
     }
 }
