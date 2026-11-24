@@ -65,6 +65,9 @@ class QrMvpServiceJourneyQualificationTest {
     @Autowired SalesReturnReceptionProofService receptionProof;
     @Autowired SalesReturnPhysicalService physical;
     @Autowired JdbcTemplate jdbc;
+    @Autowired kz.rm.crm.AuthenticatedCrmCommands crm;
+    @Autowired kz.rm.crm.CrmBuyerLinkService links;
+    @Autowired kz.rm.security.kms.TenantKeyService tenantKeys;
 
     private record Scenario(UUID tenant,UUID warehouse,UUID sku,UUID offer,
                             String publicQr, long offerVersion,
@@ -73,15 +76,10 @@ class QrMvpServiceJourneyQualificationTest {
 
     private static String key(){return "QR_MVP_"+UUID.randomUUID().toString().replace("-","");}
 
-    private VerifiedActor actor(UUID user) {
-        String subject=jdbc.queryForObject("""
-                SELECT external_subject FROM public.iam_user_account WHERE id=?
-                """,String.class,user);
-        JwtDecoder decoder=token->Jwt.withTokenValue(token)
-                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(600)).build();
-        return new OidcActorResolver(decoder,users).resolve("qr-mvp-fixture");
-    }
+    private static JourneySignedActorFixture signedActors;
+    @org.junit.jupiter.api.BeforeAll static void startIssuer() throws Exception { signedActors=new JourneySignedActorFixture(); }
+    @org.junit.jupiter.api.AfterAll static void stopIssuer(){ if(signedActors!=null)signedActors.close(); }
+    private VerifiedActor actor(UUID user){ return signedActors.resolve(jdbc,users,user); }
 
     private Scenario setup() {
         var org=organizations.saveAndFlush(new OrganizationEntity(
@@ -128,11 +126,12 @@ class QrMvpServiceJourneyQualificationTest {
                 DomainPermission.SALES_RETURN_RECEIVE,
                 DomainPermission.SALES_RETURN_INSPECT,
                 DomainPermission.SALES_RETURN_POST,
-                DomainPermission.INVENTORY_ADJUST))
+                DomainPermission.INVENTORY_ADJUST,DomainPermission.CRM_WRITE,DomainPermission.CRM_READ))
             roles.grant(owner,tenant,role.id(),permission);
         roles.assign(owner,tenant,staffId,role.id());
         roles.enable(owner,tenant);
         currencies.initialize(owner,tenant);
+        tenantKeys.provision(tenant);
 
         String kato=jdbc.queryForObject("""
                 SELECT code FROM public.ref_kato_territory
@@ -162,6 +161,15 @@ class QrMvpServiceJourneyQualificationTest {
         assertThat(publicCards.findPublished(reference.publicRef(),"ru").currency()).isEqualTo("KZT");
         return new Scenario(tenant,warehouse,product.id(),published.id(),
                 reference.publicRef(),published.rowVersion(),owner,staff,buyer);
+    }
+
+    private void linkBuyer(Scenario s,UUID order){
+        var customer=crm.createCompany(s.staff(),s.tenant(),"QR linked customer",null);
+        var link=links.propose(s.staff(),s.tenant(),customer.id(),s.buyer().userId(),key());
+        assertThat(links.orderHistory(s.staff(),s.tenant(),customer.id(),20)).isEmpty();
+        assertThat(links.confirm(s.buyer(),s.tenant(),link.id(),0).state()).isEqualTo(kz.rm.crm.CrmBuyerLinkService.State.CONFIRMED);
+        assertThat(links.orderHistory(s.staff(),s.tenant(),customer.id(),20))
+            .extracting(kz.rm.crm.CrmBuyerLinkService.BuyerOrder::orderId).containsExactly(order);
     }
 
     private long orderVersion(Scenario s,UUID orderId) {
@@ -255,16 +263,20 @@ class QrMvpServiceJourneyQualificationTest {
         assertThat(jdbc.queryForObject("""
                 SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
                 """,String.class,s.tenant(),order)).isEqualTo("PICKUP_PROOF_REQUIRED");
+        linkBuyer(s,order);
         UUID line=handover(s,order,3);
         assertThat(sellable(s)).isEqualByComparingTo("7");
         returnAndInspect(s,order,line,2,SalesReturnPhysicalService.Disposition.RESTOCK);
         assertThat(sellable(s)).isEqualByComparingTo("9");
+        returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.WRITE_OFF);
+        assertThat(sellable(s)).isEqualByComparingTo("9");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_return_posting p JOIN crm.sales_return_request r ON r.tenant_id=p.tenant_id AND r.id=p.return_id WHERE p.tenant_id=? AND r.order_id=? AND p.disposition='WRITE_OFF' AND p.movement_id IS NULL AND p.quarantine_movement_id IS NULL",Integer.class,s.tenant(),order)).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_return_posting p
                 JOIN crm.sales_return_request r
                   ON r.tenant_id=p.tenant_id AND r.id=p.return_id
                 WHERE p.tenant_id=? AND r.order_id=?
-                """,Integer.class,s.tenant(),order)).isEqualTo(1);
+                """,Integer.class,s.tenant(),order)).isEqualTo(2);
     }
 
     @Test void qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg() {
@@ -284,6 +296,7 @@ class QrMvpServiceJourneyQualificationTest {
                 SELECT unit_price_snapshot FROM crm.sales_order_line
                 WHERE tenant_id=? AND order_id=?
                 """,BigDecimal.class,s.tenant(),order)).isEqualByComparingTo("80.0000");
+        linkBuyer(s,order);
         UUID line=handover(s,order,2);
         assertThat(sellable(s)).isEqualByComparingTo("8");
         returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.QUARANTINE);

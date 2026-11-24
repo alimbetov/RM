@@ -53,6 +53,8 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired AuthenticatedCrmCommands crm;
     @Autowired AuthenticatedCrmQueries crmReads;
     @Autowired TaskService tasks;
+    @Autowired kz.rm.tasks.TaskCrmFollowupService followups;
+    @Autowired kz.rm.crm.CrmInteractionService interactions;
     @Autowired CatalogItemService catalog;
     @Autowired StorefrontManagementService stores;
     @Autowired StorefrontOfferService offers;
@@ -67,10 +69,10 @@ class BusMvpServiceJourneyQualificationTest {
                 UUID.randomUUID(),prefix+"-"+UUID.randomUUID(),prefix)).getId();
     }
 
-    private VerifiedActor actor(UUID userId) {
-        // Only available because this qualification is inside IAM test package.
-        return new VerifiedActor(userId,Instant.now().plusSeconds(600));
-    }
+    private static JourneySignedActorFixture signedActors;
+    @org.junit.jupiter.api.BeforeAll static void startIssuer() throws Exception { signedActors=new JourneySignedActorFixture(); }
+    @org.junit.jupiter.api.AfterAll static void stopIssuer(){ if(signedActors!=null)signedActors.close(); }
+    private VerifiedActor actor(UUID user){ return signedActors.resolve(jdbc,users,user); }
 
     private void proveInitialOwnerEmail(UUID ownerId) {
         emails.requestInitialVerification(actor(ownerId),
@@ -117,7 +119,7 @@ class BusMvpServiceJourneyQualificationTest {
                 DomainPermission.INVENTORY_RECEIVE,DomainPermission.INVENTORY_STOCK_READ,
                 DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
                 DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL,
-                DomainPermission.SALES_ORDER_READ))
+                DomainPermission.SALES_ORDER_READ,DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE))
             roles.grant(owner,tenant,role.id(),permission);
         roles.assign(owner,tenant,staffId,role.id());
         roles.enable(owner,tenant);
@@ -138,12 +140,14 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(crmReads.getCustomer(staff,tenant,customer.id()).id()).isEqualTo(customer.id());
         assertThat(crmReads.getContact(staff,tenant,contact.id()).customerId()).isEqualTo(customer.id());
 
-        var task=tasks.create(staff,tenant,"Prepare customer call",staffId,
+        var interaction=interactions.record(staff,tenant,customer.id(),contact.id(),kz.rm.crm.CrmInteractionService.Kind.CALL,staffId,Instant.now(),Instant.now().plusSeconds(3600),"bus-interaction-"+UUID.randomUUID());
+        var task=followups.create(staff,tenant,interaction.id(),"Prepare customer call",staffId,
                 Instant.now().plusSeconds(3600),"bus-task-"+UUID.randomUUID());
         var started=tasks.start(staff,tenant,task.id(),task.version());
         var finished=tasks.complete(staff,tenant,task.id(),started.version());
         assertThat(finished.state().name()).isEqualTo("COMPLETED");
         assertThat(tasks.historyMine(staff,tenant,task.id(),20)).hasSize(3);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.task_crm_followup f JOIN crm.customer_interaction i ON i.tenant_id=f.tenant_id AND i.id=f.interaction_id WHERE f.tenant_id=? AND f.task_id=? AND i.id=? AND i.customer_id=?",Integer.class,tenant,task.id(),interaction.id(),customer.id())).isEqualTo(1);
 
         var draft=catalog.createDraft(staff,tenant,
                 "BUS-"+UUID.randomUUID(),CatalogItem.Kind.PRODUCT,
@@ -195,6 +199,15 @@ class BusMvpServiceJourneyQualificationTest {
                 """,Integer.class,tenant,published.id(),orderId)).isEqualTo(1);
         assertThat(orderReads.history(staff,tenant,orderId,0,20)).hasSize(3);
         assertThat(orderReads.detail(staff,tenant,orderId)).isNotNull();
+        UUID cancelOrder=checkout.checkout(store.slug(),"bus-cancel-"+UUID.randomUUID()+"@example.kz",
+                "bus-cancel-order-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),2))).order().orderId();
+        assertThat(sales.confirm(staff,tenant,cancelOrder,warehouse.id()).status()).isEqualTo("CONFIRMED");
+        assertThat(sales.cancel(staff,tenant,cancelOrder).status()).isEqualTo("CANCELLED");
+        assertThat(sales.cancel(staff,tenant,cancelOrder).affectedLines()).isZero();
+        assertThat(jdbc.queryForObject("SELECT reserved FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("SELECT on_hand FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("7");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER' AND source_id=?",Integer.class,tenant,cancelOrder)).isZero();
+        assertThat(orderReads.history(staff,tenant,cancelOrder,0,20)).hasSize(3);
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
     }
