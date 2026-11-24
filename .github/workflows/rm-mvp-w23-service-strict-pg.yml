@@ -11,6 +11,7 @@ on:
       - 'src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java'
       - 'src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java'
       - 'docs/operations/RM-MVP-SERVICE-CURRENCY-PREFLIGHT.sql'
+      - '.github/scripts/verify_rm_qa_01b.py'
       - '.github/workflows/rm-mvp-w23-service-strict-pg.yml'
   workflow_dispatch:
 
