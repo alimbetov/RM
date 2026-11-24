@@ -7,7 +7,7 @@
 
 **[RM-IDEA-BANK-R1 — Единый банк продуктовых идей](RM-IDEA-BANK-R1.md)**
 
-В реестре собрано **16 направлений** из обсуждений пользователя и существующей стратегии RM:
+В реестре собрано **17 направлений** из обсуждений пользователя и существующей стратегии RM:
 
 | Направление | Что внутри |
 |---|---|
@@ -21,6 +21,11 @@
 | **Smart FX Shield** | Управляемая массовая автоматическая корректировка цен в KZT |
 | **CRM improvements** | Kanban/лиды, коммуникации, интеграции и KPI |
 | **Earlier Killer Features** | InstantDeal, Promise Engine, Relationship Radar, Zero-Entry Order (parked) |
+| **FIN → RM Analytics Adaptation (IDEA-17)** | Period Resolver, Metric Registry, Native SQL, lineage, Methodology & Results, Metric Graph, Reports, Tribuo contract — без зависимости от FIN |
+
+## Отобранная архитектура из FIN Analyzer
+
+**[RM-INSIGHT-FIN-ADAPT-R1 — адаптация расчётных механизмов FIN для RM](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md)**. Отобраны 9 логических компонентов, расписаны границы доменных владельцев и 32 будущие PostgreSQL/functional acceptance проверки. Статус **SPEC_EXISTS / POST-MVP PARKED**, без кода.
 
 ## Канонические документы
 
