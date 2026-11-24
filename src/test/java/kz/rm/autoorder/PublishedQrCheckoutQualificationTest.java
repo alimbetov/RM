@@ -12,6 +12,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -20,13 +22,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * QR-03: public QR -> existing email-first AUTOORDER checkout with exact
+ * QR-MVP: public QR -> verified AUTOORDER checkout with exact
  * server-side acknowledgement of an offer revision under row locks.
  * No HTTP controller, no synthetic "buyer-is-seller" membership.
  */
@@ -50,6 +54,9 @@ class PublishedQrCheckoutQualificationTest {
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired PlatformTransactionManager transactions;
+    @Autowired GlobalAccountStatusService accountStatus;
+    @Autowired GlobalAccountDeletionService accountDeletion;
 
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,
                            String offerRef,VerifiedActor seller) {}
@@ -278,6 +285,118 @@ class PublishedQrCheckoutQualificationTest {
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
                 """,Integer.class,f.tenant())).isEqualTo(1);
+    }
+
+    private VerifiedActor platformAdmin() {
+        UUID id=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "qrmvp-admin-"+UUID.randomUUID(),"QR Admin")).getId();
+        jdbc.update("""
+                INSERT INTO public.iam_global_role_assignment(id,user_id,role,granted_at)
+                VALUES (?,?,'PLATFORM_ADMIN',?)
+                """,UUID.randomUUID(),id,Timestamp.from(Instant.now()));
+        return verified(id);
+    }
+
+    private List<Integer> salesEffects(Fixture f) {
+        return List.of(
+                orders(f),
+                jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=?",Integer.class,f.tenant()),
+                jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=?",Integer.class,f.tenant()),
+                jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?",Integer.class,f.tenant()),
+                jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_qr_reference WHERE tenant_id=?",Integer.class,f.tenant()),
+                jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=?",Integer.class,f.tenant()));
+    }
+
+    private static void awaitLatch(CountDownLatch latch) {
+        try {
+            if(!latch.await(20,TimeUnit.SECONDS))
+                throw new IllegalStateException("Timed out awaiting transaction barrier");
+        } catch(InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+        }
+    }
+
+    private void awaitPostgresBlock(int backendPid) throws InterruptedException {
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+        do {
+            Integer blockedBy=jdbc.queryForObject(
+                    "SELECT cardinality(pg_blocking_pids(?))",Integer.class,backendPid);
+            if(blockedBy!=null && blockedBy>0)return;
+            Thread.sleep(25);
+        } while(System.nanoTime()<deadline);
+        fail("Second transaction never reached a PostgreSQL row-lock wait");
+    }
+
+    @Test void qrMvpSuspendOrDeleteVersusCheckoutBothCommitOrders() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        // Actual IAM owner commands, four deterministic commit orderings.
+        for(boolean delete:List.of(false,true)) {
+            for(boolean revokeFirst:List.of(false,true)) {
+                var f=setup();
+                var buyer=mvpBuyer(true);
+                var admin=platformAdmin();
+                String requestKey=key(),deleteKey=key();
+                List<Integer> before=salesEffects(f);
+                var tx=new TransactionTemplate(transactions);
+                var firstApplied=new CountDownLatch(1);
+                var firstCommit=new CountDownLatch(1);
+                var secondPid=new CompletableFuture<Integer>();
+                Runnable revoke=()->{
+                    if(delete)accountDeletion.deleteAccount(admin,buyer.userId(),deleteKey);
+                    else accountStatus.suspendAccount(admin,buyer.userId());
+                };
+                Runnable checkout=()->buy(f,buyer,2,0,new BigDecimal("250"),requestKey);
+                Runnable firstOperation=revokeFirst?revoke:checkout;
+                Runnable secondOperation=revokeFirst?checkout:revoke;
+                try(var pool=Executors.newFixedThreadPool(2)) {
+                    var first=pool.submit(()->tx.execute(status->{
+                        firstOperation.run();
+                        firstApplied.countDown();
+                        awaitLatch(firstCommit);
+                        return true;
+                    }));
+                    try {
+                        assertThat(firstApplied.await(10,TimeUnit.SECONDS)).isTrue();
+                        var second=pool.submit(()->tx.execute(status->{
+                            secondPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                            secondOperation.run();
+                            return true;
+                        }));
+                        awaitPostgresBlock(secondPid.get(10,TimeUnit.SECONDS));
+                        firstCommit.countDown();
+                        assertThat(first.get(30,TimeUnit.SECONDS)).isTrue();
+                        if(revokeFirst) {
+                            assertThatThrownBy(()->second.get(30,TimeUnit.SECONDS))
+                                    .isInstanceOf(ExecutionException.class)
+                                    .hasCauseInstanceOf(SecurityException.class);
+                            assertThat(salesEffects(f)).isEqualTo(before);
+                        } else {
+                            assertThat(second.get(30,TimeUnit.SECONDS)).isTrue();
+                            assertThat(salesEffects(f)).containsExactly(1,1,1,1,1,0);
+                            assertThat(jdbc.queryForObject("""
+                                    SELECT count(*) FROM crm.sales_order
+                                    WHERE tenant_id=? AND buyer_user_id=? AND status='PLACED'
+                                      AND total_amount=500 AND currency='KZT'
+                                    """,Integer.class,f.tenant(),buyer.userId())).isEqualTo(1);
+                        }
+                    } finally {
+                        firstCommit.countDown();
+                    }
+                }
+                assertThat(jdbc.queryForObject("SELECT status FROM public.iam_user_account WHERE id=?",
+                        String.class,buyer.userId())).isEqualTo(delete?"DELETED":"SUSPENDED");
+                List<Integer> after=salesEffects(f);
+                assertThatThrownBy(()->buy(f,buyer,2,0,new BigDecimal("250"),requestKey))
+                        .isInstanceOf(SecurityException.class);
+                assertThatThrownBy(()->buy(f,buyer,2,0,new BigDecimal("250"),key()))
+                        .isInstanceOf(SecurityException.class);
+                assertThat(salesEffects(f)).isEqualTo(after);
+            }
+        }
     }
 
     @Test void decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation() {
