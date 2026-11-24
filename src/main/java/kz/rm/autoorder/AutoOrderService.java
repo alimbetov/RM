@@ -30,10 +30,7 @@ public class AutoOrderService {
     private final EmailIdentityService emailIdentities;
     private final SalesOrderQrReferenceService orderQrReferences;
     private final CommerceCurrencyAdmission currencyAdmission;
-    private String verifiedBuyerLockSql;
     private String verifiedBuyerIdentityLockSql;
-    @org.springframework.beans.factory.annotation.Value("${rm.qr.legacy-email-first-checkout.enabled:false}")
-    private boolean legacyEmailFirstQrEnabled;
 
     public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
                             SalesOrderQrReferenceService orderQrReferences) {
@@ -77,15 +74,13 @@ public class AutoOrderService {
     }
 
     /**
-     * QR-03A compatibility path, explicitly opt-in for legacy qualification.
-     * Not an admitted public MVP checkout operation.
+     * Historical QR-03A signature retained for source compatibility only.
+     * No deployment property may enable email-first private QR checkout.
      */
     @Transactional
     public CheckoutResult checkoutPublishedQr(String slug,String email,String idempotencyKey,
                                                Line line,QrPriceAcknowledgement acknowledged) {
-        if(!legacyEmailFirstQrEnabled)throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
-        validateQrAcknowledgement(line,acknowledged);
-        return checkoutInternal(slug,email,idempotencyKey,List.of(line),acknowledged,null);
+        throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
     }
 
     @Transactional
@@ -157,15 +152,19 @@ public class AutoOrderService {
         // Check current buyer state before replay, not just before new writes.
         BuyerProof buyerProof=buyer==null?null:lockVerifiedBuyer(buyer);
         List<OrderReceipt> existing=jdbc.query("""
-            SELECT r.order_id,r.request_sha256,o.status FROM crm.sales_checkout_receipt r
+            SELECT r.order_id,r.request_sha256,o.status,o.buyer_user_id FROM crm.sales_checkout_receipt r
             JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
             WHERE r.tenant_id=? AND r.idempotency_key=?
             """,(rs,n)->{
-                if(!MessageDigest.isEqual(requestHash,rs.getBytes(2)))
+                if(!MessageDigest.isEqual(requestHash,rs.getBytes(2))
+                        ||(buyerProof!=null && !buyerProof.userId().equals(rs.getObject(4,UUID.class))))
                     throw new IllegalArgumentException("Idempotency key reused with different request");
                 return new OrderReceipt(rs.getObject(1,UUID.class),rs.getString(3));
             },tenant,idempotencyKey);
-        if(!existing.isEmpty()) return new CheckoutResult(existing.get(0));
+        if(!existing.isEmpty()) {
+            if(buyer!=null)buyer.userId();
+            return new CheckoutResult(existing.get(0));
+        }
         // New checkout must be serialized with IAM tenant suspension.
         // Lock order: checkout stripe -> IAM workspace -> storefront -> offer -> catalogue.
         // Exact idempotent replay above remains available for previously accepted orders.
@@ -232,6 +231,7 @@ public class AutoOrderService {
         }
         BigDecimal total=offers.stream().map(o->o.unitPrice().multiply(BigDecimal.valueOf(o.quantity())))
                 .reduce(BigDecimal.ZERO,BigDecimal::add);
+        if(buyer!=null)buyer.userId();
         // IAM alone owns global email deduplication and pending account provisioning.
         UUID identityId=buyerProof==null
                 ?emailIdentities.findOrProvision(normalized).identityId()
@@ -297,7 +297,6 @@ public class AutoOrderService {
                 c.getMetaData().getDatabaseProductName());
         String suffix=(db!=null&&db.toLowerCase(java.util.Locale.ROOT).contains("postgresql"))
                 ?"FOR SHARE":"FOR UPDATE";
-        verifiedBuyerLockSql="SELECT status FROM public.iam_user_account WHERE id=? "+suffix;
         verifiedBuyerIdentityLockSql="SELECT status,external_subject "
                 +"FROM public.iam_user_account WHERE id=? "+suffix;
     }
@@ -321,6 +320,7 @@ public class AutoOrderService {
                 """,(rs,n)->rs.getObject(1,UUID.class),user);
         if(identities.size()!=1)
             throw new SecurityException("VERIFIED_EMAIL_REQUIRED");
+        buyer.userId(); // fail closed if expiry elapsed while acquiring locks
         return new BuyerProof(user,identities.getFirst());
     }
 
@@ -348,31 +348,25 @@ public class AutoOrderService {
                 +"|"+accepted.currency());
         // Shared seller-wide checkout namespace from QR-03A and normal lists.
         lockStripe("crm.sales_checkout_lock",tenant+":"+idempotencyKey);
-        String accountStatus=jdbc.query(verifiedBuyerLockSql,
-                rs->rs.next()?rs.getString(1):null,user);
-        if(!"ACTIVE".equals(accountStatus))
-            throw new SecurityException("VERIFIED_BUYER_REQUIRED");
-        List<UUID> emailIdentities=jdbc.query("""
-                SELECT id FROM public.iam_email_identity
-                WHERE user_id=? AND lifecycle_state='CURRENT'
-                  AND verified_at IS NOT NULL
-                """,(rs,n)->rs.getObject(1,UUID.class),user);
-        if(emailIdentities.size()!=1)
-            throw new SecurityException("VERIFIED_EMAIL_REQUIRED");
+        BuyerProof buyerProof=lockVerifiedBuyer(buyer);
 
         List<OrderReceipt> replays=jdbc.query("""
-                SELECT r.order_id,r.request_sha256,o.status
+                SELECT r.order_id,r.request_sha256,o.status,o.buyer_user_id
                 FROM crm.sales_checkout_receipt r
                 JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
                 WHERE r.tenant_id=? AND r.idempotency_key=?
                 """,(rs,n)->{
-                    if(!MessageDigest.isEqual(requestHash,rs.getBytes(2)))
+                    if(!MessageDigest.isEqual(requestHash,rs.getBytes(2))
+                            ||!buyerProof.userId().equals(rs.getObject(4,UUID.class)))
                         throw new IllegalArgumentException(
                                 "Idempotency key reused with different request");
                     return new OrderReceipt(rs.getObject(1,UUID.class),
                             rs.getString(3));
                 },tenant,idempotencyKey);
-        if(!replays.isEmpty())return new CheckoutResult(replays.getFirst());
+        if(!replays.isEmpty()) {
+            buyer.userId();
+            return new CheckoutResult(replays.getFirst());
+        }
 
         String workspace=jdbc.query("""
                 SELECT status FROM public.iam_workspace
@@ -436,6 +430,10 @@ public class AutoOrderService {
         if(!quote.currency().equals(offer.currency()))
             throw new IllegalStateException("QUOTE_CURRENCY_CHANGED");
         requireCurrency(quote.currency());
+        // W2 first invariant: NEW negotiated QR orders may never be foreign-currency,
+        // even under a disabled staged market-policy flag. Existing receipts replay above.
+        if(!"KZT".equals(quote.currency()))
+            throw new IllegalStateException("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
         Integer agreed=jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_price_proposal
                 WHERE tenant_id=? AND id=? AND state='AGREED' AND offer_id=?
@@ -447,12 +445,13 @@ public class AutoOrderService {
         UUID orderId=UUID.randomUUID();
         Timestamp now=Timestamp.from(Instant.now());
         BigDecimal total=quote.price().multiply(BigDecimal.valueOf(quote.quantity()));
+        buyer.userId();
         jdbc.update("""
                 INSERT INTO crm.sales_order
                   (tenant_id,id,pending_email_identity_id,buyer_user_id,status,
                    total_amount,currency,created_at,fulfillment_mode)
                 VALUES (?,?,?,?,'PLACED',?,?,?,'PICKUP_PROOF_REQUIRED')
-                """,tenant,orderId,emailIdentities.getFirst(),user,total,
+                """,tenant,orderId,buyerProof.emailIdentityId(),user,total,
                 quote.currency(),now);
         jdbc.update("""
                 INSERT INTO crm.sales_order_line

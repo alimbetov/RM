@@ -10,12 +10,13 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 
-/** W1 default-fail-closed admission, independent of QR-03 legacy regression profile. */
+/** W1 unconditional deny even if obsolete legacy configuration is set true. */
 @SpringBootTest
 @TestPropertySource(properties={
     "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "rm.qr.legacy-email-first-checkout.enabled=true"
 })
 class QrLegacyEmailFirstDisabledQualificationTest {
     @Autowired PublishedQrCheckoutService publishedQr;

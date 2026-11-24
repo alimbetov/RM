@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * QR-03 service-only adapter from a stable PRODUCT_OFFER ref to the existing
- * email-first AUTOORDER checkout. It never creates a second SALES order ledger.
+ * verified AUTOORDER checkout. It never creates a second SALES order ledger.
  *
  * A revoked alias can still be resolved ONLY as a lookup key for an exact
  * idempotent replay of a previously accepted checkout. AutoOrderService
@@ -23,27 +23,17 @@ public class PublishedQrCheckoutService {
 
     private final JdbcTemplate jdbc;
     private final AutoOrderService checkout;
-    @org.springframework.beans.factory.annotation.Value("${rm.qr.legacy-email-first-checkout.enabled:false}")
-    private boolean legacyEmailFirstQrEnabled;
 
     public PublishedQrCheckoutService(JdbcTemplate jdbc,AutoOrderService checkout) {
         this.jdbc=jdbc;
         this.checkout=checkout;
     }
 
-    /** Legacy email-first QR path: disabled except explicitly opted-in compatibility tests. */
+    /** Historical signature: always denied, including under obsolete legacy configuration. */
     public AutoOrderService.CheckoutResult checkout(String publicOfferRef,String email,
             int quantity,long acceptedOfferVersion,BigDecimal acceptedUnitPrice,
             String acceptedCurrency,String requestKey) {
-        if(!legacyEmailFirstQrEnabled)
-            throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
-        requireQuantity(quantity);
-        OfferTarget target=resolveTarget(publicOfferRef);
-        return checkout.checkoutPublishedQr(target.sellerSlug(),email,requestKey,
-                new AutoOrderService.Line(target.offerId(),quantity),
-                new AutoOrderService.QrPriceAcknowledgement(publicOfferRef,
-                        target.offerId(),acceptedOfferVersion,acceptedUnitPrice,
-                        acceptedCurrency));
+        throw new SecurityException("QR_VERIFIED_BUYER_REQUIRED");
     }
 
     public AutoOrderService.CheckoutResult checkoutVerified(VerifiedActor buyer,

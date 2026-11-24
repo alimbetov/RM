@@ -34,8 +34,7 @@ import static org.assertj.core.api.Assertions.*;
 @TestPropertySource(properties={
     "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
-    "rm.qr.legacy-email-first-checkout.enabled=true"
+    "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
 })
 class PublishedQrCheckoutQualificationTest {
     @Autowired PublishedQrCheckoutService qrCheckout;
@@ -114,9 +113,16 @@ class PublishedQrCheckoutQualificationTest {
     private static String email() {
         return "qrbuyer-"+UUID.randomUUID()+"@example.kz";
     }
-    private AutoOrderService.CheckoutResult buy(Fixture f,String email,int quantity,
+    private AutoOrderService.CheckoutResult buy(Fixture f,MvpBuyer buyer,int quantity,
                                                  long version,BigDecimal price,String key) {
-        return qrCheckout.checkout(f.offerRef(),email,quantity,version,price,"KZT",key);
+        return qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),quantity,version,price,"KZT",key);
+    }
+
+    // Historical email claim and order-locator regressions use the supported
+    // STANDARD channel; they must not re-enable retired QR checkout.
+    private AutoOrderService.CheckoutResult standard(Fixture f,String address,int quantity,String requestKey) {
+        return auto.checkout(f.slug(),address,requestKey,
+                List.of(new AutoOrderService.Line(f.offer(),quantity)));
     }
     private int orders(Fixture f) {
         return jdbc.queryForObject("""
@@ -157,6 +163,10 @@ class PublishedQrCheckoutQualificationTest {
         UUID order=placed.order().orderId();
         assertThat(placed.order().status()).isEqualTo("PLACED");
         assertThat(orders(f)).isEqualTo(1);
+        var reference=orderQr.ownReference(buyer.actor(),f.tenant(),order);
+        assertThat(orderQr.readOwn(buyer.actor(),reference.publicRef()).orderId()).isEqualTo(order);
+        assertThatThrownBy(()->orderQr.readOwn(mvpBuyer(true).actor(),reference.publicRef()))
+                .isInstanceOf(SecurityException.class);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_order
                 WHERE tenant_id=? AND id=? AND buyer_user_id=?
@@ -272,7 +282,7 @@ class PublishedQrCheckoutQualificationTest {
 
     @Test void decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation() {
         var f=setup();
-        UUID id=buy(f,email(),2,0,new BigDecimal("250.0000"),key()).order().orderId();
+        UUID id=buy(f,mvpBuyer(true),2,0,new BigDecimal("250.0000"),key()).order().orderId();
         assertThat(jdbc.queryForObject("""
             SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
             """,String.class,f.tenant(),id)).isEqualTo("PICKUP_PROOF_REQUIRED");
@@ -296,7 +306,7 @@ class PublishedQrCheckoutQualificationTest {
                 .contains("postgresql"));
         }
         var f=setup();
-        UUID id=buy(f,email(),1,0,new BigDecimal("250.0000"),key()).order().orderId();
+        UUID id=buy(f,mvpBuyer(true),1,0,new BigDecimal("250.0000"),key()).order().orderId();
         assertThatThrownBy(()->jdbc.update("""
             UPDATE crm.sales_order SET fulfillment_mode='STANDARD'
             WHERE tenant_id=? AND id=?
@@ -308,7 +318,7 @@ class PublishedQrCheckoutQualificationTest {
 
     @Test void qr03AcceptedCurrentPriceCreatesOnePlacedOrderWithEmailIdentity() {
         var f=setup();
-        var placed=buy(f,email(),3,0,new BigDecimal("250.0000"),key());
+        var placed=buy(f,mvpBuyer(true),3,0,new BigDecimal("250.0000"),key());
         UUID id=placed.order().orderId();
         assertThat(placed.order().status()).isEqualTo("PLACED");
         assertThat(orders(f)).isEqualTo(1);
@@ -318,7 +328,7 @@ class PublishedQrCheckoutQualificationTest {
                 """,BigDecimal.class,f.tenant(),id)).isEqualByComparingTo("750");
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_order
-                WHERE tenant_id=? AND id=? AND buyer_user_id IS NULL
+                WHERE tenant_id=? AND id=? AND buyer_user_id IS NOT NULL
                   AND pending_email_identity_id IS NOT NULL
                 """,Integer.class,f.tenant(),id)).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
@@ -337,7 +347,7 @@ class PublishedQrCheckoutQualificationTest {
     }
 
     @Test void qr03SellerPriceChangeRejectsStaleAcceptanceBeforeBuyerProvisioning() {
-        var f=setup();String buyer=email(),requestKey=key();
+        var f=setup();var buyer=mvpBuyer(true);String requestKey=key();
         var updated=sellerOffers.updatePrice(f.seller(),f.tenant(),f.offer(),
                 "QR Commercial Item",new BigDecimal("310"),"KZT",0L);
         assertThat(updated.rowVersion()).isEqualTo(1);
@@ -348,15 +358,15 @@ class PublishedQrCheckoutQualificationTest {
                 SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
                 """,Integer.class,f.tenant())).isZero();
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM public.iam_email_identity WHERE lookup_hmac=?
-                """,Integer.class,crypto.lookup(buyer))).isZero();
+                SELECT count(*) FROM public.iam_email_identity WHERE id=? AND user_id=?
+                """,Integer.class,buyer.emailId(),buyer.userId())).isEqualTo(1);
         var accepted=buy(f,buyer,2,1,new BigDecimal("310"),requestKey);
         assertThat(accepted.order().status()).isEqualTo("PLACED");
         assertThat(orders(f)).isEqualTo(1);
     }
 
     @Test void qr03RevokeBlocksNewCheckoutYetExactCommittedReplayWorks() {
-        var f=setup();String buyer=email(),requestKey=key();
+        var f=setup();var buyer=mvpBuyer(true);String requestKey=key();
         var first=buy(f,buyer,1,0,new BigDecimal("250"),requestKey);
         qr.revoke(f.seller(),f.tenant(),f.offer(),0,
                 "QCO_"+UUID.randomUUID().toString().replace("-",""));
@@ -371,14 +381,14 @@ class PublishedQrCheckoutQualificationTest {
     }
 
     @Test void qr03CheckoutSharesSellerReceiptNamespaceWithNonQrMode() {
-        var f=setup();String buyer=email(),requestKey=key();
+        var f=setup();String buyer=email(),requestKey=key();var verifiedBuyer=mvpBuyer(true);
         var first=auto.checkout(f.slug(),buyer,requestKey,
                 List.of(new AutoOrderService.Line(f.offer(),1)));
-        assertThatThrownBy(()->buy(f,buyer,1,0,new BigDecimal("250"),requestKey))
+        assertThatThrownBy(()->buy(f,verifiedBuyer,1,0,new BigDecimal("250"),requestKey))
                 .hasMessageContaining("Idempotency key reused");
         assertThat(orders(f)).isEqualTo(1);
         var another=setup();String secondBuyer=email(),secondKey=key();
-        var second=buy(another,secondBuyer,1,0,new BigDecimal("250"),secondKey);
+        var second=buy(another,mvpBuyer(true),1,0,new BigDecimal("250"),secondKey);
         assertThatThrownBy(()->auto.checkout(another.slug(),secondBuyer,secondKey,
                 List.of(new AutoOrderService.Line(another.offer(),1))))
                 .hasMessageContaining("Idempotency key reused");
@@ -387,12 +397,12 @@ class PublishedQrCheckoutQualificationTest {
     }
 
     @Test void qr03WrongQuantityOrCurrencyOrUnpublishedOfferCannotCreateOrder() {
-        var f=setup();String buyer=email();
+        var f=setup();var buyer=mvpBuyer(true);
         assertThatThrownBy(()->buy(f,buyer,0,0,new BigDecimal("250"),key()))
                 .hasMessage("QTY_INVALID");
-        assertThatThrownBy(()->qrCheckout.checkout(f.offerRef(),buyer,1,0,
+        assertThatThrownBy(()->qrCheckout.checkoutVerified(buyer.actor(),f.offerRef(),1,0,
                 new BigDecimal("250"),"USD",key()))
-                .hasMessage("PRICE_RECONFIRM_REQUIRED");
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
         jdbc.update("""
                 UPDATE crm.store_offer SET state='HIDDEN',row_version=row_version+1
                 WHERE tenant_id=? AND id=?
@@ -407,7 +417,7 @@ class PublishedQrCheckoutQualificationTest {
             Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
                     .toLowerCase().contains("postgresql"));
         }
-        var f=setup();String buyer=email(),requestKey=key();
+        var f=setup();var buyer=mvpBuyer(true);String requestKey=key();
         var start=new CountDownLatch(1);
         try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
             var one=pool.submit(()->{
@@ -465,7 +475,7 @@ class PublishedQrCheckoutQualificationTest {
     @Test void qr03bPlacedOrderCreatesLocatorButEmailOnlyBuyerCannotRead() {
         var f=setup();
         String buyerEmail=email();
-        var created=buy(f,buyerEmail,3,0,new BigDecimal("250"),key());
+        var created=standard(f,buyerEmail,3,key());
         UUID orderId=created.order().orderId();
         String ref=storedOrderRef(f,orderId);
         assertThat(ref).hasSize(32);
@@ -500,8 +510,8 @@ class PublishedQrCheckoutQualificationTest {
         var a=setup();
         var b=setup();
         String oneEmail=email(),twoEmail=email();
-        var aOrder=buy(a,oneEmail,1,0,new BigDecimal("250"),key());
-        buy(b,twoEmail,1,0,new BigDecimal("250"),key());
+        var aOrder=standard(a,oneEmail,1,key());
+        standard(b,twoEmail,1,key());
         String ref=storedOrderRef(a,aOrder.order().orderId());
         VerifiedActor owner=verifyBuyer(oneEmail);
         VerifiedActor stranger=verifyBuyer(twoEmail);
@@ -525,7 +535,7 @@ class PublishedQrCheckoutQualificationTest {
     @Test void qr03bRotationInvalidatesOldRefButDoesNotTouchOrderOrStock() {
         var f=setup();
         String buyerEmail=email();
-        var placed=buy(f,buyerEmail,2,0,new BigDecimal("250"),key());
+        var placed=standard(f,buyerEmail,2,key());
         VerifiedActor buyer=verifyBuyer(buyerEmail);
         UUID id=placed.order().orderId();
         var initial=orderQr.ownReference(buyer,f.tenant(),id);
@@ -556,7 +566,7 @@ class PublishedQrCheckoutQualificationTest {
     @Test void qr03bLegacyOrderGetsOneReferenceOnlyAfterBuyerProof() {
         var f=setup();
         String buyerEmail=email();
-        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        var placed=standard(f,buyerEmail,1,key());
         UUID id=placed.order().orderId();
         // Simulate the pre-migration legacy row: no order QR existed then.
         jdbc.update("""
@@ -579,7 +589,7 @@ class PublishedQrCheckoutQualificationTest {
     @Test void qr03bOrderTimelineReadsHistoricalSnapshotNotCurrentOfferPrice() {
         var f=setup();
         String buyerEmail=email();
-        var placed=buy(f,buyerEmail,4,0,new BigDecimal("250"),key());
+        var placed=standard(f,buyerEmail,4,key());
         VerifiedActor buyer=verifyBuyer(buyerEmail);
         String ref=storedOrderRef(f,placed.order().orderId());
         sellerOffers.updatePrice(f.seller(),f.tenant(),f.offer(),
@@ -607,7 +617,7 @@ class PublishedQrCheckoutQualificationTest {
     @Test void qr03bSuspendedBuyerDeniedEvenWithValidRefAndOldOidcActor() {
         var f=setup();
         String buyerEmail=email();
-        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        var placed=standard(f,buyerEmail,1,key());
         VerifiedActor buyer=verifyBuyer(buyerEmail);
         String ref=storedOrderRef(f,placed.order().orderId());
         jdbc.update("""
@@ -628,7 +638,7 @@ class PublishedQrCheckoutQualificationTest {
         }
         var f=setup();
         String buyerEmail=email();
-        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        var placed=standard(f,buyerEmail,1,key());
         UUID id=placed.order().orderId();
         VerifiedActor buyer=verifyBuyer(buyerEmail);
         jdbc.update("""
@@ -676,7 +686,7 @@ class PublishedQrCheckoutQualificationTest {
         }
         var f=setup();
         String buyerEmail=email();
-        var placed=buy(f,buyerEmail,1,0,new BigDecimal("250"),key());
+        var placed=standard(f,buyerEmail,1,key());
         VerifiedActor buyer=verifyBuyer(buyerEmail);
         UUID orderId=placed.order().orderId();
         var original=orderQr.ownReference(buyer,f.tenant(),orderId);
