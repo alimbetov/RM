@@ -93,6 +93,8 @@ REQUIRED_CASES = {
          "sellerEditR1SplitEmployeeGrantsPreserveCatalogVersionsAndImmutablePriceHistory"),
         ("StorefrontManagementQualificationTest",
          "sellerEditR1EmployeePriceAndPublisherRolesCannotRewriteCommittedOrders"),
+        ("StorefrontManagementQualificationTest",
+         "sellerEditR1CatalogPriceAndSellerOfferPriceHaveIndependentHistories"),
         ("PublishedQrCheckoutQualificationTest",
          "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"),
         ("PublishedQrCheckoutQualificationTest",
