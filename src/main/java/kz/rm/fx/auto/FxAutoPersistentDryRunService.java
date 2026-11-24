@@ -83,6 +83,7 @@ public class FxAutoPersistentDryRunService {
                 tenant,c.policyId(),c.approvalId(),user);
         if(a==null || !"PAUSED".equals(a.state()) || a.epoch()!=c.expectedEpoch())
             throw new SecurityException("FX_AUTO_AUTHORITY_HOLD");
+        FxAutoCommercialBinding.requireCurrent(jdbc,tenant,a.revision(),false);
         Instant now=jdbc.queryForObject("SELECT clock_timestamp()",Timestamp.class).toInstant();
         if(!a.expiry().isAfter(now))throw new SecurityException("FX_AUTO_CONSENT_EXPIRED");
         String request="""

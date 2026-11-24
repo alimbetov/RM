@@ -78,6 +78,7 @@ public class FxAutoDraftApprovalService {
                 AND m.role='OWNER' AND m.status='ACTIVE'
                 """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant,user);
         if(membership==null)throw new SecurityException("FX_AUTO_OWNER_REQUIRED");
+        FxAutoCommercialBinding.requireCurrent(jdbc,tenant,revision,false);
         actor.userId();
         Existing old=jdbc.query("""
                 SELECT id,policy_revision_id,trim(payload_sha256),trim(scope_sha256),expires_at,target_count,membership_id

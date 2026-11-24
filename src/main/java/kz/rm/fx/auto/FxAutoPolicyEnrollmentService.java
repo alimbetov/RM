@@ -46,7 +46,10 @@ public class FxAutoPolicyEnrollmentService {
     }
     public enum TaxBasis { TAX_INCLUDED, TAX_EXCLUDED, NONE }
     public record Target(UUID offerId, UUID anchorId, UUID guardrailId, Instant reviewDueAt,
-                         String unitCode, TaxBasis taxBasis) {
+                         String unitCode, TaxBasis taxBasis, UUID commercialContextId) {
+        public Target(UUID offerId,UUID anchorId,UUID guardrailId,Instant reviewDueAt,String unitCode,TaxBasis taxBasis){
+            this(offerId,anchorId,guardrailId,reviewDueAt,unitCode,taxBasis,null);
+        }
         public Target {
             Objects.requireNonNull(offerId); Objects.requireNonNull(anchorId);
             Objects.requireNonNull(guardrailId); Objects.requireNonNull(reviewDueAt);
@@ -97,6 +100,15 @@ public class FxAutoPolicyEnrollmentService {
         UUID storefront=jdbc.query("SELECT id FROM crm.store_front WHERE tenant_id=? FOR UPDATE",
                 rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
         if(storefront==null) throw new SecurityException("FX_AUTO_TARGET_BINDING_UNAVAILABLE");
+        for(Target t:command.targets()){
+            if(t.commercialContextId()!=null && !Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM crm.store_offer_commercial_context c
+                WHERE c.tenant_id=? AND c.offer_id=? AND c.id=? AND c.unit_code=? AND c.tax_basis=?
+                  AND c.revision=(SELECT max(x.revision) FROM crm.store_offer_commercial_context x
+                    WHERE x.tenant_id=c.tenant_id AND x.offer_id=c.offer_id))
+                """,Boolean.class,tenant,t.offerId(),t.commercialContextId(),t.unitCode(),t.taxBasis().name())))
+                throw new IllegalArgumentException("FX_AUTO_COMMERCIAL_CONTEXT_STALE");
+        }
         String payload=payload(user,command);
         if(payload.length()>1000000) throw new IllegalArgumentException("FX_AUTO_PAYLOAD_TOO_LARGE");
         String hash=jdbc.queryForObject("SELECT crm.fx_auto_sha_v1(CAST(? AS jsonb))",String.class,payload);
@@ -172,7 +184,8 @@ public class FxAutoPolicyEnrollmentService {
         StringJoiner targets=new StringJoiner(",","[","]");
         for(Target t:c.targets()) targets.add("""
                 {"offer":"%s","anchor":"%s","guardrail":"%s","reviewDue":"%s","unit":"%s","tax":"%s"}""".formatted(
-                t.offerId(),t.anchorId(),t.guardrailId(),t.reviewDueAt(),t.unitCode(),t.taxBasis()));
+                t.offerId(),t.anchorId(),t.guardrailId(),t.reviewDueAt(),t.unitCode(),t.taxBasis())
+                .replace("}",t.commercialContextId()==null?"}":",\"commercialContextId\":\""+t.commercialContextId()+"\"}"));
         return """
                 {"schema":"PRODUCT_DRAFT_V1","author":"%s","policy":"%s","expectedRevision":%d,"requestKey":"%s",
                 "includeFuture":false,"source":"NBRK","formula":"SKU_FX_R2A_V1","purpose":"PRICING_ANCHOR",
