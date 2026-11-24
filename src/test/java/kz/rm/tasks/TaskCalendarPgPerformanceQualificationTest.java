@@ -226,7 +226,7 @@ class TaskCalendarPgPerformanceQualificationTest {
         assertThat(p.nextCursor()!=null).isEqualTo(p.hasMore());
     }
     private void explain(Tenant t,Page p,int limit,Cursor cursor,String label)throws Exception{
-        var q=TaskCalendarQueryService.prepareQuery(TaskTimingEngine.fullRelation(true,false),p.appliedFilter(),
+        var q=TaskCalendarQueryService.prepareQuery(true,p.appliedFilter(),
             p.evaluatedAt(),t.id(),t.staffId(),limit,cursor);
         String plan=jdbc.query("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+q.sql(),q.bind(),
             rs->{if(!rs.next())throw new IllegalStateException("no plan");return rs.getString(1);});

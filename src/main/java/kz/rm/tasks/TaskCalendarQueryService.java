@@ -47,14 +47,14 @@ public class TaskCalendarQueryService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization auth;
     private final Clock clock;
-    private String relation;
+    private boolean pg;
     public TaskCalendarQueryService(JdbcTemplate jdbc,TenantAuthorization auth,Clock clock){
         this.jdbc=jdbc;this.auth=auth;this.clock=clock;
     }
     @PostConstruct void initialize(){
         String db=jdbc.execute((ConnectionCallback<String>) c->c.getMetaData().getDatabaseProductName());
         if(!"PostgreSQL".equals(db)&&!"H2".equals(db))throw new IllegalStateException("TASK_TIMING_UNSUPPORTED_DATABASE");
-        relation=TaskTimingEngine.fullRelation("PostgreSQL".equals(db),false);
+        pg="PostgreSQL".equals(db);
     }
     private static <E extends Enum<E>> Set<E> copy(Set<E> in){
         if(in==null)return null;
@@ -119,7 +119,7 @@ public class TaskCalendarQueryService {
         TaskTimingQueryService.requireSupported(cutoff);
         AppliedFilter f=normalize(filter,cutoff);
         verifyCursor(after,user,tenant,f,limit);
-        QueryPlan query=prepareQuery(relation,f,cutoff,tenant,user,limit,after);
+        QueryPlan query=prepareQuery(pg,f,cutoff,tenant,user,limit,after);
         List<Item> rows=jdbc.query(query.sql(),query.bind(),(rs,n)->new Item(
             TaskTimingQueryService.map(rs),TaskTitlePolicy.calendarCode(rs.getString("title")),
             TaskTimingQueryService.instant(rs,"selected_date")));
@@ -135,13 +135,19 @@ public class TaskCalendarQueryService {
     // Package-private query specification so qualification can EXPLAIN the exact
     // production statement and binds without exposing a public SQL API.
     record QueryPlan(String sql,org.springframework.jdbc.core.PreparedStatementSetter bind){}
-    static QueryPlan prepareQuery(String relation,AppliedFilter f,Instant cutoff,UUID tenant,
+    static QueryPlan prepareQuery(boolean pg,AppliedFilter f,Instant cutoff,UUID tenant,
                                   UUID user,int limit,Cursor after){
         String date=f.dateBasis()==DateBasis.DUE?"due_at":"completed_at";
         // Only closed enum-selected SQL fragments. All values bound.
         var states=f.states().stream().sorted().toList();
         var timing=f.timeliness()==null?List.<TaskTimingSnapshot.Timeliness>of():f.timeliness().stream().sorted().toList();
-        StringBuilder sql=new StringBuilder("SELECT cal.*, "+date+" AS selected_date FROM ("+relation+") cal WHERE status IN ("+marks(states.size())+")");
+        // DUE without a timing predicate needs no history for membership.
+        boolean simple=pg&&f.dateBasis()==DateBasis.DUE&&timing.isEmpty();
+        String relation=pg?(simple?
+            "SELECT t.id,t.status,t.due_at,t.created_by,t.assignee_user_id FROM crm.task_item t WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)":
+            TaskTimingEngine.calendarMembershipRelation()):TaskTimingEngine.fullRelation(false,false);
+        StringBuilder sql=new StringBuilder("SELECT "+(pg?"cal.id":"cal.*")+", "+date+
+            " AS selected_date FROM ("+relation+") cal WHERE status IN ("+marks(states.size())+")");
         if(f.perspective()==Perspective.MINE_CREATED)sql.append(" AND created_by=?");
         else if(f.perspective()==Perspective.MINE_ASSIGNED)sql.append(" AND assignee_user_id=?");
         if(!timing.isEmpty())sql.append(" AND timeliness IN ("+marks(timing.size())+")");
@@ -155,10 +161,18 @@ public class TaskCalendarQueryService {
             sql.append(" ORDER BY "+date+" ASC,id ASC");
         }
         sql.append(" LIMIT ?");
-        return new QueryPlan(sql.toString(),ps->{
+        // Materialize fully filtered keys; reconstruct full history for
+        // those keys in the same PostgreSQL statement and MVCC snapshot.
+        String statement=pg?
+            "SELECT result.* FROM (WITH page_keys AS MATERIALIZED ("+sql+"), enriched AS MATERIALIZED ("+
+                TaskTimingEngine.fullRelation(true,false,true)+") "+
+                "SELECT enriched.*,k.selected_date FROM page_keys k JOIN enriched ON enriched.id=k.id) result "+
+                (f.undated()?"ORDER BY id ASC":"ORDER BY selected_date ASC,id ASC"):
+            sql.toString();
+        return new QueryPlan(statement,ps->{
             int i=1;
-            timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);ps.setObject(i++,tenant);
-            ps.setObject(i++,user);ps.setObject(i++,user);
+            if(!simple){timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);}
+            ps.setObject(i++,tenant);ps.setObject(i++,user);ps.setObject(i++,user);
             for(var state:states)ps.setString(i++,state.name());
             if(f.perspective()!=Perspective.ALL_VISIBLE)ps.setObject(i++,user);
             for(var t:timing)ps.setString(i++,t.name());
@@ -171,7 +185,9 @@ public class TaskCalendarQueryService {
                     ps.setObject(i++,after.lastTaskId());
                 }
             }
-            ps.setInt(i,limit+1);
+            ps.setInt(i++,limit+1);
+            if(pg){timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);ps.setObject(i++,tenant);
+                ps.setObject(i++,user);ps.setObject(i,user);}
         });
     }
 }

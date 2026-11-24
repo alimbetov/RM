@@ -86,7 +86,7 @@ final class TaskTimingEngine {
 
     // Scope event evidence before windowing. Composite tenant/task is mandatory.
     // The previous due-change pointer ignores intervening non-deadline events.
-    private static String eventSummary(boolean point) {
+    private static String eventSummary(boolean point,boolean pageOnly) {
         return """
             SELECT e.tenant_id,e.task_id,COUNT(*) AS event_count,
                    MIN(e.new_version) AS first_version,MAX(e.new_version) AS last_version,
@@ -119,20 +119,7 @@ final class TaskTimingEngine {
                             THEN 1 ELSE 0 END) AS valid_changes,
                    MAX(CASE WHEN e.action_code='DUE_DATE_CHANGED' AND e.prev_change IS NULL THEN e.previous_due_at END) AS first_due,
                    MAX(CASE WHEN e.action_code='DUE_DATE_CHANGED' AND e.new_version=e.last_change THEN e.next_due_at END) AS last_due,
-                   SUM(CASE WHEN e.action_code='COMPLETED' OR e.to_state='COMPLETED' THEN 1 ELSE 0 END) AS completion_count,
-                   SUM(CASE WHEN e.action_code='COMPLETED' AND e.from_state='IN_PROGRESS'
-                                 AND e.to_state='COMPLETED' AND e.new_version>0
-                                 AND e.previous_version=e.new_version-1 THEN 1 ELSE 0 END) AS completion_valid,
-                   MAX(CASE WHEN e.action_code='COMPLETED' THEN e.new_version END) AS completion_version,
-                   MAX(CASE WHEN e.action_code='COMPLETED' THEN e.occurred_at END) AS completion_time,
-                   SUM(CASE WHEN e.action_code='ARCHIVED' OR e.to_state='ARCHIVED' THEN 1 ELSE 0 END) AS archive_count,
-                   SUM(CASE WHEN e.action_code='ARCHIVED' AND e.from_state='COMPLETED'
-                                 AND e.to_state='ARCHIVED' AND e.new_version>0
-                                 AND e.previous_version=e.new_version-1 THEN 1 ELSE 0 END) AS archive_valid,
-                   MAX(CASE WHEN e.action_code='ARCHIVED' THEN e.new_version END) AS archive_version,
-                   SUM(CASE WHEN e.action_code='CANCELLED' OR e.to_state='CANCELLED'
-                                 OR (e.from_state='COMPLETED' AND e.action_code<>'ARCHIVED')
-                                 OR e.from_state IN ('ARCHIVED','CANCELLED') THEN 1 ELSE 0 END) AS terminal_conflicts
+                   %s
             FROM (
                 SELECT x.*,
                     LAG(new_version) OVER(PARTITION BY tenant_id,task_id ORDER BY new_version) AS prev_version,
@@ -147,7 +134,38 @@ final class TaskTimingEngine {
             ) e LEFT JOIN crm.task_event prior ON prior.tenant_id=e.tenant_id
                 AND prior.task_id=e.task_id AND prior.new_version=e.prev_change
             GROUP BY e.tenant_id,e.task_id
-            """.formatted(transition(),point?"AND task_id=?":"");
+            """.formatted(transition(),terminalAggregates(),point?"AND task_id=?":pageOnly?"AND task_id IN (SELECT id FROM page_keys)":"");
+    }
+
+
+    private static String terminalAggregates() {
+        return """
+                   SUM(CASE WHEN e.action_code='COMPLETED' OR e.to_state='COMPLETED' THEN 1 ELSE 0 END) AS completion_count,
+                   SUM(CASE WHEN e.action_code='COMPLETED' AND e.from_state='IN_PROGRESS'
+                                 AND e.to_state='COMPLETED' AND e.new_version>0
+                                 AND e.previous_version=e.new_version-1 THEN 1 ELSE 0 END) AS completion_valid,
+                   MAX(CASE WHEN e.action_code='COMPLETED' THEN e.new_version END) AS completion_version,
+                   MAX(CASE WHEN e.action_code='COMPLETED' THEN e.occurred_at END) AS completion_time,
+                   SUM(CASE WHEN e.action_code='ARCHIVED' OR e.to_state='ARCHIVED' THEN 1 ELSE 0 END) AS archive_count,
+                   SUM(CASE WHEN e.action_code='ARCHIVED' AND e.from_state='COMPLETED'
+                                 AND e.to_state='ARCHIVED' AND e.new_version>0
+                                 AND e.previous_version=e.new_version-1 THEN 1 ELSE 0 END) AS archive_valid,
+                   MAX(CASE WHEN e.action_code='ARCHIVED' THEN e.new_version END) AS archive_version,
+                   SUM(CASE WHEN e.action_code='CANCELLED' OR e.to_state='CANCELLED'
+                                 OR (e.from_state='COMPLETED' AND e.action_code<>'ARCHIVED')
+                                 OR e.from_state IN ('ARCHIVED','CANCELLED') THEN 1 ELSE 0 END) AS terminal_conflicts
+            """;
+    }
+    private static String terminalSummary() {
+        return """
+            SELECT e.tenant_id,e.task_id,%s
+            FROM crm.task_event e
+            WHERE e.tenant_id=? AND (
+                e.action_code IN ('COMPLETED','ARCHIVED','CANCELLED')
+                OR e.to_state IN ('COMPLETED','ARCHIVED','CANCELLED')
+                OR e.from_state IN ('COMPLETED','ARCHIVED','CANCELLED'))
+            GROUP BY e.tenant_id,e.task_id
+            """.formatted(terminalAggregates());
     }
 
     private static String transition() {
@@ -179,21 +197,14 @@ final class TaskTimingEngine {
     // Bind order: cutoff, event tenant[,event task], task tenant, actor, actor[,task].
     // Future calendar predicates operate on this classified relation, before LIMIT.
     static String fullRelation(boolean pg, boolean point) {
+        return fullRelation(pg,point,false);
+    }
+    static String fullRelation(boolean pg,boolean point,boolean pageOnly) {
         String scoped="""
             SELECT t.id,t.status,t.due_at,t.row_version,t.created_at,t.title,t.assignee_user_id,
                    t.created_by,t.tenant_id,c.evaluated_at,
                    ev.completion_time,ev.first_due,ev.change_count,ev.valid_changes,
-                   CASE WHEN t.status NOT IN ('COMPLETED','ARCHIVED') THEN 'NOT_APPLICABLE'
-                        WHEN COALESCE(ev.completion_count,0)=0 THEN 'MISSING'
-                        WHEN ev.completion_count<>1 OR ev.completion_valid<>1
-                             OR ev.terminal_conflicts<>0 OR ev.completion_time IS NULL
-                             OR ev.completion_time<t.created_at
-                             OR (t.status='COMPLETED' AND (ev.completion_version<>t.row_version OR ev.archive_count<>0))
-                             OR (t.status='ARCHIVED' AND (ev.completion_version<>t.row_version-1
-                                  OR ev.archive_count<>1 OR ev.archive_valid<>1 OR ev.archive_version<>t.row_version))
-                        THEN 'INVALID'
-                        WHEN ev.completion_time>c.evaluated_at THEN 'AFTER_CUTOFF'
-                        ELSE 'VALID' END AS completion_evidence,
+                   %s AS completion_evidence,
                    CASE WHEN ev.event_count=CAST(t.row_version AS NUMERIC(30,0))+1
                              AND ev.first_version=0 AND ev.last_version=t.row_version
                              AND ev.last_state=t.status AND ev.chain_bad=0 AND ev.change_bad=0
@@ -203,7 +214,7 @@ final class TaskTimingEngine {
             FROM crm.task_item t CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
             LEFT JOIN (%s) ev ON ev.tenant_id=t.tenant_id AND ev.task_id=t.id
             WHERE t.tenant_id=? AND (t.assignee_user_id=? OR t.created_by=?) %s
-            """.formatted(eventSummary(point),point?"AND t.id=?":"");
+            """.formatted(completionEvidence(),eventSummary(point,pageOnly),point?"AND t.id=?":pageOnly?"AND t.id IN (SELECT id FROM page_keys)":"");
         String dates="""
             SELECT s.*,
                    CASE WHEN completion_evidence='VALID' THEN completion_time ELSE NULL END AS completed_at,
@@ -234,4 +245,47 @@ final class TaskTimingEngine {
             """.formatted(direction(),magnitude(),severity(),completionClassification(),activeClassification(),facts);
     }
 
+    private static String completionEvidence() {
+        return """
+                   CASE WHEN t.status NOT IN ('COMPLETED','ARCHIVED') THEN 'NOT_APPLICABLE'
+                        WHEN COALESCE(ev.completion_count,0)=0 THEN 'MISSING'
+                        WHEN ev.completion_count<>1 OR ev.completion_valid<>1
+                             OR ev.terminal_conflicts<>0 OR ev.completion_time IS NULL
+                             OR ev.completion_time<t.created_at
+                             OR (t.status='COMPLETED' AND (ev.completion_version<>t.row_version OR ev.archive_count<>0))
+                             OR (t.status='ARCHIVED' AND (ev.completion_version<>t.row_version-1
+                                  OR ev.archive_count<>1 OR ev.archive_valid<>1 OR ev.archive_version<>t.row_version))
+                        THEN 'INVALID'
+                        WHEN ev.completion_time>c.evaluated_at THEN 'AFTER_CUTOFF'
+                        ELSE 'VALID' END
+            """;
+    }
+    // Original-deadline evidence is not a membership predicate. All terminal
+    // validation and timing classification fragments are shared.
+    static String calendarMembershipRelation() {
+        String scoped="""
+            SELECT t.id,t.status,t.due_at,t.created_at,t.row_version,
+                   t.assignee_user_id,t.created_by,c.evaluated_at,
+                   ev.completion_time,%s AS completion_evidence
+            FROM crm.task_item t
+            CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
+            LEFT JOIN (%s) ev ON ev.tenant_id=t.tenant_id AND ev.task_id=t.id
+            WHERE t.tenant_id=? AND (t.assignee_user_id=? OR t.created_by=?)
+            """.formatted(completionEvidence(),terminalSummary());
+        String dates="""
+            SELECT s.*,CASE WHEN completion_evidence='VALID'
+                       THEN completion_time ELSE NULL END AS completed_at
+            FROM (%s) s
+            """.formatted(scoped);
+        String facts="""
+            SELECT dt.*, %s AS d, %s AS p, %s AS e, %s AS saved
+            FROM (%s) dt
+            """.formatted(signedMicros(true,"evaluated_at","due_at"),signedMicros(true,"created_at","due_at"),
+                signedMicros(true,"created_at","completed_at"),signedMicros(true,"completed_at","due_at"),dates);
+        return """
+            SELECT f.*,CASE WHEN status IN ('COMPLETED','ARCHIVED') THEN %s
+                            ELSE %s END AS timeliness
+            FROM (%s) f
+            """.formatted(completionClassification(),activeClassification(),facts);
+    }
 }
