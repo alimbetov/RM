@@ -25,6 +25,15 @@ final class PgCommitOrderEvidence {
     private static void runBoth(JdbcTemplate jdbc,PlatformTransactionManager manager,
             Runnable first,Runnable second,Class<? extends RuntimeException> denialType,
             String firstDenial,String expectedDenial) throws Exception {
+        runBoth(jdbc,manager,first,second,denialType,firstDenial,expectedDenial,()->{});
+    }
+    static void runAcrossCutoff(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            Runnable first,Runnable second,String expectedDenial,Runnable awaitCutoff) throws Exception {
+        runBoth(jdbc,manager,first,second,IllegalStateException.class,null,expectedDenial,awaitCutoff);
+    }
+    private static void runBoth(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            Runnable first,Runnable second,Class<? extends RuntimeException> denialType,
+            String firstDenial,String expectedDenial,Runnable beforeRelease) throws Exception {
         var tx=new TransactionTemplate(manager);
         var applied=new CountDownLatch(1);
         var release=new CountDownLatch(1);
@@ -46,7 +55,7 @@ final class PgCommitOrderEvidence {
                     outcome="DENIED_ROLLED_BACK";
                 }
                 applied.countDown();
-                try{if(!release.await(20,TimeUnit.SECONDS))throw new AssertionError("Commit gate timed out");}
+                try{if(!release.await(35,TimeUnit.SECONDS))throw new AssertionError("Commit gate timed out");}
                 catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
                 return outcome;
             }));
@@ -75,6 +84,7 @@ final class PgCommitOrderEvidence {
                     Thread.sleep(25);
                 }while(System.nanoTime()<deadline);
                 assertThat(observed).as("actual first PID blocks second PID").isTrue();
+                beforeRelease.run();
                 release.countDown();
                 assertThat(a.get(20,TimeUnit.SECONDS)).isEqualTo(firstDenial==null?"COMMITTED":"DENIED_ROLLED_BACK");
                 assertThat(b.get(20,TimeUnit.SECONDS)).isEqualTo(expectedDenial==null?"COMMITTED":"DENIED");

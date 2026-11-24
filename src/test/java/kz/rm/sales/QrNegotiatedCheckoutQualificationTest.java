@@ -47,6 +47,9 @@ class QrNegotiatedCheckoutQualificationTest {
     @Autowired EmailIdentityCrypto crypto;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Autowired GlobalAccountStatusService accountStatus;
+    @Autowired GlobalAccountDeletionService accountDeletion;
 
     private record Buyer(VerifiedActor actor,UUID user,String email) {}
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,String qrRef,
@@ -439,6 +442,153 @@ class QrNegotiatedCheckoutQualificationTest {
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?
                 """,Integer.class,f.tenant())).isEqualTo(1);
+        try(var issuer=new JourneySignedActorFixture()){
+            qualifyWithdrawalBeforeOrAfterAcceptance(issuer);
+            qualifyBuyerRevocationBothOrders(issuer);
+            qualifyQuoteCutoffBothOrders(issuer);
+        }
+    }
+
+    private Fixture signedFixture(JourneySignedActorFixture issuer){
+        var f=setup();
+        var buyer=new Buyer(issuer.resolve(jdbc,users,f.buyer().user()),f.buyer().user(),f.buyer().email());
+        return new Fixture(f.tenant(),f.offer(),f.item(),f.slug(),f.qrRef(),
+                issuer.resolve(jdbc,users,f.seller().userId()),buyer);
+    }
+
+    // Independent committed rows. Project only business evidence, not secrets
+    // or bearer tokens. The fixture has no stock receipt and checkout must not reserve.
+    private List<Object> checkoutEvidence(Fixture f){
+        assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+        return List.of(
+            jdbc.queryForList("SELECT id,status,buyer_user_id,total_amount,currency,fulfillment_mode,row_version FROM crm.sales_order WHERE tenant_id=? ORDER BY id",f.tenant()),
+            jdbc.queryForList("SELECT id,order_id,offer_id,quantity,unit_price_snapshot,currency,price_source,accepted_quote_id FROM crm.sales_order_line WHERE tenant_id=? ORDER BY id",f.tenant()),
+            jdbc.queryForList("SELECT id,order_id,event_type,occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? ORDER BY id",f.tenant()),
+            jdbc.queryForList("SELECT idempotency_key,order_id,created_at FROM crm.sales_checkout_receipt WHERE tenant_id=? ORDER BY idempotency_key",f.tenant()),
+            jdbc.queryForList("SELECT id,order_id,state,row_version FROM crm.sales_order_qr_reference WHERE tenant_id=? ORDER BY id",f.tenant()),
+            jdbc.queryForList("SELECT id,order_id,quantity,state,row_version FROM crm.inv_stock_reservation WHERE tenant_id=? ORDER BY id",f.tenant()),
+            jdbc.queryForList("SELECT item_id,location_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? ORDER BY item_id,location_id",f.tenant()),
+            jdbc.queryForList("SELECT id,item_id,delta_quantity FROM crm.inv_stock_movement WHERE tenant_id=? ORDER BY id",f.tenant()),
+            JourneySqlEvidence.invoices(jdbc,f.tenant()));
+    }
+    private void assertOneQuoteOrder(Fixture f,UUID quote,UUID order){
+        assertThat(order).isNotNull();
+        assertThat(orders(f)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_accepted_quote q
+            JOIN crm.sales_order o ON o.tenant_id=q.tenant_id AND o.id=q.consumed_order_id
+            JOIN crm.sales_order_line l ON l.tenant_id=o.tenant_id AND l.order_id=o.id
+            JOIN crm.sales_checkout_receipt r ON r.tenant_id=o.tenant_id AND r.order_id=o.id
+            JOIN crm.sales_order_status_event e ON e.tenant_id=o.tenant_id AND e.order_id=o.id
+            JOIN crm.sales_order_qr_reference qr ON qr.tenant_id=o.tenant_id AND qr.order_id=o.id
+            WHERE q.tenant_id=? AND q.id=? AND o.id=? AND q.state='CONSUMED'
+              AND o.status='PLACED' AND o.fulfillment_mode='PICKUP_PROOF_REQUIRED'
+              AND o.buyer_user_id=q.buyer_user_id AND o.total_amount=q.quantity*q.agreed_unit_price
+              AND l.accepted_quote_id=q.id AND l.price_source='NEGOTIATED'
+              AND l.quantity=q.quantity AND l.unit_price_snapshot=q.agreed_unit_price
+              AND l.currency=q.currency AND l.catalog_item_id_snapshot=?
+              AND e.event_type='PLACED' AND qr.state='ACTIVE'
+            """,Integer.class,f.tenant(),quote,order,f.item())).isEqualTo(1);
+        for(String table:List.of("sales_order_line","sales_checkout_receipt","sales_order_status_event","sales_order_qr_reference"))
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm."+table+" WHERE tenant_id=?",Integer.class,f.tenant())).as(table).isEqualTo(1);
+        for(String table:List.of("inv_stock_reservation","inv_stock_movement","inv_stock_balance","fin_invoice"))
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm."+table+" WHERE tenant_id=?",Integer.class,f.tenant())).as(table).isZero();
+    }
+    private void qualifyWithdrawalBeforeOrAfterAcceptance(JourneySignedActorFixture issuer) throws Exception {
+        for(boolean withdrawFirst:List.of(false,true)){
+            var f=signedFixture(issuer);var p=submit(f,2,"700",key());
+            var before=checkoutEvidence(f);
+            var quote=new java.util.concurrent.atomic.AtomicReference<UUID>();
+            var order=new java.util.concurrent.atomic.AtomicReference<UUID>();
+            String buyKey=key(),withdrawKey=key();
+            Runnable withdraw=()->buyer(f,p.proposalId(),p.revision(),SalesPriceProposalService.Action.WITHDRAW,null,withdrawKey);
+            Runnable acceptAndCheckout=()->{
+                var agreed=seller(f,p.proposalId(),p.revision(),SalesPriceProposalService.Action.ACCEPT,null,key());
+                quote.set(agreed.quoteId());
+                order.set(pay(f,agreed.quoteId(),p.revision(),2,"700",buyKey).order().orderId());
+            };
+            PgCommitOrderEvidence.run(jdbc,transactionManager,withdrawFirst?withdraw:acceptAndCheckout,
+                withdrawFirst?acceptAndCheckout:withdraw,IllegalStateException.class,"PROPOSAL_VERSION_CONFLICT");
+            if(withdrawFirst){
+                assertThat(checkoutEvidence(f)).isEqualTo(before);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_accepted_quote WHERE tenant_id=?",Integer.class,f.tenant())).isZero();
+                assertThat(proposals.buyerDetail(f.buyer().actor(),f.tenant(),p.proposalId()).current().state()).isEqualTo("WITHDRAWN");
+            }else{
+                assertOneQuoteOrder(f,quote.get(),order.get());
+                var committed=checkoutEvidence(f);
+                assertThatThrownBy(()->buyer(f,p.proposalId(),p.revision()+1,SalesPriceProposalService.Action.WITHDRAW,null,key()))
+                    .isInstanceOf(IllegalStateException.class).hasMessage("PROPOSAL_TERMINAL");
+                assertThat(pay(f,quote.get(),p.revision(),2,"700",buyKey).order().orderId()).isEqualTo(order.get());
+                assertThat(checkoutEvidence(f)).isEqualTo(committed);
+            }
+        }
+    }
+    private VerifiedActor signedAdmin(JourneySignedActorFixture issuer){
+        UUID admin=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "neg-admin-"+UUID.randomUUID(),"Admin")).getId();
+        jdbc.update("INSERT INTO public.iam_global_role_assignment(id,user_id,role,granted_at) VALUES (?,?,'PLATFORM_ADMIN',?)",
+                UUID.randomUUID(),admin,Timestamp.from(Instant.now()));
+        return issuer.resolve(jdbc,users,admin);
+    }
+    private void qualifyBuyerRevocationBothOrders(JourneySignedActorFixture issuer) throws Exception {
+        for(boolean delete:List.of(false,true))for(boolean revokeFirst:List.of(false,true)){
+            var f=signedFixture(issuer);var a=agreed(f,2,"700");var admin=signedAdmin(issuer);
+            String buyKey=key(),deleteKey=key();var before=checkoutEvidence(f);
+            var order=new java.util.concurrent.atomic.AtomicReference<UUID>();
+            Runnable buy=()->order.set(pay(f,a.quoteId(),1,2,"700",buyKey).order().orderId());
+            Runnable revoke=()->{
+                if(delete)accountDeletion.deleteAccount(admin,f.buyer().user(),deleteKey);
+                else accountStatus.suspendAccount(admin,f.buyer().user());
+            };
+            PgCommitOrderEvidence.run(jdbc,transactionManager,revokeFirst?revoke:buy,revokeFirst?buy:revoke,
+                SecurityException.class,revokeFirst?"VERIFIED_BUYER_REQUIRED":null);
+            assertThat(jdbc.queryForObject("SELECT status FROM public.iam_user_account WHERE id=?",String.class,f.buyer().user())).isEqualTo(delete?"DELETED":"SUSPENDED");
+            if(revokeFirst){
+                assertThat(checkoutEvidence(f)).isEqualTo(before);
+                assertThat(jdbc.queryForObject("SELECT state FROM crm.sales_accepted_quote WHERE tenant_id=? AND id=?",String.class,f.tenant(),a.quoteId())).isEqualTo("AVAILABLE");
+            }else assertOneQuoteOrder(f,a.quoteId(),order.get());
+            var after=checkoutEvidence(f);
+            // Current identity is required even for exact replay. Never leak a
+            // historical receipt to a suspended or deleted buyer.
+            assertThatThrownBy(buy::run).isInstanceOf(SecurityException.class).hasMessage("VERIFIED_BUYER_REQUIRED");
+            assertThatThrownBy(()->pay(f,a.quoteId(),1,2,"700",key())).isInstanceOf(SecurityException.class).hasMessage("VERIFIED_BUYER_REQUIRED");
+            assertThat(checkoutEvidence(f)).isEqualTo(after);
+        }
+    }
+    private void qualifyQuoteCutoffBothOrders(JourneySignedActorFixture issuer) throws Exception {
+        for(boolean expiryFirst:List.of(false,true)){
+            var f=signedFixture(issuer);var a=agreed(f,2,"700");String buyKey=key();
+            // Synthetic short-lived quote, set before competing transactions.
+            // Do not rewrite state or expiry after consumption. The real clock
+            // crosses this cutoff while the second PostgreSQL backend waits.
+            Instant cutoff=Instant.now().plusSeconds(5).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+            assertThat(jdbc.update("UPDATE crm.sales_accepted_quote SET expires_at=? WHERE tenant_id=? AND id=? AND state='AVAILABLE'",
+                    Timestamp.from(cutoff),f.tenant(),a.quoteId())).isEqualTo(1);
+            var before=checkoutEvidence(f);
+            var order=new java.util.concurrent.atomic.AtomicReference<UUID>();
+            Runnable buy=()->order.set(pay(f,a.quoteId(),1,2,"700",buyKey).order().orderId());
+            Runnable lock=()->assertThat(jdbc.queryForObject("SELECT state FROM crm.sales_accepted_quote WHERE tenant_id=? AND id=? FOR UPDATE",String.class,f.tenant(),a.quoteId())).isEqualTo("AVAILABLE");
+            Runnable fresh=()->pay(f,a.quoteId(),1,2,"700",key());
+            PgCommitOrderEvidence.runAcrossCutoff(jdbc,transactionManager,expiryFirst?lock:buy,
+                expiryFirst?buy:fresh,expiryFirst?"QUOTE_EXPIRED":"QUOTE_ALREADY_CONSUMED_OR_INVALID",
+                ()->awaitQuoteCutoff(cutoff));
+            if(expiryFirst){
+                assertThat(checkoutEvidence(f)).isEqualTo(before);
+                assertThat(jdbc.queryForObject("SELECT state FROM crm.sales_accepted_quote WHERE tenant_id=? AND id=?",String.class,f.tenant(),a.quoteId())).isEqualTo("AVAILABLE");
+            }else{
+                assertOneQuoteOrder(f,a.quoteId(),order.get());
+                var committed=checkoutEvidence(f);
+                assertThat(pay(f,a.quoteId(),1,2,"700",buyKey).order().orderId()).isEqualTo(order.get());
+                assertThat(checkoutEvidence(f)).isEqualTo(committed);
+            }
+        }
+    }
+    private void awaitQuoteCutoff(Instant cutoff){
+        long timeout=System.nanoTime()+TimeUnit.SECONDS.toNanos(12);
+        while(Instant.now().isBefore(cutoff)||jdbc.queryForObject("SELECT clock_timestamp()",Timestamp.class).toInstant().isBefore(cutoff)){
+            if(System.nanoTime()>=timeout)throw new AssertionError("Quote cutoff not reached");
+            try{Thread.sleep(20);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+        }
     }
 
     @Test void qr04aConcurrentAcceptCreatesOneQuoteAndOneTerminalEventInPostgres() throws Exception{
