@@ -44,9 +44,12 @@ public class FxAutoPersistentDryRunService {
     }
     public record Receipt(UUID simulationId,String resultSha256,int itemCount) {}
     private record Approval(UUID revision,UUID author,UUID membership,Instant expiry,String scope,String state,long epoch) {}
+    private record History(UUID id,long version,Instant at,BigDecimal oldPrice,BigDecimal newPrice,String oldCurrency,String newCurrency) {}
+    private record Window(BigDecimal baseline,List<FxAutoRollingLimitEvaluator.Change> changes,List<UUID> evidence) {}
+    private record PolicyLimits(long seconds,BigDecimal increase,BigDecimal decrease,BigDecimal variation,long publications, FxAutoDryRun.Budget budget) {}
     private record Target(UUID offer,UUID anchor,UUID guard,BigDecimal current,UUID priceRevision,
                           BigDecimal anchorAmount,BigDecimal buffer,BigDecimal markup,BigDecimal step,
-                          Instant reviewDue,boolean eligible,int maxAge) {}
+                          Instant reviewDue,boolean eligible,int maxAge,BigDecimal increase,BigDecimal decrease,BigDecimal min,BigDecimal max) {}
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public Receipt simulate(VerifiedActor actor,UUID tenant,Command c) {
         if(actor==null || tenant==null)throw new SecurityException("FX_AUTO_VERIFIED_ACTOR_REQUIRED");
@@ -111,7 +114,7 @@ public class FxAutoPersistentDryRunService {
                AND h.new_price=o.unit_price AND h.new_currency=o.currency
                AND a.revision=(SELECT max(revision) FROM crm.sku_fx_policy_version WHERE tenant_id=o.tenant_id AND offer_id=o.id)
                AND g.revision=(SELECT max(revision) FROM crm.sku_fx_guardrail_version WHERE tenant_id=o.tenant_id AND offer_id=o.id)),
-              g.max_rate_calendar_days
+              g.max_rate_calendar_days,g.max_increase_pct,g.max_decrease_pct,g.min_price_kzt,g.max_price_kzt
             FROM crm.fx_auto_target_enrollment e
             JOIN crm.store_offer o ON o.tenant_id=e.tenant_id AND o.id=e.offer_id
             JOIN crm.cat_item i ON i.tenant_id=o.tenant_id AND i.id=o.catalog_item_id
@@ -122,32 +125,75 @@ public class FxAutoPersistentDryRunService {
             WHERE e.tenant_id=? AND e.policy_revision_id=? AND a.anchor_currency=? ORDER BY o.id
             """,(rs,n)->new Target(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
                 rs.getBigDecimal(4),rs.getObject(5,UUID.class),rs.getBigDecimal(6),rs.getBigDecimal(7),
-                rs.getBigDecimal(8),rs.getBigDecimal(9),rs.getTimestamp(10).toInstant(),rs.getBoolean(11),rs.getInt(12)),
+                rs.getBigDecimal(8),rs.getBigDecimal(9),rs.getTimestamp(10).toInstant(),rs.getBoolean(11),rs.getInt(12),rs.getBigDecimal(13),rs.getBigDecimal(14),rs.getBigDecimal(15),rs.getBigDecimal(16)),
                 tenant,a.revision(),c.currency());
         if(targets.isEmpty())throw new IllegalArgumentException("FX_AUTO_EMPTY_CURRENCY_SCOPE");
         if(targets.stream().anyMatch(t->t.priceRevision()==null))
             throw new IllegalStateException("FX_AUTO_CANONICAL_PRICE_REVISION_REQUIRED");
+        PolicyLimits limits=jdbc.query("""
+            SELECT l.rolling_seconds,l.max_rolling_increase_pct,l.max_rolling_decrease_pct,
+                   l.max_rolling_variation_kzt,l.max_auto_publications,l.tenant_delta_cap_kzt,
+                   l.tenant_count_cap,l.run_delta_cap_kzt,l.run_count_cap,l.max_targets
+            FROM crm.fx_auto_policy_revision p JOIN crm.fx_auto_limit_policy_version l
+              ON l.tenant_id=p.tenant_id AND l.id=p.limit_id
+            WHERE p.tenant_id=? AND p.id=?
+            """,rs->rs.next()?new PolicyLimits(rs.getLong(1),rs.getBigDecimal(2),rs.getBigDecimal(3),
+                rs.getBigDecimal(4),rs.getLong(5),new FxAutoDryRun.Budget(rs.getBigDecimal(6),
+                    rs.getLong(7),rs.getBigDecimal(8),rs.getLong(9),rs.getInt(10))):null,tenant,a.revision());
+        if(limits==null)throw new IllegalStateException("FX_AUTO_LIMITS_UNAVAILABLE");
+        // No AUTO writer exists in this release. Budget is a hypothetical scenario,
+        // not a durable tenant ledger or a promise of spendable capacity.
+        Map<UUID,BigDecimal> candidates=new HashMap<>();
+        Map<UUID,Window> windows=new HashMap<>();
+        List<FxAutoDryRun.Item> items=new ArrayList<>();
+        for(Target t:targets){
+            BigDecimal candidate=calculator.preview(c.currency(),t.anchorAmount(),t.buffer(),t.markup(),t.step(),rate).suggestedKzt();
+            candidates.put(t.offer(),candidate);
+            Window window=history(tenant,t,now,limits.seconds());
+            windows.put(t.offer(),window);
+            if(calendarId!=null && java.time.temporal.ChronoUnit.DAYS.between(c.validDate(),today)<=t.maxAge()
+                    && t.eligible() && t.reviewDue().isAfter(now) && window.baseline()!=null){
+                var guard=new FxAutoRollingLimitEvaluator.Limits(t.increase(),t.decrease(),t.min(),t.max(),
+                    limits.increase(),limits.decrease(),limits.variation(),limits.publications());
+                items.add(new FxAutoDryRun.Item(new FxAutoTargetRef(tenant,FxAutoTargetRef.TargetType.PRODUCT_OFFER,
+                    FxAutoTargetRef.OwnerType.STOREFRONT,t.offer().toString()),t.current(),candidate,window.baseline(),window.changes(),guard));
+            }
+        }
+        var report=FxAutoDryRun.simulate(new FxAutoDryRun.Snapshot(tenant,c.currency(),rate.snapshotId(),
+            rate.revision(),now,limits.budget(),items));
+        Map<UUID,FxAutoDryRun.Row> hypothetical=new HashMap<>();
+        for(var row:report.rows())hypothetical.put(UUID.fromString(row.target().canonicalKey()),row);
         UUID simulation=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.fx_auto_simulation(tenant_id,id,policy_revision_id,approval_id,source_snapshot_id,
               request_key,evaluation_as_of,input_payload,input_sha256,item_count) VALUES (?,?,?,?,?,?,?,?,?,?)
             """,tenant,simulation,a.revision(),c.approvalId(),rate.snapshotId(),c.requestKey(),Timestamp.from(now),request,hash,targets.size());
         for(Target t:targets){
-            var candidate=calculator.preview(c.currency(),t.anchorAmount(),t.buffer(),t.markup(),t.step(),rate);
+            BigDecimal candidate=candidates.get(t.offer());
+            Window window=windows.get(t.offer());
+            FxAutoDryRun.Row evaluated=hypothetical.get(t.offer());
             String outcome; String reason;
             if(calendarId==null || java.time.temporal.ChronoUnit.DAYS.between(c.validDate(),today)>t.maxAge()){
                 outcome="SOURCE_NOT_ADMITTED";reason="CALENDAR_OR_RATE_AGE";
             }else if(!t.eligible() || !t.reviewDue().isAfter(now)){
                 outcome="BLOCKED_POLICY_CONFLICT";reason="STALE_TARGET_CONTEXT";
+            }else if(window.baseline()==null){
+                outcome="BASELINE_UNAVAILABLE";reason="CANONICAL_HISTORY_UNPROVEN";
+            }else if(evaluated!=null && evaluated.outcome()!=FxAutoDryRun.Outcome.WOULD_UPDATE && evaluated.outcome()!=FxAutoDryRun.Outcome.NO_CHANGE){
+                outcome=evaluated.outcome().name();reason="HYPOTHETICAL_LIMIT_REJECTION";
             }else{
-                outcome="BLOCKED_POLICY_CONFLICT";reason="CANONICAL_UNIT_TAX_HISTORY_AND_BUDGET_NOT_QUALIFIED";
+                outcome="BLOCKED_POLICY_CONFLICT";reason="CANONICAL_UNIT_TAX_AND_BUDGET_NOT_QUALIFIED";
             }
             String input="""
                 {"schema":"PRODUCT_DIAGNOSTIC_V1","offer":"%s","anchor":"%s","guardrail":"%s","priceRevision":"%s",
                  "currentKzt":"%s","candidateKzt":"%s","rate":"%s","nominal":"%s","sourceRevision":%d,
-                 "calendar":"%s","reason":"%s"}""".formatted(t.offer(),t.anchor(),t.guard(),t.priceRevision(),
-                    t.current().toPlainString(),candidate.suggestedKzt().toPlainString(),rate.rateKzt().toPlainString(),
-                    rate.nominal().toPlainString(),rate.revision(),calendarId==null?"NONE":calendarId.toString(),reason);
+                 "calendar":"%s","reason":"%s","baselineKzt":"%s","historyIds":"%s",
+                 "hypotheticalOutcome":"%s","hypotheticalDeltaKzt":"%s"}""".formatted(t.offer(),t.anchor(),t.guard(),t.priceRevision(),
+                    t.current().toPlainString(),candidate.toPlainString(),rate.rateKzt().toPlainString(),
+                    rate.nominal().toPlainString(),rate.revision(),calendarId==null?"NONE":calendarId.toString(),reason,
+                    window.baseline()==null?"NONE":window.baseline().toPlainString(),window.evidence(),
+                    evaluated==null?"NOT_EVALUATED":evaluated.outcome().name(),
+                    evaluated==null?"0":evaluated.virtualDelta().toPlainString());
             jdbc.update("INSERT INTO crm.fx_auto_simulation_item VALUES (?,?,?,?,?,?,?,?)",
                 tenant,simulation,a.revision(),t.offer(),t.priceRevision(),input,outcome,BigDecimal.ZERO);
         }
@@ -155,5 +201,38 @@ public class FxAutoPersistentDryRunService {
         jdbc.update("INSERT INTO crm.fx_auto_simulation_seal VALUES (?,?,?)",tenant,simulation,seal);
         actor.userId();
         return new Receipt(simulation,seal,targets.size());
+    }
+
+    /** Conservative history oracle: require a recorded boundary and an unbroken
+     * KZT chain from initial revision through the current canonical price. */
+    private Window history(UUID tenant,Target t,Instant now,long seconds){
+        Window missing=new Window(null,List.of(),List.of());
+        Instant boundary;
+        try{boundary=now.minusSeconds(seconds);}catch(DateTimeException|ArithmeticException e){return missing;}
+        List<History> rows=jdbc.query("""
+            SELECT id,offer_row_version,recorded_at,old_price,new_price,trim(old_currency),trim(new_currency)
+            FROM crm.store_offer_price_revision WHERE tenant_id=? AND offer_id=?
+            ORDER BY offer_row_version LIMIT 10001
+            """,(rs,n)->new History(rs.getObject(1,UUID.class),rs.getLong(2),rs.getTimestamp(3).toInstant(),
+                rs.getBigDecimal(4),rs.getBigDecimal(5),rs.getString(6),rs.getString(7)),tenant,t.offer());
+        if(rows.isEmpty() || rows.size()>10000)return missing;
+        BigDecimal baseline=null,previous=null;
+        Instant prior=null;
+        List<FxAutoRollingLimitEvaluator.Change> changes=new ArrayList<>();
+        List<UUID> evidence=new ArrayList<>();
+        for(History h:rows){
+            if(h.at().isAfter(now) || (prior!=null && h.at().isBefore(prior))
+                || !"KZT".equals(h.newCurrency()) || h.newPrice().signum()<=0)return missing;
+            if(previous==null){
+                if(h.version()!=0 || h.oldPrice()!=null || h.oldCurrency()!=null)return missing;
+            }else{
+                if(h.oldPrice()==null || h.oldPrice().compareTo(previous)!=0 || !"KZT".equals(h.oldCurrency()))return missing;
+                if(h.at().isAfter(boundary))changes.add(new FxAutoRollingLimitEvaluator.Change(previous,h.newPrice(),false));
+            }
+            if(!h.at().isAfter(boundary))baseline=h.newPrice();
+            previous=h.newPrice();prior=h.at();evidence.add(h.id());
+        }
+        if(!rows.getLast().id().equals(t.priceRevision()) || previous.compareTo(t.current())!=0 || baseline==null)return missing;
+        return new Window(baseline,List.copyOf(changes),List.copyOf(evidence));
     }
 }
