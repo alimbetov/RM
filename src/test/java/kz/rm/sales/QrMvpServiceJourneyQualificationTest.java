@@ -167,6 +167,11 @@ class QrMvpServiceJourneyQualificationTest {
         var customer=crm.createCompany(s.staff(),s.tenant(),"QR linked customer",null);
         var link=links.propose(s.staff(),s.tenant(),customer.id(),s.buyer().userId(),key());
         assertThat(links.orderHistory(s.staff(),s.tenant(),customer.id(),20)).isEmpty();
+        long eventsBefore=jdbc.queryForObject("SELECT count(*) FROM crm.customer_buyer_link_event WHERE tenant_id=? AND link_id=?",Long.class,s.tenant(),link.id());
+        assertThatThrownBy(()->links.confirm(s.staff(),s.tenant(),link.id(),0))
+            .isInstanceOf(SecurityException.class).hasMessage("Only linked buyer can confirm");
+        assertThat(links.orderHistory(s.staff(),s.tenant(),customer.id(),20)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.customer_buyer_link_event WHERE tenant_id=? AND link_id=?",Long.class,s.tenant(),link.id())).isEqualTo(eventsBefore);
         assertThat(links.confirm(s.buyer(),s.tenant(),link.id(),0).state()).isEqualTo(kz.rm.crm.CrmBuyerLinkService.State.CONFIRMED);
         assertThat(links.orderHistory(s.staff(),s.tenant(),customer.id(),20))
             .extracting(kz.rm.crm.CrmBuyerLinkService.BuyerOrder::orderId).containsExactly(order);
@@ -208,6 +213,10 @@ class QrMvpServiceJourneyQualificationTest {
         assertThat(pickup.preview(s.staff(),s.tenant(),s.warehouse(),
                 issued.rawProof()).status()).isEqualTo("READY_FOR_PICKUP");
         long before=orderVersion(s,orderId);
+        var beforeDenied=JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku());
+        assertThatThrownBy(()->pickup.complete(s.staff(),s.tenant(),s.warehouse(),issued.rawProof(),false,before,key()))
+            .isInstanceOf(SecurityException.class).hasMessage("EXPLICIT_HANDOVER_CONFIRM_REQUIRED");
+        assertThat(JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku())).isEqualTo(beforeDenied);
         String handoverKey=key();
         var committed=pickup.complete(s.staff(),s.tenant(),s.warehouse(),
                 issued.rawProof(),true,before,handoverKey);
@@ -263,6 +272,7 @@ class QrMvpServiceJourneyQualificationTest {
         assertThat(jdbc.queryForObject("""
                 SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?
                 """,String.class,s.tenant(),order)).isEqualTo("PICKUP_PROOF_REQUIRED");
+        var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
         UUID line=handover(s,order,3);
         assertThat(sellable(s)).isEqualByComparingTo("7");
@@ -277,6 +287,7 @@ class QrMvpServiceJourneyQualificationTest {
                   ON r.tenant_id=p.tenant_id AND r.id=p.return_id
                 WHERE p.tenant_id=? AND r.order_id=?
                 """,Integer.class,s.tenant(),order)).isEqualTo(2);
+        assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
     }
 
     @Test void qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg() {
@@ -296,6 +307,7 @@ class QrMvpServiceJourneyQualificationTest {
                 SELECT unit_price_snapshot FROM crm.sales_order_line
                 WHERE tenant_id=? AND order_id=?
                 """,BigDecimal.class,s.tenant(),order)).isEqualByComparingTo("80.0000");
+        var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
         UUID line=handover(s,order,2);
         assertThat(sellable(s)).isEqualByComparingTo("8");
@@ -306,5 +318,6 @@ class QrMvpServiceJourneyQualificationTest {
                 WHERE tenant_id=? AND warehouse_id=? AND item_id=?
                 """,BigDecimal.class,s.tenant(),s.warehouse(),s.sku()))
                 .isEqualByComparingTo("1");
+        assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
     }
 }

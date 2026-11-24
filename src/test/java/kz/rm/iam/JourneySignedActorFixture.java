@@ -40,20 +40,31 @@ public final class JourneySignedActorFixture implements AutoCloseable {
         byte[] bytes=number.toByteArray();
         return b64(bytes.length>1&&bytes[0]==0?Arrays.copyOfRange(bytes,1,bytes.length):bytes);
     }
+    public enum InvalidToken { WRONG_ISSUER, WRONG_AUDIENCE, ID_TOKEN, EXPIRED, BAD_SIGNATURE }
     public VerifiedActor resolve(JdbcTemplate jdbc,UserAccountRepository users,UUID user){
+        var actor=new OidcActorResolver(decoder,users).resolve(token(jdbc,user,null));
+        if(!user.equals(actor.userId()))throw new AssertionError("Resolved user differs from fixture");
+        return actor;
+    }
+    public VerifiedActor resolveInvalid(JdbcTemplate jdbc,UserAccountRepository users,UUID user,InvalidToken invalid){
+        return new OidcActorResolver(decoder,users).resolve(token(jdbc,user,Objects.requireNonNull(invalid)));
+    }
+    private String token(JdbcTemplate jdbc,UUID user,InvalidToken invalid){
         try{
             String subject=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",String.class,user);
             long now=Instant.now().getEpochSecond();
             String header="{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"journey\"}";
-            String body="{\"iss\":\""+ISSUER+"\",\"aud\":[\""+AUDIENCE+"\"],\"sub\":\""+subject+
-                "\",\"azp\":\"rm-seller-web\",\"typ\":\"Bearer\",\"iat\":"+(now-5)+",\"nbf\":"+(now-5)+",\"exp\":"+(now+600)+"}";
+            String body="{\"iss\":\""+(invalid==InvalidToken.WRONG_ISSUER?"https://foreign-issuer.test":ISSUER)+
+                "\",\"aud\":[\""+(invalid==InvalidToken.WRONG_AUDIENCE?"foreign-api":AUDIENCE)+"\"],\"sub\":\""+subject+
+                "\",\"azp\":\"rm-seller-web\",\"typ\":\""+(invalid==InvalidToken.ID_TOKEN?"ID":"Bearer")+
+                "\",\"iat\":"+(now-600)+",\"nbf\":"+(now-600)+",\"exp\":"+(invalid==InvalidToken.EXPIRED?now-300:now+600)+"}";
             String joined=b64(header.getBytes(StandardCharsets.UTF_8))+"."+b64(body.getBytes(StandardCharsets.UTF_8));
             Signature signer=Signature.getInstance("SHA256withRSA");signer.initSign(key.getPrivate());
             signer.update(joined.getBytes(StandardCharsets.US_ASCII));
-            var actor=new OidcActorResolver(decoder,users).resolve(joined+"."+b64(signer.sign()));
-            if(!user.equals(actor.userId()))throw new AssertionError("Resolved user differs from fixture");
-            return actor;
-        }catch(Exception e){throw new IllegalStateException("Signed journey actor failed",e);}
+            byte[] signature=signer.sign();
+            if(invalid==InvalidToken.BAD_SIGNATURE)signature[0]^=1;
+            return joined+"."+b64(signature);
+        }catch(Exception e){throw new IllegalStateException("Signed journey token creation failed",e);}
     }
     @Override public void close(){server.stop(0);}
 }

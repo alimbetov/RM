@@ -174,6 +174,18 @@ class BusMvpServiceJourneyQualificationTest {
                 WHERE tenant_id=? AND order_id=?
                 """,Integer.class,tenant,orderId)).isZero();
 
+        var beforeDenied=JourneySqlEvidence.orderAndStock(jdbc,tenant,orderId,warehouse.id(),published.id());
+        var invoicesBefore=JourneySqlEvidence.invoices(jdbc,tenant);
+        for(var invalid:JourneySignedActorFixture.InvalidToken.values()){
+            assertThatThrownBy(()->sales.confirm(signedActors.resolveInvalid(jdbc,users,staffId,invalid),tenant,orderId,warehouse.id()))
+                .isInstanceOf(SecurityException.class).hasMessage("OIDC token verification failed");
+        }
+        var foreign=actor(account("bus-foreign"));
+        assertThatThrownBy(()->sales.confirm(foreign,tenant,orderId,warehouse.id())).isInstanceOf(SecurityException.class);
+        roles.revoke(owner,tenant,role.id(),DomainPermission.SALES_ORDER_CONFIRM);
+        assertThatThrownBy(()->sales.confirm(staff,tenant,orderId,warehouse.id())).isInstanceOf(SecurityException.class);
+        assertThat(JourneySqlEvidence.orderAndStock(jdbc,tenant,orderId,warehouse.id(),published.id())).isEqualTo(beforeDenied);
+        roles.grant(owner,tenant,role.id(),DomainPermission.SALES_ORDER_CONFIRM);
         assertThat(sales.confirm(staff,tenant,orderId,warehouse.id()).status())
                 .isEqualTo("CONFIRMED");
         assertThat(sales.fulfill(staff,tenant,orderId).status()).isEqualTo("COMPLETED");
@@ -208,6 +220,7 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(jdbc.queryForObject("SELECT on_hand FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("7");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER' AND source_id=?",Integer.class,tenant,cancelOrder)).isZero();
         assertThat(orderReads.history(staff,tenant,cancelOrder,0,20)).hasSize(3);
+        assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
     }
