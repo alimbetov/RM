@@ -62,6 +62,22 @@ REQUIRED_CASES = {
     "kms-postgres-surefire": {
         # MVP six-pack gates: require named cases from real PostgreSQL XML.
         # SELLER-EDIT-R0 preparation: identity, tenant, revoke and catalog CAS.
+        # Warehouse-scope denial and both commit-order races are P0 blockers
+        # for any future tenant employee stock upload; these are SERVICE cases.
+        ("SellerWarehouseScopeR0QualificationTest",
+         "sellerR0ReceiptAndCorrectionRequireAssignedWarehouseDespiteTenantGrants"),
+        ("SellerWarehouseScopeR0QualificationTest",
+         "sellerR0WarehouseScopeAndRoleRevocationBothBlockNewInventoryWrites"),
+        ("SellerWarehouseScopeR0QualificationTest",
+         "sellerR0PostgresAdmittedReceiptCommitsBeforeWarehouseScopeRevocation"),
+        ("SellerWarehouseScopeR0QualificationTest",
+         "sellerR0PostgresScopeRevocationCommitsBeforeReceiptWithZeroLedger"),
+        ("SellerWarehouseScopeR0QualificationTest",
+         "sellerR0PostgresRoleRevocationCommitsBeforeReceiptWithZeroLedger"),
+        ("StorefrontManagementQualificationTest",
+         "sellerR0PgPriceUpdateCommitsBeforeRoleRevokeKeepsOneRevision"),
+        ("StorefrontManagementQualificationTest",
+         "sellerR0PgRoleRevokeCommitsBeforePriceUpdateWithoutHistory"),
         # Keep preparatory coverage mandatory without enabling XLSX imports.
         ("CatalogQualificationTest",
          "sellerEditR0SameSkuAcrossTenantsUsesEmployeeSpecificGrants"),
