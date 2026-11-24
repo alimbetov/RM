@@ -30,7 +30,7 @@ class FxAutoPolicySchemaPgTest {
         jdbc.update("INSERT INTO crm.sku_fx_policy_version(tenant_id,id,offer_id,revision,anchor_currency,anchor_amount,buffer_pct,markup_pct,rounding_step_kzt,approved_by,created_at) VALUES (?,?,?,1,'USD',1,0,0,1,?,now())",f.tenant(),f.anchor(),f.offer(),f.user());
         jdbc.update("INSERT INTO crm.sku_fx_guardrail_version(tenant_id,id,offer_id,revision,max_increase_pct,max_decrease_pct,min_price_kzt,max_price_kzt,max_rate_calendar_days,calculation_ttl_seconds,approved_by,created_at) VALUES (?,?,?,1,10,10,1,1000,3,60,?,now())",f.tenant(),f.guard(),f.offer(),f.user());
         jdbc.update("INSERT INTO crm.fx_auto_limit_policy_version VALUES (?,?,86400,15,15,100,10,86400,1000,20,1000,10,100)",f.tenant(),f.limit());
-        jdbc.update("INSERT INTO crm.fx_auto_policy_revision VALUES (?,?,?,1,?,'{}',?,now())",f.tenant(),f.revision(),f.policy(),f.limit(),"a".repeat(64));
+        jdbc.update("INSERT INTO crm.fx_auto_policy_revision VALUES (?,?,?,1,?,'{}',crm.fx_auto_sha_v1('{}'::jsonb),now())",f.tenant(),f.revision(),f.policy(),f.limit());
         return f;
     }
     private void enroll(F f,UUID offer,UUID anchor,UUID guard){
@@ -38,7 +38,7 @@ class FxAutoPolicySchemaPgTest {
     }
     private UUID approve(F f,UUID actor,UUID member,int count){
         UUID approval=id();
-        jdbc.update("INSERT INTO crm.fx_auto_approval_evidence VALUES (?,?,?,?,?,?,?,now(),now()+interval '1 day',?)",f.tenant(),approval,f.revision(),"a".repeat(64),actor,member,id().toString(),count);
+        jdbc.update("INSERT INTO crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id,payload_sha256,owner_user_id,membership_id,request_key,approved_at,expires_at,target_count,scope_sha256) VALUES (?,?,?,crm.fx_auto_sha_v1('{}'::jsonb),?,?,?,now(),now()+interval '1 day',?,crm.fx_auto_scope_sha_v1(?,?))",f.tenant(),approval,f.revision(),actor,member,id().toString(),count,f.tenant(),f.revision());
         return approval;
     }
     @Test void immutableEvidenceAndSealedScope() throws Exception {
@@ -64,5 +64,20 @@ class FxAutoPolicySchemaPgTest {
         assertThat(jdbc.update("UPDATE crm.fx_auto_policy_activation SET state='REVOKED',execution_epoch=1 WHERE tenant_id=? AND policy_id=? AND execution_epoch=0",f.tenant(),f.policy())).isEqualTo(1);
         assertThat(jdbc.update("UPDATE crm.fx_auto_policy_activation SET state='REVOKED',execution_epoch=1 WHERE tenant_id=? AND policy_id=? AND execution_epoch=0",f.tenant(),f.policy())).isZero();
         assertThatThrownBy(()->jdbc.update("UPDATE crm.fx_auto_policy_activation SET state='PAUSED',execution_epoch=2 WHERE tenant_id=? AND policy_id=?",f.tenant(),f.policy())).hasMessageContaining("FX_AUTO_EPOCH_OR_TRANSITION_INVALID");
+    }
+
+    @Test void directGuardTamperingAndTruncateRejected() throws Exception {
+        var f=fixture();enroll(f,f.offer(),f.anchor(),f.guard());approve(f,f.user(),f.member(),1);
+        assertThatThrownBy(()->jdbc.update("UPDATE crm.fx_auto_scope_guard SET sealed=false WHERE tenant_id=? AND policy_revision_id=?",f.tenant(),f.revision())).hasMessageContaining("FX_AUTO_GUARD_DIRECT_MUTATION");
+        assertThatThrownBy(()->jdbc.update("DELETE FROM crm.fx_auto_scope_guard WHERE tenant_id=? AND policy_revision_id=?",f.tenant(),f.revision())).hasMessageContaining("FX_AUTO_GUARD_DIRECT_MUTATION");
+        assertThatThrownBy(()->jdbc.execute("TRUNCATE crm.fx_auto_target_enrollment CASCADE")).isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+    @Test void canonicalPayloadAndScopeDigestCannotBeForged() throws Exception {
+        var f=fixture();
+        assertThat(jdbc.queryForObject("SELECT crm.fx_auto_sha_v1('{\"b\":2,\"a\":1}'::jsonb)=crm.fx_auto_sha_v1('{\"a\":1,\"b\":2}'::jsonb)",Boolean.class)).isTrue();
+        assertThatThrownBy(()->jdbc.update("INSERT INTO crm.fx_auto_policy_revision VALUES (?,?,?,2,?,'{}',?,now())",f.tenant(),id(),f.policy(),f.limit(),"a".repeat(64))).hasMessageContaining("FX_AUTO_PAYLOAD_DIGEST_MISMATCH");
+        enroll(f,f.offer(),f.anchor(),f.guard());
+        assertThatThrownBy(()->jdbc.update("INSERT INTO crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id,payload_sha256,owner_user_id,membership_id,request_key,approved_at,expires_at,target_count,scope_sha256) VALUES (?,?,?,crm.fx_auto_sha_v1('{}'::jsonb),?,?,?,now(),now()+interval '1 day',1,?)",f.tenant(),id(),f.revision(),f.user(),f.member(),id().toString(),"b".repeat(64))).hasMessageContaining("FX_AUTO_SCOPE_DIGEST_MISMATCH");
+        approve(f,f.user(),f.member(),1);
     }
 }
