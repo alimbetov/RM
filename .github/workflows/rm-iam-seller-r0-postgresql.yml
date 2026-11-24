@@ -12,6 +12,11 @@ on:
       - 'src/main/java/kz/rm/iam/MyAccessService.java'
       - 'src/main/java/kz/rm/catalog/CatalogItemService.java'
       - 'src/test/java/kz/rm/iam/IamSellerAuthenticatedTenantAdmissionQualificationTest.java'
+      - 'src/test/java/kz/rm/iam/SignedJwtTestAuthority.java'
+      - 'src/test/java/kz/rm/iam/SignedJwtTestAuthorityTest.java'
+      - 'src/test/java/kz/rm/iam/OidcTestDecoderSupport.java'
+      - '.github/scripts/verify_signed_jwt_authority.py'
+      - '.github/scripts/test_verify_signed_jwt_authority.py'
       - 'src/test/java/kz/rm/iam/OidcJwtCryptoQualificationTest.java'
       - 'src/test/java/kz/rm/iam/R4LocalJwksIntegrationQualificationTest.java'
       - '.github/scripts/verify_rm_qa_01b.py'
@@ -63,34 +68,17 @@ jobs:
       - name: Signed access tokens, JWKS and IAM–seller service admission
         run: >-
           mvn -B -ntp clean test
-          '-Dtest=IamSellerAuthenticatedTenantAdmissionQualificationTest,OidcJwtCryptoQualificationTest,R4LocalJwksIntegrationQualificationTest'
-      - name: Require six PostgreSQL IAM–SELLER-R0 methods without skips
+          '-Dtest=IamSellerAuthenticatedTenantAdmissionQualificationTest,OidcJwtCryptoQualificationTest,R4LocalJwksIntegrationQualificationTest,SignedJwtTestAuthorityTest'
+      - name: Qualify authority and IAM exact-SHA Surefire evidence
         run: |
-          python3 - <<'PY'
-          import xml.etree.ElementTree as ET
-          from pathlib import Path
-          expected = {
-              'iamSellerR0RealBearerSubCannotBeOverriddenByActorOrTenantClaims',
-              'iamSellerR0SignedIdRefreshWrongPurposeAndBadJwtNeverMintActor',
-              'iamSellerR0RoleRevokedAfterSignedTokenAndTenantSelectionDeniesWrite',
-              'iamSellerR0MembershipSuspendedAfterBearerBlocksSelectAndMutation',
-              'iamSellerR0SuspendedAccountRejectsExistingAndFreshBearer',
-              'iamSellerR0TenantSuspendedAfterAccessTokenDeniesCurrentSelectionAndWrite',
-          }
-          files=list(Path('target/surefire-reports').glob('TEST-*.xml'))
-          assert files, 'IAM_SELLER_R0_MISSING_SUREFIRE'
-          rows=[tc for path in files for tc in ET.parse(path).getroot().iter('testcase')]
-          matches={row.attrib.get('name'):row for row in rows if row.attrib.get('name') in expected}
-          assert expected <= matches.keys(), 'IAM_SELLER_R0_MISSING_CASES '+str(expected-matches.keys())
-          for method,row in matches.items():
-              assert not any(row.find(t) is not None for t in ('failure','error','skipped')), (
-                  'IAM_SELLER_R0_FAILED_OR_SKIPPED '+method)
-          print('IAM_SELLER_R0_6_OF_6_SIGNED_JWT_PG_EXECUTED')
-          PY
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_signed_jwt_authority.py' -v
+          python3 .github/scripts/verify_signed_jwt_authority.py --reports target/surefire-reports --output target/signed-jwt-authority-evidence
       - name: Persist signed-JWT PostgreSQL evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rm-iam-seller-r0-pg-${{ github.sha }}
-          path: target/surefire-reports/
-          if-no-files-found: warn
+          path: |
+            target/surefire-reports/
+            target/signed-jwt-authority-evidence/
+          if-no-files-found: error
