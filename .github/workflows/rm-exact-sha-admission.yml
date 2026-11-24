@@ -57,7 +57,7 @@ jobs:
               {name:'RM TASK R2 Service Qualification',artifacts:['rm-task-h2-'+sha,'rm-task-postgresql-'+sha]},
               {name:'RM TASK R3.2A Populated PostgreSQL Upgrade Qualification',artifacts:['rm-task-r32a-populated-pg-'+sha]},
               {name:'RM TASK R32B T00 PostgreSQL Contract Qualification',artifacts:['rm-task-t00-postgresql-'+sha]},
-              {name:'RM CUR-R2C Policy Schema PostgreSQL Qualification',artifacts:['cur-r2c-policy-pg-'+sha,'cur-r2c-populated-pg-'+sha]}
+              {name:'RM CUR-R2C Policy Schema PostgreSQL Qualification',artifacts:['cur-r2c-policy-pg-'+sha,'cur-r2c-populated-pg-'+sha,'cur-r2c-anchor-populated-pg-'+sha]}
             ];
             const manifest = {
               schema:'RM-QA-01B/v2',repository:owner+'/'+repo,branch,sha,
