@@ -1,4 +1,4 @@
-name: RM MVP W2-W3 Strict Service PostgreSQL Qualification
+name: RM MVP W2-W5 Service Journeys PostgreSQL Qualification
 
 on:
   push:
@@ -7,6 +7,8 @@ on:
       - 'src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java'
       - 'src/main/java/kz/rm/sales/SalesInventoryCommandService.java'
       - 'src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java'
+      - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java'
       - 'src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java'
       - 'docs/operations/RM-MVP-SERVICE-CURRENCY-PREFLIGHT.sql'
       - '.github/workflows/rm-mvp-w23-service-strict-pg.yml'
@@ -49,11 +51,11 @@ jobs:
           cache: maven
       - name: Verify SHA
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Test strict W2 and W3 service admission in real PostgreSQL
+      - name: Test strict W2-W5 service journeys in real PostgreSQL
         run: >-
           mvn -B -ntp clean test
-          '-Dtest=MvpServiceWarehouseAdmissionQualificationTest,MvpServiceCurrencyStartupQualificationTest'
-      - name: Require both strict W3 tests and W2 startup guard (none skipped)
+          '-Dtest=MvpServiceWarehouseAdmissionQualificationTest,MvpServiceCurrencyStartupQualificationTest,BusMvpServiceJourneyQualificationTest,QrMvpServiceJourneyQualificationTest'
+      - name: Require W2-W5 strict tests (none skipped)
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
@@ -63,7 +65,10 @@ jobs:
           cases=[x for p in paths for x in ET.parse(p).getroot().iter('testcase')]
           expected={'mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill',
                     'mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation',
-                    'mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled'}
+                    'mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled',
+                    'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg',
+                    'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
+                    'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
           got={c.get('name') for c in cases}
           assert expected <= got, 'MVP_MISSING_REQUIRED_CASES: '+str(expected-got)
           assert not any(c.find(tag) is not None for c in cases
@@ -96,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rm-mvp-w23-strict-pg-${{ github.sha }}
+          name: rm-mvp-w25-strict-pg-${{ github.sha }}
           path: |
             target/surefire-reports/
           if-no-files-found: warn
