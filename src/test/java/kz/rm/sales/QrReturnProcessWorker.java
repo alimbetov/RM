@@ -42,6 +42,49 @@ public final class QrReturnProcessWorker {
             VerifiedActor principal=new OidcActorResolver(
                     decoder,app.getBean(UserAccountRepository.class))
                     .resolve("synthetic-return-process");
+            if(mode.startsWith("RESOLVE_")){
+                var resolver=app.getBean(SalesReturnQuarantineResolutionService.class);
+                var tx=new TransactionTemplate(app.getBean(PlatformTransactionManager.class));
+                boolean restock=mode.startsWith("RESOLVE_RESTOCK_");
+                var action=restock?SalesReturnQuarantineResolutionService.Action.RESTOCK:
+                        SalesReturnQuarantineResolutionService.Action.DISPOSE;
+                String phase=mode.substring(restock?"RESOLVE_RESTOCK_".length():"RESOLVE_DISPOSE_".length());
+                if(!java.util.Set.of("HALT_BEFORE_COMMIT","HALT_AFTER_COMMIT","HOLD","NORMAL").contains(phase))
+                    throw new IllegalArgumentException("Unknown resolution phase");
+                try {
+                    var result=tx.execute(status->{
+                        int pid=jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class);
+                        if("NORMAL".equals(phase))writeSignal(ready,Integer.toString(pid));
+                        var out=resolver.resolve(principal,tenant,warehouse,returnId,version,
+                                action,"QA_B_EVIDENCE",key);
+                        if(!out.state().equals(restock?"RESTOCKED":"DISPOSED")||out.version()!=7
+                                ||out.resolutionId()==null||restock!=(out.stockMovementId()!=null))
+                            throw new IllegalStateException("RET04C_RESOLUTION_INCOMPLETE");
+                        if("HALT_BEFORE_COMMIT".equals(phase)){
+                            System.out.println("RET04C_PRECOMMIT pid="+pid+" "+out);
+                            System.out.flush();
+                            Runtime.getRuntime().halt(86);
+                        }
+                        if("HOLD".equals(phase)){
+                            writeSignal(ready,Integer.toString(pid));
+                            awaitSignal(release);
+                        }
+                        return out;
+                    });
+                    System.out.println("RET04C_COMMITTED "+result);
+                    System.out.flush();
+                    if("HALT_AFTER_COMMIT".equals(phase))Runtime.getRuntime().halt(87);
+                }catch(IllegalStateException denied){
+                    if(!"QUARANTINE_REPLAY_CONFLICT".equals(denied.getMessage())
+                            ||!"NORMAL".equals(phase))throw denied;
+                    System.out.println("RET04C_DENIED QUARANTINE_REPLAY_CONFLICT");
+                    System.out.flush();
+                    System.exit(88);
+                }
+                return;
+            }
+            if(!java.util.Set.of("POST_NORMAL","POST_HALT_BEFORE_COMMIT","POST_HALT_AFTER_COMMIT").contains(mode))
+                throw new IllegalArgumentException("Unknown worker mode");
             SalesReturnPhysicalService returns=app.getBean(SalesReturnPhysicalService.class);
             if(!"-".equals(ready.toString())){
                 Files.writeString(ready,"READY");
@@ -65,6 +108,23 @@ public final class QrReturnProcessWorker {
                     Runtime.getRuntime().halt(87);
                 System.out.println("QR07_R2_JVM_POST_OK");
             }
+        }
+    }
+    private static void writeSignal(Path path,String value){
+        if("-".equals(path.toString()))return;
+        try{
+            Path tmp=path.resolveSibling(path.getFileName()+".tmp");
+            Files.writeString(tmp,value);
+            Files.move(tmp,path,java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+    }
+
+    private static void awaitSignal(Path path){
+        long cutoff=System.nanoTime()+TimeUnit.SECONDS.toNanos(100);
+        while(!Files.exists(path)){
+            if(System.nanoTime()>cutoff)throw new IllegalStateException("RET04C_COMMIT_GATE_TIMEOUT");
+            try{Thread.sleep(20);}
+            catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
         }
     }
 }
