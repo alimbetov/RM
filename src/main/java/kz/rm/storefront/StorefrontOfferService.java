@@ -149,6 +149,66 @@ public class StorefrontOfferService {
         return fetch(tenant, offerId, false);
     }
 
+    public enum TaxBasis { TAX_INCLUDED, TAX_EXCLUDED, NONE }
+    public record CommercialContext(UUID id,UUID offerId,long revision,String unitCode,
+                                    TaxBasis taxBasis,UUID approvedBy,Instant approvedAt) {}
+
+    /**
+     * Owner-reviewed metadata, not price publication or tax calculation.
+     * A context revision is deliberately separate from the legacy price history.
+     * AUTO remains disabled until consent binds this exact context and history is qualified.
+     */
+    @Transactional
+    public CommercialContext confirmCommercialContext(VerifiedActor actor,UUID tenant,UUID offerId,
+                                                       long expectedOfferVersion,long expectedContextRevision,
+                                                       String unitCode,TaxBasis taxBasis) {
+        UUID user=admit(actor,tenant,DomainPermission.TENANT_RBAC_MANAGE);
+        admit(actor,tenant,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        if(unitCode==null || !unitCode.matches("[A-Z0-9_]{1,64}") || taxBasis==null ||
+                expectedContextRevision<0 || expectedContextRevision==Long.MAX_VALUE)
+            throw new IllegalArgumentException("INVALID_COMMERCIAL_CONTEXT");
+        lockCurrency(tenant);
+        lockStorefront(tenant);
+        Offer current=locked(tenant,offerId,expectedOfferVersion);
+        requirePublicCurrency(current.currency());
+        if(!"KZT".equals(current.currency()) || current.unitPrice().signum()<=0)
+            throw new IllegalStateException("COMMERCIAL_CONTEXT_KZT_REQUIRED");
+        validateCatalogProduct(tenant,current.catalogItemId(),true);
+        CommercialContext existing=readCommercialContext(tenant,offerId);
+        long revision=existing==null?0:existing.revision();
+        if(revision!=expectedContextRevision)throw new IllegalStateException("STALE_COMMERCIAL_CONTEXT");
+        if(existing!=null && existing.unitCode().equals(unitCode) && existing.taxBasis()==taxBasis)
+            return existing;
+        UUID id=UUID.randomUUID();
+        Instant now=Instant.now();
+        actor.userId();
+        jdbc.update("""
+            INSERT INTO crm.store_offer_commercial_context
+            (tenant_id,id,offer_id,revision,unit_code,tax_basis,price_basis,approved_by,approved_at)
+            VALUES (?,?,?,?,?,?,'FIXED_SINGLE_UNIT',?,?)
+            """,tenant,id,offerId,revision+1,unitCode,taxBasis.name(),user,Timestamp.from(now));
+        audit(tenant,user,offerId,"STOREFRONT_COMMERCIAL_CONTEXT_CONFIRMED");
+        actor.userId();
+        return new CommercialContext(id,offerId,revision+1,unitCode,taxBasis,user,now);
+    }
+
+    @Transactional
+    public CommercialContext commercialContext(VerifiedActor actor,UUID tenant,UUID offerId) {
+        admit(actor,tenant,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        fetch(tenant,offerId,false);
+        return readCommercialContext(tenant,offerId);
+    }
+
+    private CommercialContext readCommercialContext(UUID tenant,UUID offerId) {
+        return jdbc.query("""
+            SELECT id,offer_id,revision,unit_code,tax_basis,approved_by,approved_at
+            FROM crm.store_offer_commercial_context WHERE tenant_id=? AND offer_id=?
+            ORDER BY revision DESC LIMIT 1
+            """,rs->rs.next()?new CommercialContext(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+                rs.getLong(3),rs.getString(4),TaxBasis.valueOf(rs.getString(5)),rs.getObject(6,UUID.class),
+                rs.getTimestamp(7).toInstant()):null,tenant,offerId);
+    }
+
     private Offer transition(VerifiedActor actor, UUID tenant, UUID offerId,
                              long expectedVersion, State target) {
         UUID user = admit(actor, tenant, target == State.PUBLISHED

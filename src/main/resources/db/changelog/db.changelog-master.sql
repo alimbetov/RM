@@ -4928,3 +4928,40 @@ CREATE TRIGGER trg_fx_auto_revocation_no_truncate BEFORE TRUNCATE ON crm.fx_auto
  FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
 --rollback DROP TRIGGER trg_fx_auto_revocation_no_truncate ON crm.fx_auto_revocation_evidence;
 --rollback DROP TRIGGER trg_fx_auto_revocation_immutable ON crm.fx_auto_revocation_evidence;
+
+
+--changeset rm:0163-storefront-commercial-context
+-- Explicit owner-reviewed metadata only. No inferred legacy unit/tax backfill.
+CREATE TABLE crm.store_offer_commercial_context (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ unit_code VARCHAR(64) NOT NULL CHECK(length(trim(unit_code))>0),
+ tax_basis VARCHAR(20) NOT NULL CHECK(tax_basis IN ('TAX_INCLUDED','TAX_EXCLUDED','NONE')),
+ price_basis VARCHAR(32) NOT NULL CHECK(price_basis='FIXED_SINGLE_UNIT'),
+ approved_by UUID NOT NULL REFERENCES public.iam_user_account(id),
+ approved_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,offer_id,revision),
+ UNIQUE(tenant_id,id,offer_id),
+ FOREIGN KEY(tenant_id,offer_id) REFERENCES crm.store_offer(tenant_id,id)
+);
+--rollback DROP TABLE crm.store_offer_commercial_context;
+
+--changeset rm:0164-storefront-commercial-context-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_store_offer_commercial_context_immutable BEFORE UPDATE OR DELETE ON crm.store_offer_commercial_context
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_store_offer_commercial_context_no_truncate BEFORE TRUNCATE ON crm.store_offer_commercial_context
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_store_offer_commercial_context_no_truncate ON crm.store_offer_commercial_context;
+--rollback DROP TRIGGER trg_store_offer_commercial_context_immutable ON crm.store_offer_commercial_context;
+
+--changeset rm:0165-fx-auto-stable-tenant-budget-guard
+-- Stable across currencies, policies, revisions and run identities.
+-- No consumption or AUTO execution authority is introduced by this migration.
+CREATE TABLE crm.fx_auto_tenant_budget_guard (
+ tenant_id UUID PRIMARY KEY REFERENCES public.iam_workspace(id),
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+--rollback DROP TABLE crm.fx_auto_tenant_budget_guard;
