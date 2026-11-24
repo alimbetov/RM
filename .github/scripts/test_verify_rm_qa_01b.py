@@ -163,6 +163,7 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         "SkuFxSellerApprovalQualificationTest": 35,
                     },
                     "cur-r2c-populated-pg-": {"FxAutoPolicySchemaPgTest": 8},
+                    "cur-r2c-revoke-populated-pg-": {"FxAutoOwnerAdmissionQualificationTest": 24},
                     "cur-r2c-anchor-populated-pg-": {
                         "TenantCurrencyPolicyQualificationTest": 14,
                         "SkuFxSellerApprovalQualificationTest": 35,
