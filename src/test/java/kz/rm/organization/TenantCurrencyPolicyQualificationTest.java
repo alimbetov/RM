@@ -187,4 +187,105 @@ class TenantCurrencyPolicyQualificationTest {
                 SELECT count(*) FROM public.tenant_currency_policy_event WHERE tenant_id=?
                 """,Integer.class,f.tenant())).isEqualTo(1);
     }
+
+    private void anchor(UUID tenant,String currency) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(s->currencies.requirePricingAnchor(tenant,currency));
+    }
+    private void purpose(UUID tenant,String currency,String purpose) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(s->currencies.requireCurrencyForPurpose(tenant,currency,purpose));
+    }
+    @Test void pa01SupportedCurrenciesAndNoImplicitGrants() {
+        var f=fixture(); currencies.initialize(f.owner(),f.tenant());
+        for(String code:java.util.List.of("USD","EUR","CNY")) {
+            assertThatThrownBy(()->anchor(f.tenant(),code)).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+            long v=currencies.get(f.owner(),f.tenant()).rowVersion();
+            currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),code,true,v);
+            anchor(f.tenant(),code);
+            for(String p:java.util.List.of("PURCHASE","SALES_INTERNAL"))
+                assertThatThrownBy(()->purpose(f.tenant(),code,p)).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+        }
+        assertThatThrownBy(()->purpose(f.tenant(),"USD","PUBLIC_PRICE")).hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+        purpose(f.tenant(),"KZT","PUBLIC_PRICE");
+    }
+    @Test void pa02LegacyPurposesDoNotGrantAnchorAndRevokeIsIndependent() {
+        var f=fixture(); currencies.initialize(f.owner(),f.tenant());
+        currencies.setCurrencyEnabled(f.owner(),f.tenant(),"USD","PURCHASE",true,0);
+        assertThatThrownBy(()->anchor(f.tenant(),"USD")).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+        currencies.setCurrencyEnabled(f.owner(),f.tenant(),"USD","SALES_INTERNAL",true,1);
+        assertThatThrownBy(()->anchor(f.tenant(),"USD")).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+        currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",true,2);
+        anchor(f.tenant(),"USD");
+        currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",false,3);
+        assertThatThrownBy(()->anchor(f.tenant(),"USD")).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+        purpose(f.tenant(),"USD","PURCHASE"); purpose(f.tenant(),"USD","SALES_INTERNAL");
+    }
+    @Test void pa03UnsupportedAnchorRejectedByServiceAndDatabase() {
+        var f=fixture(); currencies.initialize(f.owner(),f.tenant());
+        for(String code:java.util.List.of("RUB","KZT","GBP")) {
+            assertThatThrownBy(()->currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),code,true,0)).hasMessage("TENANT_PRICING_ANCHOR_CURRENCY_INVALID");
+            assertThatThrownBy(()->anchor(f.tenant(),code)).hasMessage("TENANT_PRICING_ANCHOR_CURRENCY_INVALID");
+            assertThatThrownBy(()->jdbc.update("INSERT INTO public.tenant_allowed_currency(tenant_id,currency_code,purpose,state,created_at,updated_at) VALUES (?,?,'PRICING_ANCHOR','ENABLED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",f.tenant(),code)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
+        assertThat(currencies.get(f.owner(),f.tenant()).rowVersion()).isZero();
+    }
+    @Test void pa04OwnerCasAndTenantIsolation() {
+        var a=fixture();var b=fixture(); currencies.initialize(a.owner(),a.tenant());currencies.initialize(b.owner(),b.tenant());
+        assertThatThrownBy(()->currencies.setPricingAnchorEnabled(a.viewer(),a.tenant(),"USD",true,0)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->currencies.setPricingAnchorEnabled(a.owner(),b.tenant(),"USD",true,0)).isInstanceOf(SecurityException.class);
+        assertThat(currencies.setPricingAnchorEnabled(a.owner(),a.tenant(),"USD",true,0).rowVersion()).isEqualTo(1);
+        assertThat(currencies.setPricingAnchorEnabled(a.owner(),a.tenant(),"USD",true,1).rowVersion()).isEqualTo(1);
+        assertThatThrownBy(()->currencies.setPricingAnchorEnabled(a.owner(),a.tenant(),"USD",false,0)).hasMessage("TENANT_CURRENCY_STALE_VERSION");
+        assertThatThrownBy(()->anchor(b.tenant(),"USD")).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM public.tenant_currency_policy_event WHERE tenant_id=? AND purpose='PRICING_ANCHOR'",Integer.class,a.tenant())).isEqualTo(1);
+    }
+    @Test void pa05InactiveOwnerAndTenantDenied() {
+        var f=fixture();currencies.initialize(f.owner(),f.tenant());
+        jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",f.tenant());
+        assertThatThrownBy(()->currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",true,0)).isInstanceOf(SecurityException.class);
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",f.tenant());
+        jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",f.owner().userId());
+        assertThatThrownBy(()->currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",true,0)).isInstanceOf(SecurityException.class);
+    }
+    @Test void pa06AdminCannotGrantAnchor() {
+        var f=fixture(); currencies.initialize(f.owner(),f.tenant());
+        jdbc.update("UPDATE public.iam_org_membership SET role='ADMIN' WHERE user_id=?",f.viewer().userId());
+        assertThatThrownBy(()->currencies.setPricingAnchorEnabled(f.viewer(),f.tenant(),"USD",true,0)).isInstanceOf(SecurityException.class);
+    }
+    @Test void pa07ConcurrentAdmissionAndRevoke() throws Exception {
+        try(var c=dataSource.getConnection()){
+            Assumptions.assumeTrue("PostgreSQL".equals(c.getMetaData().getDatabaseProductName()));
+        }
+        for(boolean admissionFirst:new boolean[]{true,false}) {
+            var f=fixture(); currencies.initialize(f.owner(),f.tenant());
+            currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",true,0);
+            var entered=new java.util.concurrent.CountDownLatch(1);
+            var release=new java.util.concurrent.CountDownLatch(1);
+            var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+            try {
+                var first=pool.submit(()->new TransactionTemplate(transactionManager).executeWithoutResult(s->{
+                    if(admissionFirst)currencies.requirePricingAnchor(f.tenant(),"USD");
+                    else currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",false,1);
+                    entered.countDown();
+                    try {if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("timeout");}
+                    catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+                }));
+                assertThat(entered.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                var second=pool.submit(()->{
+                    if(admissionFirst)currencies.setPricingAnchorEnabled(f.owner(),f.tenant(),"USD",false,1);
+                    else anchor(f.tenant(),"USD");
+                });
+                boolean blocked=false;
+                long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                while(System.nanoTime()<deadline&&!second.isDone()){
+                    if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND cardinality(pg_blocking_pids(pid))>0 AND query LIKE '%tenant_currency_policy%')",Boolean.class))){blocked=true;break;}
+                    Thread.sleep(20);
+                }
+                assertThat(blocked).isTrue(); release.countDown();
+                first.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                if(admissionFirst)second.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                else assertThatThrownBy(()->second.get(10,java.util.concurrent.TimeUnit.SECONDS)).hasRootCauseMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+                assertThatThrownBy(()->anchor(f.tenant(),"USD")).hasMessage("TENANT_CURRENCY_PURPOSE_NOT_ALLOWED");
+            } finally {release.countDown();pool.shutdownNow();}
+        }
+    }
 }
