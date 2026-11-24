@@ -210,6 +210,7 @@ class QrMvpServiceJourneyQualificationTest {
         UUID lineId=jdbc.queryForObject("""
                 SELECT id FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
                 """,UUID.class,s.tenant(),orderId);
+        assertGenericDeniedWithoutEffects(s,orderId);
         prep.confirmPicked(s.staff(),s.tenant(),orderId,s.warehouse(),
                 lineId,qty,orderVersion(s,orderId),key());
         prep.markReadyForPickup(s.staff(),s.tenant(),orderId,s.warehouse(),
@@ -245,9 +246,11 @@ class QrMvpServiceJourneyQualificationTest {
             .isEqualTo("PICKUP_PROOF_REQUIRED");
         assertGenericDeniedWithoutEffects(s,orderId);
         assertThat(committed.status()).isEqualTo("COMPLETED");
+        var beforeReplay=JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku());
         assertThat(pickup.complete(s.staff(),s.tenant(),s.warehouse(),
                 issued.rawProof(),true,before,handoverKey).handoverId())
                 .isEqualTo(committed.handoverId());
+        assertThat(JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku())).isEqualTo(beforeReplay);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_pickup_handover WHERE tenant_id=? AND order_id=?
                 """,Integer.class,s.tenant(),orderId)).isEqualTo(1);
@@ -268,6 +271,9 @@ class QrMvpServiceJourneyQualificationTest {
                   AND r.order_id=h.order_id AND r.state='FULFILLED'
                   AND r.quantity=hl.quantity AND hl.quantity=?
                   AND m.reservation_id=r.id AND m.movement_kind='FULFILLMENT'
+                  AND m.delta_quantity=-hl.quantity AND m.item_id=r.item_id
+                  AND m.location_id=r.location_id AND r.location_id=h.warehouse_id
+                  AND p.warehouse_id=h.warehouse_id AND p.consumed_at IS NOT NULL
                   AND e.order_id=h.order_id AND e.event_type='COMPLETED'
                 """,Integer.class,s.tenant(),orderId,committed.handoverId(),qty)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='COMPLETED'",Integer.class,s.tenant(),orderId)).isEqualTo(1);

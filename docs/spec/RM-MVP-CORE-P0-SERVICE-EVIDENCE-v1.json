@@ -521,7 +521,20 @@
     {
       "id": "CORE-SAL-09",
       "behavior": "Generic fulfill×secure pickup both orders → exactly one legal debit with proof",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
+        },
+        {
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"
+        },
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+        }
+      ],
       "legacyBehavior": "Order state and stock movement history trace each completed business order",
       "legacyProofs": [
         {
@@ -529,8 +542,8 @@
           "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Старая привязка к BUS happy path неверна; double-scan не заменяет generic fulfill × secure pickup на одном заказе.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Strict QR list-price generic-first rollback and negotiated-price pickup-first commit schedules implemented with actual PostgreSQL blocking-edge verification, exact route denial and joined receipt/credential/reservation/movement/event SQL oracle; new exact-SHA execution and persisted variant SQL artifacts pending.",
       "candidateProofs": [
         {
           "suite": "SalesInventoryRbacQualificationTest",
@@ -543,6 +556,20 @@
           "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce",
           "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
           "review": "CANDIDATE_ONLY"
+        }
+      ],
+      "variantEvidence": [
+        {
+          "id": "CONC-CORE-SAL-09-GENERIC-FIRST",
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg",
+          "oracle": "DENIED_ROLLED_BACK → secure COMMIT; one legal debit"
+        },
+        {
+          "id": "CONC-CORE-SAL-09-PICKUP-FIRST",
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg",
+          "oracle": "secure COMMIT → generic DENIED; one legal debit"
         }
       ]
     },

@@ -50,7 +50,7 @@ class MvpServiceEvidenceContractTest(unittest.TestCase):
 
     def test_wrong_behavior_bindings_are_explicit_gaps(self):
         gaps = [x for x in self.registry["scenarios"] if x["mappingVerdict"] == "GAP"]
-        self.assertEqual(len(gaps), 14)
+        self.assertEqual(len(gaps), 13)
         self.assertTrue(all(not x["requiredProofs"] and x["legacyProofs"] for x in gaps))
         report = assess(self.root, self.passed, self.sha, True, write=False)
         self.assertEqual(report["gate"], "HOLD")
