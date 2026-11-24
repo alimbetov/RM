@@ -130,7 +130,12 @@ jobs:
         run: |
           set -euo pipefail
           for t in sku_fx_policy_version sku_fx_guardrail_version sku_fx_calculation sku_fx_seller_decision store_offer_price_revision fx_official_rate_snapshot; do
-            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "SELECT to_jsonb(x)::text FROM crm.$t x ORDER BY 1" > "/tmp/fx-after-$t"
+            projection="to_jsonb(x)"
+            if [ "$t" = store_offer_price_revision ]; then
+              projection="to_jsonb(x)-\x27provenance\x27"
+              docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "SELECT count(*) FROM crm.store_offer_price_revision WHERE provenance<>\x27USER\x27 OR actor_user_id IS NULL" | grep -Fx 0
+            fi
+            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "SELECT ($projection)::text FROM crm.$t x ORDER BY 1" > "/tmp/fx-after-$t"
             LC_ALL=C sort "/tmp/fx-before-$t" > "/tmp/fx-before-$t.sorted"
             LC_ALL=C sort "/tmp/fx-after-$t" > "/tmp/fx-after-$t.sorted"
             comm -23 "/tmp/fx-before-$t.sorted" "/tmp/fx-after-$t.sorted" > "/tmp/fx-missing-$t"
