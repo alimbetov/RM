@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.*;
 class FxAutoPolicySchemaPgTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager txManager;
     @Autowired kz.rm.fx.NbrkRateRevisionWriter writer;
     record F(UUID tenant, UUID user, UUID member, UUID offer, UUID anchor, UUID guard, UUID limit, UUID policy, UUID revision) {}
     private static UUID id(){return UUID.randomUUID();}
@@ -170,5 +171,27 @@ class FxAutoPolicySchemaPgTest {
             assertThat(jdbc.queryForObject("SELECT sealed FROM crm.fx_auto_simulation_guard WHERE tenant_id=? AND simulation_id=?",Boolean.class,g.tenant(),t.id())).isTrue();
             assertThatThrownBy(()->jdbc.update("UPDATE crm.fx_auto_simulation_guard SET sealed=false WHERE tenant_id=? AND simulation_id=?",g.tenant(),t.id())).hasMessageContaining("FX_AUTO_GUARD_DIRECT_MUTATION");
         }
+    }
+
+    @Test void scopeDigestIndependentOfInsertionOrderAndSensitiveToBinding() throws Exception {
+        var f=fixture();
+        UUID item=id(), offer=id(), anchor=id(), guard=id();
+        jdbc.update("INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at) VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',now())",f.tenant(),item,"FX-"+id());
+        jdbc.update("INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state,catalog_item_id,row_version) VALUES (?,?,'FX second',100,'KZT','PUBLISHED',?,0)",f.tenant(),offer,item);
+        jdbc.update("INSERT INTO crm.sku_fx_policy_version(tenant_id,id,offer_id,revision,anchor_currency,anchor_amount,buffer_pct,markup_pct,rounding_step_kzt,approved_by,created_at) VALUES (?,?,?,1,'USD',1,0,0,1,?,now())",f.tenant(),anchor,offer,f.user());
+        jdbc.update("INSERT INTO crm.sku_fx_guardrail_version(tenant_id,id,offer_id,revision,max_increase_pct,max_decrease_pct,min_price_kzt,max_price_kzt,max_rate_calendar_days,calculation_ttl_seconds,approved_by,created_at) VALUES (?,?,?,1,10,10,1,1000,3,60,?,now())",f.tenant(),guard,offer,f.user());
+        var a=new Sql("INSERT INTO crm.fx_auto_target_enrollment VALUES (?,?,?,?,?,'2027-01-01T00:00:00Z','EA','NONE')",f.tenant(),f.revision(),f.offer(),f.anchor(),f.guard());
+        var b=new Sql("INSERT INTO crm.fx_auto_target_enrollment VALUES (?,?,?,?,?,'2027-01-01T00:00:00Z','EA','NONE')",f.tenant(),f.revision(),offer,anchor,guard);
+        var changed=new Sql("INSERT INTO crm.fx_auto_target_enrollment VALUES (?,?,?,?,?,'2027-01-02T00:00:00Z','EA','NONE')",f.tenant(),f.revision(),offer,anchor,guard);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(txManager);
+        java.util.function.BiFunction<Sql,Sql,String> digest=(first,second)->tx.execute(status->{
+            execute(first);execute(second);
+            String hash=jdbc.queryForObject("SELECT crm.fx_auto_scope_sha_v1(?,?)",String.class,f.tenant(),f.revision());
+            status.setRollbackOnly();
+            return hash;
+        });
+        String forward=digest.apply(a,b);
+        assertThat(forward).matches("[0-9a-f]{64}").isEqualTo(digest.apply(b,a));
+        assertThat(digest.apply(a,changed)).isNotEqualTo(forward);
     }
 }
