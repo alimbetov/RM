@@ -16,6 +16,15 @@ final class PgCommitOrderEvidence {
     }
     static void run(JdbcTemplate jdbc,PlatformTransactionManager manager,
             Runnable first,Runnable second,Class<? extends RuntimeException> denialType,String expectedDenial) throws Exception {
+        runBoth(jdbc,manager,first,second,denialType,null,expectedDenial);
+    }
+    static void runDeniedFirst(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            Runnable first,Runnable second,Class<? extends RuntimeException> denialType,String firstDenial) throws Exception {
+        runBoth(jdbc,manager,first,second,denialType,java.util.Objects.requireNonNull(firstDenial),null);
+    }
+    private static void runBoth(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            Runnable first,Runnable second,Class<? extends RuntimeException> denialType,
+            String firstDenial,String expectedDenial) throws Exception {
         var tx=new TransactionTemplate(manager);
         var applied=new CountDownLatch(1);
         var release=new CountDownLatch(1);
@@ -24,10 +33,22 @@ final class PgCommitOrderEvidence {
         try(var pool=Executors.newFixedThreadPool(2)){
             var a=pool.submit(()->tx.execute(status->{
                 firstPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
-                first.run();applied.countDown();
+                String outcome="COMMITTED";
+                try {
+                    first.run();
+                    if(firstDenial!=null)throw new AssertionError("First command unexpectedly succeeded");
+                } catch(RuntimeException denied){
+                    if(firstDenial==null || !denialType.isInstance(denied)
+                            || !firstDenial.equals(denied.getMessage()))throw denied;
+                    // The service has rejected the command. Hold its transaction
+                    // until the second backend demonstrably waits on its lock.
+                    status.setRollbackOnly();
+                    outcome="DENIED_ROLLED_BACK";
+                }
+                applied.countDown();
                 try{if(!release.await(20,TimeUnit.SECONDS))throw new AssertionError("Commit gate timed out");}
                 catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
-                return true;
+                return outcome;
             }));
             try{
                 assertThat(applied.await(10,TimeUnit.SECONDS)).as("first service applied").isTrue();
@@ -55,9 +76,9 @@ final class PgCommitOrderEvidence {
                 }while(System.nanoTime()<deadline);
                 assertThat(observed).as("actual first PID blocks second PID").isTrue();
                 release.countDown();
-                assertThat(a.get(20,TimeUnit.SECONDS)).isTrue();
+                assertThat(a.get(20,TimeUnit.SECONDS)).isEqualTo(firstDenial==null?"COMMITTED":"DENIED_ROLLED_BACK");
                 assertThat(b.get(20,TimeUnit.SECONDS)).isEqualTo(expectedDenial==null?"COMMITTED":"DENIED");
-                System.out.printf("BSR PG schedule blocker=%d waiter=%d observed=true first=COMMITTED second=%s%n",blocker,waiter,expectedDenial==null?"COMMITTED":"DENIED");
+                System.out.printf("BSR PG schedule blocker=%d waiter=%d observed=true first=%s second=%s%n",blocker,waiter,firstDenial==null?"COMMITTED":"DENIED_ROLLED_BACK",expectedDenial==null?"COMMITTED":"DENIED");
             }finally{release.countDown();}
         }
     }

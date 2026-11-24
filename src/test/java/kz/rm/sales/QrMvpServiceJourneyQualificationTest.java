@@ -65,6 +65,8 @@ class QrMvpServiceJourneyQualificationTest {
     @Autowired SalesReturnReceptionProofService receptionProof;
     @Autowired SalesReturnPhysicalService physical;
     @Autowired JdbcTemplate jdbc;
+    @Autowired javax.sql.DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired kz.rm.crm.AuthenticatedCrmCommands crm;
     @Autowired kz.rm.crm.CrmBuyerLinkService links;
     @Autowired kz.rm.security.kms.TenantKeyService tenantKeys;
@@ -197,9 +199,12 @@ class QrMvpServiceJourneyQualificationTest {
                 """,String.class,s.tenant(),orderId);
     }
 
-    private UUID handover(Scenario s,UUID orderId,int qty) {
+    private UUID handover(Scenario s,UUID orderId,int qty,boolean genericFirst) throws Exception {
         assertThat(sales.confirm(s.staff(),s.tenant(),orderId,s.warehouse()).status())
                 .isEqualTo("CONFIRMED");
+        assertThat(jdbc.queryForObject("SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?",String.class,s.tenant(),orderId))
+            .isEqualTo("PICKUP_PROOF_REQUIRED");
+        assertGenericDeniedWithoutEffects(s,orderId);
         prep.startPreparing(s.staff(),s.tenant(),orderId,s.warehouse(),
                 orderVersion(s,orderId),key());
         UUID lineId=jdbc.queryForObject("""
@@ -218,8 +223,27 @@ class QrMvpServiceJourneyQualificationTest {
             .isInstanceOf(SecurityException.class).hasMessage("EXPLICIT_HANDOVER_CONFIRM_REQUIRED");
         assertThat(JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku())).isEqualTo(beforeDenied);
         String handoverKey=key();
-        var committed=pickup.complete(s.staff(),s.tenant(),s.warehouse(),
-                issued.rawProof(),true,before,handoverKey);
+        assertGenericDeniedWithoutEffects(s,orderId);
+        var committedRef=new java.util.concurrent.atomic.AtomicReference<SalesPickupHandoverService.Handover>();
+        Runnable secure=()->committedRef.set(pickup.complete(s.staff(),s.tenant(),s.warehouse(),
+            issued.rawProof(),true,before,handoverKey));
+        Runnable generic=()->sales.fulfill(s.staff(),s.tenant(),orderId);
+        boolean pg;
+        try(var connection=dataSource.getConnection()){
+            pg=connection.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql");
+        }
+        if(pg){
+            if(genericFirst)PgCommitOrderEvidence.runDeniedFirst(jdbc,transactionManager,generic,secure,
+                IllegalStateException.class,"ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
+            else PgCommitOrderEvidence.run(jdbc,transactionManager,secure,generic,
+                IllegalStateException.class,"ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
+        }else secure.run();
+        var committed=committedRef.get();
+        assertThat(committed).isNotNull();
+        assertThat(orderVersion(s,orderId)).isEqualTo(before+1);
+        assertThat(jdbc.queryForObject("SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?",String.class,s.tenant(),orderId))
+            .isEqualTo("PICKUP_PROOF_REQUIRED");
+        assertGenericDeniedWithoutEffects(s,orderId);
         assertThat(committed.status()).isEqualTo("COMPLETED");
         assertThat(pickup.complete(s.staff(),s.tenant(),s.warehouse(),
                 issued.rawProof(),true,before,handoverKey).handoverId())
@@ -232,7 +256,36 @@ class QrMvpServiceJourneyQualificationTest {
                 WHERE tenant_id=? AND movement_kind='FULFILLMENT'
                   AND source_type='SALES_ORDER' AND source_id=?
                 """,Integer.class,s.tenant(),orderId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_pickup_handover h
+                JOIN crm.sales_pickup_credential p ON p.tenant_id=h.tenant_id AND p.id=h.credential_id
+                JOIN crm.sales_pickup_handover_line hl ON hl.tenant_id=h.tenant_id AND hl.handover_id=h.id
+                JOIN crm.inv_stock_reservation r ON r.tenant_id=hl.tenant_id AND r.id=hl.reservation_id
+                JOIN crm.inv_stock_movement m ON m.tenant_id=hl.tenant_id AND m.id=hl.movement_id
+                JOIN crm.sales_order_status_event e ON e.tenant_id=h.tenant_id AND e.id=h.status_event_id
+                WHERE h.tenant_id=? AND h.order_id=? AND h.id=?
+                  AND p.order_id=h.order_id AND p.state='CONSUMED'
+                  AND r.order_id=h.order_id AND r.state='FULFILLED'
+                  AND r.quantity=hl.quantity AND hl.quantity=?
+                  AND m.reservation_id=r.id AND m.movement_kind='FULFILLMENT'
+                  AND e.order_id=h.order_id AND e.event_type='COMPLETED'
+                """,Integer.class,s.tenant(),orderId,committed.handoverId(),qty)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='COMPLETED'",Integer.class,s.tenant(),orderId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT reserved FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,s.tenant(),s.warehouse(),s.sku())).isEqualByComparingTo("0");
+        assertThat(sellable(s)).isEqualByComparingTo(BigDecimal.TEN.subtract(BigDecimal.valueOf(qty)));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? AND state='ACTIVE'",Integer.class,s.tenant(),orderId)).isZero();
         return lineId;
+    }
+
+    private void assertGenericDeniedWithoutEffects(Scenario s,UUID orderId){
+        var before=JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku());
+        var credentials=jdbc.queryForList("SELECT id,state,row_version,consumed_at FROM crm.sales_pickup_credential WHERE tenant_id=? AND order_id=? ORDER BY id",s.tenant(),orderId);
+        var reservations=jdbc.queryForList("SELECT id,quantity,state,row_version FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? ORDER BY id",s.tenant(),orderId);
+        assertThatThrownBy(()->sales.fulfill(s.staff(),s.tenant(),orderId))
+            .isInstanceOf(IllegalStateException.class).hasMessage("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
+        assertThat(JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku())).isEqualTo(before);
+        assertThat(jdbc.queryForList("SELECT id,state,row_version,consumed_at FROM crm.sales_pickup_credential WHERE tenant_id=? AND order_id=? ORDER BY id",s.tenant(),orderId)).isEqualTo(credentials);
+        assertThat(jdbc.queryForList("SELECT id,quantity,state,row_version FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? ORDER BY id",s.tenant(),orderId)).isEqualTo(reservations);
     }
 
     private void returnAndInspect(Scenario s,UUID orderId,UUID lineId,int qty,
@@ -261,7 +314,7 @@ class QrMvpServiceJourneyQualificationTest {
                 """,Integer.class,s.tenant(),claim.requestId())).isEqualTo(1);
     }
 
-    @Test void qrMvpJ1VerifiedListPriceToHandoverAndRestockPg() {
+    @Test void qrMvpJ1VerifiedListPriceToHandoverAndRestockPg() throws Exception {
         Scenario s=setup();
         UUID order=listCheckout.checkoutVerified(s.buyer(),s.publicQr(),3,
                 s.offerVersion(),new BigDecimal("100.0000"),"KZT",key())
@@ -274,7 +327,7 @@ class QrMvpServiceJourneyQualificationTest {
                 """,String.class,s.tenant(),order)).isEqualTo("PICKUP_PROOF_REQUIRED");
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
-        UUID line=handover(s,order,3);
+        UUID line=handover(s,order,3,true);
         assertThat(sellable(s)).isEqualByComparingTo("7");
         returnAndInspect(s,order,line,2,SalesReturnPhysicalService.Disposition.RESTOCK);
         assertThat(sellable(s)).isEqualByComparingTo("9");
@@ -290,7 +343,7 @@ class QrMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
     }
 
-    @Test void qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg() {
+    @Test void qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg() throws Exception {
         Scenario s=setup();
         var proposed=proposals.submit(s.buyer(),s.publicQr(),2,
                 new BigDecimal("80.0000"),"KZT",key());
@@ -309,7 +362,7 @@ class QrMvpServiceJourneyQualificationTest {
                 """,BigDecimal.class,s.tenant(),order)).isEqualByComparingTo("80.0000");
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
-        UUID line=handover(s,order,2);
+        UUID line=handover(s,order,2,false);
         assertThat(sellable(s)).isEqualByComparingTo("8");
         returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.QUARANTINE);
         assertThat(sellable(s)).isEqualByComparingTo("8");
