@@ -4471,3 +4471,267 @@ CREATE TRIGGER trg_task_snapshot_seal_transaction_fence
 --rollback DROP TRIGGER trg_task_snapshot_seal_transaction_fence ON crm.task_reconciliation_snapshot_seal;
 --rollback DROP FUNCTION crm.task_snapshot_lock_before_seal();
 --rollback CREATE OR REPLACE FUNCTION crm.task_snapshot_reject_insert_after_seal() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF EXISTS (SELECT 1 FROM crm.task_reconciliation_snapshot_seal WHERE tenant_id=NEW.tenant_id AND snapshot_id=NEW.snapshot_id) THEN RAISE EXCEPTION 'TASK_SNAPSHOT_ALREADY_SEALED'; END IF; RETURN NEW; END; $$;
+
+
+--changeset rm:0154-fx-auto-policy-foundation
+-- R2C.1B PRODUCT-only inert schema. No publication or runtime activation path.
+ALTER TABLE crm.sku_fx_policy_version ADD CONSTRAINT uq_fx_auto_anchor_offer UNIQUE(tenant_id,id,offer_id);
+ALTER TABLE crm.sku_fx_guardrail_version ADD CONSTRAINT uq_fx_auto_guard_offer UNIQUE(tenant_id,id,offer_id);
+CREATE TABLE crm.fx_auto_limit_policy_version (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ id UUID NOT NULL,
+ rolling_seconds BIGINT NOT NULL CHECK(rolling_seconds>0),
+ max_rolling_increase_pct NUMERIC(8,4) NOT NULL CHECK(max_rolling_increase_pct>=0),
+ max_rolling_decrease_pct NUMERIC(8,4) NOT NULL CHECK(max_rolling_decrease_pct BETWEEN 0 AND 100),
+ max_rolling_variation_kzt NUMERIC(19,4) NOT NULL CHECK(max_rolling_variation_kzt>=0),
+ max_auto_publications BIGINT NOT NULL CHECK(max_auto_publications>=0),
+ tenant_window_seconds BIGINT NOT NULL CHECK(tenant_window_seconds>0),
+ tenant_delta_cap_kzt NUMERIC(19,4) NOT NULL CHECK(tenant_delta_cap_kzt>=0),
+ tenant_count_cap BIGINT NOT NULL CHECK(tenant_count_cap>=0),
+ run_delta_cap_kzt NUMERIC(19,4) NOT NULL CHECK(run_delta_cap_kzt>=0),
+ run_count_cap INTEGER NOT NULL CHECK(run_count_cap BETWEEN 0 AND 10000),
+ max_targets INTEGER NOT NULL CHECK(max_targets BETWEEN 1 AND 10000),
+ PRIMARY KEY(tenant_id,id),
+ CHECK(run_count_cap<=max_targets)
+);
+CREATE TABLE crm.fx_auto_policy_revision (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ id UUID NOT NULL,
+ policy_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ limit_id UUID NOT NULL,
+ payload VARCHAR(1000000) NOT NULL CHECK(length(payload)>0),
+ payload_sha256 CHAR(64) NOT NULL CHECK(length(trim(payload_sha256))=64),
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,policy_id,revision),
+ UNIQUE(tenant_id,id,policy_id),
+ UNIQUE(tenant_id,id,payload_sha256),
+ FOREIGN KEY(tenant_id,limit_id) REFERENCES crm.fx_auto_limit_policy_version(tenant_id,id)
+);
+-- Explicit finite target list. Scope is sealed when approval is inserted.
+CREATE TABLE crm.fx_auto_target_enrollment (
+ tenant_id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ anchor_id UUID NOT NULL,
+ guardrail_id UUID NOT NULL,
+ anchor_review_due_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ unit_code VARCHAR(64) NOT NULL CHECK(length(trim(unit_code))>0),
+ tax_basis VARCHAR(20) NOT NULL CHECK(tax_basis IN ('TAX_INCLUDED','TAX_EXCLUDED','NONE')),
+ PRIMARY KEY(tenant_id,policy_revision_id,offer_id),
+ FOREIGN KEY(tenant_id,policy_revision_id) REFERENCES crm.fx_auto_policy_revision(tenant_id,id),
+ FOREIGN KEY(tenant_id,offer_id) REFERENCES crm.store_offer(tenant_id,id),
+ FOREIGN KEY(tenant_id,anchor_id,offer_id) REFERENCES crm.sku_fx_policy_version(tenant_id,id,offer_id),
+ FOREIGN KEY(tenant_id,guardrail_id,offer_id) REFERENCES crm.sku_fx_guardrail_version(tenant_id,id,offer_id)
+);
+CREATE TABLE crm.fx_auto_approval_evidence (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ payload_sha256 CHAR(64) NOT NULL,
+ owner_user_id UUID NOT NULL REFERENCES public.iam_user_account(id),
+ membership_id UUID NOT NULL REFERENCES public.iam_org_membership(id),
+ request_key VARCHAR(100) NOT NULL CHECK(length(trim(request_key))>0),
+ approved_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ target_count INTEGER NOT NULL CHECK(target_count BETWEEN 1 AND 10000),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,policy_revision_id),
+ UNIQUE(tenant_id,id,policy_revision_id),
+ UNIQUE(tenant_id,owner_user_id,request_key),
+ FOREIGN KEY(tenant_id,policy_revision_id,payload_sha256)
+ REFERENCES crm.fx_auto_policy_revision(tenant_id,id,payload_sha256),
+ CHECK(expires_at>approved_at)
+);
+CREATE TABLE crm.fx_auto_policy_activation (
+ tenant_id UUID NOT NULL,
+ policy_id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ approval_id UUID NOT NULL,
+ state VARCHAR(16) NOT NULL DEFAULT 'PAUSED' CHECK(state IN ('PAUSED','REVOKED')),
+ execution_epoch BIGINT NOT NULL DEFAULT 0 CHECK(execution_epoch>=0),
+ PRIMARY KEY(tenant_id,policy_id),
+ FOREIGN KEY(tenant_id,policy_revision_id,policy_id)
+ REFERENCES crm.fx_auto_policy_revision(tenant_id,id,policy_id),
+ FOREIGN KEY(tenant_id,approval_id,policy_revision_id)
+ REFERENCES crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id)
+);
+CREATE TABLE crm.fx_auto_simulation (
+ tenant_id UUID NOT NULL,
+ id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ approval_id UUID NOT NULL,
+ source_snapshot_id UUID NOT NULL REFERENCES crm.fx_official_rate_snapshot(id),
+ request_key VARCHAR(100) NOT NULL CHECK(length(trim(request_key))>0),
+ evaluation_as_of TIMESTAMP WITH TIME ZONE NOT NULL,
+ input_payload VARCHAR(1000000) NOT NULL CHECK(length(input_payload)>0),
+ input_sha256 CHAR(64) NOT NULL CHECK(length(trim(input_sha256))=64),
+ item_count INTEGER NOT NULL CHECK(item_count BETWEEN 0 AND 10000),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,request_key),
+ UNIQUE(tenant_id,id,policy_revision_id),
+ FOREIGN KEY(tenant_id,approval_id,policy_revision_id)
+ REFERENCES crm.fx_auto_approval_evidence(tenant_id,id,policy_revision_id)
+);
+CREATE TABLE crm.fx_auto_simulation_item (
+ tenant_id UUID NOT NULL,
+ simulation_id UUID NOT NULL,
+ policy_revision_id UUID NOT NULL,
+ offer_id UUID NOT NULL,
+ price_revision_id UUID NOT NULL,
+ input_payload VARCHAR(1000000) NOT NULL CHECK(length(input_payload)>0),
+ outcome VARCHAR(48) NOT NULL CHECK(outcome IN ('WOULD_UPDATE','NO_CHANGE','NO_CHANGE_SMALL_DELTA','WOULD_DEFER','BLOCKED_PRICE_LIMIT','BLOCKED_ROLLING_LIMIT','BASELINE_UNAVAILABLE','BLOCKED_BUDGET_EXHAUSTED','BLOCKED_POLICY_CONFLICT','AUTHORITY_HOLD','CONSENT_EXPIRED','SOURCE_NOT_ADMITTED')),
+ virtual_delta_kzt NUMERIC(19,4) NOT NULL CHECK(virtual_delta_kzt>=0),
+ PRIMARY KEY(tenant_id,simulation_id,offer_id),
+ FOREIGN KEY(tenant_id,simulation_id,policy_revision_id)
+ REFERENCES crm.fx_auto_simulation(tenant_id,id,policy_revision_id),
+ FOREIGN KEY(tenant_id,policy_revision_id,offer_id)
+ REFERENCES crm.fx_auto_target_enrollment(tenant_id,policy_revision_id,offer_id),
+ FOREIGN KEY(tenant_id,price_revision_id,offer_id)
+ REFERENCES crm.store_offer_price_revision(tenant_id,id,offer_id),
+ CHECK((outcome='WOULD_UPDATE' AND virtual_delta_kzt>0) OR (outcome<>'WOULD_UPDATE' AND virtual_delta_kzt=0))
+);
+CREATE TABLE crm.fx_auto_simulation_seal (
+ tenant_id UUID NOT NULL,
+ simulation_id UUID NOT NULL,
+ result_sha256 CHAR(64) NOT NULL CHECK(length(trim(result_sha256))=64),
+ PRIMARY KEY(tenant_id,simulation_id),
+ FOREIGN KEY(tenant_id,simulation_id) REFERENCES crm.fx_auto_simulation(tenant_id,id)
+);
+--rollback DROP TABLE crm.fx_auto_simulation_seal;
+--rollback DROP TABLE crm.fx_auto_simulation_item;
+--rollback DROP TABLE crm.fx_auto_simulation;
+--rollback DROP TABLE crm.fx_auto_policy_activation;
+--rollback DROP TABLE crm.fx_auto_approval_evidence;
+--rollback DROP TABLE crm.fx_auto_target_enrollment;
+--rollback DROP TABLE crm.fx_auto_policy_revision;
+--rollback DROP TABLE crm.fx_auto_limit_policy_version;
+--rollback ALTER TABLE crm.sku_fx_guardrail_version DROP CONSTRAINT uq_fx_auto_guard_offer;
+--rollback ALTER TABLE crm.sku_fx_policy_version DROP CONSTRAINT uq_fx_auto_anchor_offer;
+
+--changeset rm:0155-fx-auto-evidence-immutability dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_fx_auto_limit_policy_version_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_limit_policy_version
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_policy_revision_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_policy_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_target_enrollment_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_target_enrollment
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_approval_evidence_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_approval_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_simulation
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_item_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_simulation_item
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_simulation_seal_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_simulation_seal
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_fx_auto_simulation_seal_immutable ON crm.fx_auto_simulation_seal;
+--rollback DROP TRIGGER trg_fx_auto_simulation_item_immutable ON crm.fx_auto_simulation_item;
+--rollback DROP TRIGGER trg_fx_auto_simulation_immutable ON crm.fx_auto_simulation;
+--rollback DROP TRIGGER trg_fx_auto_approval_evidence_immutable ON crm.fx_auto_approval_evidence;
+--rollback DROP TRIGGER trg_fx_auto_target_enrollment_immutable ON crm.fx_auto_target_enrollment;
+--rollback DROP TRIGGER trg_fx_auto_policy_revision_immutable ON crm.fx_auto_policy_revision;
+--rollback DROP TRIGGER trg_fx_auto_limit_policy_version_immutable ON crm.fx_auto_limit_policy_version;
+
+--changeset rm:0156-fx-auto-seals-and-epoch dbms:postgresql splitStatements:false
+-- Use a header row UPDATE (rather than read-only lock) to force stale snapshot
+-- writers to serialize/fail even at REPEATABLE READ. Separate mutable guard rows.
+CREATE TABLE crm.fx_auto_scope_guard (
+ tenant_id UUID NOT NULL, policy_revision_id UUID NOT NULL,
+ sealed BOOLEAN NOT NULL DEFAULT FALSE, generation BIGINT NOT NULL DEFAULT 0,
+ PRIMARY KEY(tenant_id,policy_revision_id),
+ FOREIGN KEY(tenant_id,policy_revision_id) REFERENCES crm.fx_auto_policy_revision(tenant_id,id)
+);
+CREATE TABLE crm.fx_auto_simulation_guard (
+ tenant_id UUID NOT NULL, simulation_id UUID NOT NULL,
+ sealed BOOLEAN NOT NULL DEFAULT FALSE, generation BIGINT NOT NULL DEFAULT 0,
+ PRIMARY KEY(tenant_id,simulation_id),
+ FOREIGN KEY(tenant_id,simulation_id) REFERENCES crm.fx_auto_simulation(tenant_id,id)
+);
+CREATE FUNCTION crm.fx_auto_init_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='fx_auto_policy_revision' THEN
+  INSERT INTO crm.fx_auto_scope_guard(tenant_id,policy_revision_id) VALUES(NEW.tenant_id,NEW.id);
+ ELSE
+  INSERT INTO crm.fx_auto_simulation_guard(tenant_id,simulation_id) VALUES(NEW.tenant_id,NEW.id);
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_scope_init AFTER INSERT ON crm.fx_auto_policy_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_init_guard();
+CREATE TRIGGER trg_fx_auto_sim_init AFTER INSERT ON crm.fx_auto_simulation
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_init_guard();
+CREATE FUNCTION crm.fx_auto_scope_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE actual_count bigint; cap integer;
+BEGIN
+ UPDATE crm.fx_auto_scope_guard SET generation=generation+1,
+  sealed=(TG_TABLE_NAME='fx_auto_approval_evidence')
+ WHERE tenant_id=NEW.tenant_id AND policy_revision_id=NEW.policy_revision_id AND NOT sealed;
+ IF NOT FOUND THEN RAISE EXCEPTION 'FX_AUTO_SCOPE_SEALED_OR_MISSING'; END IF;
+ IF TG_TABLE_NAME='fx_auto_approval_evidence' THEN
+  SELECT count(*) INTO actual_count FROM crm.fx_auto_target_enrollment
+   WHERE tenant_id=NEW.tenant_id AND policy_revision_id=NEW.policy_revision_id;
+  SELECT l.max_targets INTO cap FROM crm.fx_auto_policy_revision p JOIN crm.fx_auto_limit_policy_version l
+   ON l.tenant_id=p.tenant_id AND l.id=p.limit_id
+   WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.policy_revision_id;
+  IF actual_count<>NEW.target_count OR actual_count>cap THEN RAISE EXCEPTION 'FX_AUTO_SCOPE_COUNT_MISMATCH'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.iam_workspace w JOIN public.iam_org_membership m
+   ON m.organization_id=w.organization_id JOIN public.iam_user_account u ON u.id=m.user_id
+   WHERE w.id=NEW.tenant_id AND m.id=NEW.membership_id AND m.user_id=NEW.owner_user_id
+    AND w.status='ACTIVE' AND m.status='ACTIVE' AND m.role='OWNER' AND u.status='ACTIVE')
+  THEN RAISE EXCEPTION 'FX_AUTO_OWNER_EVIDENCE_INVALID'; END IF;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_scope_insert BEFORE INSERT ON crm.fx_auto_target_enrollment
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_scope_fence();
+CREATE TRIGGER trg_fx_auto_scope_seal BEFORE INSERT ON crm.fx_auto_approval_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_scope_fence();
+CREATE FUNCTION crm.fx_auto_sim_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE actual_count bigint; expected_count integer;
+BEGIN
+ UPDATE crm.fx_auto_simulation_guard SET generation=generation+1,
+  sealed=(TG_TABLE_NAME='fx_auto_simulation_seal')
+ WHERE tenant_id=NEW.tenant_id AND simulation_id=NEW.simulation_id AND NOT sealed;
+ IF NOT FOUND THEN RAISE EXCEPTION 'FX_AUTO_SIM_SEALED_OR_MISSING'; END IF;
+ IF TG_TABLE_NAME='fx_auto_simulation_seal' THEN
+  SELECT count(*) INTO actual_count FROM crm.fx_auto_simulation_item
+   WHERE tenant_id=NEW.tenant_id AND simulation_id=NEW.simulation_id;
+  SELECT item_count INTO expected_count FROM crm.fx_auto_simulation
+   WHERE tenant_id=NEW.tenant_id AND id=NEW.simulation_id;
+  IF actual_count<>expected_count THEN RAISE EXCEPTION 'FX_AUTO_SIM_COUNT_MISMATCH'; END IF;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_sim_insert BEFORE INSERT ON crm.fx_auto_simulation_item
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_sim_fence();
+CREATE TRIGGER trg_fx_auto_sim_seal BEFORE INSERT ON crm.fx_auto_simulation_seal
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_sim_fence();
+CREATE FUNCTION crm.fx_auto_activation_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'FX_AUTO_ACTIVATION_DELETE_FORBIDDEN'; END IF;
+ IF TG_OP='INSERT' THEN
+  IF NEW.state<>'PAUSED' OR NEW.execution_epoch<>0 THEN RAISE EXCEPTION 'FX_AUTO_INITIAL_STATE_INVALID'; END IF;
+ ELSE
+  IF OLD.state='REVOKED' OR NEW.tenant_id<>OLD.tenant_id OR NEW.policy_id<>OLD.policy_id
+    OR NEW.policy_revision_id<>OLD.policy_revision_id OR NEW.approval_id<>OLD.approval_id
+    OR NEW.execution_epoch<>OLD.execution_epoch+1 OR NEW.state<>'REVOKED'
+  THEN RAISE EXCEPTION 'FX_AUTO_EPOCH_OR_TRANSITION_INVALID'; END IF;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_fx_auto_activation_fence BEFORE INSERT OR UPDATE OR DELETE ON crm.fx_auto_policy_activation
+ FOR EACH ROW EXECUTE FUNCTION crm.fx_auto_activation_fence();
+--rollback DROP TRIGGER trg_fx_auto_activation_fence ON crm.fx_auto_policy_activation;
+--rollback DROP FUNCTION crm.fx_auto_activation_fence();
+--rollback DROP TRIGGER trg_fx_auto_sim_seal ON crm.fx_auto_simulation_seal;
+--rollback DROP TRIGGER trg_fx_auto_sim_insert ON crm.fx_auto_simulation_item;
+--rollback DROP FUNCTION crm.fx_auto_sim_fence();
+--rollback DROP TRIGGER trg_fx_auto_scope_seal ON crm.fx_auto_approval_evidence;
+--rollback DROP TRIGGER trg_fx_auto_scope_insert ON crm.fx_auto_target_enrollment;
+--rollback DROP FUNCTION crm.fx_auto_scope_fence();
+--rollback DROP TRIGGER trg_fx_auto_sim_init ON crm.fx_auto_simulation;
+--rollback DROP TRIGGER trg_fx_auto_scope_init ON crm.fx_auto_policy_revision;
+--rollback DROP FUNCTION crm.fx_auto_init_guard();
+--rollback DROP TABLE crm.fx_auto_simulation_guard;
+--rollback DROP TABLE crm.fx_auto_scope_guard;
