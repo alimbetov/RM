@@ -275,7 +275,9 @@ class QrMvpServiceJourneyQualificationTest {
                 proposed.revision(),SalesPriceProposalService.Action.ACCEPT,null,key());
         UUID order=quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),
                 accepted.quoteId(),
-                new AutoOrderService.AcceptedQuoteAck(accepted.revision(),2,
+                // Accepted quote snapshots the revision being accepted, not
+                // the incremented terminal proposal revision.
+                new AutoOrderService.AcceptedQuoteAck(proposed.revision(),2,
                         new BigDecimal("80.0000"),"KZT"),
                 key()).order().orderId();
         assertThat(jdbc.queryForObject("""
