@@ -4,14 +4,16 @@
 **Дата:** 2026-11-22.  
 **Репозиторий:** `alimbetov/RM`; **целевая ветка документа:** `base_dev`.  
 **Исходная точка ревью:** `base_dev` SHA `4699d640915198e58ece747b30dcc662952c2611` (исходная проверка; актуальный код перепроверять на SHA реализации).  
-**Статус:** **PROPOSED / PARKED — NO IMPLEMENTATION AUTHORIZATION**.  
+**Статус:** **PROPOSED / PARKED — NO IMPLEMENTATION AUTHORIZATION, EXCEPT KF-03 R0.1 (CR-MVP-KF-RADAR-01)**.  
 **Охват:** конкурентные функции после функциональной стабилизации RM; не заменяет текущий сервисный backlog и не разрешает открытие production/API.
+
+**Owner exception 2026-11-24:** [RM-KF-RADAR-R0.1](RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) — Overdue Task Signal only, service-first, no business DML, no new tables or endpoints. The later [MVP Freeze §0A](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) and R0.1 spec govern this slice; general PARKED statements and FS launch timing remain applicable to all other features. Security, regression and production HOLD remain.
 
 ## 0. Executive decision
 
 RM позиционируется как CRM-first B2B business operations platform с непрерывным циклом `клиент → предложение → заказ → резерв → исполнение → счёт/оплата`. Конкурентная цель — доказуемое сокращение времени, ошибок и стоимости выполнения типовых задач по сравнению с выбранными альтернативами (Bitrix24, Odoo, Zoho CRM, 1С, МойСклад) **в конкретных сегментах B2B торговли и дистрибуции**, а не абстрактное превосходство над всеми CRM/ERP.
 
-Это ТЗ **исключительно задел**. Нельзя создавать по нему Java-сервисы, таблицы, контроллеры, новые ветки, feature flags, внешние API или миграции до отдельного решения о запуске стадии. Нельзя считать утверждение ТЗ утверждением security/production admission.
+За исключением отдельно разрешённого KF-03 R0.1, это ТЗ **исключительно задел**. Нельзя создавать по нему Java-сервисы, таблицы, контроллеры, новые ветки, feature flags, внешние API или миграции до отдельного решения о запуске стадии. Нельзя считать утверждение ТЗ утверждением security/production admission.
 
 ## 1. Authority, scope и non-goals
 

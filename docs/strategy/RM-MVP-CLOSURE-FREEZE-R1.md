@@ -17,6 +17,12 @@ MVP = **один продавец/tenant**, реальные сотрудник�
 
 **R3.2A / R32B-T00:** ограничить доказательным закрытием уже введённых canonical CRM cancellation event, snapshot/immutability and PG CI. Поскольку T00-сервисы и mandatory CI уже вошли в HEAD, безопасно завершить/исправить их в текущем объёме; **не переходить к B1**, не создавать новые SLA таблицы или notification dispatcher. Все новые изменения — только минимальные P0 corrections.
 
+## 0A. Узкое исключение CR-MVP-KF-RADAR-01 (2026-11-24)
+
+**Owner decision: R0.1 IMPLEMENTATION AUTHORIZED / PRODUCTION HOLD.** Владелец продукта снял freeze исключительно для [RM-KF-RADAR-R0.1 — Overdue Task Signal](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md), IDEA-16/KF-03. Это отдельный разрешённый read-only service slice, не изменение обязательных J1-путей. Разрешены owner-side TASK query, pure signal evaluator, DTO, тесты и qualification wiring. Запрещены новые таблицы/миграции, фоновые процессы, уведомления, автоматическое изменение бизнес-данных, REST/UI и R0.2+. Не требуется доказывать фиктивный J1 blocker: это явно согласованное исключение из правила §0 и §5, а не MUST_FIX.
+
+Не ослаблять IAM/tenant/PII, BSR, обязательные CI, exact-SHA и G1–G4. Если уже квалифицируется frozen release candidate, сначала завершить или явно пересобрать candidate и повторить обязательные gates. Только base_dev; main и production не открывать. Любое расширение исключения требует нового owner decision. Все остальные запреты, включая advanced FX, analytics/ML и R3.2B automation, остаются действующими.
+
 ## 1. Два обязательных пользовательских пути, каждый выполняется без ручного SQL
 
 ### BUS-MVP-J1 — RM Business

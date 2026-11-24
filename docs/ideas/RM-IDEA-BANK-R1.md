@@ -4,7 +4,9 @@
 **Репозиторий:** `alimbetov/RM` · **рабочая Git-ветка:** `base_dev` · **логический раздел:** `docs/ideas/`  
 **Source-review baseline:** `5549c80abe09be19efd9f9b1bfbd81e5a4fa52a4` (не release verdict).  
 **Назначение:** единый каталог продуктовых идей и решений пользователя, не backlog немедленной разработки.  
-**Статус:** `IDEA BANK / POST-MVP PARKED / NO IMPLEMENTATION AUTHORIZATION / PRODUCTION HOLD`.
+**Статус:** `IDEA BANK / POST-MVP PARKED EXCEPT CR-MVP-KF-RADAR-01 / PRODUCTION HOLD`.
+
+**Узкое owner exception 2026-11-24:** только [RM-KF-RADAR-R0.1 — Overdue Task Signal](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) из IDEA-16/KF-03 разрешён к сервисной реализации; не означает реализацию или release. Остальные идеи и этапы остаются PARKED.
 
 > **Норматив:** [RM-MVP-CLOSURE-FREEZE-R1](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) и [RM-PRODUCT-STRATEGY-R2-SMB-QR](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md). Действующих продуктовых вертикалей две: **RM Business** и **RM QR Commerce**. RM Network, отдельная универсальная ERP/финансовая система и новые функции, не нужные MVP, сюда не включаются как активный roadmap. Не создавать новые ветки, не менять `main`, не открывать production на основании этого документа.
 
@@ -41,7 +43,7 @@
 | **IDEA-13** | **CRM Integration / Import Hub** | Импорт клиентов/каталога и проверяемые интеграции | IDEA / конкурентное развитие | [KF Strategy (historical)](../strategy/RM-PRODUCT-TARGETS-AND-KILLER-FEATURES-R1.md) |
 | **IDEA-14** | **Sales KPI / Role Dashboards** | Обзоры продаж, продавцов, склада и customer segments | IDEA / INSIGHT + UI | INSIGHT-R1 / P1 CRM |
 | **IDEA-15** | **KF-01 InstantDeal & KF-02 Promise Engine** | Быстрый B2B offer→order и достоверное обещание доступности | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
-| **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
+| **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | R0.1 ONLY AUTHORIZED / остальные PARKED | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) · [R0.1](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) |
 | **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | SPEC_EXISTS / Post-MVP, F2R-00 documentation only | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
 
 **Неактивные направления:** Business Network / межорганизационная торговая сеть (старый KF-05), полный бухгалтерский/налоговый ledger, масштабная маркетинговая платформа без канонических данных, автономное изменение остатков ML — **не включать в текущий план**.
@@ -158,7 +160,7 @@
 - **Import / Integration:** качественный CSV/XLSX импорт товаров/клиентов, idempotency, validation, дедупликация и mappings, API партнеров только с scoped IAM.
 - **Role-specific Dashboards:** руководитель, менеджер, склад — отдельные метрики с минимально необходимыми полномочиями.
 - **InstantDeal/Promise Engine:** персональный коммерческий оффер; реальная доступность на складе без ложного обещания резерва. Исходные KF-01/KF-02 — **PARKED**.
-- **Relationship Radar / Zero-Entry Order:** next best action по клиенту и быстрый ввод заказов; исходные KF-03/KF-04 — **PARKED**, не расширяют текущий MVP.
+- **Relationship Radar / Zero-Entry Order:** next best action по клиенту и быстрый ввод заказов; KF-03 R0.1 — узкое исключение CR-MVP-KF-RADAR-01; KF-03 R0.2+ и KF-04 — **PARKED**, не расширяют текущий MVP.
 
 **Не запускать до MVP:** универсальный messenger, social network, marketplace many-to-many checkout, сквозную сложную бухгалтерию/доставку, независимый order engine, финансовый ledger, платёжный шлюз и бесконтрольную кампанийную автоматизацию.
 
@@ -242,5 +244,7 @@ RM-INSIGHT-R5: проверенные аналитические события 
 |---|---|---|
 | 2026-11-24 | R1.0 | Создан единый банк 16 направлений: Customer 360, L1/L2, Warehouse 360, Pareto/ABC/XYZ, Tribuo, EVT, Auction, Deal Chat, FX_AUTO и CRM improvements. Объединены ранее обсуждённые идеи без изменения MVP. |
 | 2026-11-24 | R1.1 | Добавлена IDEA-17: техническая адаптация FIN Analyzer → RM Intelligence (9 логических компонентов, P1/P2/P3, независимые продукты, 32 сценария будущей приёмки); отдельный документ FIN-ADAPT-R1. |
+
+| 2026-11-24 | R1.2 | CR-MVP-KF-RADAR-01: только R0.1 Overdue Task Signal разрешён к сервисной реализации, все прочие идеи остаются PARKED. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.
