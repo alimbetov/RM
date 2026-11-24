@@ -55,6 +55,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Autowired FxAutoOwnerConsentService consent;
     @Autowired FxAutoPolicyEnrollmentService enrollment;
     @Autowired FxAutoDraftApprovalService approvals;
+    @Autowired FxAutoConsentRevocationService revocations;
     @Autowired TenantOwnershipTransferService transfers;
     @Autowired TenantAccessStatusService accessStatus;
     @Autowired TenantCurrencyPolicyService currencies;
@@ -552,5 +553,42 @@ class FxAutoOwnerAdmissionQualificationTest {
         assertThatThrownBy(()->approvals.approve(member,t.id(),command)).isInstanceOf(SecurityException.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_approval_evidence WHERE tenant_id=?",Integer.class,t.id())).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_policy_activation WHERE tenant_id=?",Integer.class,t.id())).isZero();
+    }
+
+    private FxAutoDraftApprovalService.Receipt approvedDraft(Tenant t,VerifiedActor actor) {
+        var draft=enrollment.createPolicyRevision(actor,t.id(),draftCommand(UUID.randomUUID(),0,"draft",draftTarget(t,"USD")));
+        return approvals.approve(actor,t.id(),approvalCommand(t,draft,"approve"));
+    }
+    @Test void revokeIsTerminalAndIdempotentEvenAfterCurrencyPermissionRemoved() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var approved=approvedDraft(t,actor);
+        currencies.setPricingAnchorEnabled(actor,t.id(),"USD",false,1);
+        var command=new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),0);
+        var receipt=revocations.revoke(actor,t.id(),command);
+        assertThat(receipt.state()).isEqualTo("REVOKED");
+        assertThat(receipt.executionEpoch()).isEqualTo(1);
+        assertThat(revocations.revoke(actor,t.id(),command)).isEqualTo(receipt);
+        assertThatThrownBy(()->revocations.revoke(actor,t.id(),new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),1))).hasMessageContaining("FX_AUTO_STALE_EXECUTION_EPOCH");
+        assertThatThrownBy(()->jdbc.update("UPDATE crm.fx_auto_policy_activation SET state='PAUSED',execution_epoch=2 WHERE tenant_id=? AND policy_id=?",t.id(),approved.policyId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_revocation_evidence WHERE tenant_id=? AND policy_id=?",Integer.class,t.id(),approved.policyId())).isEqualTo(1);
+        assertThatThrownBy(()->jdbc.update("DELETE FROM crm.fx_auto_revocation_evidence WHERE tenant_id=? AND policy_id=?",t.id(),approved.policyId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+    @Test void concurrentRevocationHasOneFenceAndRejectsForeignOrNonOwner() throws Exception {
+        pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actor=verified(t.owner());var approved=approvedDraft(t,actor);
+        var command=new FxAutoConsentRevocationService.Command(approved.policyId(),approved.approvalId(),0);
+        var member=verified(t.member());var other=tenant(account());var foreign=verified(other.owner());
+        assertThatThrownBy(()->revocations.revoke(member,t.id(),command)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->revocations.revoke(foreign,t.id(),command)).isInstanceOf(SecurityException.class);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var a=pool.submit(()->{start.await();return revocations.revoke(actor,t.id(),command);});
+            var b=pool.submit(()->{start.await();return revocations.revoke(actor,t.id(),command);});
+            start.countDown();
+            assertThat(a.get(20,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(b.get(20,java.util.concurrent.TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.fx_auto_revocation_evidence WHERE tenant_id=?",Integer.class,t.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT execution_epoch FROM crm.fx_auto_policy_activation WHERE tenant_id=? AND policy_id=?",Long.class,t.id(),approved.policyId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.store_offer_price_revision WHERE tenant_id=?",Integer.class,t.id())).isZero();
     }
 }

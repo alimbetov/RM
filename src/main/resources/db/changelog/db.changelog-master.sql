@@ -4904,3 +4904,27 @@ ALTER TABLE public.tenant_allowed_currency ADD CONSTRAINT ck_cur_allowed_pricing
 --rollback ALTER TABLE public.tenant_allowed_currency DROP CONSTRAINT ck_cur_allowed_pricing_anchor;
 --rollback ALTER TABLE public.tenant_allowed_currency DROP CONSTRAINT ck_cur_allowed_purpose;
 --rollback ALTER TABLE public.tenant_allowed_currency RENAME CONSTRAINT ck_cur_allowed_pre_anchor TO ck_cur_allowed_purpose;
+
+
+--changeset rm:0161-fx-auto-revocation-evidence
+CREATE TABLE crm.fx_auto_revocation_evidence (
+ tenant_id UUID NOT NULL,
+ policy_id UUID NOT NULL,
+ approval_id UUID NOT NULL,
+ actor_user_id UUID NOT NULL REFERENCES public.iam_user_account(id),
+ previous_epoch BIGINT NOT NULL CHECK(previous_epoch>=0),
+ revoked_epoch BIGINT NOT NULL CHECK(revoked_epoch=previous_epoch+1),
+ revoked_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ PRIMARY KEY(tenant_id,policy_id),
+ FOREIGN KEY(tenant_id,policy_id) REFERENCES crm.fx_auto_policy_activation(tenant_id,policy_id),
+ FOREIGN KEY(tenant_id,approval_id) REFERENCES crm.fx_auto_approval_evidence(tenant_id,id)
+);
+--rollback DROP TABLE crm.fx_auto_revocation_evidence;
+
+--changeset rm:0162-fx-auto-revocation-evidence-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_fx_auto_revocation_immutable BEFORE UPDATE OR DELETE ON crm.fx_auto_revocation_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+CREATE TRIGGER trg_fx_auto_revocation_no_truncate BEFORE TRUNCATE ON crm.fx_auto_revocation_evidence
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.cur_r2a_reject_evidence_mutation();
+--rollback DROP TRIGGER trg_fx_auto_revocation_no_truncate ON crm.fx_auto_revocation_evidence;
+--rollback DROP TRIGGER trg_fx_auto_revocation_immutable ON crm.fx_auto_revocation_evidence;
