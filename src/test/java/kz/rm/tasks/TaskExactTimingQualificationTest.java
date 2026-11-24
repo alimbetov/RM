@@ -27,9 +27,7 @@ class TaskExactTimingQualificationTest {
         // All aliases are test constants. H2 operands stay zoned in UTC:
         // casting to a zone-less timestamp could apply the session timezone.
         String delta(String a, String b) {
-            return pg ? "CAST(EXTRACT(EPOCH FROM ("+b+"-"+a+"))*1000000 AS NUMERIC(30,6))"
-                : "CAST(DATEDIFF('MICROSECOND', "+a+" AT TIME ZONE 'UTC', "
-                  +b+" AT TIME ZONE 'UTC') AS NUMERIC(30,6))";
+            return TaskTimingEngine.signedMicros(pg,a,b);
         }
     }
 
