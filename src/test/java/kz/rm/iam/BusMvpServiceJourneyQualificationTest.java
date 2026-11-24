@@ -129,7 +129,7 @@ class BusMvpServiceJourneyQualificationTest {
                 WHERE is_deleted=FALSE AND level_no<=3 ORDER BY code LIMIT 1
                 """,String.class);
         var warehouse=locations.create(staff,tenant,OrganizationLocationEntity.Type.WAREHOUSE,
-                "RM Business stock","",kato);
+                "RM Business stock",kato,"Business warehouse 1");
         warehouseScope.assign(owner,tenant,warehouse.id(),staffId);
 
         var customer=crm.createCompany(staff,tenant,"MVP Buyer Company LLP",kato);
