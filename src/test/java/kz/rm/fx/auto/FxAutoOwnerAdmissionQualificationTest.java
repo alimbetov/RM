@@ -891,6 +891,7 @@ class FxAutoOwnerAdmissionQualificationTest {
     @Test void budgetUsdAndEurShareOneTenantLimit() throws Exception {
         pg();var t=tenant(account());enable(t);grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
         var actor=verified(t.owner());
+        currencies.setPricingAnchorEnabled(actor,t.id(),"EUR",true,1);
         var usd=bindContext(t,actor,draftTarget(t,"USD"));var eur=bindContext(t,actor,draftTarget(t,"EUR"));
         diagnosticHistory(t,usd,100,100,false);diagnosticHistory(t,eur,100,100,false);
         var draft=enrollment.createPolicyRevision(actor,t.id(),budgetCommand(UUID.randomUUID(),0,"cross-currency",100,usd,eur));
