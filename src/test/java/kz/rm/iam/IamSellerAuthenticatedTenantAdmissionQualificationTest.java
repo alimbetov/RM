@@ -1,6 +1,5 @@
 package kz.rm.iam;
 
-import com.sun.net.httpserver.HttpServer;
 import kz.rm.catalog.CatalogItem;
 import kz.rm.catalog.CatalogItemService;
 import org.junit.jupiter.api.AfterAll;
@@ -13,16 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 import javax.sql.DataSource;
-import java.math.BigInteger;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.PrivateKey;
-import java.security.Signature;
-import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -40,13 +30,10 @@ import static org.assertj.core.api.Assertions.*;
         "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
 })
 class IamSellerAuthenticatedTenantAdmissionQualificationTest {
-    private static final String ISSUER="https://issuer.rm.example.test/realms/rm";
-    private static final String AUDIENCE="rm-api";
-    private static HttpServer jwks;
-    private static KeyPair trusted;
-    private static KeyPair untrusted;
+    private static final String ISSUER=SignedJwtTestAuthority.ISSUER;
+    private static final String AUDIENCE=SignedJwtTestAuthority.AUDIENCE;
+    private static SignedJwtTestAuthority authority;
     private static NimbusJwtDecoder decoder;
-    private static String kid;
 
     @Autowired DataSource dataSource;
     @Autowired JdbcTemplate jdbc;
@@ -61,61 +48,19 @@ class IamSellerAuthenticatedTenantAdmissionQualificationTest {
     private record Tenant(UUID id,UUID org,UUID owner,UUID member) {}
 
     @BeforeAll static void localJwks() throws Exception {
-        KeyPairGenerator generator=KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
-        trusted=generator.generateKeyPair();
-        untrusted=generator.generateKeyPair();
-        kid="rm-iam-seller-"+UUID.randomUUID();
-        var publicKey=(RSAPublicKey)trusted.getPublic();
-        String jwk="{\"keys\":[{\"kty\":\"RSA\",\"kid\":\""+kid
-                +"\",\"use\":\"sig\",\"alg\":\"RS256\",\"n\":\""
-                +unsigned(publicKey.getModulus())+"\",\"e\":\""
-                +unsigned(publicKey.getPublicExponent())+"\"}]}";
-        jwks=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
-        jwks.createContext("/jwks",exchange->{
-            byte[] payload=jwk.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type","application/json");
-            exchange.sendResponseHeaders(200,payload.length);
-            try(var body=exchange.getResponseBody()){body.write(payload);}
-        });
-        jwks.start();
-        decoder=NimbusJwtDecoder.withJwkSetUri(
-                "http://127.0.0.1:"+jwks.getAddress().getPort()+"/jwks").build();
-        OidcJwtConfiguration.configureValidation(decoder,ISSUER,AUDIENCE);
+        authority=SignedJwtTestAuthority.start();
+        decoder=authority.decoder();
     }
 
     @AfterAll static void closeJwks() {
-        if(jwks!=null)jwks.stop(0);
-    }
-
-    private static String b64(byte[] data) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(data);
-    }
-
-    private static String unsigned(BigInteger value) {
-        byte[] bytes=value.toByteArray();
-        return b64(bytes.length>1 && bytes[0]==0
-                ?java.util.Arrays.copyOfRange(bytes,1,bytes.length):bytes);
+        if(authority!=null)authority.close();
     }
 
     private static String signed(String subject,String purpose,String issuer,String audience,
-                                 long expires,PrivateKey signingKey,String tokenUse,
+                                 long expires,SignedJwtTestAuthority.SigningKey signingKey,String tokenUse,
                                  UUID spoofedUser,UUID spoofedTenant) throws Exception {
-        long now=Instant.now().getEpochSecond();
-        String header="{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\""+kid+"\"}";
-        String body="{\"iss\":\""+issuer+"\",\"aud\":[\""+audience+"\"],\"sub\":\""
-                +subject+"\",\"azp\":\"rm-seller-web\",\"iat\":"+(now-10)
-                +",\"nbf\":"+(now-10)+",\"exp\":"+expires
-                +(purpose==null?"":",\"typ\":\""+purpose+"\"")
-                +(tokenUse==null?"":",\"token_use\":\""+tokenUse+"\"")
-                +(spoofedUser==null?"":",\"user_id\":\""+spoofedUser+"\"")
-                +(spoofedTenant==null?"":",\"tenant_id\":\""+spoofedTenant+"\"")+"}";
-        String joined=b64(header.getBytes(StandardCharsets.UTF_8))+"."
-                +b64(body.getBytes(StandardCharsets.UTF_8));
-        Signature signature=Signature.getInstance("SHA256withRSA");
-        signature.initSign(signingKey);
-        signature.update(joined.getBytes(StandardCharsets.US_ASCII));
-        return joined+"."+b64(signature.sign());
+        return authority.issue(subject,purpose,issuer,audience,expires,signingKey,
+                tokenUse,spoofedUser,spoofedTenant);
     }
 
     private String subject(UUID user) {
@@ -126,7 +71,7 @@ class IamSellerAuthenticatedTenantAdmissionQualificationTest {
 
     private String access(UUID user) throws Exception {
         return signed(subject(user),"Bearer",ISSUER,AUDIENCE,
-                Instant.now().plusSeconds(600).getEpochSecond(),trusted.getPrivate(),
+                Instant.now().plusSeconds(600).getEpochSecond(),SignedJwtTestAuthority.SigningKey.TRUSTED,
                 null,null,null);
     }
 
@@ -190,7 +135,7 @@ class IamSellerAuthenticatedTenantAdmissionQualificationTest {
         grants(b,DomainPermission.CATALOG_READ);
         grants(foreign,DomainPermission.CATALOG_WRITE);
         String token=signed(subject(staff),"Bearer",ISSUER,AUDIENCE,
-                Instant.now().plusSeconds(600).getEpochSecond(),trusted.getPrivate(),
+                Instant.now().plusSeconds(600).getEpochSecond(),SignedJwtTestAuthority.SigningKey.TRUSTED,
                 null,a.owner(),foreign.id());
         VerifiedActor actor=new OidcActorResolver(decoder,users).resolve(token);
         assertThat(actor.userId()).isEqualTo(staff);
@@ -230,17 +175,17 @@ class IamSellerAuthenticatedTenantAdmissionQualificationTest {
         long valid=Instant.now().plusSeconds(600).getEpochSecond();
         long expired=Instant.now().minusSeconds(300).getEpochSecond();
         String[] denied={
-                signed(sub,null,ISSUER,AUDIENCE,valid,trusted.getPrivate(),null,null,null),
-                signed(sub,"ID",ISSUER,AUDIENCE,valid,trusted.getPrivate(),null,null,null),
-                signed(sub,"Bearer",ISSUER,AUDIENCE,valid,trusted.getPrivate(),"id",null,null),
-                signed(sub,"Bearer",ISSUER,AUDIENCE,valid,trusted.getPrivate(),"refresh",null,null),
-                signed(sub,"Bearer",ISSUER,"other-api",valid,trusted.getPrivate(),null,null,null),
+                signed(sub,null,ISSUER,AUDIENCE,valid,SignedJwtTestAuthority.SigningKey.TRUSTED,null,null,null),
+                signed(sub,"ID",ISSUER,AUDIENCE,valid,SignedJwtTestAuthority.SigningKey.TRUSTED,null,null,null),
+                signed(sub,"Bearer",ISSUER,AUDIENCE,valid,SignedJwtTestAuthority.SigningKey.TRUSTED,"id",null,null),
+                signed(sub,"Bearer",ISSUER,AUDIENCE,valid,SignedJwtTestAuthority.SigningKey.TRUSTED,"refresh",null,null),
+                signed(sub,"Bearer",ISSUER,"other-api",valid,SignedJwtTestAuthority.SigningKey.TRUSTED,null,null,null),
                 signed(sub,"Bearer","https://wrong-issuer.test",AUDIENCE,valid,
-                        trusted.getPrivate(),null,null,null),
-                signed(sub,"Bearer",ISSUER,AUDIENCE,expired,trusted.getPrivate(),null,null,null),
-                signed(sub,"Bearer",ISSUER,AUDIENCE,valid,untrusted.getPrivate(),null,null,null),
+                        SignedJwtTestAuthority.SigningKey.TRUSTED,null,null,null),
+                signed(sub,"Bearer",ISSUER,AUDIENCE,expired,SignedJwtTestAuthority.SigningKey.TRUSTED,null,null,null),
+                signed(sub,"Bearer",ISSUER,AUDIENCE,valid,SignedJwtTestAuthority.SigningKey.UNTRUSTED,null,null,null),
                 signed("unknown-"+UUID.randomUUID(),"Bearer",ISSUER,AUDIENCE,valid,
-                        trusted.getPrivate(),null,null,null)
+                        SignedJwtTestAuthority.SigningKey.TRUSTED,null,null,null)
         };
         for(String token:denied) {
             assertThatThrownBy(()->resolver.resolve(token))
