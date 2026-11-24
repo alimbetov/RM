@@ -2,6 +2,8 @@ package kz.rm.inventory;
 
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
+import kz.rm.iam.WarehouseStaffScopeService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,14 +21,19 @@ public class InventoryAuthorizedCommandService {
     private final InventoryMovementService movements;
     private final InventoryTransferService transfers;
     private final InventoryStocktakeService stocktakes;
+    private final WarehouseStaffScopeService warehouseScopes;
+
+    @Value("${rm.mvp.service-mode.enabled:false}")
+    private boolean strictMvpServiceMode;
 
     public InventoryAuthorizedCommandService(TenantAuthorization authorization,
                         InventoryMovementService movements,InventoryTransferService transfers,
-                        InventoryStocktakeService stocktakes) {
+                        InventoryStocktakeService stocktakes,WarehouseStaffScopeService warehouseScopes) {
         this.authorization=authorization;
         this.movements=movements;
         this.transfers=transfers;
         this.stocktakes=stocktakes;
+        this.warehouseScopes=warehouseScopes;
     }
 
     @Transactional
@@ -37,6 +44,10 @@ public class InventoryAuthorizedCommandService {
         if(quantity==null || quantity.signum()<=0)
             throw new IllegalArgumentException("Receipt quantity must be positive");
         validateStaffKey(idempotencyKey);
+        // In the admitted service-MVP mode a tenant grant is never a wildcard
+        // warehouse assignment. Fence revoke/closure in the same stock TX.
+        if(strictMvpServiceMode)
+            warehouseScopes.requireAssigned(actorId,tenantId,locationId);
         // This is quantity-only receiving; accounting valuation awaits INV-VAL-R1.2.
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,quantity,
                 InventoryMovementService.Reason.RECEIPT,actorId,null);
@@ -48,6 +59,8 @@ public class InventoryAuthorizedCommandService {
                                                        BigDecimal delta) {
         authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_ADJUST);
         validateStaffKey(idempotencyKey);
+        if(strictMvpServiceMode)
+            warehouseScopes.requireAssigned(actorId,tenantId,locationId);
         return movements.adjust(tenantId,locationId,itemId,idempotencyKey,delta,
                 InventoryMovementService.Reason.CORRECTION,actorId,null);
     }
