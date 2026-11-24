@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 
 from rm_r3_functional_coverage import assess
 from rm_user_role_qualification import assess_role_cases
+from rm_mvp_service_evidence import assess as assess_mvp_service
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path("rm-exact-sha-manifest.json")
@@ -373,6 +374,28 @@ def verify():
     except (ValueError, KeyError, OSError, TypeError) as exc:
         problems.append(f"UR-R3.1 role evidence failed: {type(exc).__name__}: {exc}")
         manifest["userRoleQualification"] = {"gate": "HOLD"}
+    # W6 is independent of earlier R3 coverage denominators. A scenario is
+    # admitted only when its explicitly mapped JUnit method EXECUTED in the
+    # verified PostgreSQL XML on this exact SHA, never from source names alone.
+    try:
+        mvp = assess_mvp_service(ROOT, passed_cases, sha, admission_pass=not problems)
+        manifest["mvpServiceQualification"] = {
+            "json": "rm-mvp-service-coverage.json",
+            "gate": mvp["gate"],
+            "totalCoreP0": mvp["totalCoreP0"],
+            "verifiedCoreP0": mvp["verifiedCoreP0"],
+            "taskAddendumTotal": mvp["taskAddendumTotal"],
+            "verifiedTaskAddenda": mvp["verifiedTaskAddenda"],
+            "mappingSha256": mvp["mappingSha256"],
+            "uniqueExecutedMethodsMapped": mvp["uniqueExecutedMethodsMapped"]
+        }
+        if mvp["gate"] != "CORE_SERVICE_EVIDENCE_QUALIFIED":
+            problems.append("RM-MVP W6 missing exact-SHA PostgreSQL evidence: "
+                            + str(mvp["missingExecution"][:10]))
+    except (ValueError, KeyError, OSError, TypeError) as exc:
+        problems.append("RM-MVP W6 evidence mapping invalid: "
+                        + type(exc).__name__ + ": " + str(exc))
+        manifest["mvpServiceQualification"] = {"gate": "HOLD"}
     manifest["evidenceErrors"] = problems
     manifest["qa01bGate"] = "PASS" if not problems else "FAIL"
     # A passing QA evidence gate is still NOT public security/production admission.
