@@ -144,7 +144,7 @@ class QrMvpServiceJourneyQualificationTest {
                  (id,workspace_id,location_type,name,kato_code,status,created_at,updated_at,row_version)
                 VALUES (?,?,'WAREHOUSE','QR strict warehouse',?,'ACTIVE',?,?,0)
                 """,warehouse,tenant,kato,now,now);
-        scopes.assign(owner,tenant,warehouse,staff);
+        scopes.assign(owner,tenant,warehouse,staffId);
 
         var draft=catalog.createDraft(staff,tenant,"QRMVP-"+UUID.randomUUID(),
                 CatalogItem.Kind.PRODUCT,"ru","Published QR product",null);
