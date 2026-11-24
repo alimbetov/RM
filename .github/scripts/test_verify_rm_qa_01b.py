@@ -30,12 +30,15 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             target = self.root / source
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((project_root / source).read_bytes())
-        # Real release mappings may intentionally be GAP/PARTIAL. A positive
-        # verifier self-test must exercise an independent, fully qualified
-        # synthetic fixture; it must never promote the checked-in registry.
+        # Synthetic fixture: fill generic W6 gaps for execution tests, but
+        # preserve the mandatory RET04-D partial-verdict guard. A fully
+        # qualified W6 outcome is exercised only at the assessor boundary in
+        # the positive composition test; never promote the checked-in registry.
         self.real_mvp_mapping = (self.root / MVP_MAPPING).read_bytes()
         mvp_mapping = json.loads(self.real_mvp_mapping)
         for item in (*mvp_mapping["scenarios"], *mvp_mapping["taskAddendum"]):
+            if item["id"] == "CORE-RET-04":
+                continue
             item["mappingVerdict"] = "EXACT"
             if not item["requiredProofs"]:
                 item["requiredProofs"] = [{
@@ -239,7 +242,30 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         self.manifest_path.write_text(json.dumps(self.manifest))
 
     def test_all_required_evidence_passes_without_granting_production_admission(self):
-        self.assertEqual(gate.verify(), 0)
+        # This is a composition test, not proof that W6 is complete. The
+        # real assessor must still report RET04-D as HOLD. Simulate a future
+        # admitted W6 outcome at this boundary only, after checking all
+        # synthetic mapped PostgreSQL executions and other prerequisite gates.
+        real_assessor = gate.assess_mvp_service
+
+        def qualified_fixture(root, passed_cases, sha, admission_pass):
+            self.assertTrue(admission_pass)
+            report = real_assessor(root, passed_cases, sha, admission_pass)
+            self.assertEqual(report["missingExecution"], [])
+            self.assertEqual(report["gate"], "HOLD")
+            self.assertEqual(
+                [(x["id"], x["verdict"]) for x in report["semanticGaps"]],
+                [("CORE-RET-04", "SUPPORTING_PARTIAL")],
+            )
+            return dict(report, gate="CORE_SERVICE_EVIDENCE_QUALIFIED",
+                        verifiedCoreP0=report["totalCoreP0"],
+                        verifiedTaskAddenda=report["taskAddendumTotal"],
+                        semanticGaps=[])
+
+        with mock.patch.object(gate, "assess_mvp_service",
+                               side_effect=qualified_fixture) as assessor:
+            self.assertEqual(gate.verify(), 0)
+            assessor.assert_called_once()
         result = json.loads(self.manifest_path.read_text())
         self.assertEqual(result["qa01bGate"], "PASS")
         self.assertEqual(result["admission"], "HOLD")
@@ -267,6 +293,20 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         report = json.loads((self.root / "rm-mvp-service-coverage.json").read_text())
         self.assertEqual(report["missingExecution"], [])
         self.assertTrue(report["semanticGaps"])
+
+    def test_ret04_partial_verdict_is_not_promoted_by_synthetic_execution(self):
+        # All fixture methods execute, but the explicit RET04-D guard remains.
+        self.assertEqual(gate.verify(), 1)
+        result = json.loads(self.manifest_path.read_text())
+        self.assertEqual(result["qa01bGate"], "FAIL")
+        self.assertEqual(result["mvpServiceQualification"]["gate"], "HOLD")
+        self.assertEqual(result["admission"], "HOLD")
+        report = json.loads((self.root / "rm-mvp-service-coverage.json").read_text())
+        self.assertEqual(report["missingExecution"], [])
+        self.assertEqual(
+            [(x["id"], x["verdict"]) for x in report["semanticGaps"]],
+            [("CORE-RET-04", "SUPPORTING_PARTIAL")],
+        )
 
     def test_wrong_commit_sha_fails_closed(self):
         self.manifest["sha"] = "bad"
