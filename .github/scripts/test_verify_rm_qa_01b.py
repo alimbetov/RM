@@ -30,7 +30,19 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             target = self.root / source
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((project_root / source).read_bytes())
-        mvp_mapping = json.loads((self.root / MVP_MAPPING).read_text())
+        # Real release mappings may intentionally be GAP/PARTIAL. A positive
+        # verifier self-test must exercise an independent, fully qualified
+        # synthetic fixture; it must never promote the checked-in registry.
+        self.real_mvp_mapping = (self.root / MVP_MAPPING).read_bytes()
+        mvp_mapping = json.loads(self.real_mvp_mapping)
+        for item in (*mvp_mapping["scenarios"], *mvp_mapping["taskAddendum"]):
+            item["mappingVerdict"] = "EXACT"
+            if not item["requiredProofs"]:
+                item["requiredProofs"] = [{
+                    "suite": "SyntheticW6QualificationTest",
+                    "test": "synthetic_" + item["id"].replace("-", "_"),
+                }]
+        (self.root / MVP_MAPPING).write_text(json.dumps(mvp_mapping))
         mvp_required = {
             (p["suite"], p["test"])
             for item in (*mvp_mapping["scenarios"], *mvp_mapping["taskAddendum"])
@@ -233,6 +245,28 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         self.assertEqual(result["admission"], "HOLD")
         self.assertTrue(result["migrationFingerprint"]["sha256"])
         self.assertGreater(result["testCounts"]["tests"], 0)
+
+    def test_real_semantic_gaps_hold_even_with_all_mapped_pg_methods(self):
+        # Restore the real, unmodified registry in the temporary workspace.
+        # The generated artifacts already contain all its mapped methods.
+        (self.root / MVP_MAPPING).write_bytes(self.real_mvp_mapping)
+        real = json.loads(self.real_mvp_mapping)
+        incomplete = [row for row in (*real["scenarios"], *real["taskAddendum"])
+                      if row["mappingVerdict"] != "EXACT"]
+        if not incomplete:
+            # Keep a permanent negative control after real release closure.
+            real["scenarios"][0]["mappingVerdict"] = "SUPPORTING_PARTIAL"
+            real["scenarios"][0]["openRequirement"] = "Synthetic missing business variant"
+            (self.root / MVP_MAPPING).write_text(json.dumps(real))
+        self.assertEqual(gate.verify(), 1)
+        result = json.loads(self.manifest_path.read_text())
+        self.assertEqual(result["qa01bGate"], "FAIL")
+        self.assertEqual(result["mvpServiceQualification"]["gate"], "HOLD")
+        self.assertEqual(result["admission"], "HOLD")
+        self.assertTrue(any("semantic gaps:" in e for e in result["evidenceErrors"]))
+        report = json.loads((self.root / "rm-mvp-service-coverage.json").read_text())
+        self.assertEqual(report["missingExecution"], [])
+        self.assertTrue(report["semanticGaps"])
 
     def test_wrong_commit_sha_fails_closed(self):
         self.manifest["sha"] = "bad"
