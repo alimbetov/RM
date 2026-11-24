@@ -716,7 +716,20 @@
     {
       "id": "CORE-QR-07",
       "behavior": "Expire/withdraw/revoke/suspend×checkout both orders, exact cutoff → winner only",
-      "requiredProofs": [],
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04aExpiredProposalEffectiveStateAndMaterialization"
+        },
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bExpiredQuoteFailsWithoutAnyOrderOrReceipt"
+        },
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        }
+      ],
       "legacyBehavior": "Accepted quote can be consumed at most once across competing checkout requests",
       "legacyProofs": [
         {
@@ -724,8 +737,8 @@
           "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
         }
       ],
-      "mappingVerdict": "GAP",
-      "openRequirement": "Старая привязка к double consumption ошибочна; для expire/withdraw/QR revoke/suspend нужны свои состояния и оба порядка.",
+      "mappingVerdict": "SUPPORTING_PARTIAL",
+      "openRequirement": "Pending proposal withdrawal versus accept+checkout, buyer suspension/deletion versus quote checkout, actual deadline crossing while PostgreSQL checkout waits, terminal proposal denial and exact replay implemented. Exact cutoff equality, live QR generation revocation semantics for already accepted quotes, persisted independent variant artifacts and new exact-SHA PostgreSQL execution remain open. No post-AGREED WITHDRAW transition exists under QR-04.",
       "candidateProofs": [
         {
           "suite": "QrNegotiatedCheckoutQualificationTest",
@@ -738,6 +751,56 @@
           "test": "qr04aExpiredProposalEffectiveStateAndMaterialization",
           "path": "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
           "review": "CANDIDATE_ONLY"
+        }
+      ],
+      "variantEvidence": [
+        {
+          "id": "CONC-CORE-QR-07-WITHDRAW-FIRST",
+          "oracle": "WITHDRAWN; stale ACCEPT denied; zero quote/order effects",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-ACCEPT-CHECKOUT-FIRST",
+          "oracle": "one CONSUMED quote/order; stale WITHDRAW denied; exact replay",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-SUSPEND-FIRST",
+          "oracle": "VERIFIED_BUYER_REQUIRED; zero order effects",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-CHECKOUT-BEFORE-SUSPEND",
+          "oracle": "one consumed quote/order; replay denied to suspended buyer",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-DELETE-FIRST",
+          "oracle": "VERIFIED_BUYER_REQUIRED; zero order effects",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-CHECKOUT-BEFORE-DELETE",
+          "oracle": "one consumed quote/order; replay denied to deleted buyer",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-EXPIRY-FIRST",
+          "oracle": "clock cutoff crossed while checkout waits; QUOTE_EXPIRED; zero effects",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        },
+        {
+          "id": "CONC-CORE-QR-07-CHECKOUT-BEFORE-EXPIRY",
+          "oracle": "checkout admitted before expiry; one order; exact replay after expiry",
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
         }
       ]
     },
