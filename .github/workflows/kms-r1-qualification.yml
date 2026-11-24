@@ -83,7 +83,7 @@ jobs:
           # Generic PG qualification runs the dedicated QR-06B multi-JVM
           # scenarios too. Supply the same real dependency classpath instead
           # of skipping or silently downgrading those process tests.
-          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile="$RUNNER_TEMP/qr06b-classpath.txt"
+          mvn -B -ntp org.apache.maven.plugins:maven-dependency-plugin:3.9.0:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile="$RUNNER_TEMP/qr06b-classpath.txt"
           export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat "$RUNNER_TEMP/qr06b-classpath.txt")"
           mvn -B -ntp clean verify
       - name: Qualify synthetic least-privilege runtime role
