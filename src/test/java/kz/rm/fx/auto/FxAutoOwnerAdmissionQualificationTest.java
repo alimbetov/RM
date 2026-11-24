@@ -255,4 +255,47 @@ class FxAutoOwnerAdmissionQualificationTest {
         assertThatThrownBy(()->admit(null,t,"USD")).isInstanceOf(SecurityException.class);
         noWrites(t);
     }
+
+    @Test void concurrentGrantRevocationBothOrders() throws Exception {
+        pg();
+        for(boolean admitFirst:new boolean[]{true,false}) {
+            var t=tenant(account());enable(t);
+            var role=grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+            var actor=verified(t.owner());
+            var entered=new java.util.concurrent.CountDownLatch(1);
+            var release=new java.util.concurrent.CountDownLatch(1);
+            var pid=new java.util.concurrent.CompletableFuture<Integer>();
+            try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var first=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                    if(admitFirst)consent.requireProductConsentAuthority(actor,t.id(),java.util.List.of("USD"));
+                    else roles.revoke(actor,t.id(),role,DomainPermission.STOREFRONT_OFFER_MANAGE);
+                    entered.countDown();
+                    try {if(!release.await(15,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("race timeout");}
+                    catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+                }));
+                try {
+                    assertThat(entered.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                    var second=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                        pid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                        if(admitFirst)roles.revoke(actor,t.id(),role,DomainPermission.STOREFRONT_OFFER_MANAGE);
+                        else consent.requireProductConsentAuthority(actor,t.id(),java.util.List.of("USD"));
+                    }));
+                    int backend=pid.get(5,java.util.concurrent.TimeUnit.SECONDS);
+                    boolean blocked=false;
+                    long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                    while(System.nanoTime()<deadline&&!second.isDone()){
+                        if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT cardinality(pg_blocking_pids(?))>0",Boolean.class,backend))){blocked=true;break;}
+                        Thread.sleep(20);
+                    }
+                    assertThat(blocked).as("actual competing backend blocked").isTrue();
+                    release.countDown();
+                    first.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                    if(admitFirst)second.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                    else assertThatThrownBy(()->second.get(10,java.util.concurrent.TimeUnit.SECONDS)).hasRootCauseInstanceOf(SecurityException.class);
+                    assertThatThrownBy(()->admit(actor,t,"USD")).isInstanceOf(SecurityException.class);
+                    noWrites(t);
+                } finally {release.countDown();}
+            }
+        }
+    }
 }
