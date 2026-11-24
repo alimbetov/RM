@@ -10,6 +10,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 import verify_rm_qa_01b as gate
+from rm_mvp_service_evidence import SOURCE as MVP_SOURCE, MAPPING as MVP_MAPPING
 
 
 class QualificationEvidenceVerifierTest(unittest.TestCase):
@@ -21,6 +22,20 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         directory.mkdir(parents=True)
         (directory / "db.changelog-master.sql").write_text("-- baseline\n")
         self.manifest_path = self.root / "manifest.json"
+        # W6 assessor must see the real canonical registry in its isolated
+        # synthetic workspace. Otherwise the verifier self-test fails due to
+        # absent fixture files, not due to missing release evidence.
+        project_root = Path(__file__).resolve().parents[2]
+        for source in (MVP_SOURCE, MVP_MAPPING):
+            target = self.root / source
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((project_root / source).read_bytes())
+        mvp_mapping = json.loads((self.root / MVP_MAPPING).read_text())
+        mvp_required = {
+            (p["suite"], p["test"])
+            for item in (*mvp_mapping["scenarios"], *mvp_mapping["taskAddendum"])
+            for p in item["requiredProofs"]
+        }
         self.artifact_bytes = {}
         gates = []
         artifact_id = 100
@@ -120,6 +135,11 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                             "durableReconciliationStreamsEntireLedgerBeyondFiveHundredMovements",
                         ],
                     }
+                if artifact == "kms-postgres-surefire":
+                    for suite, method in mvp_required:
+                        suite_cases.setdefault(suite, [])
+                        if method not in suite_cases[suite]:
+                            suite_cases[suite].append(method)
                 elif artifact != "kms-postgres-surefire":
                     for suite in gate.SUITES.get(workflow, ()):
                         suite_cases.setdefault(suite, ["qualified"])
