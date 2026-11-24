@@ -425,4 +425,41 @@ class FxAutoOwnerAdmissionQualificationTest {
             assertThat(jdbc.queryForObject("SELECT status FROM public.iam_org_membership WHERE organization_id=? AND user_id=?",String.class,t.org(),t.owner())).isEqualTo("SUSPENDED");
         }
     }
+
+    @Test void restoreWaitsForTargetAccountWithoutHoldingWorkspace() throws Exception {
+        pg();var t=tenant(account());enable(t);
+        grants(t,t.owner(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var target=verified(t.owner());var restorer=verified(t.provisioningOwner());
+        accessStatus.suspendMember(restorer,t.id(),t.owner());
+        try(var blocker=dataSource.getConnection();var pool=java.util.concurrent.Executors.newSingleThreadExecutor()){
+            blocker.setAutoCommit(false);
+            try(var lock=blocker.prepareStatement("SELECT id FROM public.iam_user_account WHERE id=? FOR UPDATE")){
+                lock.setObject(1,t.owner());try(var rows=lock.executeQuery()){assertThat(rows.next()).isTrue();}
+            }
+            try {
+                var pid=new java.util.concurrent.CompletableFuture<Integer>();
+                var restore=pool.submit(()->new TransactionTemplate(txManager).executeWithoutResult(s->{
+                    jdbc.execute("SET LOCAL lock_timeout='12s'");
+                    pid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                    accessStatus.restoreMember(restorer,t.id(),t.owner());
+                }));
+                int backend=pid.get(5,java.util.concurrent.TimeUnit.SECONDS);
+                boolean blocked=false;
+                long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                while(System.nanoTime()<deadline&&!restore.isDone()){
+                    if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT cardinality(pg_blocking_pids(?))>0",Boolean.class,backend))){blocked=true;break;}
+                    Thread.sleep(20);
+                }
+                assertThat(blocked).isTrue();
+                // A separate session holding the target must still be able to
+                // acquire workspace SHARE: the old implementation deadlocks here.
+                try(var lock=blocker.prepareStatement("SELECT id FROM public.iam_workspace WHERE id=? FOR SHARE NOWAIT")){
+                    lock.setObject(1,t.id());try(var rows=lock.executeQuery()){assertThat(rows.next()).isTrue();}
+                }
+                blocker.commit();
+                restore.get(10,java.util.concurrent.TimeUnit.SECONDS);
+                admit(target,t,"USD");noWrites(t);
+            } finally {blocker.rollback();}
+        }
+    }
 }
