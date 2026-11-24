@@ -41,7 +41,8 @@ SUITES = {
          "SalesOrderQueryQualificationTest", "UserRoleMatrixR31QualificationTest",
          "MvpServiceWarehouseAdmissionQualificationTest",
          "MvpServiceCurrencyStartupQualificationTest",
-         "BusMvpServiceJourneyQualificationTest"),
+         "BusMvpServiceJourneyQualificationTest",
+         "QrMvpServiceJourneyQualificationTest"),
     "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification":
         ("InventoryMovementQualificationTest",),
     "SALES 08.4 Populated PostgreSQL Upgrade Qualification":
@@ -81,6 +82,10 @@ REQUIRED_CASES = {
          "mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation"),
         ("BusMvpServiceJourneyQualificationTest",
          "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"),
+        ("QrMvpServiceJourneyQualificationTest",
+         "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"),
+        ("QrMvpServiceJourneyQualificationTest",
+         "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"),
         ("InventoryReservationQualificationTest", "reservationReleaseAndIdempotentReplay"),
         ("OrganizationLocationQueryQualificationTest", "paginationAndFiltersUseTenantBoundary"),
         ("KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
