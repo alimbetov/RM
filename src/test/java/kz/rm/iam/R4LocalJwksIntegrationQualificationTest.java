@@ -51,7 +51,7 @@ class R4LocalJwksIntegrationQualificationTest {
                                  String subject,long notBefore,long expires) throws Exception {
         String head="{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\""+kid+"\"}";
         String body="{\"iss\":\""+iss+"\",\"aud\":[\""+aud+"\"],\"sub\":\""
-                +subject+"\",\"iat\":"+notBefore+",\"exp\":"+expires+"}";
+                +subject+"\",\"typ\":\"Bearer\",\"iat\":"+notBefore+",\"exp\":"+expires+"}";
         String part=b64(head.getBytes(StandardCharsets.UTF_8))+"."
                 +b64(body.getBytes(StandardCharsets.UTF_8));
         Signature signature=Signature.getInstance("SHA256withRSA");
