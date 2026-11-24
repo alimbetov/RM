@@ -12,6 +12,10 @@ final class PgCommitOrderEvidence {
     private PgCommitOrderEvidence(){}
     static void run(JdbcTemplate jdbc,PlatformTransactionManager manager,
             Runnable first,Runnable second,String expectedDenial) throws Exception {
+        run(jdbc,manager,first,second,SecurityException.class,expectedDenial);
+    }
+    static void run(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            Runnable first,Runnable second,Class<? extends RuntimeException> denialType,String expectedDenial) throws Exception {
         var tx=new TransactionTemplate(manager);
         var applied=new CountDownLatch(1);
         var release=new CountDownLatch(1);
@@ -34,8 +38,8 @@ final class PgCommitOrderEvidence {
                             second.run();
                         });
                         return "COMMITTED";
-                    }catch(SecurityException denied){
-                        if(expectedDenial==null || !expectedDenial.equals(denied.getMessage()))throw denied;
+                    }catch(RuntimeException denied){
+                        if(expectedDenial==null || !denialType.isInstance(denied) || !expectedDenial.equals(denied.getMessage()))throw denied;
                         return "DENIED";
                     }
                 });

@@ -351,6 +351,42 @@ class SalesInventoryRbacQualificationTest {
         assertThat(scalar(c,"on_hand")).isEqualByComparingTo("5");
         assertThatThrownBy(()->commands.confirm(c.staff(),other.tenant(),order(other,1),other.location()))
             .isInstanceOf(SecurityException.class);
+        try(var connection=dataSource.getConnection()){
+            if(connection.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql"))
+                qualifyHotSkuBothCommitOrders();
+        }
+    }
+
+    private void qualifyHotSkuBothCommitOrders() throws Exception {
+        try(var issuer=new JourneySignedActorFixture()){
+            for(boolean reverse:List.of(false,true)){
+                Context c=context(5);UUID a=order(c,4),b=order(c,4);
+                allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
+                var staff=issuer.resolve(jdbc,users,c.staff());
+                UUID winner=reverse?b:a,loser=reverse?a:b;
+                var loserLine=jdbc.queryForList("SELECT id,quantity,unit_price_snapshot,currency FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",c.tenant(),loser);
+                var invoices=JourneySqlEvidence.invoices(jdbc,c.tenant());
+                Runnable first=()->assertThat(authenticatedCommands.confirm(staff,c.tenant(),winner,c.location()).affectedLines()).isEqualTo(1);
+                Runnable second=()->authenticatedCommands.confirm(staff,c.tenant(),loser,c.location());
+                PgCommitOrderEvidence.run(jdbc,transactionManager,first,second,IllegalStateException.class,"Insufficient available inventory");
+                assertThat(status(c,winner)).isEqualTo("CONFIRMED");
+                assertThat(status(c,loser)).isEqualTo("PLACED");
+                assertThat(scalar(c,"reserved")).isEqualByComparingTo("4");
+                assertThat(scalar(c,"on_hand")).isEqualByComparingTo("5");
+                assertThat(reservationCount(c,winner,"ACTIVE")).isEqualTo(1);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=?",Integer.class,c.tenant(),loser)).isZero();
+                assertThat(eventCount(c,winner,"CONFIRMED")).isEqualTo(1);
+                assertThat(eventCount(c,loser,"CONFIRMED")).isZero();
+                assertThat(jdbc.queryForObject("SELECT row_version FROM crm.sales_order WHERE tenant_id=? AND id=?",Long.class,c.tenant(),loser)).isZero();
+                assertThat(jdbc.queryForList("SELECT id,quantity,unit_price_snapshot,currency FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",c.tenant(),loser)).isEqualTo(loserLine);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?",Integer.class,c.tenant())).isZero();
+                assertThat(JourneySqlEvidence.invoices(jdbc,c.tenant())).isEqualTo(invoices);
+                var after=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),loser,c.location(),c.item());
+                assertThat(authenticatedCommands.confirm(staff,c.tenant(),winner,c.location()).affectedLines()).isZero();
+                assertThatThrownBy(second::run).isInstanceOf(IllegalStateException.class).hasMessage("Insufficient available inventory");
+                assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),loser,c.location(),c.item())).isEqualTo(after);
+            }
+        }
     }
 
     @Test void opposingMultiSkuOrdersReserveWithoutDeadlock() throws Exception {
@@ -733,45 +769,66 @@ class SalesInventoryRbacQualificationTest {
             Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
                     .toLowerCase().contains("postgresql"));
         }
-        Context c=context(10);
-        UUID id=order(c,3);
-        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
-                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
-                DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
-        commands.confirm(c.staff(),c.tenant(),id,c.location());
-        var start=new CountDownLatch(1);
-        try(var pool=Executors.newFixedThreadPool(2)) {
-            var cancellation=pool.submit(()->{
-                if(!start.await(10,TimeUnit.SECONDS))
-                    throw new IllegalStateException("Start barrier");
-                try {
-                    return commands.cancel(c.staff(),c.tenant(),id).affectedLines()==1;
-                } catch(IllegalStateException expected) {
-                    return false;
-                }
-            });
-            var fulfillment=pool.submit(()->{
-                if(!start.await(10,TimeUnit.SECONDS))
-                    throw new IllegalStateException("Start barrier");
-                try {
-                    return commands.fulfill(c.staff(),c.tenant(),id).affectedLines()==1;
-                } catch(IllegalStateException expected) {
-                    return false;
-                }
-            });
-            start.countDown();
-            boolean cancelled=cancellation.get(30,TimeUnit.SECONDS);
-            boolean fulfilled=fulfillment.get(30,TimeUnit.SECONDS);
-            assertThat((cancelled?1:0)+(fulfilled?1:0)).isEqualTo(1);
-            assertThat(status(c,id)).isEqualTo(cancelled?"CANCELLED":"COMPLETED");
+        try(var issuer=new JourneySignedActorFixture()){
+            for(boolean cancelFirst:List.of(false,true)){
+                Context c=context(10);
+                UUID id=order(c,3);
+                allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                    DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
+                    DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+                var staff=issuer.resolve(jdbc,users,c.staff());
+                authenticatedCommands.confirm(staff,c.tenant(),id,c.location());
+                var invoices=JourneySqlEvidence.invoices(jdbc,c.tenant());
+                Runnable cancel=()->assertThat(authenticatedCommands.cancel(staff,c.tenant(),id).status()).isEqualTo("CANCELLED");
+                Runnable fulfill=()->assertThat(authenticatedCommands.fulfill(staff,c.tenant(),id).status()).isEqualTo("COMPLETED");
+                PgCommitOrderEvidence.run(jdbc,transactionManager,cancelFirst?cancel:fulfill,cancelFirst?fulfill:cancel,
+                    IllegalStateException.class,cancelFirst?"Order not ready for fulfillment":"Order cannot be cancelled");
+                assertThat(status(c,id)).isEqualTo(cancelFirst?"CANCELLED":"COMPLETED");
+                assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+                assertThat(scalar(c,"on_hand")).isEqualByComparingTo(cancelFirst?"10":"7");
+                assertThat(reservationCount(c,id,"ACTIVE")).isZero();
+                assertThat(reservationCount(c,id,cancelFirst?"RELEASED":"FULFILLED")).isEqualTo(1);
+                assertThat(reservationCount(c,id,cancelFirst?"FULFILLED":"RELEASED")).isZero();
+                assertThat(fulfillmentMovementCount(c,id)).isEqualTo(cancelFirst?0:1);
+                assertThat(eventCount(c,id,"CANCELLED")).isEqualTo(cancelFirst?1:0);
+                assertThat(eventCount(c,id,"COMPLETED")).isEqualTo(cancelFirst?0:1);
+                assertThat(eventCount(c,id,"CONFIRMED")).isEqualTo(1);
+                assertThat(JourneySqlEvidence.invoices(jdbc,c.tenant())).isEqualTo(invoices);
+                var terminal=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item());
+                assertThat((cancelFirst?authenticatedCommands.cancel(staff,c.tenant(),id):authenticatedCommands.fulfill(staff,c.tenant(),id)).affectedLines()).isZero();
+                assertThatThrownBy((cancelFirst?fulfill:cancel)::run).isInstanceOf(IllegalStateException.class)
+                    .hasMessage(cancelFirst?"Order not ready for fulfillment":"Order cannot be cancelled");
+                assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item())).isEqualTo(terminal);
+            }
+            qualifyCancelConfirmOrders(issuer);
+        }
+    }
+
+    private void qualifyCancelConfirmOrders(JourneySignedActorFixture issuer) throws Exception {
+        for(boolean cancelFirst:List.of(false,true)){
+            Context c=context(10);UUID id=order(c,3);
+            allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+                DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE);
+            var staff=issuer.resolve(jdbc,users,c.staff());
+            var invoices=JourneySqlEvidence.invoices(jdbc,c.tenant());
+            Runnable confirm=()->assertThat(authenticatedCommands.confirm(staff,c.tenant(),id,c.location()).status()).isEqualTo("CONFIRMED");
+            Runnable cancel=()->assertThat(authenticatedCommands.cancel(staff,c.tenant(),id).status()).isEqualTo("CANCELLED");
+            PgCommitOrderEvidence.run(jdbc,transactionManager,cancelFirst?cancel:confirm,cancelFirst?confirm:cancel,
+                IllegalStateException.class,cancelFirst?"Order not confirmable":null);
+            assertThat(status(c,id)).isEqualTo("CANCELLED");
             assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
-            assertThat(scalar(c,"on_hand")).isEqualByComparingTo(cancelled?"10":"7");
+            assertThat(scalar(c,"on_hand")).isEqualByComparingTo("10");
             assertThat(reservationCount(c,id,"ACTIVE")).isZero();
-            assertThat(reservationCount(c,id,cancelled?"RELEASED":"FULFILLED"))
-                    .isEqualTo(1);
-            assertThat(fulfillmentMovementCount(c,id)).isEqualTo(fulfilled?1:0);
-            assertThat(eventCount(c,id,"CANCELLED")).isEqualTo(cancelled?1:0);
-            assertThat(eventCount(c,id,"COMPLETED")).isEqualTo(fulfilled?1:0);
+            assertThat(reservationCount(c,id,"RELEASED")).isEqualTo(cancelFirst?0:1);
+            assertThat(reservationCount(c,id,"FULFILLED")).isZero();
+            assertThat(eventCount(c,id,"CONFIRMED")).isEqualTo(cancelFirst?0:1);
+            assertThat(eventCount(c,id,"CANCELLED")).isEqualTo(1);
+            assertThat(fulfillmentMovementCount(c,id)).isZero();
+            assertThat(JourneySqlEvidence.invoices(jdbc,c.tenant())).isEqualTo(invoices);
+            var terminal=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item());
+            assertThat(authenticatedCommands.cancel(staff,c.tenant(),id).affectedLines()).isZero();
+            assertThatThrownBy(confirm::run).isInstanceOf(IllegalStateException.class).hasMessage("Order not confirmable");
+            assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item())).isEqualTo(terminal);
         }
     }
 
