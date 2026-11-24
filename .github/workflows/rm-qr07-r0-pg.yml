@@ -3,33 +3,7 @@ name: RM QR-07 R0-R2 Physical Return PostgreSQL Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/sales/SalesReturn*.java'
-      - 'src/main/java/kz/rm/inventory/ReturnInventoryPostingPort.java'
-      - 'src/test/java/kz/rm/sales/QrReturnProcessWorker.java'
-      - 'src/test/java/kz/rm/iam/SignedJwtTestAuthority.java'
-      - 'src/test/java/kz/rm/iam/OidcTestDecoderSupport.java'
-      - 'src/main/java/kz/rm/iam/OidcJwtConfiguration.java'
-      - 'src/main/java/kz/rm/iam/OidcActorResolver.java'
-      - 'src/main/java/kz/rm/iam/VerifiedActor.java'
-      - 'src/main/java/kz/rm/iam/DomainPermission.java'
-      - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
-      - 'src/main/resources/db/changelog/db.changelog-master.sql'
-      - 'src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java'
-      - '.github/scripts/verify_ret04_evidence.py'
-      - '.github/scripts/test_verify_ret04_evidence.py'
-      - '.github/scripts/verify_ret04_identity_e3a.py'
-      - '.github/scripts/test_verify_ret04_identity_e3a.py'
-      - '.github/scripts/verify_ret04_revocation_e3b.py'
-      - '.github/scripts/test_verify_ret04_revocation_e3b.py'
-      - 'src/test/java/kz/rm/sales/PgCommitOrderEvidence.java'
-      - 'src/main/java/kz/rm/iam/GlobalAccountStatusService.java'
-      - 'src/main/java/kz/rm/iam/TenantAccessStatusService.java'
-      - 'src/main/java/kz/rm/iam/TenantRoleService.java'
-      - 'src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java'
-      - 'src/main/java/kz/rm/iam/WarehouseStaffScopeService.java'
-      - 'docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json'
-      - '.github/workflows/rm-qr07-r0-pg.yml'
+    # Mandatory exact-SHA gate: no path filter or prior-SHA reuse.
   workflow_dispatch:
 
 permissions:

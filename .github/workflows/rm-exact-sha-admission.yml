@@ -57,7 +57,8 @@ jobs:
               {name:'RM TASK R2 Service Qualification',artifacts:['rm-task-h2-'+sha,'rm-task-postgresql-'+sha]},
               {name:'RM TASK R3.2A Populated PostgreSQL Upgrade Qualification',artifacts:['rm-task-r32a-populated-pg-'+sha]},
               {name:'RM TASK R32B T00 PostgreSQL Contract Qualification',artifacts:['rm-task-t00-postgresql-'+sha]},
-              {name:'RM CUR-R2C Policy Schema PostgreSQL Qualification',artifacts:['cur-r2c-policy-pg-'+sha,'cur-r2c-populated-pg-'+sha,'cur-r2c-anchor-populated-pg-'+sha,'cur-r2c-revoke-populated-pg-'+sha]}
+              {name:'RM CUR-R2C Policy Schema PostgreSQL Qualification',artifacts:['cur-r2c-policy-pg-'+sha,'cur-r2c-populated-pg-'+sha,'cur-r2c-anchor-populated-pg-'+sha,'cur-r2c-revoke-populated-pg-'+sha]},
+              {name:'RM QR-07 R0-R2 Physical Return PostgreSQL Qualification',artifacts:['qr07-r0-r1-'+sha,'qr07-full-pg-'+sha]}
             ];
             const manifest = {
               schema:'RM-QA-01B/v2',repository:owner+'/'+repo,branch,sha,
@@ -108,8 +109,9 @@ jobs:
                     {owner,repo,run_id:run.id,per_page:100}
                   );
                   for(const expected of gate.artifacts) {
-                    const a=artifacts.find(a=>a.name===expected && !a.expired &&
+                    const candidates=artifacts.filter(a=>a.name===expected && !a.expired &&
                       a.size_in_bytes>0);
+                    const a=candidates.length===1?candidates[0]:null;
                     evidence.artifacts.push(a ?
                       {name:a.name,id:a.id,bytes:a.size_in_bytes} :
                       {name:expected,status:'MISSING'});

@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 from rm_r3_functional_coverage import assess
 from rm_user_role_qualification import assess_role_cases
 from rm_mvp_service_evidence import assess as assess_mvp_service
+from verify_ret04_global_artifact import verify_target_archive, verify_full_archive, WORKFLOW as RET04_WORKFLOW
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path("rm-exact-sha-manifest.json")
@@ -28,6 +29,7 @@ REQUIRED = {
     "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification": ("rm-task-r32a-populated-pg-{sha}",),
     "RM TASK R32B T00 PostgreSQL Contract Qualification": ("rm-task-t00-postgresql-{sha}",),
     "RM CUR-R2C Policy Schema PostgreSQL Qualification": ("cur-r2c-policy-pg-{sha}", "cur-r2c-populated-pg-{sha}", "cur-r2c-anchor-populated-pg-{sha}", "cur-r2c-revoke-populated-pg-{sha}"),
+    RET04_WORKFLOW: ("qr07-r0-r1-{sha}", "qr07-full-pg-{sha}"),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
@@ -58,6 +60,7 @@ SUITES = {
     "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification": ("TaskServiceQualificationTest",),
     "RM TASK R32B T00 PostgreSQL Contract Qualification": ("CrmInteractionQualificationTest",),
     "RM CUR-R2C Policy Schema PostgreSQL Qualification": ("FxAutoPolicySchemaPgTest", "FxAutoRollingLimitEvaluatorTest", "FxAutoDryRunTest", "FxAutoOwnerAdmissionQualificationTest", "TenantCurrencyPolicyQualificationTest", "SkuFxSellerApprovalQualificationTest"),
+    RET04_WORKFLOW: ("QrWarehouseHandoverQualificationTest",),
 }
 
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
@@ -231,6 +234,10 @@ def verify():
         "sha256": digest.hexdigest(), "fileCount": len(migrations)}
     total = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
     passed_cases = {}  # strictly validated PostgreSQL artifact cases
+    ret04_artifacts = {}
+    manifest["ret04DurableQualification"] = {"status": "HOLD", "sha": sha,
+        "mappingVerdict": "SUPPORTING_PARTIAL", "productionAdmission": "HOLD"}
+    seen_artifact_ids = set()
     for gate in gates:
         name = gate.get("name")
         if gate.get("sha") != sha or gate.get("status") != "completed" or gate.get("conclusion") != "success":
@@ -257,12 +264,25 @@ def verify():
                 problems.append(f"{name}: {artifact_name} unavailable")
                 continue
             try:
+                if artifact["id"] in seen_artifact_ids:
+                    raise ValueError("Duplicate artifact ID across mandatory gates")
+                seen_artifact_ids.add(artifact["id"])
                 data = api(f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact['id']}/zip", token)
                 archive = zipfile.ZipFile(BytesIO(data))
                 xmls = [n for n in archive.namelist() if n.endswith(".xml") and
                         Path(n).name.startswith("TEST-")]
                 if not xmls:
                     raise ValueError("No Surefire TEST-*.xml files")
+                # Independently re-run SQL verifiers on raw QR evidence. The
+                # source artifact PASS and test labels alone are insufficient.
+                ret04_verified = None
+                if name == RET04_WORKFLOW:
+                    if artifact_name == "qr07-r0-r1-" + sha:
+                        ret04_verified = verify_target_archive(archive, sha)
+                    elif artifact_name == "qr07-full-pg-" + sha:
+                        ret04_verified = verify_full_archive(archive, sha)
+                    else:
+                        raise ValueError("Unknown RET04 artifact")
                 counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
                 skipped_cases = []
                 executed_cases = set()
@@ -400,13 +420,16 @@ def verify():
                 if not missing_cases and counts["tests"] > 0 and not (
                         counts["failures"] or counts["errors"]) and counts["skipped"] <= counts["tests"]:
                     passed_cases[artifact_name] = executed_cases
+                    if ret04_verified is not None:
+                        ret04_artifacts[artifact_name] = dict(ret04_verified,
+                            artifactId=artifact["id"], artifactSha256=hashlib.sha256(data).hexdigest())
                 gate["verifiedArtifacts"].append({
                     "name": artifact_name, "id": artifact["id"], "sha256": hashlib.sha256(data).hexdigest(),
                     "surefire": counts, "skippedTests": skipped_cases,
                 })
                 for key in total:
                     total[key] += counts[key]
-            except (OSError, ValueError, KeyError, ET.ParseError, urllib.error.URLError, zipfile.BadZipFile) as exc:
+            except (OSError, ValueError, KeyError, TypeError, ArithmeticError, ET.ParseError, urllib.error.URLError, zipfile.BadZipFile) as exc:
                 problems.append(f"{name}: {artifact_name} cannot verify evidence: {exc}")
         for suite in SUITES.get(name, ()):
             group = discovered_suites.get(suite)
@@ -414,6 +437,15 @@ def verify():
                 problems.append(f"{name}: mandatory suite {suite} missing or entirely skipped")
         gate["suites"] = sorted(discovered_suites)
     manifest["testCounts"] = total
+    target = ret04_artifacts.get("qr07-r0-r1-" + sha)
+    full = ret04_artifacts.get("qr07-full-pg-" + sha)
+    if target is not None and full is not None:
+        manifest["ret04DurableQualification"].update({
+            "status": "PG_EVIDENCE_REVERIFIED", "cases": 56,
+            "target": target, "fullRegression": full,
+            "scope": "SERVICE_ONLY; semantic review and production admission remain HOLD"})
+    else:
+        problems.append("CORE-RET-04: missing independently reverified exact-SHA target/full evidence")
     try:
         result = assess(ROOT, passed_cases, sha, admission_pass=not problems)
         manifest["functionalCoverage"] = {
@@ -454,7 +486,8 @@ def verify():
             "taskAddendumTotal": mvp["taskAddendumTotal"],
             "verifiedTaskAddenda": mvp["verifiedTaskAddenda"],
             "mappingSha256": mvp["mappingSha256"],
-            "uniqueExecutedMethodsMapped": mvp["uniqueExecutedMethodsMapped"]
+            "uniqueExecutedMethodsMapped": mvp["uniqueExecutedMethodsMapped"],
+            "ret04DurableEvidence": manifest["ret04DurableQualification"]["status"]
         }
         if mvp["gate"] != "CORE_SERVICE_EVIDENCE_QUALIFIED":
             problems.append("RM-MVP W6 missing exact-SHA PostgreSQL evidence: "

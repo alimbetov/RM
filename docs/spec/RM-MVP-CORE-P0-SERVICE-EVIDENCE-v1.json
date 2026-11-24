@@ -1025,7 +1025,7 @@
         }
       ],
       "mappingVerdict": "SUPPORTING_PARTIAL",
-      "openRequirement": "A–C and E.3A: 48 PostgreSQL scenarios verified on E.3A SHA. E.3B implements 8 controlled warehouse/permission revocation orders with independent business and IAM evidence. 56/56 on new exact SHA, verified QR fixture, global artifact ingestion and normative variant review remain open.",
+      "openRequirement": "56/56 dedicated PostgreSQL scenarios and three manifests verified on E.3B SHA. Global artifact re-verification integrated; new exact-SHA global execution, verified QR fixture and normative variant review remain open. Partial verdict is intentional.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",

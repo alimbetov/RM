@@ -207,6 +207,13 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                 "mandatory": 6,
                 "executedPostgresql": 6,
                 "verifiedInternal": 6}),
+            # Synthetic composition fixtures do not contain genuine SQL
+            # evidence. Mock only the dedicated archive verification boundary;
+            # its path, manifest and raw SQL rejection tests live separately.
+            mock.patch.object(gate, "verify_target_archive", return_value={
+                "status":"PASS","sha":"f"*40,"cases":56,"javaTests":81}),
+            mock.patch.object(gate, "verify_full_archive", return_value={
+                "status":"PASS","sha":"f"*40,"coreCases":56,"suiteTests":81}),
             mock.patch.object(gate, "api", side_effect=self.fake_api),
             mock.patch.dict(os.environ, {
                 "GITHUB_SHA": "f" * 40, "GITHUB_REPOSITORY": "alimbetov/RM",
@@ -307,6 +314,21 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             [(x["id"], x["verdict"]) for x in report["semanticGaps"]],
             [("CORE-RET-04", "SUPPORTING_PARTIAL")],
         )
+
+    def test_ret04_missing_raw_evidence_blocks_global_gate(self):
+        with mock.patch.object(gate,"verify_target_archive",side_effect=ValueError("missing RET04 snapshots")):
+            self.assertEqual(gate.verify(),1)
+        result=json.loads(self.manifest_path.read_text())
+        self.assertEqual(result["ret04DurableQualification"]["status"],"HOLD")
+        self.assertTrue(any("missing RET04 snapshots" in e for e in result["evidenceErrors"]))
+
+    def test_ret04_reverified_evidence_does_not_promote_semantic_verdict(self):
+        self.assertEqual(gate.verify(),1)
+        result=json.loads(self.manifest_path.read_text())
+        self.assertEqual(result["ret04DurableQualification"]["status"],"PG_EVIDENCE_REVERIFIED")
+        self.assertEqual(result["ret04DurableQualification"]["cases"],56)
+        self.assertEqual(result["ret04DurableQualification"]["mappingVerdict"],"SUPPORTING_PARTIAL")
+        self.assertEqual(result["admission"],"HOLD")
 
     def test_wrong_commit_sha_fails_closed(self):
         self.manifest["sha"] = "bad"
