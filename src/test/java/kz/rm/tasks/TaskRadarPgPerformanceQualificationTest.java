@@ -214,8 +214,7 @@ class TaskRadarPgPerformanceQualificationTest {
         List<Long> values=new ArrayList<>();
         for(int i=0;i<SAMPLES;i++){
             long start=System.nanoTime();var page=radar.listMine(t.staff(),t.id(),limit,cursor);
-            long end=System.nanoTime();values.add(end-start);
-                    readSpans.add(new RadarCompetitionIntervals.Span(start,end));
+            values.add(System.nanoTime()-start);
             assertThat(ids(page)).containsExactlyElementsOf(ids(initial));
         }
         samples(label,values);plan(t,limit,initial.evaluatedAt(),cursor,label);
@@ -251,7 +250,8 @@ class TaskRadarPgPerformanceQualificationTest {
                 while(!stop.get()){
                     long start=System.nanoTime();
                     var page=radar.listMine(t.staff(),t.id(),100,null);
-                    values.add(System.nanoTime()-start);
+                    long end=System.nanoTime();values.add(end-start);
+                    readSpans.add(new RadarCompetitionIntervals.Span(start,end));
                     assertThat(page.items()).hasSize(100);
                     readerStarted.countDown();
                 }
