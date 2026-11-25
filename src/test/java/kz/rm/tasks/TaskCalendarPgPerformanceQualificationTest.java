@@ -330,8 +330,10 @@ class TaskCalendarPgPerformanceQualificationTest {
         Files.writeString(REPORT.resolve("100000-lock-sampling.csv"),locks);
         assertThat(tasks.getMine(t.manager(),t.id(),task.id()).version()).isEqualTo(v[0]);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?",Long.class,t.id(),task.id())).isEqualTo(v[0]+1);
-        assertThat(p(reads,.95)).as("calendar mixed p95").isLessThanOrEqualTo(200);
-        assertThat(delta).as("command degradation p95 percent").isLessThanOrEqualTo(10);
+        // Report both independent failures even if the first SLA is missed.
+        org.junit.jupiter.api.Assertions.assertAll(
+            ()->assertThat(p(reads,.95)).as("calendar mixed p95").isLessThanOrEqualTo(200),
+            ()->assertThat(delta).as("command degradation p95 percent").isLessThanOrEqualTo(10));
     }
     @Test void f211OneThousandTasksWithHistory()throws Exception{workload(populate(1000));}
     @Test void f212TenThousandTasksWithHistory()throws Exception{workload(populate(10000));}

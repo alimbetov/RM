@@ -162,10 +162,23 @@ def main():
     for label,plan in sorted(result["readPlans"].items(),
             key=lambda item:item[1]["service"]["p95Ms"],reverse=True)[:5]:
         lines.append(f"- {label}: service p95 {plan['service']['p95Ms']:.3f} ms; EXPLAIN {plan['executionMs']:.3f} ms")
+        # Print concrete plan operators to the job log as well as the full
+        # artifact, so diagnosis is possible without downloading a ZIP.
+        for node in plan["topInclusiveNodes"][:5]:
+            lines.append(f"  - {node['path']} {node['type']} relation={node['relation']} "
+                         f"index={node['index']} loops={node['loops']} "
+                         f"rows={node['actualRows']}/{node['estimatedRows']} "
+                         f"inclusiveMs={node['inclusiveMsAcrossLoops']:.3f} "
+                         f"hit/read={node['sharedHitBlocks']}/{node['sharedReadBlocks']} "
+                         f"temp read/write={node['tempReadBlocks']}/{node['tempWrittenBlocks']}")
     if result["competition"] is not None:
         c=result["competition"]
         lines.extend([f"- Command p95 degradation: {c['commandDegradationPercent']:.3f}% (budget 10%)",
                       f"- Mixed reader p95: {c['reader']['p95Ms']:.3f} ms, n={c['reader']['n']}"])
+        for block in c["blocks"]:
+            lines.append(f"- Block {block['block']} mixed={block['mixed']} p95={block['p95Ms']:.3f} ms; "
+                         f"lock samples={block['positiveLockSamples']}/{block['lockSamples']}; "
+                         f"completed reads={block['completedReads']}")
         if c["readerTailSampleWarning"]:
             lines.append("- Mixed reader tail estimate has fewer than 100 samples.")
     lines.append("This report does not replace or relax the Java qualification assertions.")

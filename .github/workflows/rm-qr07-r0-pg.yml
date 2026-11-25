@@ -49,8 +49,7 @@ jobs:
           mkdir -p target/qr07-r0-evidence
           export RM_RET04_EVIDENCE_DIR="$PWD/target/qr07-r0-evidence/sql"
           set -o pipefail
-          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr07-classpath.txt
-          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr07-classpath.txt)"
+          # Child JVMs use the executing Surefire test classpath; no extra plugin resolution.
           mvn -B -ntp '-Dtest=QrWarehouseHandoverQualificationTest#qr07R*' test 2>&1 | tee target/qr07-r0-evidence/console.log
           printf '%s\n' "${GITHUB_SHA}" > target/qr07-r0-evidence/exact-sha.txt
       - name: Verify RET04 exact-SHA SQL and testcase evidence
@@ -115,8 +114,7 @@ jobs:
         run: |
           mkdir -p target/qr07-full-pg
           set -o pipefail
-          mvn -B -ntp dependency:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile=target/qr07-classpath.txt
-          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat target/qr07-classpath.txt)"
+          # Child JVMs use the executing Surefire test classpath; no extra plugin resolution.
           timeout --signal=TERM --kill-after=30s 2700s mvn -B -ntp test 2>&1 | tee target/qr07-full-pg/console.log
           printf '%s\n' "$GITHUB_SHA" > target/qr07-full-pg/exact-sha.txt
       - name: Preserve full PostgreSQL Surefire and logs

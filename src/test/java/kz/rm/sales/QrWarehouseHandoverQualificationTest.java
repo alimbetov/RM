@@ -1187,14 +1187,23 @@ class QrWarehouseHandoverQualificationTest {
         }
     }
 
+    // Use the exact dependency classpath of the already running Surefire
+    // test JVM, not a second Maven plugin resolution before the tests.
+    // The explicit override is retained for standalone/IDE qualification.
+    private static String workerClasspath() {
+        String cp=System.getenv("RM_QR06B_JAVA_CLASSPATH");
+        if(cp==null||cp.isBlank())cp=System.getProperty("surefire.test.class.path");
+        if(cp==null||cp.isBlank())
+            throw new IllegalStateException("QR_PROCESS_TEST_CLASSPATH_REQUIRED");
+        return cp;
+    }
+
     /** B2 process runner: new java.exe, new Spring context and PG connection pool. */
     private Process startQr06bWorker(String mode, Context c, String proofFile,
                                      long version, String requestKey,
                                      java.nio.file.Path ready,java.nio.file.Path gate,
                                      java.nio.file.Path output) throws Exception {
-        String cp=System.getenv("RM_QR06B_JAVA_CLASSPATH");
-        if(cp==null||cp.isBlank())
-            throw new IllegalStateException("RM_QR06B_JAVA_CLASSPATH required for process qualification");
+        String cp=workerClasspath();
         String javaExecutable=java.nio.file.Path.of(System.getProperty("java.home"),
                 "bin","java").toString();
         return new ProcessBuilder(javaExecutable,"-cp",cp,
@@ -2930,9 +2939,7 @@ class QrWarehouseHandoverQualificationTest {
                                      String requestKey,java.nio.file.Path ready,
                                      java.nio.file.Path release,java.nio.file.Path log)
                                      throws Exception{
-        String cp=System.getenv("RM_QR06B_JAVA_CLASSPATH");
-        if(cp==null||cp.isBlank())
-            throw new IllegalStateException("QR07_R2_PROCESS_CLASSPATH_REQUIRED");
+        String cp=workerClasspath();
         String javaExecutable=java.nio.file.Path.of(System.getProperty("java.home"),
                 "bin","java").toString();
         // UUID in argv is only an expected-actor assertion; the worker derives
