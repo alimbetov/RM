@@ -5145,3 +5145,13 @@ CREATE TRIGGER trg_int_fact_no_truncate BEFORE TRUNCATE ON crm.int_canonical_fac
 --rollback DROP TRIGGER trg_int_fact_no_truncate ON crm.int_canonical_fact;
 --rollback DROP TRIGGER trg_int_fact_immutable ON crm.int_canonical_fact;
 --rollback DROP FUNCTION crm.int_reject_fact_mutation();
+ 
+--changeset rm:0177-int-canonical-fact-v2
+ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_schema;
+ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_schema CHECK(schema_version IN (1,2));
+--rollback ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_schema;
+--rollback ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_schema CHECK(schema_version=1);
+
+--changeset rm:0178-int-canonical-fact-hex dbms:postgresql
+ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_hex CHECK(digest ~ '^[0-9a-f]{64}$');
+--rollback ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_hex;
