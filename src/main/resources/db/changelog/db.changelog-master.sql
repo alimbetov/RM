@@ -5110,3 +5110,38 @@ CREATE TRIGGER trg_int_calendar_no_truncate BEFORE TRUNCATE ON crm.int_calendar_
 --rollback DROP TRIGGER trg_int_calendar_no_truncate ON crm.int_calendar_policy;
 --rollback DROP TRIGGER trg_int_calendar_immutable ON crm.int_calendar_policy;
 --rollback DROP FUNCTION crm.int_reject_calendar_mutation();
+
+--changeset rm:0175-int-canonical-fact
+CREATE TABLE crm.int_canonical_fact (
+ tenant_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,
+ subject_id UUID NOT NULL,
+ source_version BIGINT,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ recorded_at TIMESTAMP WITH TIME ZONE,
+ schema_version INTEGER NOT NULL,
+ digest VARCHAR(64) NOT NULL,
+ CONSTRAINT pk_int_canonical_fact PRIMARY KEY(tenant_id,owner_module,source_kind,source_id),
+ CONSTRAINT fk_int_fact_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT ck_int_fact_schema CHECK(schema_version=1),
+ CONSTRAINT ck_int_fact_digest CHECK(length(digest)=64),
+ CONSTRAINT ck_int_fact_kind CHECK((owner_module='SALES' AND source_kind IN ('ORDER_PLACED','ORDER_CONFIRMED','ORDER_COMPLETED','ORDER_CANCELLED') AND recorded_at IS NULL)
+ OR (owner_module='INVENTORY' AND source_kind='STOCK_MOVEMENT' AND recorded_at IS NOT NULL)),
+ CONSTRAINT ck_int_fact_version CHECK(source_version IS NULL OR source_version>=0)
+);
+--rollback DROP TABLE crm.int_canonical_fact;
+
+--changeset rm:0176-int-canonical-fact-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_reject_fact_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CANONICAL_FACT_IMMUTABLE';
+END; $$;
+CREATE TRIGGER trg_int_fact_immutable BEFORE UPDATE OR DELETE ON crm.int_canonical_fact
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_fact_no_truncate BEFORE TRUNCATE ON crm.int_canonical_fact
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_fact_no_truncate ON crm.int_canonical_fact;
+--rollback DROP TRIGGER trg_int_fact_immutable ON crm.int_canonical_fact;
+--rollback DROP FUNCTION crm.int_reject_fact_mutation();
