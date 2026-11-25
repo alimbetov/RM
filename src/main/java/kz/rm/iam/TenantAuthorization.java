@@ -80,18 +80,7 @@ public class TenantAuthorization {
     public Decision requireForCommand(UUID actorId,UUID tenantId,DomainPermission permission) {
         if(actorId==null || tenantId==null || permission==null)
             throw new SecurityException("Authenticated actor, tenant and permission required");
-        // A global account status UPDATE conflicts with this row lock, so an
-        // account suspension cannot commit across an admitted business command.
-        // Lock actor first, tenant second; future status writers must obey the
-        // same lock order and tenant membership writers must fence on workspace.
-        String actorStatus=jdbc.query(commandActorLockSql,rs->
-                rs.next()?rs.getString(1):null,actorId);
-        if(!"ACTIVE".equals(actorStatus))
-            throw new SecurityException("Actor inactive or unknown");
-        UUID locked=jdbc.query(commandTenantLockSql,rs->
-                rs.next()?rs.getObject(1,UUID.class):null,tenantId);
-        if(locked==null || !locked.equals(tenantId))
-            throw new SecurityException("Tenant unavailable");
+        lockActorAndTenant(actorId,tenantId);
 
         // A JPA persistence context may already contain an ACTIVE membership or
         // workspace loaded before another transaction suspended it. The tenant
@@ -119,6 +108,64 @@ public class TenantAuthorization {
         TransactionSynchronizationManager.registerSynchronization(marker);
         return new Decision(checked.actorId(),checked.tenantId(),
                 checked.organizationId(),checked.role(),checked.permission(),marker);
+    }
+
+    private void lockActorAndTenant(UUID actorId,UUID tenantId) {
+        // A global account status UPDATE conflicts with this row lock, so an
+        // account suspension cannot commit across an admitted business command.
+        // Lock actor first, tenant second; future status writers must obey the
+        // same lock order and tenant membership writers must fence on workspace.
+        String actorStatus=jdbc.query(commandActorLockSql,rs->
+                rs.next()?rs.getString(1):null,actorId);
+        if(!"ACTIVE".equals(actorStatus))
+            throw new SecurityException("Actor inactive or unknown");
+        UUID locked=jdbc.query(commandTenantLockSql,rs->
+                rs.next()?rs.getObject(1,UUID.class):null,tenantId);
+        if(locked==null || !locked.equals(tenantId))
+            throw new SecurityException("Tenant unavailable");
+    }
+
+    /**
+     * Read-only TASK admission for SQL projections. Same current account and
+     * workspace fences (in the same order) as command admission. Read only
+     * fresh JDBC state after the fence; no JPA entity materialization, cache,
+     * reusable Decision, or permission for mutation. Keep this API specific
+     * to TASK_READ until additional read domains are independently qualified.
+     */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void requireTaskRead(UUID actorId,UUID tenantId) {
+        if(actorId==null||tenantId==null)
+            throw new SecurityException("Authenticated actor and tenant required");
+        if(!TransactionSynchronizationManager.isActualTransactionActive()
+                || !TransactionSynchronizationManager.isSynchronizationActive())
+            throw new IllegalStateException("Transactional synchronization required");
+        lockActorAndTenant(actorId,tenantId);
+        record ReadAdmission(OrganizationMembershipEntity.Role role,boolean enforced,boolean granted) {}
+        ReadAdmission admission=jdbc.query("""
+                SELECT m.role,
+                       COALESCE((SELECT cfg.enforced FROM public.iam_tenant_rbac_config cfg
+                                 WHERE cfg.tenant_id=w.id),FALSE) AS enforced,
+                       EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+                              JOIN public.iam_tenant_role r
+                                ON r.tenant_id=a.tenant_id AND r.id=a.role_id
+                              JOIN public.iam_tenant_role_permission p
+                                ON p.tenant_id=r.tenant_id AND p.role_id=r.id
+                              WHERE a.tenant_id=w.id AND a.user_id=m.user_id
+                                AND r.active=TRUE AND p.permission_code=?) AS granted
+                FROM public.iam_workspace w
+                JOIN public.iam_org_membership m
+                  ON m.organization_id=w.organization_id AND m.user_id=?
+                WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
+                  AND m.status='ACTIVE'
+                """,rs->rs.next()?new ReadAdmission(
+                    OrganizationMembershipEntity.Role.valueOf(rs.getString(1)),
+                    rs.getBoolean(2),rs.getBoolean(3)):null,
+                DomainPermission.TASK_READ.name(),actorId,tenantId);
+        if(admission==null)
+            throw new SecurityException("Active organization membership required");
+        if(admission.enforced() ? !admission.granted()
+                : !permitted(DomainPermission.TASK_READ,admission.role()))
+            throw new SecurityException("Tenant RBAC permission denied");
     }
 
     public Decision require(UUID actorId, UUID tenantId, DomainPermission permission) {

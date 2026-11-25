@@ -180,7 +180,8 @@ class TaskRadarSqlFailureQualificationTest {
         try(var trace=RadarSqlProbe.capture(false)){
             assertThat(radar.listMine(t.staff(),t.id(),10,null).items()).hasSize(1);
             readOnly(trace,1);
-            assertThat(trace.entries().stream().filter(e->!e.business()).count()).isGreaterThan(0);
+            assertThat(trace.entries().stream().filter(e->!e.business()).count())
+                .as("actor fence, tenant fence, fresh membership/RBAC query").isEqualTo(3);
         }
     }
     @Test void c215ZeroBusinessDmlAndLedgerUnchanged()throws Exception{

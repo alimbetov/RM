@@ -1,7 +1,6 @@
 package kz.rm.tasks;
 
 import jakarta.annotation.PostConstruct;
-import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -33,7 +32,7 @@ public class TaskTimingQueryService {
     @Transactional
     public Result getMine(VerifiedActor actor,UUID tenant,UUID task){
         if(actor==null||tenant==null)throw new SecurityException("TASK_VERIFIED_TENANT_REQUIRED");
-        UUID user=actor.userId();auth.requireForCommand(user,tenant,DomainPermission.TASK_READ);
+        UUID user=actor.userId();auth.requireTaskRead(user,tenant);
         if(task==null)throw new IllegalArgumentException("TASK_ID_REQUIRED");
         Instant cutoff=clock.instant().truncatedTo(ChronoUnit.MICROS);
         requireSupported(cutoff);

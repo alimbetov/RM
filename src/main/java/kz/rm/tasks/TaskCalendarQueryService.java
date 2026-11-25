@@ -1,7 +1,6 @@
 package kz.rm.tasks;
 
 import jakarta.annotation.PostConstruct;
-import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -113,7 +112,7 @@ public class TaskCalendarQueryService {
     @Transactional
     public Page listMine(VerifiedActor actor,UUID tenant,Filter filter,int limit,Cursor after){
         if(actor==null||tenant==null)throw new SecurityException("TASK_VERIFIED_TENANT_REQUIRED");
-        UUID user=actor.userId();auth.requireForCommand(user,tenant,DomainPermission.TASK_READ);
+        UUID user=actor.userId();auth.requireTaskRead(user,tenant);
         if(limit<1||limit>100)throw new IllegalArgumentException("TASK_CALENDAR_LIMIT_INVALID");
         Instant cutoff=clock.instant().truncatedTo(ChronoUnit.MICROS);
         TaskTimingQueryService.requireSupported(cutoff);

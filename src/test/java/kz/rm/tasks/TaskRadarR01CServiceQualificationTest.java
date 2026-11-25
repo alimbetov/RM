@@ -206,6 +206,12 @@ class TaskRadarR01CServiceQualificationTest {
         assertThatThrownBy(()->radar.listMine(t.manager(),t.id(),1,null)).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->radar.listMine(t.owner(),t.id(),1,null)).isInstanceOf(SecurityException.class);
         assertThat(create(t,CUT.minusSeconds(1))).isNotNull();
+        // Legacy unenforced TASK_READ policy remains available to active members;
+        // re-enabling RBAC must immediately deny the already-minted actor again.
+        assertThat(jdbc.update("UPDATE public.iam_tenant_rbac_config SET enforced=FALSE WHERE tenant_id=?",t.id())).isEqualTo(1);
+        assertThat(radar.listMine(t.manager(),t.id(),10,null).items()).hasSize(3);
+        assertThat(jdbc.update("UPDATE public.iam_tenant_rbac_config SET enforced=TRUE WHERE tenant_id=?",t.id())).isEqualTo(1);
+        assertThatThrownBy(()->radar.listMine(t.manager(),t.id(),10,null)).isInstanceOf(SecurityException.class);
     }
 
     @Test void c04CommittedInactiveAccountMembershipWorkspaceAndPersonalDenied() throws Exception {

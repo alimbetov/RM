@@ -1,7 +1,6 @@
 package kz.rm.tasks;
 
 import jakarta.annotation.PostConstruct;
-import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.VerifiedActor;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -61,7 +60,7 @@ public class TaskOverdueQueryService {
     public OverdueSignalPage listMine(VerifiedActor actor, UUID tenant, int limit, OverdueCursor after) {
         if(actor==null||tenant==null)throw new SecurityException("TASK_VERIFIED_TENANT_REQUIRED");
         UUID user=actor.userId();
-        authorization.requireForCommand(user,tenant,DomainPermission.TASK_READ);
+        authorization.requireTaskRead(user,tenant);
         if(limit<1||limit>100)throw new IllegalArgumentException("TASK_RADAR_LIMIT_INVALID");
         if(after!=null && (!tenant.equals(after.tenantId())||!user.equals(after.actorId())
                 ||limit!=after.limit()||after.lastTaskId()==null||after.lastDueAt()==null
