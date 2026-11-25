@@ -5530,3 +5530,82 @@ CREATE TRIGGER trg_int_movement_dim_no_truncate BEFORE TRUNCATE ON crm.int_movem
 --rollback DROP TRIGGER trg_cat_group_assignment_immutable ON crm.cat_group_assignment;
 --rollback DROP TRIGGER trg_cat_group_node_no_truncate ON crm.cat_group_node;
 --rollback DROP TRIGGER trg_cat_group_node_immutable ON crm.cat_group_node;
+
+
+--changeset rm:0193-int-dimension-source-binding
+-- Bind copied identities to their exact source, not merely to valid tenant entities.
+-- Existing mismatched non-null snapshots fail migration; no historical repair.
+ALTER TABLE crm.sales_order_line ADD CONSTRAINT uq_sales_line_source_item
+ UNIQUE(tenant_id,id,catalog_item_id_snapshot);
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT uq_inv_movement_source_dims
+ UNIQUE(tenant_id,id,item_id,location_id);
+ALTER TABLE crm.int_sales_line_dimension ADD CONSTRAINT fk_int_sales_dim_source_item
+ FOREIGN KEY(tenant_id,line_id,item_id)
+ REFERENCES crm.sales_order_line(tenant_id,id,catalog_item_id_snapshot);
+ALTER TABLE crm.int_movement_dimension ADD CONSTRAINT fk_int_movement_dim_source
+ FOREIGN KEY(tenant_id,movement_id,item_id,location_id)
+ REFERENCES crm.inv_stock_movement(tenant_id,id,item_id,location_id);
+--rollback ALTER TABLE crm.int_movement_dimension DROP CONSTRAINT fk_int_movement_dim_source;
+--rollback ALTER TABLE crm.int_sales_line_dimension DROP CONSTRAINT fk_int_sales_dim_source_item;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT uq_inv_movement_source_dims;
+--rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT uq_sales_line_source_item;
+
+--changeset rm:0194-int-dimension-source-null-guard dbms:postgresql splitStatements:false
+-- MATCH SIMPLE skips NULL; verify equality including NULL.
+-- Historical absence of the entire dimension row remains valid.
+DO $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM crm.int_sales_line_dimension d
+   JOIN crm.sales_order_line l ON l.tenant_id=d.tenant_id AND l.id=d.line_id
+   WHERE d.item_id IS DISTINCT FROM l.catalog_item_id_snapshot) THEN
+   RAISE EXCEPTION 'INT_SALES_DIM_SOURCE_ITEM_MISMATCH';
+ END IF;
+END; $$;
+CREATE FUNCTION crm.int_check_sales_dimension_source() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM crm.sales_order_line l
+   WHERE l.tenant_id=NEW.tenant_id AND l.id=NEW.line_id
+   AND l.catalog_item_id_snapshot IS NOT DISTINCT FROM NEW.item_id) THEN
+   RAISE EXCEPTION 'INT_SALES_DIM_SOURCE_ITEM_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_sales_dim_source BEFORE INSERT ON crm.int_sales_line_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_check_sales_dimension_source();
+--rollback DROP TRIGGER trg_int_sales_dim_source ON crm.int_sales_line_dimension;
+--rollback DROP FUNCTION crm.int_check_sales_dimension_source();
+
+--changeset rm:0195-int-movement-dimension-geo-admission dbms:postgresql splitStatements:false
+-- Validate geography on insertion, without reinterpreting older snapshots.
+CREATE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE actual_kato VARCHAR(16); node RECORD; next_source BIGINT;
+ expected_region VARCHAR(16); visited BIGINT[] := ARRAY[]::BIGINT[];
+BEGIN
+ SELECT l.kato_code INTO actual_kato FROM public.org_location l
+ WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;
+ IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node
+ FROM public.ref_kato_territory WHERE code=actual_kato;
+ FOR depth IN 1..32 LOOP
+   EXIT WHEN node.source_id IS NULL;
+   EXIT WHEN node.is_deleted OR node.source_id=ANY(visited);
+   visited:=array_append(visited,node.source_id);
+   IF node.level_no=2 THEN expected_region:=node.code; EXIT; END IF;
+   EXIT WHEN node.level_no<2 OR node.parent_source_id IS NULL;
+   next_source:=node.parent_source_id;
+   SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node
+   FROM public.ref_kato_territory WHERE source_id=next_source;
+ END LOOP;
+ IF expected_region IS DISTINCT FROM NEW.region_code OR
+    NEW.geo_quality IS DISTINCT FROM
+       (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_movement_dim_geo BEFORE INSERT ON crm.int_movement_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_check_movement_dimension_geo();
+--rollback DROP TRIGGER trg_int_movement_dim_geo ON crm.int_movement_dimension;
+--rollback DROP FUNCTION crm.int_check_movement_dimension_geo();

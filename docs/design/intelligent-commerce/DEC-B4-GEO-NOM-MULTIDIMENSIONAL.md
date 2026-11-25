@@ -18,3 +18,9 @@ B4.0 harden source-bound snapshot constraints, actual catalog/geo provenance and
 
 ## Qualification candidate
 Named strict PG b4RegionAndNomenclatureSnapshotsPg tests actual BUS flows, classification changes, two region codes (ancestor when suitable fixture available), product/service separation, historical revision, regional stock and fulfilled amounts, foreign/unauthorized warehouse denial, immutable snapshot/definition, historical append UNKNOWN. Mandatory strict PG + central exact-SHA verifier, H2 skip only on matching PG evidence; schema tests updated. No local build/PG in this pass. No performance, concurrency or full regional population qualification claim.
+
+
+## B4.1A — source integrity implementation candidate
+Parent admission: 25be3be07412fe80710ca76dd0a936a2fd2e2d7f, 21/21 observed workflows successful including Exact-SHA Admission.
+0193–0195 introduce exact source SKU/location composite foreign keys (both databases), PostgreSQL null-safe sales source validation for existing and new rows, and PostgreSQL insert-time KATO/region validation against the warehouse and existing directory ancestry. Existing geographic snapshots are not reclassified. No history repair on constraint failure. H2 is a portable FK smoke environment, not proof of the PostgreSQL trigger contracts. Existing strict PG b4RegionAndNomenclatureSnapshotsPg includes negative same-tenant source mismatch and geographic forgery cases; new exact-SHA qualification is required.
+Scope: Manager 360 and commercial attribution to staff are excluded; preserve existing CRM/TASK operational evidence. Complete official KATO release acquisition/versioning and coverage gate, generation lifecycle/routing, rollup and rebuild remain open. No production activation.

@@ -420,6 +420,43 @@ class BusMvpServiceJourneyQualificationTest {
             });
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_movement_dimension WHERE tenant_id=? AND movement_id=?",
                 Long.class,tenant,legacy)).isZero();
+            // Same-tenant IDs are insufficient: the snapshot must match its source.
+            var wrongSku=catalog.createDraft(staff,tenant,"B4-WRONG-"+UUID.randomUUID(),
+                CatalogItem.Kind.PRODUCT,"ru","Wrong same-tenant SKU",null);
+            String insertDim="""
+                INSERT INTO crm.int_movement_dimension(tenant_id,movement_id,item_id,item_kind,
+                    location_id,kato_code,region_code,geo_quality)
+                VALUES (?,?,?,'PRODUCT',?,?,?,'RESOLVED')
+                """;
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,wrongSku.id(),warehouse.id(),kato,kato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_int_movement_dim_source");
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,published.id(),second.id(),
+                childKato==null?secondKato:childKato,secondKato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_int_movement_dim_source");
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,published.id(),warehouse.id(),secondKato,secondKato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_MOVEMENT_DIM_KATO_MISMATCH");
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,published.id(),warehouse.id(),kato,secondKato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_MOVEMENT_DIM_REGION_MISMATCH");
+            UUID bookedLine=jdbc.queryForObject("SELECT id FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",
+                UUID.class,tenant,orderId);
+            // BEFORE INSERT guard rejects false UNKNOWN and different SKU before
+            // duplicate-key handling for the already captured line.
+            assertThatThrownBy(()->jdbc.update("""
+                INSERT INTO crm.int_sales_line_dimension(tenant_id,line_id) VALUES (?,?)
+                """,tenant,bookedLine)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_SALES_DIM_SOURCE_ITEM_MISMATCH");
+            assertThatThrownBy(()->jdbc.update("""
+                INSERT INTO crm.int_sales_line_dimension(tenant_id,line_id,item_id,item_kind)
+                VALUES (?,?,?,'PRODUCT')
+                """,tenant,bookedLine,wrongSku.id()))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_SALES_DIM_SOURCE_ITEM_MISMATCH");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_movement_dimension WHERE tenant_id=? AND movement_id=?",
+                Long.class,tenant,legacy)).isZero();
             assertThat(dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31)).anySatisfy(row->{
                 assertThat(row.region()).isNull();assertThat(row.group().id()).isNull();assertThat(row.in()).isEqualByComparingTo("10");
             });
