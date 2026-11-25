@@ -139,6 +139,17 @@ class TaskRadarPgPerformanceQualificationTest {
         Instant anchor=Instant.now().truncatedTo(ChronoUnit.MICROS);
         seed(dense,total/2,true,anchor);seed(sparse,total-total/2,false,anchor);
         jdbc.execute("ANALYZE crm.task_item");
+        // Qualification must exercise the migrated physical design. The
+        // planner remains free to choose the least-cost valid plan.
+        String activeIndex=jdbc.queryForObject("""
+            SELECT pg_get_indexdef(i.indexrelid)
+            FROM pg_index i JOIN pg_class x ON x.oid=i.indexrelid
+            WHERE i.indrelid='crm.task_item'::regclass
+              AND x.relname='idx_task_radar_active_due'
+              AND i.indisvalid AND i.indisready AND i.indpred IS NOT NULL
+            """,String.class);
+        assertThat(activeIndex).contains("(tenant_id, due_at, id)","assignee_user_id IS NOT NULL","due_at IS NOT NULL");
+        Files.writeString(REPORT.resolve("active-due-index.txt"),activeIndex+"\n");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.task_item WHERE tenant_id IN (?,?)",
             Long.class,dense.id(),sparse.id())).isEqualTo((long)total);
         Files.writeString(REPORT.resolve("fixture-"+total+".txt"),

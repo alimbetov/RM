@@ -5071,3 +5071,12 @@ CREATE TRIGGER trg_store_offer_price_no_truncate BEFORE TRUNCATE ON crm.store_of
 --rollback DROP TRIGGER trg_store_offer_price_no_truncate ON crm.store_offer_price_revision;
 --rollback DROP TRIGGER trg_store_offer_auto_closed ON crm.store_offer_price_revision;
 --rollback DROP FUNCTION crm.reject_unadmitted_auto_price();
+
+--changeset rm:0172-task-radar-active-due-index dbms:postgresql
+-- One ordered active/assigned/non-null due range across statuses.
+-- Do not include row_version or other mutable payload columns.
+-- Build transactionally during controlled migration; measure populated build/lock time.
+CREATE INDEX idx_task_radar_active_due ON crm.task_item(tenant_id,due_at,id)
+ WHERE status IN ('OPEN','IN_PROGRESS','BLOCKED')
+   AND assignee_user_id IS NOT NULL AND due_at IS NOT NULL;
+--rollback DROP INDEX crm.idx_task_radar_active_due;

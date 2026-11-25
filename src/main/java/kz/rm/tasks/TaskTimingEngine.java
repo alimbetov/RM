@@ -56,10 +56,10 @@ final class TaskTimingEngine {
 
     static String overduePage(boolean pg, boolean hasCursor) {
         if(pg){
-            // Each status is disjoint. Its first K qualifying rows suffice for
-            // the global first K, including ties ordered by (due_at,id).
-            // Existing (tenant_id,status,due_at,id) index can serve each
-            // bounded ordered scan; scope and cursor precede BOTH limits.
+            // The PG partial active-due index orders all eligible statuses
+            // together by tenant,due_at,id. Apply visibility and keyset before
+            // LIMIT, then compute exact severity only for the selected rows.
+            // A sparse actor may still scan more than K index entries.
             return """
                 SELECT id,status,due_at,row_version,-d AS magnitude_micros,%s AS severity
                 FROM (
@@ -72,18 +72,12 @@ final class TaskTimingEngine {
                                      CAST(? AS UUID) AS creator_actor,
                                      %s CAST(? AS INTEGER) AS page_limit) p
                         CROSS JOIN LATERAL (
-                            SELECT part.*
-                            FROM (VALUES (CAST('OPEN' AS VARCHAR(20))),
-                                         (CAST('IN_PROGRESS' AS VARCHAR(20))),
-                                         (CAST('BLOCKED' AS VARCHAR(20)))) AS states(active_state)
-                            CROSS JOIN LATERAL (
-                                SELECT id,status,due_at,row_version
-                                FROM crm.task_item
-                                WHERE tenant_id=p.scope_tenant AND status=states.active_state
-                                  AND (assignee_user_id=p.assignee_actor OR created_by=p.creator_actor)
-                                  AND (%s) %s
-                                ORDER BY due_at,id LIMIT p.page_limit
-                            ) part
+                            SELECT id,status,due_at,row_version
+                            FROM crm.task_item
+                            WHERE tenant_id=p.scope_tenant
+                              AND (assignee_user_id=p.assignee_actor OR created_by=p.creator_actor)
+                              AND due_at IS NOT NULL
+                              AND (%s) %s
                             ORDER BY due_at,id LIMIT p.page_limit
                         ) candidate
                     ) keys

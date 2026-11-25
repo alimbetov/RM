@@ -313,8 +313,8 @@ class TaskRadarR01CServiceQualificationTest {
         }
         assertThat(jdbc.queryForList("SELECT * FROM crm.task_item WHERE tenant_id IN (?,?) ORDER BY tenant_id,id",t.id(),other.id())).isEqualTo(rows);
         assertThat(jdbc.queryForList("SELECT * FROM crm.task_event WHERE tenant_id IN (?,?) ORDER BY tenant_id,task_id,new_version",t.id(),other.id())).isEqualTo(events);
-        // A dense tie across all three statuses must survive per-status top-K
-        // merge; check exact page size and cursor exhaustion at 100/101.
+        // A dense tie across all three statuses must preserve global top-K;
+        // check exact page size and cursor exhaustion at 100/101.
         var dense=tenant();
         for(int i=0;i<101;i++){
             var task=create(dense,CUT.minusSeconds(30));
@@ -323,6 +323,12 @@ class TaskRadarR01CServiceQualificationTest {
         }
         List<UUID> ordered=jdbc.query("SELECT id FROM crm.task_item WHERE tenant_id=? ORDER BY due_at,id",
             (rs,n)->rs.getObject(1,UUID.class),dense.id());
+        // Earlier, invisible rows must not consume any of the page budget.
+        // Raw legacy fixtures intentionally omit history; Radar uses active
+        // task state only. Another active tenant is already in the oracle.
+        for(int i=0;i<105;i++)
+            legacy(dense,UUID.randomUUID(),dense.manager().userId(),
+                dense.manager().userId(),CUT.minusSeconds(60));
         var first=radar.listMine(dense.staff(),dense.id(),100,null);
         assertThat(ids(first)).containsExactlyElementsOf(ordered.subList(0,100));
         assertThat(first.nextCursor()).isNotNull();
