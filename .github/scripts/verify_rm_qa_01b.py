@@ -300,15 +300,30 @@ def verify():
                             raise ValueError(f"Missing or invalid {key} in {member}")
                         values[key] = value
                         counts[key] += value
-                    for case in suite_root.findall("testcase"):
-                        if case.find("skipped") is None:
-                            executed_cases.add((suite, case.get("name")))
+                    cases = suite_root.findall("testcase")
+                    actual = {"tests": len(cases), "failures": 0, "errors": 0, "skipped": 0}
+                    seen_case_names = set()
+                    for case in cases:
+                        case_name = case.get("name")
+                        if not case_name or case_name in seen_case_names:
+                            raise ValueError(f"Unnamed or duplicate testcase in {member}: {case_name}")
+                        seen_case_names.add(case_name)
+                        outcomes = [kind for kind in ("failure", "error", "skipped")
+                                    if case.find(kind) is not None]
+                        if len(outcomes) > 1:
+                            raise ValueError(f"Conflicting testcase outcomes in {member}: {case_name}")
+                        if outcomes:
+                            actual[{"failure": "failures", "error": "errors", "skipped": "skipped"}[outcomes[0]]] += 1
+                        else:
+                            executed_cases.add((suite, case_name))
                         skip = case.find("skipped")
                         if skip is not None:
                             skipped_cases.append({
                                 "suite": suite, "test": case.get("name"),
                                 "reason": skip.get("message") or skip.text or "UNSPECIFIED"
                             })
+                    if actual != values:
+                        raise ValueError(f"Surefire testcase counters mismatch in {member}: declared {values}, actual {actual}")
                     group = discovered_suites.setdefault(suite, {"tests": 0, "skipped": 0})
                     group["tests"] += values["tests"]
                     group["skipped"] += values["skipped"]
