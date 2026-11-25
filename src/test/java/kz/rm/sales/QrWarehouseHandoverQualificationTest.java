@@ -3582,11 +3582,77 @@ class QrWarehouseHandoverQualificationTest {
                 for(String row:jdbc.queryForList("SELECT row_to_json(p)::text FROM ("+projection+") p ORDER BY 1",
                         String.class,c.tenant()))lines.add("row\t"+table+"\t"+row);
             }
-            java.nio.file.Files.write(dir.resolve(String.format(java.util.Locale.ROOT,"snapshot-%03d.tsv",sequence)),
-                    lines,java.nio.charset.StandardCharsets.UTF_8,java.nio.file.StandardOpenOption.CREATE_NEW);
+            String name=String.format(java.util.Locale.ROOT,"snapshot-%03d.tsv",sequence);
+            java.nio.file.Files.write(dir.resolve(name),lines,java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE_NEW);
+            ret04RecordCheckoutProvenance(c,method,name,sha,directory,snapshot.get("sales_return_request").size());
         }catch(java.io.IOException|java.security.NoSuchAlgorithmException e){
             throw new AssertionError("RET04D evidence write failed",e);
         }
+    }
+
+    // Independent committed SQL evidence, bound to the exact return snapshot.
+    // No bearer, email, raw QR reference, request key or pickup secret is exported.
+    private void ret04RecordCheckoutProvenance(Context c,String method,String name,String sha,
+                                                String directory,int returns) throws java.io.IOException {
+        if(c.strictQrRef()==null)throw new AssertionError("RET04 strict QR provenance required");
+        var rows=jdbc.queryForList("""
+                SELECT row_to_json(p)::text FROM (
+                  SELECT r.id AS return_id,o.id AS order_id,r.buyer_user_id AS return_buyer,
+                         o.buyer_user_id AS buyer,e.id AS identity_id,e.user_id AS identity_buyer,
+                         e.current_owner_id AS identity_owner,e.lifecycle_state AS identity_state,
+                         e.verified_at IS NOT NULL AS verified,
+                         ch.id AS challenge_id,ch.purpose AS challenge_purpose,
+                         ch.consumed_at IS NOT NULL AS consumed,
+                         ev.id AS registration_event,ev.user_id AS registration_buyer,
+                         ev.purpose AS registration_purpose,
+                         ev.occurred_at<=o.created_at AS registered_before_order,
+                         (SELECT count(*) FROM public.iam_email_delivery_outbox d
+                            WHERE d.challenge_id=ch.id) AS delivery_rows,
+                         (SELECT count(*) FROM public.iam_email_verification_challenge cc
+                            JOIN public.iam_email_identity ee ON ee.id=cc.email_identity_id
+                            WHERE ee.user_id=o.buyer_user_id AND cc.purpose='CHECKOUT') AS checkout_challenges,
+                         encode(cr.request_sha256,'hex') AS receipt_sha,
+                         l.id AS line_id,l.offer_id,l.catalog_item_id_snapshot AS sku,
+                         l.quantity,l.unit_price_snapshot AS unit_price,l.currency,
+                         o.total_amount,o.currency AS order_currency,o.fulfillment_mode,
+                         sf.id AS storefront_id,sf.state AS storefront_state,
+                         off.state AS offer_state,off.unit_price AS offer_price,off.currency AS offer_currency,
+                         item.state AS item_state,item.kind AS item_kind,
+                         q.id AS qr_id,q.state AS qr_state,q.issued_by AS qr_issuer,
+                         (SELECT count(*) FROM crm.cat_price pr
+                            WHERE pr.tenant_id=item.tenant_id AND pr.item_id=item.id
+                              AND pr.unit_price=l.unit_price_snapshot AND pr.currency=l.currency
+                              AND pr.valid_from<=o.created_at) AS price_rows,
+                         ho.id AS handover_id,ho.warehouse_id,ho.staff_actor_id AS handover_staff
+                  FROM crm.sales_return_request r
+                  JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
+                  JOIN public.iam_email_identity e ON e.id=o.pending_email_identity_id
+                  JOIN public.iam_email_verification_event ev ON ev.email_identity_id=e.id
+                  JOIN public.iam_email_verification_challenge ch ON ch.id=ev.challenge_id
+                    AND ch.email_identity_id=e.id
+                  JOIN crm.sales_checkout_receipt cr ON cr.tenant_id=o.tenant_id AND cr.order_id=o.id
+                  JOIN crm.sales_order_line l ON l.tenant_id=o.tenant_id AND l.order_id=o.id
+                  JOIN crm.store_offer off ON off.tenant_id=l.tenant_id AND off.id=l.offer_id
+                  JOIN crm.store_front sf ON sf.tenant_id=off.tenant_id
+                  JOIN crm.cat_item item ON item.tenant_id=off.tenant_id AND item.id=off.catalog_item_id
+                    AND item.id=l.catalog_item_id_snapshot
+                  JOIN crm.store_offer_qr_ref q ON q.tenant_id=off.tenant_id AND q.offer_id=off.id
+                    AND q.active_offer_id=off.id AND q.public_ref=?
+                  JOIN crm.sales_pickup_handover ho ON ho.tenant_id=r.tenant_id AND ho.order_id=o.id
+                    AND ho.id=r.source_handover_id
+                  WHERE r.tenant_id=?
+                ) p ORDER BY 1
+                """,String.class,c.strictQrRef(),c.tenant());
+        assertThat(rows).hasSize(returns);
+        var target=java.nio.file.Path.of(directory).resolveSibling("checkout-e6c").resolve(method);
+        java.nio.file.Files.createDirectories(target);
+        var lines=new ArrayList<String>();
+        lines.add("sha\t"+sha);lines.add("method\t"+method);
+        lines.add("tenant\t"+c.tenant());
+        for(String row:rows)lines.add("row\t"+row);
+        java.nio.file.Files.write(target.resolve(name),lines,java.nio.charset.StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE_NEW);
     }
 
     private BigDecimal ret04BQuarantine(Context c,UUID sku) {

@@ -64,6 +64,10 @@ jobs:
         run: |
           python3 -m unittest discover -s .github/scripts -p 'test_verify_ret04_revocation_e3b.py' -v
           python3 .github/scripts/verify_ret04_revocation_e3b.py --evidence target/qr07-r0-evidence --xml target/surefire-reports/TEST-kz.rm.sales.QrWarehouseHandoverQualificationTest.xml
+      - name: Verify E6C registration and verified checkout lineage
+        run: |
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_ret04_checkout_e6c.py' -v
+          python3 .github/scripts/verify_ret04_checkout_e6c.py --evidence target/qr07-r0-evidence --xml target/surefire-reports/TEST-kz.rm.sales.QrWarehouseHandoverQualificationTest.xml
       - name: Preserve migration and service test evidence
         if: always()
         uses: actions/upload-artifact@v4

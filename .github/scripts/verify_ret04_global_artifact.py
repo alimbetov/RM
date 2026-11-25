@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import verify_ret04_evidence as d
 import verify_ret04_identity_e3a as a
 import verify_ret04_revocation_e3b as b
+import verify_ret04_checkout_e6c as c
 
 WORKFLOW = "RM QR-07 R0-R2 Physical Return PostgreSQL Qualification"
 SUITE = d.SUITE
@@ -88,8 +89,8 @@ def verify_target_archive(archive, sha):
         xml.write_bytes(raw)
         evidence=root/"evidence"
         evidence.mkdir()
-        allowed={"exact-sha.txt","console.log",*(x[0] for x in MANIFESTS)}
-        folders={"sql","identity-e3","revocation-e3b","revocation-iam"}
+        allowed={"exact-sha.txt","console.log","ret04-e6c-manifest.json",*(x[0] for x in MANIFESTS)}
+        folders={"sql","identity-e3","revocation-e3b","revocation-iam","checkout-e6c"}
         for path in sorted(files):
             if not path.startswith(TARGET):
                 continue
@@ -120,8 +121,19 @@ def verify_target_archive(archive, sha):
                             "methods":[x["method"] for x in actual["evidence"]]})
         method_list=[x for item in results for x in item["methods"]]
         require(len(method_list)==56 and set(method_list)==CORE,"RET04 combined method coverage mismatch")
+        lineage_path=evidence/"ret04-e6c-manifest.json"
+        require(lineage_path.is_file(),"missing RET04 checkout lineage manifest")
+        lineage=c.verify(xml,evidence,sha)
+        require(json.loads(lineage_path.read_text(encoding="utf-8"))==lineage,
+                "RET04 checkout lineage manifest differs")
+        require(lineage.get("schema")==c.SCHEMA and lineage.get("status")=="PASS" and
+                lineage.get("sha")==sha and lineage.get("cases")==56 and
+                lineage.get("surefireSha256")==hashlib.sha256(raw).hexdigest() and
+                {x["method"] for x in lineage["evidence"]}==CORE,"RET04 checkout lineage provenance mismatch")
         return {"status":"PASS","sha":sha,"cases":56,"javaTests":81,
-                "surefireSha256":hashlib.sha256(raw).hexdigest(),"manifests":results}
+                "surefireSha256":hashlib.sha256(raw).hexdigest(),"manifests":results,
+                "checkoutLineage":{"schema":c.SCHEMA,"cases":56,
+                    "sha256":hashlib.sha256(lineage_path.read_bytes()).hexdigest()}}
 
 def verify_full_archive(archive, sha):
     files=safe_members(archive)

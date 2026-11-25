@@ -1,5 +1,6 @@
 """Archive boundary and manifest recomputation tests; no production evidence is minted."""
 import io
+from contextlib import contextmanager
 import json
 import unittest
 from unittest.mock import patch
@@ -24,22 +25,37 @@ class GlobalRet04ArtifactTest(unittest.TestCase):
                     "evidence":[{"method":m} for m in methods]}
             self.files[g.TARGET+name]=json.dumps(report).encode()
             self.reports.append((name,report,count,schema))
+        self.lineage={"schema":g.c.SCHEMA,"sha":SHA,"status":"PASS","cases":56,
+                      "surefireSha256":hashlib.sha256(self.raw).hexdigest(),
+                      "evidence":[{"method":m} for m in sorted(g.CORE)]}
+        self.files[g.TARGET+"ret04-e6c-manifest.json"]=json.dumps(self.lineage).encode()
     def archive(self,files=None):
         data=io.BytesIO()
         with zipfile.ZipFile(data,"w") as z:
             for p,v in (self.files if files is None else files).items():
                 z.writestr(p,v)
         return zipfile.ZipFile(data)
+    @contextmanager
     def mock_verifiers(self):
         # Test the archive composition boundary only. Real D/A/B SQL
         # verifiers have their own tests and execute against real CI artifacts.
         entries=tuple((n,lambda *args, report=r:report,c,s) for n,r,c,s in self.reports)
-        return patch.object(g,"MANIFESTS",entries)
+        with patch.object(g,"MANIFESTS",entries),patch.object(g.c,"verify",return_value=self.lineage):
+            yield
     def test_three_independently_recomputed_manifests(self):
         with self.mock_verifiers(),self.archive() as z:
             result=g.verify_target_archive(z,SHA)
         self.assertEqual(result["cases"],56)
         self.assertEqual(len(result["manifests"]),3)
+        self.assertEqual(result["checkoutLineage"]["cases"],56)
+    def test_checkout_lineage_tamper(self):
+        self.files[g.TARGET+"ret04-e6c-manifest.json"]=b'{"status":"PASS"}'
+        with self.mock_verifiers(),self.archive() as z,self.assertRaisesRegex(ValueError,"lineage manifest differs"):
+            g.verify_target_archive(z,SHA)
+    def test_checkout_lineage_missing(self):
+        del self.files[g.TARGET+"ret04-e6c-manifest.json"]
+        with self.mock_verifiers(),self.archive() as z,self.assertRaisesRegex(ValueError,"missing RET04 checkout lineage"):
+            g.verify_target_archive(z,SHA)
     def test_wrong_sha(self):
         with self.archive() as z,self.assertRaisesRegex(ValueError,"SHA mismatch"):
             g.verify_target_archive(z,"b"*40)
