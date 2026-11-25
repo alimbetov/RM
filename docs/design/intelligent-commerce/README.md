@@ -60,4 +60,26 @@ Before implementation: verified PR #9 core merge and mandatory exact-SHA CI, rec
 - D-07 final branch integration target after PR #9.
 All are design questions, not approved decisions.
 
-Next: D00/D01 — exact source-to-fact-to-metric-to-view-to-signal traceability and shared semantic contract draft.
+Next: review the detailed R2.0-draft package below, resolve slice decisions, then after Q1 execute IE-00B/A3. D00/D01 source/design drafts now exist; runtime admission remains OPEN.
+
+
+## 8. Detailed R2.0-draft — current-project alignment, 2026-11-25
+Source review pinned to base_dev `d9242e539a07ef1843c0e72aba9c651204bf42ae`; design parent `f5c86672e36dabb1445265c9276195d844e1a1f9`. User requested detailed elaboration and alignment with current project. All artifacts below are design proposals/source review, not implementation approval or tests PASS.
+
+| Iteration | Document | Main result |
+|---|---|---|
+| D00 | [Project alignment](D00-PROJECT-ALIGNMENT-R2.md) | 14 source findings, branch drift and current gate snapshot |
+| D01 | [Shared contracts](D01-SEMANTIC-SECURITY-EVENT-CONTRACTS-R2.md) | Grain/time/quality, IAM, event identity, replay and retention |
+| D02 | [Metric passports and oracles](D02-METRIC-CATALOG-AND-ORACLES-R2.md) | 8 metrics, SQL sketches, numeric business fixture, L1/L2 |
+| D03/D04 | [Customer and Warehouse 360](D03-D04-CUSTOMER-WAREHOUSE-R2.md) | Scoped read cases, stock reconciliation, ABC/XYZ methods |
+| D05 | [Event Builder](D05-EVENT-BUILDER-DELIVERY-R2.md) | Policy revisions, occurrence binding, audience, lease/fencing/crash |
+| D06 | [Future Radar](D06-RADAR-FUTURE-CONTRACTS-R2.md) | Signal identity, explanation, partial top-K and resumption boundaries |
+| D07 | [Scenario qualification](D07-SCENARIOS-QUALIFICATION-R2.md) | 40 detailed scenario rows, 11 owner-test reuse references |
+| D08 | [Decisions and admission](D08-DECISIONS-AND-ADMISSION-R2.md) | 15 concrete OPEN recommendations, staged handoff |
+| Registry | [Traceability JSON](TRACEABILITY-R2.json) | 22 sources / 8 metrics / 88 original families; source blob SHAs |
+
+The original 88 acceptance families remain 32 IE-Q + 48 BV + 8 MC. The 40 detailed rows overlap these families and are not 40 new passed tests. Existing RAD/CAL/F2R/BSR obligations remain independent normative dependencies. New R2 parameters are PROPOSED, see D08. Master R1.1 and execution DAG remain operative; synchronize canonical documents after design decisions are approved, not by silently replacing them with a draft.
+
+Documentation validation: counts/IDs, links and source symbols, DAG 32/48 and acyclicity, hand arithmetic and docs-only diff. Runtime tests/migrations/load not executed for this design pass. No code, schema, CI, dependency or test changes.
+
+Pre-save drift checked through base_dev `d1019e6acdb04a5c9a03da79d0f9232649723ead`: RET04 proof/test changes only, no production service/schema delta; source analysis remains pinned as above. Details and limitations: D00 §6.
