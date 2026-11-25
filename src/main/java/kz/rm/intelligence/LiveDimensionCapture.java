@@ -7,24 +7,31 @@ import java.util.UUID;
 /** Operation-time snapshots only. Historical backfill must never use today's master data. */
 final class LiveDimensionCapture {
     private LiveDimensionCapture(){}
-    private record Territory(long source,Long parent,String code,int level,boolean deleted){}
+    private record Territory(long source,Long parent,String code,int level,boolean deleted,String type){}
     record Geo(String region,String quality){}
     static Geo resolve(JdbcTemplate jdbc,String code){
+        if(code==null||!code.matches("[0-9]{9}"))return new Geo(null,"UNKNOWN");
         Territory node=jdbc.query("""
-            SELECT source_id,parent_source_id,code,level_no,is_deleted
+            SELECT source_id,parent_source_id,code,level_no,is_deleted,territory_type
             FROM public.ref_kato_territory WHERE code=?
             """,rs->rs.next()?new Territory(rs.getLong(1),rs.getObject(2,Long.class),rs.getString(3),
-                rs.getInt(4),rs.getBoolean(5)):null,code);
+                rs.getInt(4),rs.getBoolean(5),rs.getString(6)):null,code);
         var seen=new HashSet<Long>();
+        int previousLevel=Integer.MAX_VALUE;
         for(int depth=0;node!=null&&depth<32;depth++){
-            if(node.deleted()||!seen.add(node.source()))break;
-            if(node.level()==2)return new Geo(node.code(),"RESOLVED");
-            if(node.level()<2||node.parent()==null)break;
+            if(node.deleted()||!seen.add(node.source())||node.level()>=previousLevel
+                ||!node.code().startsWith(code.substring(0,2)))break;
+            if("OBLAST".equals(node.type())||"REPUBLICAN_CITY".equals(node.type())){
+                if(node.parent()==null)return new Geo(node.code(),"RESOLVED");
+                break;
+            }
+            if(node.parent()==null)break;
+            previousLevel=node.level();
             node=jdbc.query("""
-                SELECT source_id,parent_source_id,code,level_no,is_deleted
+                SELECT source_id,parent_source_id,code,level_no,is_deleted,territory_type
                 FROM public.ref_kato_territory WHERE source_id=?
                 """,rs->rs.next()?new Territory(rs.getLong(1),rs.getObject(2,Long.class),rs.getString(3),
-                    rs.getInt(4),rs.getBoolean(5)):null,node.parent());
+                    rs.getInt(4),rs.getBoolean(5),rs.getString(6)):null,node.parent());
         }
         return new Geo(null,"UNKNOWN");
     }

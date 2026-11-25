@@ -11,6 +11,9 @@ public class KatoTerritoryEntity {
     @Column(name="parent_source_id") private Long parentSourceId;
     @Column(name="level_no",nullable=false) private Integer level;
     @Column(name="area_type",nullable=false) private Integer areaType;
+    @Enumerated(EnumType.STRING)
+    @Column(name="territory_type",nullable=false,length=32) private KatoTerritoryType territoryType;
+    @Column(name="semantic_release",length=10) private String semanticRelease;
     @Column(name="name_kk",nullable=false,length=300) private String nameKk;
     @Column(name="name_ru",nullable=false,length=300) private String nameRu;
     @Column(name="name_en",nullable=false,length=400) private String nameEng;
@@ -21,6 +24,8 @@ public class KatoTerritoryEntity {
     public Long getParentSourceId(){return parentSourceId;}
     public Integer getLevel(){return level;}
     public Integer getAreaType(){return areaType;}
+    public KatoTerritoryType getTerritoryType(){return territoryType;}
+    public String getSemanticRelease(){return semanticRelease;}
     public String getNameKk(){return nameKk;}
     public String getNameRu(){return nameRu;}
     public String getNameEng(){return nameEng;}

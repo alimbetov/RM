@@ -39,6 +39,11 @@ class KatoAuditTest(unittest.TestCase):
         manifest = json.loads((root / "src/main/resources/kato-admin-release.json").read_text(encoding="utf-8"))
         result = audit_admin(raw, manifest)
         self.assertEqual(result["administrativeRows"], 375)
+        self.assertEqual(result["semanticTypes"]["CITY"], 87)
+        tampered = json.loads(json.dumps(manifest))
+        tampered["territoryTypes"]["CITY"][0] = tampered["territoryTypes"]["DISTRICT"][0]
+        with self.assertRaises(ValueError):
+            audit_admin(raw, tampered)
         self.assertEqual(result["administrativeCoverage"], "STRUCTURALLY_COMPLETE")
         self.assertEqual(result["directoryCoverage"], "HOLD")
         self.assertEqual(result["activationAdmission"], "HOLD")

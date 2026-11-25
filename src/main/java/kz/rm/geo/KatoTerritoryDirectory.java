@@ -13,7 +13,10 @@ public class KatoTerritoryDirectory {
 
     @Transactional(readOnly=true)
     public List<KatoTerritoryView> eligibleForOrganizationLocation() {
-        return repo.findAll().stream().filter(x -> !x.isDeleted() && x.getLevel() <= 3)
+        var rows=repo.findAll();
+        var byId=new java.util.HashMap<Long,KatoTerritoryEntity>();
+        rows.forEach(row->byId.put(row.getSourceId(),row));
+        return rows.stream().filter(x -> KatoHierarchy.eligible(x,byId::get))
                 .sorted(java.util.Comparator.comparing(KatoTerritoryEntity::getCode))
                 .map(KatoTerritoryView::from).toList();
     }

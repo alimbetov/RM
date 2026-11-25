@@ -43,7 +43,7 @@ jobs:
           python3 .github/scripts/verify_rm_ie00b_a2_contracts.py
           python3 .github/scripts/verify_rm_ie00b_source_inventory.py
           python3 .github/scripts/test_verify_rm_kato_directory.py
-          python3 .github/scripts/verify_rm_kato_directory.py --admin-manifest src/main/resources/kato-admin-release.json --require-admin-complete
+          python3 .github/scripts/verify_rm_kato_directory.py --admin-manifest src/main/resources/kato-admin-release.json --require-admin-complete --verify-semantic-migration src/main/resources/db/changelog/db.changelog-master.sql
           python3 .github/scripts/test_verify_rm_canonical_producer_inventory.py
           python3 .github/scripts/verify_rm_canonical_producer_inventory.py
       - name: Qualify migrated schema and pure B1 specifications
@@ -53,7 +53,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          expected={'migratedSourceColumnsAndOrderedTenantPrimaryKeys','sourceNumericAndTimestampTypesArePreserved','dstDaysUseCalendarNotFixedSeconds','decadeLeapMonthAndIsoWeekBoundaries','allSevenPeriodsAndVersion','invalidCalendarRejected','registryRejectsWrongSelectionAndVersion','allEightMetricDefinitionsAreExplicit','framingDistinguishesNullEmptyAndDelimiters','decimalScaleIsCanonical','fixedSalesV1V2GoldenVectors','fixedInventoryV1V2GoldenVectors','administrativeReleaseHasTwentyRegionsAndClosedParentChains'}
+          expected={'migratedSourceColumnsAndOrderedTenantPrimaryKeys','sourceNumericAndTimestampTypesArePreserved','dstDaysUseCalendarNotFixedSeconds','decadeLeapMonthAndIsoWeekBoundaries','allSevenPeriodsAndVersion','invalidCalendarRejected','registryRejectsWrongSelectionAndVersion','allEightMetricDefinitionsAreExplicit','framingDistinguishesNullEmptyAndDelimiters','decimalScaleIsCanonical','fixedSalesV1V2GoldenVectors','fixedInventoryV1V2GoldenVectors','administrativeReleaseHasTwentyRegionsAndClosedParentChains','semanticTypesAreExplicitAndLocationAdmissionIsNotNumericDepth'}
           cases=[c for p in Path('target/surefire-reports').glob('TEST-*.xml') for c in ET.parse(p).getroot().iter('testcase')]
           assert expected <= {c.get('name') for c in cases}
           assert not any(c.find(t) is not None for c in cases for t in ('failure','error','skipped'))

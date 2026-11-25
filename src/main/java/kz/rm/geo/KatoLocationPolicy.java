@@ -13,11 +13,11 @@ public class KatoLocationPolicy {
     private final KatoTerritoryRepository kato;
 
     public void requireOrganizationLocationEligible(String katoCode) {
-        if (katoCode == null || katoCode.isBlank())
-            throw new IllegalArgumentException("KATO code required");
+        if (katoCode == null || !katoCode.matches("[0-9]{9}"))
+            throw new IllegalArgumentException("KATO code must contain exactly nine ASCII digits");
         var territory=kato.findByCodeAndDeletedFalse(katoCode)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown or deleted KATO code"));
-        if (territory.getLevel()>3)
-            throw new IllegalArgumentException("KATO selection limited to oblast/district level");
+        if (!KatoHierarchy.eligible(territory,id->kato.findBySourceId(id).orElse(null)))
+            throw new IllegalArgumentException("KATO selection limited to approved administrative territories");
     }
 }

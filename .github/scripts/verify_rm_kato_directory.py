@@ -84,6 +84,22 @@ def audit_admin(raw, manifest):
             raise ValueError("KATO_ADMIN_PARENT_OUTSIDE_SCOPE")
     if {r["Code"] for r in rows if r["Id"] >= 1_000_000_000} != scope - set(manifest["legacySelectedCodes"]):
         raise ValueError("KATO_ADMIN_NEW_SCOPE_DRIFT")
+    types = manifest.get("territoryTypes", {})
+    expected = {"OBLAST":17,"REPUBLICAN_CITY":3,"DISTRICT":170,"CITY":87,
+                "CITY_DISTRICT":25,"CITY_ADMINISTRATION":71,"DISTRICT_ADMINISTRATION":2}
+    if set(types) != set(expected) or any(len(types[k]) != n for k,n in expected.items()):
+        raise ValueError("KATO_SEMANTIC_TYPES")
+    flattened = [int(code) for codes in types.values() for code in codes]
+    if len(flattened) != len(set(flattened)) or set(flattened) != scope:
+        raise ValueError("KATO_SEMANTIC_SCOPE")
+    if {int(c) for c in types["OBLAST"] + types["REPUBLICAN_CITY"]} != set(regions):
+        raise ValueError("KATO_SEMANTIC_REGION")
+    for code in scope:
+        row = by_code[code]
+        parent = by_id.get(row["Parent"])
+        if parent is not None and str(parent["Code"])[:2] != str(code)[:2]:
+            raise ValueError("KATO_SEMANTIC_FOREIGN_REGION")
+    report["semanticTypes"] = expected
     report["administrativeCoverage"] = "STRUCTURALLY_COMPLETE"
     report["administrativeRows"] = len(codes)
     report["releaseDate"] = manifest["releaseDate"]
@@ -96,14 +112,29 @@ def main():
     parser.add_argument("--expected-sha256")
     parser.add_argument("--admin-manifest", type=Path)
     parser.add_argument("--require-admin-complete", action="store_true")
+    parser.add_argument("--verify-semantic-migration", type=Path)
     parser.add_argument("--require-complete", action="store_true")
     args = parser.parse_args()
     try:
         raw = args.file.read_bytes()
         result = audit_admin(raw, json.loads(args.admin_manifest.read_text(encoding="utf-8"))) if args.admin_manifest else audit(raw)
+        if args.verify_semantic_migration:
+            if not args.admin_manifest:
+                raise ValueError("KATO_SEMANTIC_MANIFEST_REQUIRED")
+            import re
+            manifest = json.loads(args.admin_manifest.read_text(encoding="utf-8"))
+            sql = args.verify_semantic_migration.read_text(encoding="utf-8")
+            block = sql.split("--changeset rm:0201-kato-semantic-administrative-types", 1)[1].split("--changeset",1)[0]
+            parsed = {}
+            for kind, values in re.findall(r"UPDATE public\.ref_kato_territory SET territory_type='([A-Z_]+)',semantic_release='2026-11-17'\s+WHERE code IN \(([^;]+)\);",block):
+                if kind in parsed:
+                    raise ValueError("KATO_SEMANTIC_SQL_DUPLICATE")
+                parsed[kind] = sorted(re.findall(r"'([0-9]{9})'",values))
+            if parsed != {k:sorted(v) for k,v in manifest["territoryTypes"].items()}:
+                raise ValueError("KATO_SEMANTIC_SQL_DRIFT")
         if args.require_admin_complete and result.get("administrativeCoverage") != "STRUCTURALLY_COMPLETE":
             raise ValueError("KATO_ADMIN_REQUIRED")
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
         print(json.dumps({"directoryCoverage":"INVALID","activationAdmission":"HOLD","error":str(error)}))
         return 1
     print(json.dumps(result, indent=2))

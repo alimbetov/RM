@@ -6164,3 +6164,84 @@ CREATE TRIGGER trg_int_coverage_fence_no_truncate BEFORE TRUNCATE ON crm.int_cov
 --rollback DROP TRIGGER trg_int_source_rev_4 ON crm.int_sales_line_dimension;
 --rollback DROP TRIGGER trg_int_source_rev_5 ON crm.int_movement_dimension;
 --rollback DROP FUNCTION crm.int_bump_source_revision();
+
+
+--changeset rm:0201-kato-semantic-administrative-types
+-- Explicit release mapping; level_no remains legacy structural depth, never a business type.
+ALTER TABLE public.ref_kato_territory ADD COLUMN territory_type VARCHAR(32) NOT NULL DEFAULT 'LEGACY_OTHER';
+ALTER TABLE public.ref_kato_territory ADD COLUMN semantic_release VARCHAR(10);
+UPDATE public.ref_kato_territory SET territory_type='OBLAST',semantic_release='2026-11-17'
+ WHERE code IN ('100000000','110000000','150000000','190000000','230000000','270000000','310000000','330000000','350000000','390000000','430000000','470000000','550000000','590000000','610000000','620000000','630000000');
+UPDATE public.ref_kato_territory SET territory_type='CITY',semantic_release='2026-11-17'
+ WHERE code IN ('101010000','101810000','103620100','104221100','111010000','111610000','111810000','113220100','113820100','114020100','114520100','114620100','114820100','115420100','117020100','151010000','153220100','154820100','154823100','154825100','155621100','156020100','156420100','191010000','191810000','194020100','195220100','196220100','231010000','233620100','271010000','273620100','311010000','316020100','316220100','316621100','331010000','331810000','333420100','334420100','334620100','334820100','351010000','351610000','352110000','352210000','352410000','352810000','353220100','354820100','391010000','391610000','392010000','392410000','394420100','395420100','431010000','431910000','433220100','434423100','471010000','471810000','475220100','551010000','551610000','552210000','591010000','593620100','595220100','595620100','596020100','611010000','611610000','612010000','613820100','615420100','615820100','616420100','621010000','621810000','622010000','631010000','632410000','634620100','634820100','634821100','636820100');
+UPDATE public.ref_kato_territory SET territory_type='CITY_ADMINISTRATION',semantic_release='2026-11-17'
+ WHERE code IN ('101000000','101800000','103620000','104221000','111000000','111600000','111800000','113220000','114520000','117020000','151000000','153220000','154820000','154823000','154825000','155621000','156420000','191000000','191800000','194020000','195220000','196220000','231000000','233620000','271000000','273620000','311000000','316621000','331000000','331800000','333420000','334420000','334620000','334820000','351000000','351600000','352100000','352200000','352400000','352800000','353220000','391000000','391600000','392000000','392400000','395420000','431000000','431900000','433220000','434423000','471000000','471800000','551000000','551600000','552200000','591000000','593620000','595220000','595620000','596020000','611000000','611600000','612000000','621000000','621800000','622000000','631000000','632400000','634620000','634820000','636820000');
+UPDATE public.ref_kato_territory SET territory_type='DISTRICT',semantic_release='2026-11-17'
+ WHERE code IN ('103200000','103400000','103600000','103800000','104000000','104100000','104200000','104400000','104500000','104600000','113200000','113400000','113600000','113800000','114000000','114400000','114500000','114600000','114800000','115200000','115400000','115600000','116000000','116400000','116600000','116800000','117000000','153200000','153400000','153600000','154000000','154200000','154600000','154800000','155200000','155600000','156000000','156400000','156800000','193600000','194000000','194200000','194400000','195200000','195800000','196200000','196600000','196800000','233600000','234000000','234200000','234600000','234800000','235200000','235600000','273200000','273600000','274000000','274200000','274400000','274800000','275000000','275400000','275800000','276000000','276200000','276600000','313600000','314000000','314200000','314800000','315000000','315400000','315600000','316000000','316200000','316600000','333200000','333400000','333600000','334000000','334200000','334400000','334600000','334800000','353200000','353600000','354000000','354800000','355200000','355600000','356400000','393200000','393400000','393600000','394000000','394200000','394400000','394800000','395000000','395200000','395400000','395600000','395800000','396200000','396400000','396600000','396800000','433200000','433600000','434000000','434400000','434600000','434800000','435200000','473600000','474200000','474600000','475000000','475200000','553200000','553600000','554200000','554600000','554800000','555200000','555600000','556000000','556400000','556800000','593200000','593400000','593600000','594200000','594600000','595000000','595200000','595600000','595800000','596000000','596200000','596400000','596600000','613600000','613800000','613900000','614000000','614400000','614600000','614800000','615200000','615400000','615500000','615600000','615800000','616000000','616400000','623600000','623800000','634000000','634600000','634800000','635200000','635400000','635500000','635600000','635800000','636200000','636300000','636800000');
+UPDATE public.ref_kato_territory SET territory_type='REPUBLICAN_CITY',semantic_release='2026-11-17'
+ WHERE code IN ('710000000','750000000','790000000');
+UPDATE public.ref_kato_territory SET territory_type='CITY_DISTRICT',semantic_release='2026-11-17'
+ WHERE code IN ('151011100','151013100','311011100','311013100','351011100','351013100','711110000','711210000','711310000','711410000','711510000','711610000','751110000','751210000','751310000','751410000','751510000','751710000','751810000','751910000','791110000','791310000','791510000','791710000','791910000');
+UPDATE public.ref_kato_territory SET territory_type='DISTRICT_ADMINISTRATION',semantic_release='2026-11-17'
+ WHERE code IN ('351011000','351013000');
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_code_format
+ CHECK(REGEXP_LIKE(code,'^[0-9]{9}$'));
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_semantic_type
+ CHECK(territory_type IN ('OBLAST','REPUBLICAN_CITY','DISTRICT','CITY','CITY_DISTRICT','CITY_ADMINISTRATION','DISTRICT_ADMINISTRATION','LEGACY_OTHER'));
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_semantic_release
+ CHECK((territory_type='LEGACY_OTHER' AND semantic_release IS NULL) OR
+       (territory_type<>'LEGACY_OTHER' AND semantic_release IS NOT NULL));
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_semantic_root
+ CHECK(territory_type='LEGACY_OTHER' OR
+       (territory_type IN ('OBLAST','REPUBLICAN_CITY') AND parent_source_id IS NULL) OR
+       (territory_type NOT IN ('OBLAST','REPUBLICAN_CITY') AND parent_source_id IS NOT NULL));
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_semantic_root;
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_semantic_release;
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_semantic_type;
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_code_format;
+--rollback ALTER TABLE public.ref_kato_territory DROP COLUMN semantic_release;
+--rollback ALTER TABLE public.ref_kato_territory DROP COLUMN territory_type;
+
+--changeset rm:0202-kato-semantic-region-admission dbms:postgresql splitStatements:false
+-- Use one explicit root type and the stored parent chain; no inferred parent from a prefix.
+CREATE FUNCTION crm.int_resolve_semantic_region(p_code VARCHAR) RETURNS VARCHAR LANGUAGE plpgsql STABLE AS $$
+DECLARE node RECORD; next_source BIGINT; previous_level INTEGER:=2147483647;
+ visited BIGINT[]:=ARRAY[]::BIGINT[];
+BEGIN
+ IF p_code IS NULL OR p_code !~ '^[0-9]{9}$' THEN RETURN NULL; END IF;
+ SELECT source_id,parent_source_id,code,level_no,is_deleted,territory_type INTO node
+ FROM public.ref_kato_territory WHERE code=p_code;
+ FOR depth IN 1..32 LOOP
+   EXIT WHEN node.source_id IS NULL OR node.is_deleted OR node.source_id=ANY(visited)
+      OR node.level_no>=previous_level OR left(node.code,2)<>left(p_code,2);
+   visited:=array_append(visited,node.source_id);
+   IF node.territory_type IN ('OBLAST','REPUBLICAN_CITY') THEN
+     IF node.parent_source_id IS NULL THEN RETURN node.code; END IF;
+     EXIT;
+   END IF;
+   EXIT WHEN node.parent_source_id IS NULL;
+   previous_level:=node.level_no;
+   next_source:=node.parent_source_id;
+   SELECT source_id,parent_source_id,code,level_no,is_deleted,territory_type INTO node
+   FROM public.ref_kato_territory WHERE source_id=next_source;
+ END LOOP;
+ RETURN NULL;
+END; $$;
+CREATE OR REPLACE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE actual_kato VARCHAR(16); expected_region VARCHAR(16);
+BEGIN
+ SELECT l.kato_code INTO actual_kato FROM public.org_location l
+ WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;
+ IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ expected_region:=crm.int_resolve_semantic_region(actual_kato);
+ IF expected_region IS DISTINCT FROM NEW.region_code OR
+    NEW.geo_quality IS DISTINCT FROM
+       (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+--rollback CREATE OR REPLACE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE actual_kato VARCHAR(16); node RECORD; next_source BIGINT;  expected_region VARCHAR(16); visited BIGINT[] := ARRAY[]::BIGINT[]; BEGIN  SELECT l.kato_code INTO actual_kato FROM public.org_location l  WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;  IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN    RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';  END IF;  SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node  FROM public.ref_kato_territory WHERE code=actual_kato;  FOR depth IN 1..32 LOOP    EXIT WHEN node.source_id IS NULL;    EXIT WHEN node.is_deleted OR node.source_id=ANY(visited);    visited:=array_append(visited,node.source_id);    IF node.level_no=2 THEN expected_region:=node.code; EXIT; END IF;    EXIT WHEN node.level_no<2 OR node.parent_source_id IS NULL;    next_source:=node.parent_source_id;    SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node    FROM public.ref_kato_territory WHERE source_id=next_source;  END LOOP;  IF expected_region IS DISTINCT FROM NEW.region_code OR     NEW.geo_quality IS DISTINCT FROM        (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN    RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';  END IF;  RETURN NEW; END; $$;
+--rollback DROP FUNCTION crm.int_resolve_semantic_region(VARCHAR);
