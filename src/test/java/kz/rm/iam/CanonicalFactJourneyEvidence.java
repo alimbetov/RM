@@ -42,6 +42,9 @@ final class CanonicalFactJourneyEvidence {
         boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
             c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
         if(pg){
+            assertThat(jdbc.queryForObject("SELECT booked_snapshot_sealed FROM crm.sales_order WHERE tenant_id=? AND id=?",Boolean.class,tenant,order)).isTrue();
+            assertThatThrownBy(()->copyLine(jdbc,tenant,order,order)).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("SALES_BOOKED_SNAPSHOT_SEALED");
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.sales_order SET booked_snapshot_sealed=FALSE WHERE tenant_id=? AND id=?",tenant,order)).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("SALES_BOOKED_SNAPSHOT_IMMUTABLE");
             assertThatThrownBy(()->jdbc.update("UPDATE crm.sales_order_status_event SET occurred_at=occurred_at WHERE tenant_id=? AND id=?",tenant,event)).isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThatThrownBy(()->jdbc.update("UPDATE crm.sales_order SET total_amount=total_amount+1 WHERE tenant_id=? AND id=?",tenant,order)).isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThatThrownBy(()->jdbc.update("UPDATE crm.sales_order_line SET quantity=quantity WHERE tenant_id=? AND order_id=?",tenant,order)).isInstanceOf(org.springframework.dao.DataAccessException.class);
@@ -102,6 +105,113 @@ final class CanonicalFactJourneyEvidence {
         assertThatThrownBy(()->jdbc.update("UPDATE crm.inv_stock_movement SET delta_quantity=delta_quantity WHERE tenant_id=? AND id=?",tenant,movement))
             .isInstanceOf(org.springframework.dao.DataAccessException.class);
     }
+    /** Synthetic isolated owner source, after the BUS metric assertions. */
+    static void sealingRace(JdbcTemplate jdbc,PlatformTransactionManager manager,UUID tenant,UUID templateOrder){
+        boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
+        if(!pg)return;
+        var tx=new TransactionTemplate(manager);
+        UUID order=UUID.randomUUID(),event=UUID.randomUUID();
+        tx.executeWithoutResult(s->{
+            assertThat(jdbc.update("""
+                INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
+                SELECT tenant_id,?,pending_email_identity_id,buyer_user_id,'PLACED',total_amount,currency,created_at,fulfillment_mode
+                FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,order,tenant,templateOrder)).isEqualTo(1);
+            copyLine(jdbc,tenant,templateOrder,order);
+        });
+        assertThat(jdbc.queryForObject("SELECT booked_snapshot_sealed FROM crm.sales_order WHERE tenant_id=? AND id=?",Boolean.class,tenant,order)).isFalse();
+        var workers=Executors.newFixedThreadPool(2);
+        var sealed=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var contender=new AtomicReference<Integer>();
+        var holder=new AtomicReference<Integer>();
+        try{
+            Future<?> first=workers.submit(()->tx.executeWithoutResult(s->{
+                holder.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                jdbc.update("INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at) VALUES (?,?,?,'PLACED',CURRENT_TIMESTAMP)",tenant,event,order);
+                sealed.countDown();
+                await(finish);
+            }));
+            await(sealed);
+            Future<?> second=workers.submit(()->{
+                assertThatThrownBy(()->tx.executeWithoutResult(s->{
+                    contender.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                    copyLine(jdbc,tenant,templateOrder,order);
+                })).isInstanceOf(org.springframework.dao.DataAccessException.class)
+                    .hasStackTraceContaining("SALES_BOOKED_SNAPSHOT_SEALED");
+            });
+            awaitBlocked(jdbc,contender,holder);
+            finish.countDown();
+            first.get(30,TimeUnit.SECONDS);
+            second.get(30,TimeUnit.SECONDS);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",Integer.class,tenant,order)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT booked_snapshot_sealed FROM crm.sales_order WHERE tenant_id=? AND id=?",Boolean.class,tenant,order)).isTrue();
+        }catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+         catch(ExecutionException|TimeoutException e){throw new AssertionError("Concurrent source sealing failed",e);}
+        finally{finish.countDown();workers.shutdownNow();}
+    }
+
+    static void concurrentRollbackOnPostgres(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                             CanonicalFactAppender appender,UUID tenant,UUID order){
+        boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
+        if(!pg)return;
+        UUID event=statusEvent(jdbc,tenant,order,"PLACED");
+        var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event);
+        assertThat(count(jdbc,tenant,event)).isZero();
+        var tx=new TransactionTemplate(manager);
+        tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        var workers=Executors.newFixedThreadPool(2);
+        var inserted=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var holder=new AtomicReference<Integer>();
+        var contender=new AtomicReference<Integer>();
+        try{
+            Future<?> first=workers.submit(()->tx.executeWithoutResult(s->{
+                holder.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+                inserted.countDown();
+                await(finish);
+                s.setRollbackOnly();
+            }));
+            await(inserted);
+            Future<CanonicalFactAppender.Outcome> second=workers.submit(()->tx.execute(s->{
+                contender.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                return appender.append(key);
+            }));
+            awaitBlocked(jdbc,contender,holder);
+            finish.countDown();
+            first.get(30,TimeUnit.SECONDS);
+            assertThat(second.get(30,TimeUnit.SECONDS)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+            assertThat(count(jdbc,tenant,event)).isEqualTo(1);
+        }catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+         catch(ExecutionException|TimeoutException e){throw new AssertionError("Concurrent rollback failed",e);}
+        finally{finish.countDown();workers.shutdownNow();}
+    }
+
+    private static void await(CountDownLatch latch){
+        try{if(!latch.await(20,TimeUnit.SECONDS))throw new AssertionError("Latch timeout");}
+        catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+    }
+    private static void awaitBlocked(JdbcTemplate jdbc,AtomicReference<Integer> contender,AtomicReference<Integer> holder)
+            throws InterruptedException{
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+        while(System.nanoTime()<deadline){
+            if(contender.get()!=null && holder.get()!=null && Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT ? = ANY(pg_blocking_pids(?))",Boolean.class,holder.get(),contender.get())))return;
+            Thread.sleep(50);
+        }
+        throw new AssertionError("Expected PostgreSQL lock dependency not observed");
+    }
+    private static void copyLine(JdbcTemplate jdbc,UUID tenant,UUID sourceOrder,UUID targetOrder){
+        assertThat(jdbc.update("""
+            INSERT INTO crm.sales_order_line(tenant_id,id,order_id,offer_id,title_snapshot,quantity,unit_price_snapshot,currency,catalog_item_id_snapshot,price_source)
+            SELECT tenant_id,?,?,offer_id,title_snapshot,quantity,unit_price_snapshot,currency,catalog_item_id_snapshot,price_source
+            FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+            """,UUID.randomUUID(),targetOrder,tenant,sourceOrder)).isEqualTo(1);
+    }
+
     private record Race(UUID event,CanonicalFactKey.Kind kind,int calls){}
     private record Attempt(int backend,CanonicalFactAppender.Outcome outcome){}
     private static void race(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,

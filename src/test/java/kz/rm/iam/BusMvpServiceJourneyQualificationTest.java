@@ -240,6 +240,7 @@ class BusMvpServiceJourneyQualificationTest {
             ()->checkout.checkout(store.slug(),"bus-rollback-"+UUID.randomUUID()+"@example.kz",
                 rollbackKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
         CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
+        CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
         calendar.append(owner,tenant,"Etc/UTC",0);
         var period=new kz.rm.intelligence.MetricSelection.PeriodChoice(
             kz.rm.intelligence.PeriodResolver.Code.Y,java.time.LocalDate.now(java.time.ZoneOffset.UTC),1);
@@ -255,5 +256,6 @@ class BusMvpServiceJourneyQualificationTest {
             kz.rm.intelligence.MetricRegistry.Code.PLACED_ORDERS,period))).isInstanceOf(SecurityException.class);
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
+        CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
     }
 }

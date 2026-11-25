@@ -5177,3 +5177,53 @@ CREATE TRIGGER trg_sales_booked_header_immutable BEFORE UPDATE ON crm.sales_orde
  FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_booked_header_mutation();
 --rollback DROP TRIGGER trg_sales_booked_header_immutable ON crm.sales_order;
 --rollback DROP FUNCTION crm.reject_sales_booked_header_mutation();
+
+
+--changeset rm:0181-sales-booked-snapshot-seal dbms:postgresql splitStatements:false
+-- Both checkout producers persist merchandise lines before their first status event.
+-- A committed historical status event seals the existing snapshot, not its historical completeness.
+ALTER TABLE crm.sales_order ADD COLUMN booked_snapshot_sealed BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE crm.sales_order o SET booked_snapshot_sealed=TRUE
+ WHERE EXISTS (SELECT 1 FROM crm.sales_order_status_event e
+               WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id);
+CREATE FUNCTION crm.reject_sales_snapshot_unseal() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.booked_snapshot_sealed AND NOT NEW.booked_snapshot_sealed
+ THEN RAISE EXCEPTION 'SALES_BOOKED_SNAPSHOT_IMMUTABLE'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_snapshot_no_unseal BEFORE UPDATE ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_snapshot_unseal();
+CREATE FUNCTION crm.seal_sales_booked_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE crm.sales_order SET booked_snapshot_sealed=TRUE
+ WHERE tenant_id=NEW.tenant_id AND id=NEW.order_id AND NOT booked_snapshot_sealed;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_snapshot_seal BEFORE INSERT ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.seal_sales_booked_snapshot();
+CREATE FUNCTION crm.reject_late_sales_order_line() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE sealed BOOLEAN;
+BEGIN
+ SELECT booked_snapshot_sealed INTO sealed FROM crm.sales_order
+ WHERE tenant_id=NEW.tenant_id AND id=NEW.order_id FOR NO KEY UPDATE;
+ IF sealed IS TRUE THEN RAISE EXCEPTION 'SALES_BOOKED_SNAPSHOT_SEALED'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_line_no_late_insert BEFORE INSERT ON crm.sales_order_line
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_late_sales_order_line();
+--rollback DROP TRIGGER trg_sales_line_no_late_insert ON crm.sales_order_line;
+--rollback DROP FUNCTION crm.reject_late_sales_order_line();
+--rollback DROP TRIGGER trg_sales_snapshot_seal ON crm.sales_order_status_event;
+--rollback DROP FUNCTION crm.seal_sales_booked_snapshot();
+--rollback DROP TRIGGER trg_sales_snapshot_no_unseal ON crm.sales_order;
+--rollback DROP FUNCTION crm.reject_sales_snapshot_unseal();
+--rollback ALTER TABLE crm.sales_order DROP COLUMN booked_snapshot_sealed;
+
+--changeset rm:0182-canonical-source-no-truncate dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_sales_line_no_truncate BEFORE TRUNCATE ON crm.sales_order_line
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_inv_movement_no_truncate BEFORE TRUNCATE ON crm.inv_stock_movement
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_inv_movement_no_truncate ON crm.inv_stock_movement;
+--rollback DROP TRIGGER trg_sales_line_no_truncate ON crm.sales_order_line;

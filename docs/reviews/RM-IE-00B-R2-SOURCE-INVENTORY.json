@@ -44,9 +44,9 @@
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
       "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "baselineBlob": "fb00bde7a0d48359c483b21a4ac921b982eba8fb",
+      "baselineBlob": "89e171cbb13da84a801c5cdb9797c306b092b23b",
       "status": "DRIFT",
-      "priorBaselineBlob": "27c4cc26883d54148c428b3ac5ceb9bee90edea3"
+      "priorBaselineBlob": "fb00bde7a0d48359c483b21a4ac921b982eba8fb"
     },
     {
       "path": "src/main/java/kz/rm/crm/ContractExpiryPolicy.java",
@@ -765,6 +765,6 @@
   ],
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
-  "lastObservedChangeset": "0172-task-radar-active-due-index",
-  "sourceInventoryRevision": "B2.1R source fence and journey evidence intentional changes"
+  "lastObservedChangeset": "0182-canonical-source-no-truncate",
+  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded"
 }
