@@ -8,7 +8,7 @@
       "sites": 2,
       "method": "checkoutInternal / negotiated checkout",
       "canonical": "ORDER_PLACED, one per accepted order",
-      "integration": "B2.2A.1: mandatory append after both owner event INSERT sites"
+      "integration": "B2.2A.1: mandatory append after both owner event INSERT sites; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
@@ -40,7 +40,7 @@
       "sites": 1,
       "method": "adjust",
       "canonical": "STOCK_MOVEMENT, includes return restock via delegation",
-      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
@@ -48,7 +48,7 @@
       "sites": 1,
       "method": "transition",
       "canonical": "STOCK_MOVEMENT per fulfillment; release excluded",
-      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
@@ -56,7 +56,7 @@
       "sites": 1,
       "method": "postLeg",
       "canonical": "STOCK_MOVEMENT × 2 per transfer",
-      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
@@ -64,7 +64,7 @@
       "sites": 1,
       "method": "post",
       "canonical": "STOCK_MOVEMENT per nonzero stocktake adjustment",
-      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
     }
   ],
   "delegates": [

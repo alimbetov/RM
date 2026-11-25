@@ -49,7 +49,7 @@ public class AutoOrderService {
     // The owner source is already persisted and sealed inside the caller transaction.
     // A new source must insert a new fact; a collision is not a checkout replay.
     private void appendPlacedFact(UUID tenant,UUID eventId) {
-        var outcome=canonicalFacts.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,
+        var outcome=canonicalFacts.appendLive(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,
             CanonicalFactKey.Kind.ORDER_PLACED,eventId));
         if(outcome!=CanonicalFactAppender.Outcome.INSERTED)
             throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");

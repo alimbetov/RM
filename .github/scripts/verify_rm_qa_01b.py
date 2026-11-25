@@ -99,6 +99,7 @@ REQUIRED_CASES = {
         ("BusMvpServiceJourneyQualificationTest", "canonicalTenantSourceCollisionPg"),
         ("BusMvpServiceJourneyQualificationTest", "p2CanonicalDurableDiscoveryReplayAndBackfillPg"),
         ("BusMvpServiceJourneyQualificationTest", "p3L1ProjectionParityAndLateDuplicatePg"),
+        ("BusMvpServiceJourneyQualificationTest", "b4RegionAndNomenclatureSnapshotsPg"),
         ("QrMvpServiceJourneyQualificationTest", "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"),
         ("QrMvpServiceJourneyQualificationTest", "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"),
         ("MvpServiceWarehouseAdmissionQualificationTest", "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"),
@@ -573,6 +574,7 @@ def verify():
                     "canonicalTenantSourceCollisionPg",
                     "p2CanonicalDurableDiscoveryReplayAndBackfillPg",
                     "p3L1ProjectionParityAndLateDuplicatePg",
+                    "b4RegionAndNomenclatureSnapshotsPg",
                 } and "CANONICAL_POSTGRESQL_REQUIRED" in reason and
                 "rm-mvp-w25-strict-pg-" + sha in alternatives):
             policy = "EXPECTED_SKIP_CONFIRMED"

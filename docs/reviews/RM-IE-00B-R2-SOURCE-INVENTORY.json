@@ -44,10 +44,10 @@
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
       "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "baselineBlob": "b8324c6bd3e8529f24de101fb31c28af3482f743",
+      "baselineBlob": "cdc695b8c3973277d863a0fe0b89c97bb6f3cd75",
       "status": "DRIFT",
       "priorBaselineBlob": "fb00bde7a0d48359c483b21a4ac921b982eba8fb",
-      "previousBaselineBlob": "dde80b04e4ca8c5b5bb328a088910b96246cb5de"
+      "previousBaselineBlob": "b8324c6bd3e8529f24de101fb31c28af3482f743"
     },
     {
       "path": "src/main/java/kz/rm/crm/ContractExpiryPolicy.java",
@@ -83,9 +83,9 @@
     {
       "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
       "designBlob": "a572038d74d4d0a15be588a270c11cadcf350407",
-      "baselineBlob": "efa40ffbb3dfee859135a5b8ce4b4a04a69af143",
+      "baselineBlob": "e81f26d420ca2e2cf48b2478cac14c62303d33f2",
       "status": "DRIFT",
-      "previousBaselineBlob": "a572038d74d4d0a15be588a270c11cadcf350407"
+      "previousBaselineBlob": "efa40ffbb3dfee859135a5b8ce4b4a04a69af143"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
@@ -103,9 +103,9 @@
     {
       "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
       "designBlob": "3b25e1bd965131d95ddab478492516b06e51c040",
-      "baselineBlob": "17e89594332f6daacbd36aebca7000658649a231",
+      "baselineBlob": "f0047773e4af5f4991e692554534c38e01c7b9e4",
       "status": "DRIFT",
-      "previousBaselineBlob": "3b25e1bd965131d95ddab478492516b06e51c040"
+      "previousBaselineBlob": "17e89594332f6daacbd36aebca7000658649a231"
     },
     {
       "path": "src/main/java/kz/rm/inventory/StockBalanceRepository.java",
@@ -134,9 +134,9 @@
     {
       "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
       "designBlob": "2e651d2094574a43eb0effd395d6816a911427ed",
-      "baselineBlob": "6abaec72cf1f07d8a8e139e859601571a8205a78",
+      "baselineBlob": "a5625926b103de602cd5d45eec4cbe92fc1ed27d",
       "status": "DRIFT",
-      "previousBaselineBlob": "2e651d2094574a43eb0effd395d6816a911427ed"
+      "previousBaselineBlob": "6abaec72cf1f07d8a8e139e859601571a8205a78"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesReturnQuarantineResolutionService.java",
@@ -147,9 +147,9 @@
     {
       "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
       "designBlob": "2d0eb7f5cc8d7b4d798f14f1db531ae103083fcc",
-      "baselineBlob": "b3f2c483e419bd668305df7c47d624047200486b",
+      "baselineBlob": "0700b7a8e0b7b3d31d450ef5c2d881740d2280c7",
       "status": "DRIFT",
-      "previousBaselineBlob": "2d0eb7f5cc8d7b4d798f14f1db531ae103083fcc"
+      "previousBaselineBlob": "b3f2c483e419bd668305df7c47d624047200486b"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryPostingVersion.java",

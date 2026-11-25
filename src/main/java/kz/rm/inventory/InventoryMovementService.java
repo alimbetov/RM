@@ -149,7 +149,7 @@ public class InventoryMovementService {
             """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now,reason.name(),
                 actorId,actorId==null?null:"STAFF",null,cause==null?null:cause.name(),
                 InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,locationId,itemId));
-        if(canonicalFacts.append(new CanonicalFactKey(tenantId,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,id))
+        if(canonicalFacts.appendLive(new CanonicalFactKey(tenantId,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,id))
                 !=CanonicalFactAppender.Outcome.INSERTED)
             throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
         return new Movement(id,tenantId,locationId,itemId,delta,before,after);

@@ -165,7 +165,7 @@ public class InventoryReservationService {
                     stock.onHand(),afterOnHand,now,now,reservationId,
                     actorId,"SALES_ORDER",current.orderId(),
                     InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,current.locationId(),current.itemId()));
-            if(canonicalFacts.append(new CanonicalFactKey(tenantId,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
+            if(canonicalFacts.appendLive(new CanonicalFactKey(tenantId,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
                     !=CanonicalFactAppender.Outcome.INSERTED)
                 throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
         }

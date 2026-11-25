@@ -48,6 +48,16 @@ public class CanonicalFactAppender {
             Timestamp.from(fact.occurred()),fact.recorded()==null?null:Timestamp.from(fact.recorded()),fact.sourceVersion(),digest);
         return changed==1?Outcome.INSERTED:verify(existing(key),fact,legacy,digest);
     }
+    /** Live booking/movement: dimensions share the owner transaction with the canonical fact.
+     * Historical replays deliberately use append(), without capturing today's master data. */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public Outcome appendLive(CanonicalFactKey key){
+        if(key.kind()!=CanonicalFactKey.Kind.ORDER_PLACED && key.kind()!=CanonicalFactKey.Kind.STOCK_MOVEMENT)
+            throw new IllegalArgumentException("DIMENSION_LIVE_KIND");
+        Outcome outcome=append(key);
+        if(outcome==Outcome.INSERTED)LiveDimensionCapture.capture(jdbc,key);
+        return outcome;
+    }
     private Stored existing(CanonicalFactKey k){
         return jdbc.query("""
             SELECT schema_version,digest,subject_id,occurred_at,recorded_at,source_version

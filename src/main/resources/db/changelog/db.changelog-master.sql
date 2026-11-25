@@ -5426,3 +5426,107 @@ CREATE TRIGGER trg_int_l1_coverage_no_truncate BEFORE TRUNCATE ON crm.int_projec
 --rollback DROP TRIGGER trg_int_l1_coverage_immutable ON crm.int_projection_coverage;
 --rollback DROP TRIGGER trg_int_l1_generation_no_truncate ON crm.int_projection_generation;
 --rollback DROP TRIGGER trg_int_l1_generation_immutable ON crm.int_projection_generation;
+
+
+--changeset rm:0190-catalog-group-classification
+ALTER TABLE crm.cat_item ADD CONSTRAINT uq_cat_item_kind_identity UNIQUE(tenant_id,id,kind);
+CREATE TABLE crm.cat_group_node (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ id UUID NOT NULL,
+ kind VARCHAR(20) NOT NULL CHECK(kind IN ('PRODUCT','SERVICE')),
+ group_code VARCHAR(80) NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ parent_id UUID,
+ label VARCHAR(240) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,id,kind),
+ UNIQUE(tenant_id,kind,group_code,revision),
+ FOREIGN KEY(tenant_id,parent_id,kind) REFERENCES crm.cat_group_node(tenant_id,id,kind),
+ CHECK(parent_id IS NULL OR parent_id<>id)
+);
+CREATE TABLE crm.cat_group_assignment (
+ tenant_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ kind VARCHAR(20) NOT NULL,
+ group_id UUID NOT NULL,
+ assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,item_id,revision),
+ UNIQUE(tenant_id,item_id,revision,group_id),
+ FOREIGN KEY(tenant_id,item_id,kind) REFERENCES crm.cat_item(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,group_id,kind) REFERENCES crm.cat_group_node(tenant_id,id,kind)
+);
+--rollback DROP TABLE crm.cat_group_assignment;
+--rollback DROP TABLE crm.cat_group_node;
+--rollback ALTER TABLE crm.cat_item DROP CONSTRAINT uq_cat_item_kind_identity;
+
+--changeset rm:0191-int-dimension-snapshots
+-- Historical absence is not reconstructed from today's master data.
+CREATE TABLE crm.int_sales_line_dimension (
+ tenant_id UUID NOT NULL,
+ line_id UUID NOT NULL,
+ item_id UUID,
+ item_kind VARCHAR(20),
+ group_id UUID,
+ assignment_revision BIGINT,
+ captured_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,line_id),
+ FOREIGN KEY(tenant_id,line_id) REFERENCES crm.sales_order_line(tenant_id,id),
+ FOREIGN KEY(tenant_id,item_id,item_kind) REFERENCES crm.cat_item(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,item_id,assignment_revision,group_id) REFERENCES crm.cat_group_assignment(tenant_id,item_id,revision,group_id),
+ CHECK((item_id IS NULL AND item_kind IS NULL) OR (item_id IS NOT NULL AND item_kind IS NOT NULL)),
+ CHECK((group_id IS NULL AND assignment_revision IS NULL) OR
+   (group_id IS NOT NULL AND assignment_revision IS NOT NULL AND item_id IS NOT NULL))
+);
+CREATE TABLE crm.int_movement_dimension (
+ tenant_id UUID NOT NULL,
+ movement_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ item_kind VARCHAR(20) NOT NULL,
+ group_id UUID,
+ assignment_revision BIGINT,
+ location_id UUID NOT NULL,
+ kato_code VARCHAR(16) NOT NULL,
+ region_code VARCHAR(16),
+ geo_quality VARCHAR(16) NOT NULL CHECK(geo_quality IN ('RESOLVED','UNKNOWN')),
+ captured_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,movement_id),
+ FOREIGN KEY(tenant_id,movement_id) REFERENCES crm.inv_stock_movement(tenant_id,id),
+ FOREIGN KEY(tenant_id,item_id,item_kind) REFERENCES crm.cat_item(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,item_id,assignment_revision,group_id) REFERENCES crm.cat_group_assignment(tenant_id,item_id,revision,group_id),
+ FOREIGN KEY(tenant_id,location_id) REFERENCES public.org_location(workspace_id,id),
+ CHECK((group_id IS NULL AND assignment_revision IS NULL) OR
+       (group_id IS NOT NULL AND assignment_revision IS NOT NULL)),
+ CHECK((geo_quality='RESOLVED' AND region_code IS NOT NULL) OR (geo_quality='UNKNOWN' AND region_code IS NULL))
+);
+CREATE INDEX idx_int_movement_dimension_geo ON crm.int_movement_dimension(tenant_id,region_code,group_id);
+CREATE INDEX idx_int_sales_dimension_group ON crm.int_sales_line_dimension(tenant_id,group_id,line_id);
+--rollback DROP TABLE crm.int_movement_dimension;
+--rollback DROP TABLE crm.int_sales_line_dimension;
+
+--changeset rm:0192-int-dimension-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_cat_group_node_immutable BEFORE UPDATE OR DELETE ON crm.cat_group_node
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_cat_group_node_no_truncate BEFORE TRUNCATE ON crm.cat_group_node
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_cat_group_assignment_immutable BEFORE UPDATE OR DELETE ON crm.cat_group_assignment
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_cat_group_assignment_no_truncate BEFORE TRUNCATE ON crm.cat_group_assignment
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_sales_dim_immutable BEFORE UPDATE OR DELETE ON crm.int_sales_line_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_sales_dim_no_truncate BEFORE TRUNCATE ON crm.int_sales_line_dimension
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_movement_dim_immutable BEFORE UPDATE OR DELETE ON crm.int_movement_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_movement_dim_no_truncate BEFORE TRUNCATE ON crm.int_movement_dimension
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_movement_dim_no_truncate ON crm.int_movement_dimension;
+--rollback DROP TRIGGER trg_int_movement_dim_immutable ON crm.int_movement_dimension;
+--rollback DROP TRIGGER trg_int_sales_dim_no_truncate ON crm.int_sales_line_dimension;
+--rollback DROP TRIGGER trg_int_sales_dim_immutable ON crm.int_sales_line_dimension;
+--rollback DROP TRIGGER trg_cat_group_assignment_no_truncate ON crm.cat_group_assignment;
+--rollback DROP TRIGGER trg_cat_group_assignment_immutable ON crm.cat_group_assignment;
+--rollback DROP TRIGGER trg_cat_group_node_no_truncate ON crm.cat_group_node;
+--rollback DROP TRIGGER trg_cat_group_node_immutable ON crm.cat_group_node;

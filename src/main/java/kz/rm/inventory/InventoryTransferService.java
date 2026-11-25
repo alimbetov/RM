@@ -140,7 +140,7 @@ class InventoryTransferService {
                 """,tenant,movementId,location,item,key,delta,before,after,at,at,
                 reason,actor,"TRANSFER",receipt,
                 InventoryPostingVersion.afterBalanceUpdate(jdbc,tenant,location,item));
-        if(canonicalFacts.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
+        if(canonicalFacts.appendLive(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
                 !=CanonicalFactAppender.Outcome.INSERTED)
             throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
     }

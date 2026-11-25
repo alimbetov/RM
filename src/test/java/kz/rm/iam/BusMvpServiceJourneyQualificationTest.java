@@ -56,6 +56,8 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired kz.rm.tasks.TaskCrmFollowupService followups;
     @Autowired kz.rm.crm.CrmInteractionService interactions;
     @Autowired CatalogItemService catalog;
+    @Autowired kz.rm.catalog.CatalogGroupService groups;
+    @Autowired kz.rm.intelligence.MultidimensionalReadService dimensions;
     @Autowired StorefrontManagementService stores;
     @Autowired StorefrontOfferService offers;
     @Autowired AuthenticatedInventoryCommands stock;
@@ -97,7 +99,7 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
-    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1 }
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1, DIMENSIONS }
 
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
         runBusJourney(CanonicalCase.FULL);
@@ -129,6 +131,10 @@ class BusMvpServiceJourneyQualificationTest {
 
     @Test void p3L1ProjectionParityAndLateDuplicatePg() {
         runNamedPostgresCase(CanonicalCase.L1);
+    }
+
+    @Test void b4RegionAndNomenclatureSnapshotsPg(){
+        runNamedPostgresCase(CanonicalCase.DIMENSIONS);
     }
 
     private void runNamedPostgresCase(CanonicalCase scenario){
@@ -212,6 +218,17 @@ class BusMvpServiceJourneyQualificationTest {
                 "RM business product",new BigDecimal("75.0000"),"KZT");
         var offer=offers.publish(staff,tenant,offerDraft.id(),offerDraft.rowVersion());
 
+        kz.rm.catalog.CatalogGroupService.Node root=null,leaf=null;
+        if(scenario==CanonicalCase.DIMENSIONS){
+            root=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01","Products",null,0);
+            leaf=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01.01","Original group",root.id(),0);
+            groups.assign(staff,tenant,published.id(),leaf.id(),0);
+            var serviceGroup=groups.appendNode(staff,tenant,CatalogItem.Kind.SERVICE,"02","Services",null,0);
+            assertThatThrownBy(()->groups.assign(staff,tenant,published.id(),serviceGroup.id(),1))
+                .hasMessage("CAT_ASSIGNMENT_GROUP_NOT_FOUND");
+            var serviceDraft=catalog.createDraft(staff,tenant,"SVC-"+UUID.randomUUID(),CatalogItem.Kind.SERVICE,"ru","Service",null);
+            assertThat(groups.assign(staff,tenant,serviceDraft.id(),serviceGroup.id(),0).groupId()).isEqualTo(serviceGroup.id());
+        }
         stock.receive(staff,tenant,warehouse.id(),published.id(),
                 "bus-receipt-"+UUID.randomUUID(),new BigDecimal("10"));
         String checkoutEmail="bus-buyer-"+UUID.randomUUID()+"@example.kz";
@@ -226,6 +243,12 @@ class BusMvpServiceJourneyQualificationTest {
                 WHERE tenant_id=? AND order_id=?
                 """,Integer.class,tenant,orderId)).isZero();
 
+        kz.rm.catalog.CatalogGroupService.Node revisedRoot=null,revisedLeaf=null;
+        if(scenario==CanonicalCase.DIMENSIONS){
+            revisedRoot=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01","Products revised",null,1);
+            revisedLeaf=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01.01","Revised group",revisedRoot.id(),1);
+            groups.assign(staff,tenant,published.id(),revisedLeaf.id(),1);
+        }
         var beforeDenied=JourneySqlEvidence.orderAndStock(jdbc,tenant,orderId,warehouse.id(),published.id());
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,tenant);
         for(var invalid:JourneySignedActorFixture.InvalidToken.values()){
@@ -311,6 +334,74 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(onboarding.createFirstTenant(otherOwner,otherTenant,
                 "RM Canonical Isolation LLP","RM Canonical Isolation","KZ").tenantId()).isEqualTo(otherTenant);
         currencies.initialize(otherOwner,otherTenant);
+        if(scenario==CanonicalCase.DIMENSIONS){
+            Instant from=Instant.now().minusSeconds(86400),until=Instant.now().plusSeconds(86400);
+            var booked=dimensions.booked(staff,tenant,from,until,31);
+            assertThat(booked).hasSize(2);
+            UUID originalRoot=root.id(),newRoot=revisedRoot.id();
+            assertThat(booked).anySatisfy(row->{assertThat(row.group().id()).isEqualTo(originalRoot);
+                assertThat(row.group().revision()).isEqualTo(1);assertThat(row.amount()).isEqualByComparingTo("225");});
+            assertThat(booked).anySatisfy(row->{assertThat(row.group().id()).isEqualTo(newRoot);
+                assertThat(row.group().revision()).isEqualTo(2);assertThat(row.amount()).isEqualByComparingTo("150");});
+            var fulfilled=dimensions.fulfilled(staff,tenant,List.of(warehouse.id()),from,until,31);
+            assertThat(fulfilled).hasSize(1);
+            assertThat(fulfilled.getFirst().region()).isEqualTo(kato);
+            assertThat(fulfilled.getFirst().group().id()).isEqualTo(originalRoot);
+            assertThat(fulfilled.getFirst().amount()).isEqualByComparingTo("225");
+            assertThat(fulfilled.getFirst().distinctOrders()).isEqualTo(1);
+            var first=dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31);
+            assertThat(first).hasSize(2);
+            assertThat(first).anySatisfy(row->{assertThat(row.region()).isEqualTo(kato);
+                assertThat(row.group().id()).isEqualTo(originalRoot);assertThat(row.in()).isEqualByComparingTo("10");});
+            assertThat(first).anySatisfy(row->{assertThat(row.group().id()).isEqualTo(newRoot);
+                assertThat(row.out()).isEqualByComparingTo("3");});
+            String secondKato=jdbc.queryForObject("""
+                SELECT code FROM public.ref_kato_territory WHERE is_deleted=FALSE AND level_no=2 AND code<>?
+                ORDER BY code LIMIT 1
+                """,String.class,kato);
+            String childKato=jdbc.query("""
+                SELECT c.code FROM public.ref_kato_territory c JOIN public.ref_kato_territory p
+                  ON p.source_id=c.parent_source_id
+                WHERE p.code=? AND c.level_no=3 AND c.is_deleted=FALSE ORDER BY c.code LIMIT 1
+                """,rs->rs.next()?rs.getString(1):null,secondKato);
+            var second=locations.create(staff,tenant,OrganizationLocationEntity.Type.WAREHOUSE,
+                "Second regional warehouse",childKato==null?secondKato:childKato,"Second warehouse");
+            assertThatThrownBy(()->dimensions.stock(staff,tenant,List.of(warehouse.id(),second.id()),from,until,31))
+                .isInstanceOf(SecurityException.class);
+            warehouseScope.assign(owner,tenant,second.id(),staffId);
+            stock.receive(staff,tenant,second.id(),published.id(),"b4-second-region-"+UUID.randomUUID(),new BigDecimal("5"));
+            var regions=dimensions.stock(staff,tenant,List.of(warehouse.id(),second.id()),from,until,31);
+            assertThat(regions).hasSize(3);
+            assertThat(regions).anySatisfy(row->{assertThat(row.region()).isEqualTo(secondKato);
+                assertThat(row.group().id()).isEqualTo(newRoot);assertThat(row.in()).isEqualByComparingTo("5");});
+            assertThatThrownBy(()->dimensions.stock(otherOwner,otherTenant,List.of(warehouse.id()),from,until,31))
+                .isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->groups.assign(otherOwner,otherTenant,published.id(),newRoot,0))
+                .hasMessage("CAT_ASSIGNMENT_ITEM_NOT_FOUND");
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.int_movement_dimension SET region_code=region_code WHERE tenant_id=?",tenant))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            // A synthetic legacy movement is backfilled without current category/geography.
+            UUID legacy=UUID.randomUUID();
+            new org.springframework.transaction.support.TransactionTemplate(canonicalTransactions).executeWithoutResult(status->{
+                assertThat(jdbc.update("""
+                    INSERT INTO crm.inv_stock_movement(tenant_id,id,location_id,item_id,request_key,delta_quantity,balance_before,balance_after,
+                      occurred_at,recorded_at,reason_code,movement_kind,actor_user_id,source_type,source_id,business_reason_code,posting_version)
+                    SELECT tenant_id,?,location_id,item_id,?,delta_quantity,balance_before,balance_after,
+                      occurred_at,recorded_at,reason_code,movement_kind,actor_user_id,source_type,source_id,business_reason_code,NULL
+                    FROM crm.inv_stock_movement WHERE tenant_id=? AND location_id=? AND reason_code='RECEIPT' ORDER BY id LIMIT 1
+                    """,legacy,"b4-legacy-"+legacy,tenant,warehouse.id())).isEqualTo(1);
+                canonicalFacts.append(new kz.rm.intelligence.CanonicalFactKey(tenant,kz.rm.intelligence.CanonicalFactKey.Owner.INVENTORY,
+                    kz.rm.intelligence.CanonicalFactKey.Kind.STOCK_MOVEMENT,legacy));
+            });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_movement_dimension WHERE tenant_id=? AND movement_id=?",
+                Long.class,tenant,legacy)).isZero();
+            assertThat(dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31)).anySatisfy(row->{
+                assertThat(row.region()).isNull();assertThat(row.group().id()).isNull();assertThat(row.in()).isEqualByComparingTo("10");
+            });
+            return;
+        }
         if(scenario==CanonicalCase.L1){
             long calendarVersion=calendar.append(owner,tenant,"Etc/UTC",0).version();
             L1ProjectionJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
