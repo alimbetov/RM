@@ -295,6 +295,7 @@ class BusMvpServiceJourneyQualificationTest {
                 rollbackKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
         if(scenario==CanonicalCase.ADMISSION_ROLLBACK){
             CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            CanonicalFactJourneyEvidence.rejectUnsealedSourceOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
             return;
         }
         CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);

@@ -86,7 +86,7 @@ jobs:
           docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
             UPDATE public.tenant_currency_policy
             SET status='REVIEW_REQUIRED'
-            WHERE tenant_id=(SELECT tenant_id FROM crm.store_front LIMIT 1);
+            WHERE tenant_id=(SELECT tenant_id FROM crm.store_front WHERE state='PUBLISHED' ORDER BY tenant_id LIMIT 1);
           "
           if docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -f /tmp/mvp-preflight.sql > /tmp/mvp-negative.log 2>&1; then
             cat /tmp/mvp-negative.log

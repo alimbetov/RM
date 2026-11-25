@@ -328,7 +328,34 @@ final class CanonicalFactJourneyEvidence {
         }
     }
 
-    /** Actual distinct workspaces; synthetic tenant-owned order rows, rolled back after the probe. */
+    /** Fault injection only: roll back both the synthetic source and temporary trigger DDL. */
+    static void rejectUnsealedSourceOnPostgres(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                               CanonicalFactAppender appender,UUID tenant,UUID templateOrder){
+        var tx=new TransactionTemplate(manager);
+        UUID order=UUID.randomUUID(),event=UUID.randomUUID();
+        assertThatThrownBy(()->tx.executeWithoutResult(status->{
+            assertThat(jdbc.update("""
+                INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
+                SELECT tenant_id,?,pending_email_identity_id,buyer_user_id,'PLACED',total_amount,currency,created_at,fulfillment_mode
+                FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,order,tenant,templateOrder)).isEqualTo(1);
+            copyLine(jdbc,tenant,templateOrder,order);
+            jdbc.execute("ALTER TABLE crm.sales_order_status_event DISABLE TRIGGER trg_sales_snapshot_seal");
+            insertSealEvent(jdbc,tenant,order,event,"PLACED");
+            assertThat(jdbc.queryForObject("SELECT booked_snapshot_sealed FROM crm.sales_order WHERE tenant_id=? AND id=?",
+                Boolean.class,tenant,order)).isFalse();
+            appender.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event));
+        })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_SOURCE_NOT_SEALED");
+        assertThat(count(jdbc,tenant,event)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=? AND id=?",Integer.class,tenant,order)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND id=?",Integer.class,tenant,event)).isZero();
+        assertThat(jdbc.queryForObject("""
+            SELECT tgenabled::text FROM pg_trigger
+            WHERE tgrelid='crm.sales_order_status_event'::regclass AND tgname='trg_sales_snapshot_seal'
+            """,String.class)).isEqualTo("O");
+    }
+
+    /** Actual distinct workspaces; prove rollback first, then independent committed collision. */
     static void tenantCollision(JdbcTemplate jdbc,PlatformTransactionManager manager,
                                 CanonicalFactAppender appender,UUID tenant,UUID order,UUID otherTenant){
         UUID event=statusEvent(jdbc,tenant,order,"PLACED");
@@ -338,6 +365,7 @@ final class CanonicalFactJourneyEvidence {
             """,String.class,tenant,event);
         assertThat(original).isNotNull();
         var tx=new TransactionTemplate(manager);
+        for(boolean rollback:List.of(true,false)){
         tx.executeWithoutResult(status->{
             UUID store=UUID.randomUUID(),offer=UUID.randomUUID(),otherOrder=UUID.randomUUID();
             jdbc.update("INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at) VALUES (?,?,?,'DRAFT',CURRENT_TIMESTAMP)",
@@ -367,10 +395,17 @@ final class CanonicalFactJourneyEvidence {
                 WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?
                 """,String.class,otherTenant,event)).isNotEqualTo(original);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE source_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'",Integer.class,event)).isEqualTo(2);
-            status.setRollbackOnly();
+            if(rollback)status.setRollbackOnly();
         });
-        assertThat(count(jdbc,otherTenant,event)).isZero();
+        assertThat(count(jdbc,otherTenant,event)).isEqualTo(rollback?0:1);
         assertThat(count(jdbc,tenant,event)).isEqualTo(1);
+        }
+        for(UUID scope:List.of(tenant,otherTenant)){
+            var key=new CanonicalFactKey(scope,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event);
+            CanonicalFactAppender.Outcome replay=tx.execute(status->appender.append(key));
+            assertThat(replay).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE source_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'",Integer.class,event)).isEqualTo(2);
         assertThat(jdbc.queryForObject("""
             SELECT digest FROM crm.int_canonical_fact
             WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?
