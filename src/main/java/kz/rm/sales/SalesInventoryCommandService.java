@@ -5,6 +5,8 @@ import kz.rm.iam.TenantAuthorization;
 import kz.rm.iam.WarehouseStaffScopeService;
 import org.springframework.beans.factory.annotation.Value;
 import kz.rm.inventory.OrderInventoryPort;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,17 +32,20 @@ public class SalesInventoryCommandService {
     private final OrderInventoryPort inventory;
     private final JdbcTemplate jdbc;
     private final WarehouseStaffScopeService warehouseStaff;
+    private final CanonicalFactAppender canonicalFacts;
 
     @Value("${rm.mvp.service-mode.enabled:false}")
     private boolean strictMvpServiceMode;
 
     public SalesInventoryCommandService(TenantAuthorization authorization,
                                         OrderInventoryPort inventory,JdbcTemplate jdbc,
-                                        WarehouseStaffScopeService warehouseStaff) {
+                                        WarehouseStaffScopeService warehouseStaff,
+                                        CanonicalFactAppender canonicalFacts) {
         this.authorization=authorization;
         this.inventory=inventory;
         this.jdbc=jdbc;
         this.warehouseStaff=warehouseStaff;
+        this.canonicalFacts=java.util.Objects.requireNonNull(canonicalFacts);
     }
 
     public record CommandResult(UUID orderId,String status,int affectedLines) {}
@@ -227,10 +232,20 @@ public class SalesInventoryCommandService {
     }
 
     private void appendEvent(UUID tenant,UUID order,String event) {
+        var kind=switch(event){
+            case "CONFIRMED" -> CanonicalFactKey.Kind.ORDER_CONFIRMED;
+            case "CANCELLED" -> CanonicalFactKey.Kind.ORDER_CANCELLED;
+            case "COMPLETED" -> CanonicalFactKey.Kind.ORDER_COMPLETED;
+            default -> throw new IllegalArgumentException("UNSUPPORTED_CANONICAL_SALES_EVENT");
+        };
+        UUID eventId=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.sales_order_status_event
               (tenant_id,id,order_id,event_type,occurred_at)
             VALUES (?,?,?,?,?)
-            """,tenant,UUID.randomUUID(),order,event,Timestamp.from(Instant.now()));
+            """,tenant,eventId,order,event,Timestamp.from(Instant.now()));
+        if(canonicalFacts.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,kind,eventId))
+                !=CanonicalFactAppender.Outcome.INSERTED)
+            throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
     }
 }

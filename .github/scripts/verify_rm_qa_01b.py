@@ -181,6 +181,8 @@ REQUIRED_CASES = {
         ("KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
         ("KmsDeploymentGuardTest", "urR34DeploymentConfigurationAcceptsOnlySafeImmutableKeyModes"),
         ("SalesInventoryRbacQualificationTest", "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"),
+        ("SalesInventoryRbacQualificationTest", "b22a2PostgresCanonicalFailureRollsBackEverySalesTransition"),
+        ("SalesInventoryRbacQualificationTest", "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome"),
         ("SalesInventoryRbacQualificationTest", "urR32InventoryGrantRevokeAndForeignActorPreserveLedger"),
         ("CrmR1aQualificationTest", "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"),
         ("CrmInteractionQualificationTest", "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"),

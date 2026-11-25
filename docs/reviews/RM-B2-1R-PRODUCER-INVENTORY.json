@@ -15,7 +15,8 @@
       "table": "sales_order_status_event",
       "sites": 1,
       "method": "appendEvent",
-      "canonical": "ORDER_CONFIRMED, ORDER_COMPLETED, ORDER_CANCELLED"
+      "canonical": "ORDER_CONFIRMED, ORDER_COMPLETED, ORDER_CANCELLED",
+      "integration": "B2.2A.2: mandatory append after shared owner event INSERT for CONFIRMED/CANCELLED/COMPLETED"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
@@ -67,6 +68,6 @@
   "limitations": [
     "Manifest gate fails on new or missing literal insert sites",
     "Additional static checks cover quoted SQL identifiers, adjacent Java literals, ORM mappings, MERGE/COPY and SQL/XML inserts; not a proof for arbitrary generated SQL, external writers or database procedures",
-    "Only AutoOrderService ORDER_PLACED wired; other producers pending B2.2A.2/B2.2A.3/B2.2B"
+    "AutoOrderService and SalesInventoryCommandService wired; secure pickup and INVENTORY producers pending B2.2A.3/B2.2B"
   ]
 }

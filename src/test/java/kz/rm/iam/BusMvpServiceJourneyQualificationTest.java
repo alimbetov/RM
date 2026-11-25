@@ -230,8 +230,14 @@ class BusMvpServiceJourneyQualificationTest {
         roles.grant(owner,tenant,role.id(),DomainPermission.SALES_ORDER_CONFIRM);
         assertThat(sales.confirm(staff,tenant,orderId,warehouse.id()).status())
                 .isEqualTo("CONFIRMED");
+        UUID confirmedFact=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"CONFIRMED");
+        assertThat(sales.confirm(staff,tenant,orderId,warehouse.id()).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"CONFIRMED")).isEqualTo(confirmedFact);
         assertThat(sales.fulfill(staff,tenant,orderId).status()).isEqualTo("COMPLETED");
+        UUID completedFact=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"COMPLETED");
         assertThat(sales.fulfill(staff,tenant,orderId).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"COMPLETED")).isEqualTo(completedFact);
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,tenant,orderId,"CANCELLED");
 
         assertThat(jdbc.queryForObject("""
                 SELECT unit_price_snapshot FROM crm.sales_order_line
@@ -257,8 +263,12 @@ class BusMvpServiceJourneyQualificationTest {
                 "bus-cancel-order-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),2))).order().orderId();
         CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,cancelOrder);
         assertThat(sales.confirm(staff,tenant,cancelOrder,warehouse.id()).status()).isEqualTo("CONFIRMED");
+        CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,cancelOrder,"CONFIRMED");
         assertThat(sales.cancel(staff,tenant,cancelOrder).status()).isEqualTo("CANCELLED");
+        UUID cancelledFact=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,cancelOrder,"CANCELLED");
         assertThat(sales.cancel(staff,tenant,cancelOrder).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,cancelOrder,"CANCELLED")).isEqualTo(cancelledFact);
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,tenant,cancelOrder,"COMPLETED");
         assertThat(jdbc.queryForObject("SELECT reserved FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("0");
         assertThat(jdbc.queryForObject("SELECT on_hand FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("7");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER' AND source_id=?",Integer.class,tenant,cancelOrder)).isZero();
@@ -306,8 +316,6 @@ class BusMvpServiceJourneyQualificationTest {
                 ()->checkout.checkout(store.slug(),faultEmail,faultKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
             return;
         }
-        CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
-        CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
         calendar.append(owner,tenant,"Etc/UTC",0);
         var period=new kz.rm.intelligence.MetricSelection.PeriodChoice(
             kz.rm.intelligence.PeriodResolver.Code.Y,java.time.LocalDate.now(java.time.ZoneOffset.UTC),1);
@@ -323,6 +331,8 @@ class BusMvpServiceJourneyQualificationTest {
             kz.rm.intelligence.MetricRegistry.Code.PLACED_ORDERS,period))).isInstanceOf(SecurityException.class);
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
+        CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
+        CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
         CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
         CanonicalFactJourneyEvidence.sealingPermutations(jdbc,canonicalTransactions,tenant,orderId);
         CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);

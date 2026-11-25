@@ -21,6 +21,7 @@ public final class JourneySqlEvidence {
             jdbc.queryForList("SELECT id,status,row_version,total_amount,currency,fulfillment_mode FROM crm.sales_order WHERE tenant_id=? AND id=?",tenant,order),
             jdbc.queryForList("SELECT id,quantity,unit_price_snapshot,currency FROM crm.sales_order_line WHERE tenant_id=? AND order_id=? ORDER BY id",tenant,order),
             jdbc.queryForList("SELECT id,event_type,occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? ORDER BY id",tenant,order),
+            jdbc.queryForList("SELECT owner_module,source_kind,source_id,subject_id,occurred_at,recorded_at,source_version,schema_version,digest FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module='SALES' AND subject_id=? ORDER BY source_kind,source_id",tenant,order),
             jdbc.queryForList("SELECT on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",tenant,warehouse,sku),
             jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=?",Long.class,tenant,order),
             jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=? AND item_id=?",Long.class,tenant,sku),

@@ -100,15 +100,32 @@ final class CanonicalFactJourneyEvidence {
         CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,recovered);
     }
 
+    // Synthetic historical source: deliberately bypasses the now-wired owner commands.
+    // Never delete or modify a real immutable fact to recreate first-append conditions.
+    private static UUID historicalSource(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                         UUID tenant,UUID templateOrder,String kind){
+        UUID order=UUID.randomUUID();
+        new TransactionTemplate(manager).executeWithoutResult(status->{
+            assertThat(jdbc.update("""
+                INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
+                SELECT tenant_id,?,pending_email_identity_id,buyer_user_id,?,total_amount,currency,created_at,fulfillment_mode
+                FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,order,kind,tenant,templateOrder)).isEqualTo(1);
+            copyLine(jdbc,tenant,templateOrder,order);
+            insertSealEvent(jdbc,tenant,order,UUID.randomUUID(),kind);
+        });
+        return order;
+    }
+
     static void concurrentReplayOnPostgres(JdbcTemplate jdbc,PlatformTransactionManager manager,
                                            CanonicalFactAppender appender,UUID tenant,UUID order,UUID cancelledOrder){
         boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
             c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
         if(!pg)return; // H2 is not concurrency qualification; the strict journey workflow uses PostgreSQL.
         for(var scenario:List.of(
-                new Race(statusEvent(jdbc,tenant,order,"CONFIRMED"),CanonicalFactKey.Kind.ORDER_CONFIRMED,2),
-                new Race(statusEvent(jdbc,tenant,order,"COMPLETED"),CanonicalFactKey.Kind.ORDER_COMPLETED,8),
-                new Race(statusEvent(jdbc,tenant,cancelledOrder,"CANCELLED"),CanonicalFactKey.Kind.ORDER_CANCELLED,16))){
+                new Race(statusEvent(jdbc,tenant,historicalSource(jdbc,manager,tenant,order,"CONFIRMED"),"CONFIRMED"),CanonicalFactKey.Kind.ORDER_CONFIRMED,2),
+                new Race(statusEvent(jdbc,tenant,historicalSource(jdbc,manager,tenant,order,"COMPLETED"),"COMPLETED"),CanonicalFactKey.Kind.ORDER_COMPLETED,8),
+                new Race(statusEvent(jdbc,tenant,historicalSource(jdbc,manager,tenant,cancelledOrder,"CANCELLED"),"CANCELLED"),CanonicalFactKey.Kind.ORDER_CANCELLED,16))){
             var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,scenario.kind(),scenario.event());
             assertThat(count(jdbc,tenant,scenario.event())).isZero();
             race(jdbc,manager,appender,key,scenario.calls());
@@ -271,9 +288,8 @@ final class CanonicalFactJourneyEvidence {
         boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
             c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
         if(!pg)return;
-        // The real checkout now already owns PLACED; use the still-unwired
-        // CONFIRMED event of the cancelled-order fixture for insert/rollback contention.
-        UUID event=statusEvent(jdbc,tenant,order,"CONFIRMED");
+        UUID historical=historicalSource(jdbc,manager,tenant,order,"CONFIRMED");
+        UUID event=statusEvent(jdbc,tenant,historical,"CONFIRMED");
         var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_CONFIRMED,event);
         assertThat(count(jdbc,tenant,event)).isZero();
         var tx=new TransactionTemplate(manager);
@@ -441,7 +457,11 @@ final class CanonicalFactJourneyEvidence {
 
     /** Independent legacy digest oracle; rollback fixtures never rewrite existing immutable facts. */
     static void digestReplayContract(JdbcTemplate jdbc,PlatformTransactionManager manager,
-                                     CanonicalFactAppender appender,UUID tenant,UUID cancelledOrder){
+                                     CanonicalFactAppender appender,UUID tenant,UUID templateOrder){
+        UUID realEvent=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,templateOrder,"CONFIRMED");
+        assertThat(jdbc.queryForObject("SELECT digest FROM crm.int_canonical_fact WHERE tenant_id=? AND source_id=?",
+            String.class,tenant,realEvent)).isEqualTo(salesV2Oracle(jdbc,tenant,templateOrder,realEvent,"CONFIRMED"));
+        UUID cancelledOrder=historicalSource(jdbc,manager,tenant,templateOrder,"CONFIRMED");
         UUID event=statusEvent(jdbc,tenant,cancelledOrder,"CONFIRMED");
         var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_CONFIRMED,event);
         java.time.Instant occurred=jdbc.queryForObject(
@@ -477,18 +497,7 @@ final class CanonicalFactJourneyEvidence {
 
         // Capture a new V2 fact through the real appender, then independently corrupt the
         // stored envelope in a fresh rollback-only fixture while preserving its valid digest.
-        String header=jdbc.query("""
-            SELECT total_amount,currency FROM crm.sales_order WHERE tenant_id=? AND id=?
-            """,rs->{if(!rs.next())throw new AssertionError("Missing booked header");
-                return oracleFrame(rs.getBigDecimal(1),rs.getString(2).trim());},tenant,cancelledOrder);
-        var lines=jdbc.query("""
-            SELECT id,offer_id,catalog_item_id_snapshot,quantity,unit_price_snapshot,currency,price_source,accepted_quote_id
-            FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
-            """,(rs,n)->oracleFrame(rs.getObject(1),rs.getObject(2),rs.getObject(3),rs.getInt(4),
-                rs.getBigDecimal(5),rs.getString(6).trim(),rs.getString(7),rs.getObject(8)),tenant,cancelledOrder);
-        assertThat(lines).isNotEmpty();
-        String expectedV2=oracleHash(oracleFrame("RM-FACT-V2",legacy,
-            oracleFrame(header,oracleFrame(lines.stream().sorted().toArray()))));
+        String expectedV2=salesV2Oracle(jdbc,tenant,cancelledOrder,event,"CONFIRMED");
         var v2=new AtomicReference<String>();
         tx.executeWithoutResult(s->{
             assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
@@ -507,6 +516,26 @@ final class CanonicalFactJourneyEvidence {
             })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_FACT_CONFLICT");
             assertThat(count(jdbc,tenant,event)).isZero();
         }
+    }
+
+    private static String salesV2Oracle(JdbcTemplate jdbc,UUID tenant,UUID cancelledOrder,UUID event,String status){
+        java.time.Instant occurred=jdbc.queryForObject(
+            "SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND id=?",
+            java.sql.Timestamp.class,tenant,event).toInstant();
+        String legacy=oracleHash(String.join("|","RM-FACT-V1",tenant.toString(),"SALES","ORDER_"+status,
+            event.toString(),cancelledOrder.toString(),occurred.toString(),"NULL",status));
+        String header=jdbc.query("""
+            SELECT total_amount,currency FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,rs->{if(!rs.next())throw new AssertionError("Missing booked header");
+                return oracleFrame(rs.getBigDecimal(1),rs.getString(2).trim());},tenant,cancelledOrder);
+        var lines=jdbc.query("""
+            SELECT id,offer_id,catalog_item_id_snapshot,quantity,unit_price_snapshot,currency,price_source,accepted_quote_id
+            FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+            """,(rs,n)->oracleFrame(rs.getObject(1),rs.getObject(2),rs.getObject(3),rs.getInt(4),
+                rs.getBigDecimal(5),rs.getString(6).trim(),rs.getString(7),rs.getObject(8)),tenant,cancelledOrder);
+        assertThat(lines).isNotEmpty();
+        return oracleHash(oracleFrame("RM-FACT-V2",legacy,
+            oracleFrame(header,oracleFrame(lines.stream().sorted().toArray()))));
     }
 
     /** Read only owner rows; never call production framing/digest helpers. */

@@ -88,8 +88,9 @@
     {
       "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
       "designBlob": "54b5c79959458f33e7d640f14bbab06bbaf7bb3f",
-      "baselineBlob": "54b5c79959458f33e7d640f14bbab06bbaf7bb3f",
-      "status": "UNCHANGED"
+      "baselineBlob": "9df98d8d0b4b491dc7c1c08558aade86ce6f4c45",
+      "status": "DRIFT",
+      "previousBaselineBlob": "54b5c79959458f33e7d640f14bbab06bbaf7bb3f"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
