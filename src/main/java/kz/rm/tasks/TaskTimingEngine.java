@@ -110,21 +110,7 @@ final class TaskTimingEngine {
     // Scope event evidence before windowing. Composite tenant/task is mandatory.
     // The previous due-change pointer ignores intervening non-deadline events.
     private static String eventSummary(boolean point,boolean pageOnly) {
-        // For PG page enrichment, bound both the history window and previous
-        // change join to a materialized event set. The composite-key join uses
-        // existing indexes when selected by the planner. Still one statement;
-        // no client-side per-card query and no OFFSET.
-        String source=pageOnly?"page_events":"crm.task_event";
-        String scope=pageOnly?"":(" WHERE tenant_id=? "+(point?"AND task_id=?":""));
-        String prefix=pageOnly?"""
-            WITH page_events AS MATERIALIZED (
-                SELECT x.* FROM page_keys k CROSS JOIN LATERAL (
-                    SELECT ev.* FROM crm.task_event ev
-                    WHERE ev.tenant_id=? AND ev.task_id=k.id
-                ) x
-            )
-            """:"";
-        return prefix+"""
+        return """
             SELECT e.tenant_id,e.task_id,COUNT(*) AS event_count,
                    MIN(e.new_version) AS first_version,MAX(e.new_version) AS last_version,
                    MAX(CASE WHEN e.new_version=e.max_version THEN e.to_state END) AS last_state,
@@ -167,11 +153,11 @@ final class TaskTimingEngine {
                              ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_change,
                     MAX(CASE WHEN action_code='DUE_DATE_CHANGED' THEN new_version END)
                         OVER(PARTITION BY tenant_id,task_id) AS last_change
-                FROM %s x %s
-            ) e LEFT JOIN %s prior ON prior.tenant_id=e.tenant_id
+                FROM crm.task_event x WHERE tenant_id=? %s
+            ) e LEFT JOIN crm.task_event prior ON prior.tenant_id=e.tenant_id
                 AND prior.task_id=e.task_id AND prior.new_version=e.prev_change
             GROUP BY e.tenant_id,e.task_id
-            """.formatted(transition(),terminalAggregates(),source,scope,source);
+            """.formatted(transition(),terminalAggregates(),point?"AND task_id=?":pageOnly?"AND task_id IN (SELECT id FROM page_keys)":"");
     }
 
 
