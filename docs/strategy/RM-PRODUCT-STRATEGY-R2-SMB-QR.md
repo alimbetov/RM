@@ -4,6 +4,8 @@
 
 > **MVP SCOPE FREEZE (2026-11-23):** действующее решение о первом выпуске — [RM-MVP-CLOSURE-FREEZE-R1](RM-MVP-CLOSURE-FREEZE-R1.md). TASKS R2/R3/R3.2A уже реализуются и **базовые задачи включены в MVP**; только автоматическая SLA/outbox/notifications (R3.2B B1–B4, R3.2C) перенесена после MVP. Существующее описание «TASKS позже» читать как исторический план на момент R2 стратегии; безопасность, доменные инварианты и уже включённые обязательные CI job не ослаблять. В G1 действует service-only STOP, **после G1** допускаются минимальные реальный OIDC/REST/UI для MVP.
 
+> **Дополнение 2026-11-25 / CR-MVP-INTELLIGENCE-EVT-01:** владелец выбрал RM Intelligence, Customer 360, Warehouse 360 + ABC/XYZ, Event Builder как staged расширение MVP. [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md). Допускается только описанный scope (in-app + mock external EVT), не общий TASK SLA/ML/marketing. Две продуктовые вертикали и J1 сохраняются; дополнительный BUS-MVP-I1 требует G1–G4. Radar Analytics First, остальные freeze запреты сохраняются.
+
 ## 1. Продуктовое решение
 
 Активных рыночных направлений **два**, использующих один Java/Spring Boot modular monolith, общую базу бизнес-объектов и согласованные права:

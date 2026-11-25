@@ -4,9 +4,9 @@
 **Репозиторий:** `alimbetov/RM` · **рабочая Git-ветка:** `base_dev` · **логический раздел:** `docs/ideas/`  
 **Source-review baseline:** `5549c80abe09be19efd9f9b1bfbd81e5a4fa52a4` (не release verdict).  
 **Назначение:** единый каталог продуктовых идей и решений пользователя, не backlog немедленной разработки.  
-**Статус:** `IDEA BANK / POST-MVP PARKED EXCEPT CR-MVP-KF-RADAR-01 / PRODUCTION HOLD`.
+**Статус:** `IDEA BANK / SCOPED MVP INTELLIGENCE-EVT + CR-MVP-KF-RADAR-01 / OTHER IDEAS PARKED / PRODUCTION HOLD`.
 
-**Узкое owner exception 2026-11-24:** только [RM-KF-RADAR-R0.1 — Overdue Task Signal](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) из IDEA-16/KF-03 разрешён к сервисной реализации; не означает реализацию или release. Остальные идеи и этапы остаются PARKED.
+**Узкое owner exception 2026-11-24:** только [RM-KF-RADAR-R0.1 — Overdue Task Signal](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) из IDEA-16/KF-03 разрешён к сервисной реализации; не означает реализацию или release. Расширение 2026-11-25: IDEA-17/02, 01, 03/04, 07 выбраны для staged MVP только в границах CR-MVP-INTELLIGENCE-EVT-01; остальные идеи/этапы остаются PARKED.
 
 > **Норматив:** [RM-MVP-CLOSURE-FREEZE-R1](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) и [RM-PRODUCT-STRATEGY-R2-SMB-QR](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md). Действующих продуктовых вертикалей две: **RM Business** и **RM QR Commerce**. RM Network, отдельная универсальная ERP/финансовая система и новые функции, не нужные MVP, сюда не включаются как активный roadmap. Не создавать новые ветки, не менять `main`, не открывать production на основании этого документа.
 
@@ -28,13 +28,13 @@
 
 | ID | Инициатива | Пользовательский результат | Статус / очередь | Источник |
 |---|---|---|---|---|
-| **IDEA-01** | **RM-INSIGHT-R2 — Customer 360** | Статистика, активность, покупки и договоры по конкретному клиенту | IDEA / Post-MVP, после INSIGHT-R1 | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
-| **IDEA-02** | **RM-INSIGHT-R2 — Two-Layer Aggregates** | Неделя, декада, месяц без долгих запросов к истории | IDEA / после корректных daily facts | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
-| **IDEA-03** | **RM-INSIGHT-R2 — Warehouse 360** | Остатки, резервы, движения и эффективность складов/SKU | IDEA / Post-MVP | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
-| **IDEA-04** | **RM-INSIGHT-R3 — ABC/Pareto + XYZ** | Найти ключевые и нестабильные товары, излишки и риск дефицита | IDEA / после Warehouse 360 | INSIGHT-R2 |
+| **IDEA-01** | **RM-INSIGHT-R2 — Customer 360** | Статистика, активность, покупки и договоры по конкретному клиенту | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
+| **IDEA-02** | **RM-INSIGHT-R2 — Two-Layer Aggregates** | Неделя, декада, месяц без долгих запросов к истории | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
+| **IDEA-03** | **RM-INSIGHT-R2 — Warehouse 360** | Остатки, резервы, движения и эффективность складов/SKU | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
+| **IDEA-04** | **RM-INSIGHT-R3 — ABC/Pareto + XYZ** | Найти ключевые и нестабильные товары, излишки и риск дефицита | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | INSIGHT-R2 |
 | **IDEA-05** | **RM-INSIGHT-R4 — Tribuo ML** | Прогноз спроса, stockout risk, аномалии и объяснимые рекомендации | IDEA / после качества статистики | INSIGHT-R3 |
 | **IDEA-06** | **RM-INSIGHT-R5 — Intelligence → EVT** | Уведомления по проверенным изменениям KPI/прогноза | IDEA / после квалификации обоих контуров | INSIGHT-R4 + EVT |
-| **IDEA-07** | **RM-EVT-R1 — Event-Driven Notification & Campaign Builder** | Общий конструктор триггеров, расписаний и шаблонов уведомлений | IDEA / Post-MVP | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11), [TASK-R3.2B](../spec/RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md) |
+| **IDEA-07** | **RM-EVT-R1 — Event-Driven Notification & Campaign Builder** | Общий конструктор триггеров, расписаний и шаблонов уведомлений | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11), [TASK-R3.2B](../spec/RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md) |
 | **IDEA-08** | **RM-AUC-R1 — Multi-Mode Auction** | Закрытые, таймированные и английские торги на лот | IDEA / Post-MVP | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11) |
 | **IDEA-09** | **RM-AUC-R1 — Deal Chat** | Общение покупателя и продавца, связанное с лотом, торгом, заказом | IDEA / Post-MVP | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11) |
 | **IDEA-10** | **CUR-R2C — Smart FX Shield FX_AUTO** | Массовое ценовое обновление в KZT в утверждённых пределах | SPEC_EXISTS + FOUNDATION_PARTIAL / Post-MVP | [CUR-R2C-R1.1](../spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md) |
@@ -44,7 +44,7 @@
 | **IDEA-14** | **Sales KPI / Role Dashboards** | Обзоры продаж, продавцов, склада и customer segments | IDEA / INSIGHT + UI | INSIGHT-R1 / P1 CRM |
 | **IDEA-15** | **KF-01 InstantDeal & KF-02 Promise Engine** | Быстрый B2B offer→order и достоверное обещание доступности | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
 | **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | R0.1 ONLY AUTHORIZED (timeliness + calendar reads R1.1) / остальные PARKED | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) · [R0.1](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) |
-| **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | SPEC_EXISTS / Post-MVP, F2R-00 documentation only | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
+| **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
 | **IDEA-18** | **RM-RADAR-VISION-R1 — Intelligent Business Control Center** | Единая лента операционных рисков и действий: TASK, SALES, CRM, INVENTORY, Financial/FX, прогнозы и рекомендации | SPEC_EXISTS / DEFERRED_ANALYTICS_FIRST / POST-MVP PARKED | [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) |
 
 **Неактивные направления:** Business Network / межорганизационная торговая сеть (старый KF-05), полный бухгалтерский/налоговый ledger, масштабная маркетинговая платформа без канонических данных, автономное изменение остатков ML — **не включать в текущий план**.
@@ -178,7 +178,7 @@
 | No automatic commercial action | ML recommendation, EVT reminder и аукционная ставка не делают незаметных price, inventory или payment writes. |
 | Test gates | PostgreSQL real concurrency, 2 tenants, crash/replay, populated Liquibase, IAM/PII scope, exact SHA; затем отдельный user-facing OIDC/UAT. |
 
-## 13. Рекомендуемый порядок, без открытия scope
+## 13. Рекомендуемый порядок (историческая гипотеза; обновлённый scope §13C ниже)
 
 ```text
 ТЕКУЩИЙ ПРИОРИТЕТ: MVP G0 → G1 → G2 (OIDC + UI) → G3 (пилот) → G4
@@ -230,6 +230,10 @@ RM-INSIGHT-R5: проверенные аналитические события 
 
 **Потребность:** продавец и руководитель видят не только задачи, но и проверяемые риски продаж, клиентов, склада и финансов с объяснением и разрешённым следующим действием. **Статус:** SPEC_EXISTS / DEFERRED_ANALYTICS_FIRST / POST-MVP PARKED. Решение владельца 2026-11-25: отложить плановую доработку Radar до развития и квалификации INSIGHT/IDEA-17 по соответствующим вертикалям. R0.1 сохраняется, обязательные regression/security gates и R0.1D не отменяются, незакрытая приёмка HOLD. R0.2 и новые Radar features требуют отдельного возобновления и scope. Analytics First не открывает реализацию INSIGHT вопреки MVP freeze. Переиспользуются IDEA-01…07, IDEA-10, IDEA-16/17 и канонические owner read contracts; не создаётся второй INSIGHT, FX calculator, EVT или ledger. ML/Advisor только после качества фактов и отдельного допуска, без автоматических бизнес-команд. Стратегическое ТЗ: [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) — 9 этапов roadmap включая R0.1/R0.2, каталог сигналов, 48 будущих BV семейств, точные ограничения и open decisions. Оценка ценности/сложности — предварительная гипотеза. Никакой новой разработки/production admission.
 
+## 13C. CR-MVP-INTELLIGENCE-EVT-01 — выбор владельца (2026-11-25)
+
+**TOP-1…4 выбраны для расширенного MVP:** RM Intelligence (IDEA-17/02), Customer 360 (01), Warehouse 360 + ABC/XYZ (03/04), Event & Notification Builder (07). [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md) — IE-00…09, 32 future qualification families, BUS-MVP-I1, explicit gates and non-goals. Сначала IE-00 source/contract admission и P0 corrections, затем INT foundation → Customer/Warehouse → ABC/XYZ; EVT contracts независимо, затем durable in-app + mock. Предыдущая post-MVP очередь §13 историческая для этих срезов. Реальные внешние sends, campaigns, R3.2B blanket, ML, Radar R1+, FX_AUTO, auctions, остальные идеи не открыты. Нет кода/тестового PASS от этого решения. Все mandatory G1/G2/G3/G4 сохранены, только base_dev, production HOLD.
+
 ## 14. Связанные документы и история решений
 
 - [Активная стратегия RM Business + QR Commerce](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md)
@@ -254,5 +258,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | 2026-11-24 | R1.4 | Создано [RM-KF-RADAR-R0.2 — Smart Deadline Reminder Text](../spec/RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md), SPECIFIED / DOC-ONLY, отдельный допуск реализации требуется. CRM contract-expiration остаётся PARKED. |
 | 2026-11-25 | R1.5 | IDEA-18: [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md), отдельное стратегическое ТЗ, DOC-ONLY / PARKED. Не расширяет CR-MVP-KF-RADAR-01/01A. |
 | 2026-11-25 | R1.6 | IDEA-18 Analytics First: плановые доработки Radar отложены до квалификации аналитических источников INSIGHT/IDEA-17; отдельный допуск возобновления, существующая R0.1 и gates сохранены. |
+| 2026-11-25 | R1.7 | TOP-1…4: [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md), scoped MVP admission INT-01…03 + EVT-01; остальной банк PARKED. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.

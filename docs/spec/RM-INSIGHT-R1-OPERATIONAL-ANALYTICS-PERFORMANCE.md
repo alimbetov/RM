@@ -9,6 +9,8 @@
 
 **Связанное проектное ТЗ:** [RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1](RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md) — склады с GPS, поиск товара по региону, immutable warehouse-origin в SALES, безопасный QR самовывоза и возвраты. Статус SPEC; эти функции ещё не реализованы.
 
+> **CR-MVP-INTELLIGENCE-EVT-01 (2026-11-25):** [Scoped MVP R1](RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md) — owner selected bounded INT-01…03 for staged MVP implementation after IE-00. Prior post-MVP/freeze language superseded only for admitted slices. Existing source semantics, safety, benchmark and G1–G4 retained. No geo prediction, ML, full reports or new REST/UI before G1. No implementation PASS inferred.
+
 ## 1. Назначение и границы
 
 Создать проверяемую, tenant-safe и восстанавливаемую основу операционной аналитики RM поверх существующих транзакционных фактов SALES и INVENTORY; получить измеримое снижение стоимости аналитических чтений без ухудшения checkout/confirm/reserve/fulfill. Аналитика должна отвечать на реальные вопросы владельца: сколько заказов принято/отменено/исполнено, как быстро подтверждаются заказы, где движутся запасы, почему нет доступного товара, какие склады испытывают дефицит. Позднее добавить геоаналитику, рекомендации складов и прогноз спроса.

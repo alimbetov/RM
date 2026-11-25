@@ -1,7 +1,7 @@
 # Банк идей RM / RM Idea Bank
 
 **Дата открытия:** 2026-11-24 · **Git-ветка:** `base_dev` · **Каталог:** `docs/ideas/`  
-**Статус:** PRODUCT DISCOVERY / POST-MVP PARKED. Документы этого раздела НЕ разрешают новую разработку или выпуск в production.
+**Статус:** SCOPED MVP SELECTION (CR-MVP-INTELLIGENCE-EVT-01) / OTHER IDEAS PARKED / PRODUCTION HOLD. Только явные scope decisions разрешают staged разработку; документы сами по себе не доказывают release.
 
 ## Центральный реестр
 
@@ -27,6 +27,10 @@
 ## Отобранная архитектура из FIN Analyzer
 
 **[RM-INSIGHT-FIN-ADAPT-R1 — адаптация расчётных механизмов FIN для RM](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md)**. Отобраны 9 логических компонентов, расписаны границы доменных владельцев и 32 будущие PostgreSQL/functional acceptance проверки. Статус **SPEC_EXISTS / POST-MVP PARKED**, без кода.
+
+## Выбранные направления MVP (2026-11-25)
+
+[RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md): RM Intelligence (IDEA-17/02), Customer 360 (01), Warehouse 360 + ABC/XYZ (03/04), Event & Notification Builder (07). IE-00…09, 32 будущие проверки, дополнительный BUS-MVP-I1. Только bounded scope после stage gates, внешние отправки mock, остальное PARKED.
 
 ## Стратегическое развитие Radar
 

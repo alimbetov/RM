@@ -25,6 +25,10 @@ MVP = **один продавец/tenant**, реальные сотрудник�
 
 **Дополнение CR-MVP-KF-RADAR-01A (2026-11-24):** по запросу владельца в тот же R0.1 включены read-only классификация выполнения EARLY_50/ON_TIME/COMPLETED_LATE, фильтры, keyset и календарная модель (§11 ТЗ R1.1). Это не разрешение новых TASK-команд, схемы, SLA или иных KF. Outlook-style UI — только проектирование; фактические REST/UI допускаются отдельно после G1 в G2. Все обязательные gates и ограничения base_dev/main/production сохранены.
 
+## 0B. CR-MVP-INTELLIGENCE-EVT-01 — расширенный MVP Analytics First (2026-11-25)
+
+**Owner decision: SELECTED FOR MVP / STAGED IMPLEMENTATION AUTHORIZED / PRODUCTION HOLD.** Владелец выбрал TOP-1…4 банка идей: RM Intelligence (IDEA-17 и enabling IDEA-02), Customer 360 (IDEA-01), Warehouse 360 + ABC/XYZ (IDEA-03/04), Event & Notification Builder (IDEA-07). Обязательные границы, этапы IE-00…09, 32 planned qualification families и acceptance BUS-MVP-I1 определены в [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md). Это узкое исключение из §0/§2/§3/§4/§5/§7 для названных срезов: прошлое POST-MVP/PARKED относится ко всему остальному. Не нужно фабриковать broken J1. IE-00 — первая задача: source/permission/metric/event admission и выбор контрактов, затем staged development по ТЗ. Основные J1, IAM, R0.1 gates, безопасность, exact-SHA, migration safety и G1–G4 неизменны. Analytics First: Radar расширение отложено; существующая обязательная регрессия сохранена. EVT только безопасные typed правила, preview, durable in-app + mock external; TASK R3.2B/R3.2C целиком, campaigns/external sends, Tribuo и FX_AUTO расширение не открываются. Новые REST/UI только после G1. Если текущий frozen RC квалифицируется, не менять молча; новый RC и полный повтор gate. Base J1 квалифицируются независимо; expanded MVP PASS требует I1, отдельный owner decision при phased release. Только base_dev, main/production HOLD.
+
 ## 1. Два обязательных пользовательских пути, каждый выполняется без ручного SQL
 
 ### BUS-MVP-J1 — RM Business
@@ -68,6 +72,8 @@ MVP = **один продавец/tenant**, реальные сотрудник�
 | Client | **один responsive web/PWA**, три роли (seller/warehouse/buyer), минимальные verified service adapters | отдельные native Flutter/mobile/desktop приложения |
 | Operations | postgres backup/restore, error logs, simple runbook, essential rate/health checks | advanced observability, multi-region, autoscaling |
 
+**Дополнение MVP §0B:** INT-01…03 и EVT-01 входят в расширенный MVP в точных границах связанного ТЗ; историческая таблица выше описывает исходный J1 scope и не запрещает эту явную добавку. Остальные analytics/automation остаются POST-MVP.
+
 **Важная оговорка CUR:** если действующая `rm.currency.commerce-admission.enabled=false` не гарантирует KZT-only в новых публичных путях, публичный MVP **не активировать**, пока server-side policy и квалификация исторических опубликованных предложений не закрыты. Не запускать AUTO FX вместо устранения admission gap.
 
 **Оплата:** «заказ принят» и `SALES.COMPLETED` означают исполнение выдачи, а **не** оплату. Оплата вне платформы/при получении — организационный процесс пилота, без фиктивного статуса PAID, списания денег или автоматического refund. Ясно указывать ограничение в интерфейсе и условиях пилота.
@@ -99,6 +105,8 @@ MVP = **один продавец/tenant**, реальные сотрудник�
 | **G2** | Secure usable slice | real OIDC + minimal trusted REST + один responsive web client, **оба** пути BUS-MVP-J1/QR-MVP-J1 до end state | negative auth/tenant/PII, idempotent retries, no dangerous cross-domain effects, manual real-browser UAT |
 | **G3** | Real pilot | одна пилотная организация, реальные сотрудники и смартфоны, в том числе отмены, pickup double-scan и возврат | signed UAT scripts, real DB backups/restore drill, operator runbook, live identity and endpoint tests, fixed known issues |
 | **G4** | Release admission | security/legal/operations, privacy, rollback, monitoring, capacity qualified for actual agreed pilot load | explicit release decision; **no automatic production promotion from prior PASS** |
+
+**Для расширенного MVP:** IE-00…08 перед integrated G1, IE-09 и BUS-MVP-I1 в G2/G3/G4; 7 исходных групп экранов остаются, добавляются минимальные Customer/Warehouse 360 и Event Builder surfaces только в G2 после допуска. G0 принимает письменный CR §0B без фиктивного J1 дефекта.
 
 **MVP PILOT READY** после G3 (в контролируемом пилотном окружении). **MVP RELEASE READY** после G4. **SERVICE FUNCTIONAL PASS** после G1 — не обещает пользовательский MVP. Real OIDC/UI/phones становятся обязательными после G1; ранее действовавший `CONTROLLERS/UI STOP` превращается в **stage gate**, а не вечный запрет.
 

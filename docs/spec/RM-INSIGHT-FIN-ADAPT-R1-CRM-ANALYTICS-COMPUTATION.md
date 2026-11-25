@@ -5,11 +5,13 @@
 **Репозиторий назначения:** `alimbetov/RM`, **ветка:** `base_dev` (не создавать ветку и не изменять `main`)  
 **Сверенный исходник FIN:** `alimbetov/fin-analyzer`, `feat/fin-form-library-standalone`, commit `323f0d4e7c8f99fec97fa8be1f69a1b8414436d9`  
 **RM source-review baseline:** `19ce05d4355eb1f0b3e52016f55ed47035d27211`  
-**Статус:** `ARCHITECTURE / ADAPTATION SPEC / POST-MVP PARKED / NO CODE AUTHORIZATION / PRODUCTION HOLD`  
+**Статус:** `ARCHITECTURE / ADAPTATION SPEC / SCOPED MVP SELECTED (INT-01…03) / STAGED ADMISSION / PRODUCTION HOLD`  
 **Владелец решения:** RM Business Intelligence; бизнес-источники остаются в SALES, INVENTORY, CRM, TASKS, STOREFRONT и IAM.  
 **Связанные документы:** [RM-INSIGHT-R1](RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md), [банк идей](../ideas/RM-IDEA-BANK-R1.md), [MVP freeze](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md), [RM Business + QR](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md).
 
 > **Принятое архитектурное решение:** FIN Analyzer **не объединяется** с RM и не добавляется как внешний обязательный HTTP, Maven, runtime или database dependency. Заимствуются только точные идеи и, после отдельного legal/license review, небольшие чистые Java-алгоритмы. Все контракты адаптируются к авторизации, источникам истины, типам данных и миграциям RM. Сам документ НЕ меняет MVP freeze, не включает SQL DDL, HTTP API, новые workers, Tribuo dependency или UI.
+
+> **Owner scope CR-MVP-INTELLIGENCE-EVT-01 (2026-11-25):** [Scoped MVP R1](RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md) authorizes F2R-01…04 and the necessary scoped XYZ/performance part of F2R-05 after IE-00 source/contract admission. F2R-06/07, generic graph/reports/ML, FIN runtime remain PARKED; earlier post-MVP language is historical for admitted slices. Current core J1 qualification independent, expanded MVP additionally I1; all G1–G4 unchanged.
 
 ## 0. Executive decision и цели
 
@@ -355,7 +357,7 @@ Each F2R requires traceability `requirement → Java/SQL → concrete JUnit meth
 | Stage | Deliverable | No-go if |
 |---|---|---|
 | **F2R-00 (now, DOC ONLY)** | This adoption spec + idea bank registration and source/code review | MVP freeze changed, new module/schema created |
-| **F2R-01 (post-MVP)** | Adapt pure PeriodResolver tests + 6–8 metric registry entries, source owner matrix | Period/currency/permission contract ambiguous |
+| **F2R-01 (after IE-00)** | Adapt pure PeriodResolver tests + 6–8 metric registry entries, source owner matrix | Period/currency/permission contract ambiguous |
 | **F2R-02** | Native SQL/day L1 + exact source outbox/applied receipts aligned to INSIGHT-R1 | Lost/double event, negative PG admission |
 | **F2R-03** | L2 week/decade/month + metric methodology, result SHA and replay/rebuild | Irreconcilable weekly/decade boundary, stale asOf hidden |
 | **F2R-04** | Customer 360 and Warehouse 360 read facades; ABC/Pareto pilot | Identity/stock/paid-revenue semantics ambiguous |
@@ -363,7 +365,7 @@ Each F2R requires traceability `requirement → Java/SQL → concrete JUnit meth
 | **F2R-06** | ReportGrid/export in RM UX, XLSX with safe versioned metadata | Permission or memory/PII concerns |
 | **F2R-07** | Tribuo feature adapter + offline validation; optional EVT event outputs | No sufficient data quality, temporal baseline failed |
 
-**Non-blocking rule:** Existing RM-INSIGHT-R1 source/outbox design is prerequisite. These stages must not prevent core RM Business + QR MVP release. No scope expansion by referencing FIN branch.
+**Non-blocking rule:** Existing RM-INSIGHT-R1 source/outbox design is prerequisite. Core J1 qualification remains independent; expanded MVP acceptance requires I1 per CR-MVP-INTELLIGENCE-EVT-01, phased release only by explicit owner decision. No scope expansion by referencing FIN branch.
 
 ## 14. Definition of Done and explicit exclusions
 
