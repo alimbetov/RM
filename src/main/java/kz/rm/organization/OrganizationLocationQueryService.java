@@ -15,15 +15,15 @@ import java.util.UUID;
 /** Internal service: actor must come from validated principal, not request parameters. */
 @Service
 @RequiredArgsConstructor
-public class OrganizationLocationQueryService {
+class OrganizationLocationQueryService {
     private final TenantAuthorization authorization;
     private final OrganizationLocationRepository repository;
     private final LocationMapper mapper;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<LocationDto> search(UUID actorId, UUID tenantId, LocationSearch filters,
                                     int page, int size) {
-        authorization.require(actorId,tenantId,DomainPermission.ORGANIZATION_LOCATION_READ);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.ORGANIZATION_LOCATION_READ);
         if (page < 0 || size < 1 || size > 100)
             throw new IllegalArgumentException("Page must be nonnegative, size 1..100");
         var query = filters == null ? new LocationSearch(null,null,null) : filters;
@@ -32,9 +32,9 @@ public class OrganizationLocationQueryService {
                         .and(Sort.by("id")))).map(mapper::toDto);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LocationDto get(UUID actorId,UUID tenantId,UUID id) {
-        authorization.require(actorId,tenantId,DomainPermission.ORGANIZATION_LOCATION_READ);
+        authorization.requireForCommand(actorId,tenantId,DomainPermission.ORGANIZATION_LOCATION_READ);
         if(id==null) throw new IllegalArgumentException("Location required");
         return repository.findByIdAndWorkspaceId(id,tenantId)
                 .map(mapper::toDto).orElseThrow(()->new IllegalArgumentException("Location not found"));

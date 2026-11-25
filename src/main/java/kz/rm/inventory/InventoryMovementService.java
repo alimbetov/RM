@@ -23,13 +23,17 @@ import java.util.UUID;
 @Service
 public class InventoryMovementService {
     private final JdbcTemplate jdbc;
+    private final StockEligibility stockEligibility;
 
-    public InventoryMovementService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    public InventoryMovementService(JdbcTemplate jdbc,StockEligibility stockEligibility) {
+        this.jdbc=jdbc;this.stockEligibility=stockEligibility;
+    }
 
     public record Movement(UUID id, UUID tenantId, UUID locationId, UUID itemId,
                            BigDecimal delta, BigDecimal before, BigDecimal after) {}
 
     public enum Reason { MANUAL_ADJUSTMENT, CORRECTION, RECEIPT, WRITE_OFF }
+    public enum WriteOffCause { DAMAGE, LOSS, EXPIRED, OTHER }
 
     @Transactional
     Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
@@ -40,6 +44,17 @@ public class InventoryMovementService {
     @Transactional
     Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
                            String requestKey, BigDecimal delta, Reason reason) {
+        return adjust(tenantId,locationId,itemId,requestKey,delta,reason,null,null);
+    }
+
+    @Transactional
+    Movement adjust(UUID tenantId, UUID locationId, UUID itemId,
+                    String requestKey, BigDecimal delta, Reason reason,
+                    UUID actorId, WriteOffCause cause) {
+        if(reason==Reason.WRITE_OFF && cause==null && actorId!=null)
+            throw new IllegalArgumentException("Write-off reason required");
+        if(reason!=Reason.WRITE_OFF && cause!=null)
+            throw new IllegalArgumentException("Write-off reason only applies to write-off");
         if (tenantId==null || locationId==null || itemId==null
                 || requestKey==null || !requestKey.matches("[A-Za-z0-9_-]{8,100}")
                 || delta==null || delta.signum()==0 || delta.scale()>4
@@ -61,23 +76,46 @@ public class InventoryMovementService {
                 Integer.class,stripe);
         // Same request must return its original immutable ledger entry.
         var recorded=jdbc.query("""
-            SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after,reason_code
+            SELECT id,location_id,item_id,delta_quantity,balance_before,balance_after,reason_code,
+                   business_reason_code
             FROM crm.inv_stock_movement WHERE tenant_id=? AND request_key=?
             """,(rs,n)->new Movement(rs.getObject(1,UUID.class),tenantId,
                 rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
                 rs.getBigDecimal(4),rs.getBigDecimal(5),rs.getBigDecimal(6)),
                 tenantId,requestKey);
         if(!recorded.isEmpty()) {
-            String savedReason=jdbc.queryForObject("""
-                SELECT reason_code FROM crm.inv_stock_movement WHERE tenant_id=? AND request_key=?
-                """,String.class,tenantId,requestKey);
+            String[] saved=jdbc.query("""
+                SELECT reason_code,business_reason_code
+                FROM crm.inv_stock_movement WHERE tenant_id=? AND request_key=?
+                """,rs->rs.next()?new String[]{rs.getString(1),rs.getString(2)}:null,
+                tenantId,requestKey);
             var old=recorded.getFirst();
             if(!old.locationId().equals(locationId) || !old.itemId().equals(itemId)
-                    || old.delta().compareTo(delta)!=0 || !savedReason.equals(reason.name()))
+                    || old.delta().compareTo(delta)!=0 || !saved[0].equals(reason.name())
+                    || !java.util.Objects.equals(saved[1],cause==null?null:cause.name()))
                 throw new IllegalArgumentException("Idempotency key reused with different movement");
             return old;
         }
 
+        // Transfer and single-leg movement request keys share the tenant-wide
+        // idempotency namespace. The request stripe above serializes both writers.
+        Integer transferKeyCount=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_transfer
+            WHERE tenant_id=? AND request_key=?
+            """,Integer.class,tenantId,requestKey);
+        if(transferKeyCount!=null && transferKeyCount>0)
+            throw new IllegalArgumentException("Movement key belongs to an existing transfer");
+
+        // First check under tenant request-key fence; idempotent retries above
+        // are replayable even after closing a warehouse or archiving the SKU.
+        // Lock owner reference rows before stock for race-safe ACTIVE PRODUCT check.
+        stockEligibility.requireReceivable(tenantId,locationId,itemId);
+        if(reason==Reason.RECEIPT) {
+            // Stock row is zero-initialized on first legitimate receipt only.
+            // The warehouse owner row is FOR UPDATE locked, so competing first
+            // receives serialize initialization without an upsert race.
+            stockEligibility.ensureZeroPosition(tenantId,locationId,itemId);
+        }
         // Serialize by the exact tenant/location/SKU stock row, across all pods.
         List<BigDecimal[]> balance=jdbc.query("""
             SELECT on_hand,reserved FROM crm.inv_stock_balance
@@ -101,9 +139,12 @@ public class InventoryMovementService {
         jdbc.update("""
             INSERT INTO crm.inv_stock_movement
             (tenant_id,id,location_id,item_id,request_key,delta_quantity,
-             balance_before,balance_after,occurred_at,recorded_at,reason_code)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-            """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now,reason.name());
+             balance_before,balance_after,occurred_at,recorded_at,reason_code,
+             actor_user_id,source_type,source_id,business_reason_code,posting_version)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now,reason.name(),
+                actorId,actorId==null?null:"STAFF",null,cause==null?null:cause.name(),
+                InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,locationId,itemId));
         return new Movement(id,tenantId,locationId,itemId,delta,before,after);
     }
 }

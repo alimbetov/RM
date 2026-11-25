@@ -27,7 +27,7 @@ public class TenantRoleService {
     public record TenantRole(UUID id, String code, String displayName, boolean active) {}
 
     @Transactional
-    public TenantRole createRole(UUID actorId, UUID tenantId, String code, String displayName) {
+    TenantRole createRole(UUID actorId, UUID tenantId, String code, String displayName) {
         lockAndAuthorize(actorId,tenantId);
         if(code==null || !code.matches("[A-Z][A-Z0-9_]{2,63}")
                 || displayName==null || displayName.isBlank() || displayName.length()>120)
@@ -43,7 +43,7 @@ public class TenantRoleService {
     }
 
     @Transactional
-    public void grant(UUID actorId,UUID tenantId,UUID roleId,DomainPermission permission) {
+    void grant(UUID actorId,UUID tenantId,UUID roleId,DomainPermission permission) {
         lockAndAuthorize(actorId,tenantId);
         ensureAssignable(permission);
         requireActiveRole(tenantId,roleId);
@@ -60,7 +60,7 @@ public class TenantRoleService {
     }
 
     @Transactional
-    public void revoke(UUID actorId,UUID tenantId,UUID roleId,DomainPermission permission) {
+    void revoke(UUID actorId,UUID tenantId,UUID roleId,DomainPermission permission) {
         lockAndAuthorize(actorId,tenantId);
         ensureAssignable(permission);
         if(jdbc.update("""
@@ -71,7 +71,7 @@ public class TenantRoleService {
     }
 
     @Transactional
-    public void assign(UUID actorId,UUID tenantId,UUID userId,UUID roleId) {
+    void assign(UUID actorId,UUID tenantId,UUID userId,UUID roleId) {
         lockAndAuthorize(actorId,tenantId);
         if(userId==null || userId.equals(actorId))
             throw new SecurityException("Role self-assignment prohibited");
@@ -90,7 +90,7 @@ public class TenantRoleService {
     }
 
     @Transactional
-    public void unassign(UUID actorId,UUID tenantId,UUID userId,UUID roleId) {
+    void unassign(UUID actorId,UUID tenantId,UUID userId,UUID roleId) {
         lockAndAuthorize(actorId,tenantId);
         if(userId==null || userId.equals(actorId))
             throw new SecurityException("Role self-revocation prohibited");
@@ -102,7 +102,7 @@ public class TenantRoleService {
     }
 
     @Transactional
-    public void enable(UUID actorId,UUID tenantId) {
+    void enable(UUID actorId,UUID tenantId) {
         lockAndAuthorize(actorId,tenantId);
         Boolean already=jdbc.query("""
             SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
@@ -144,7 +144,7 @@ public class TenantRoleService {
     }
 
     @Transactional
-    public void setRoleActive(UUID actorId,UUID tenantId,UUID roleId,boolean active) {
+    void setRoleActive(UUID actorId,UUID tenantId,UUID roleId,boolean active) {
         lockAndAuthorize(actorId,tenantId);
         requireRole(tenantId,roleId);
         int updated=jdbc.update("""
@@ -157,7 +157,7 @@ public class TenantRoleService {
     }
 
     @Transactional(readOnly=true)
-    public List<DomainPermission> listGrants(UUID actorId,UUID tenantId,UUID roleId) {
+    List<DomainPermission> listGrants(UUID actorId,UUID tenantId,UUID roleId) {
         authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
         requireRole(tenantId,roleId);
         return jdbc.query("""
@@ -169,7 +169,7 @@ public class TenantRoleService {
     public record RoleAssignment(UUID userId,UUID roleId,String roleCode) {}
 
     @Transactional(readOnly=true)
-    public List<RoleAssignment> listAssignments(UUID actorId,UUID tenantId) {
+    List<RoleAssignment> listAssignments(UUID actorId,UUID tenantId) {
         authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
         return jdbc.query("""
             SELECT a.user_id,a.role_id,r.role_code
@@ -183,7 +183,7 @@ public class TenantRoleService {
     }
 
     @Transactional(readOnly=true)
-    public List<TenantRole> listRoles(UUID actorId,UUID tenantId) {
+    List<TenantRole> listRoles(UUID actorId,UUID tenantId) {
         authorization.require(actorId,tenantId,DomainPermission.TENANT_RBAC_MANAGE);
         return jdbc.query("""
             SELECT id,role_code,display_name,active FROM public.iam_tenant_role
@@ -192,7 +192,7 @@ public class TenantRoleService {
                  rs.getString(3),rs.getBoolean(4)),tenantId);
     }
 
-    private void lockAndAuthorize(UUID actorId,UUID tenantId) {
+    void lockAndAuthorize(UUID actorId,UUID tenantId) {
         if(actorId==null || tenantId==null)
             throw new SecurityException("Verified owner and tenant required");
         // Match the command admission order. The actor lock also fences global

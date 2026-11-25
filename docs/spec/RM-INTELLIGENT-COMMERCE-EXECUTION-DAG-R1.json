@@ -1,0 +1,408 @@
+{
+  "revision": "R1.1",
+  "source_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a",
+  "status": "STABILIZATION_FIRST_MERGE_HOLD",
+  "admission": "CR-MVP-INTELLIGENCE-EVT-01 selected; IE-00A source review complete; IE-00B and new feature execution paused until verified core merge; Radar expansion deferred; production HOLD",
+  "nodes": [
+    {
+      "id": "P0",
+      "title": "Core mandatory CI and verified P0 corrections",
+      "lane": "core",
+      "depends_on": [],
+      "exit": "fix mandatory defects including C2; C3 manual-only temporary core-merge exception, retain 200ms/10% for Radar/production",
+      "status": "ACTIVE_STABILIZATION"
+    },
+    {
+      "id": "Q0",
+      "title": "Current core exact-SHA qualification",
+      "lane": "core_gate",
+      "depends_on": [
+        "P0"
+      ],
+      "exit": "remaining mandatory exact-SHA CI/PG/security/migration/manifest GREEN; only explicit C3 core-merge deferral and approved skips; actual branch protection must permit; not Radar or production PASS",
+      "status": "HOLD_REQUIRED_CHECKS"
+    },
+    {
+      "id": "Q1",
+      "title": "Verified core merge base_dev → main and reconcile baseline",
+      "lane": "core_gate",
+      "depends_on": [
+        "Q0"
+      ],
+      "exit": "PR #9 merge expected head SHA; verify main tree/merge commit and applicable post-merge checks, reconcile base_dev without force; record baseline; not production admission",
+      "status": "BLOCKED_BY_Q0"
+    },
+    {
+      "id": "A0",
+      "title": "IE-00A source inventory",
+      "lane": "foundation",
+      "depends_on": [],
+      "exit": "source review only, completed in this document",
+      "status": "SOURCE_REVIEW_COMPLETE"
+    },
+    {
+      "id": "A1",
+      "title": "IE-00B migrated schema and source producer/fixture proof",
+      "lane": "foundation",
+      "depends_on": [
+        "A0",
+        "Q1"
+      ],
+      "exit": "actual schema, coverage, owner event proof, baseline",
+      "status": "PAUSED_UNTIL_VERIFIED_CORE_MERGE"
+    },
+    {
+      "id": "A2",
+      "title": "IE-00B common ADR + metric and IAM/event admission",
+      "lane": "foundation",
+      "depends_on": [
+        "A0",
+        "Q1"
+      ],
+      "exit": "reviewed definitions and typed scope; no invented grants",
+      "status": "PAUSED_UNTIL_VERIFIED_CORE_MERGE"
+    },
+    {
+      "id": "A3",
+      "title": "IE-00 admission register",
+      "lane": "gate",
+      "depends_on": [
+        "A1",
+        "A2"
+      ],
+      "exit": "approved source/metric/event contracts; blocked items explicit",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "B1",
+      "title": "IE-01 PeriodResolver + Metric Registry + direct SQL oracle",
+      "lane": "analytics",
+      "depends_on": [
+        "A3"
+      ],
+      "exit": "PG/H2 exact periods, numeric, source quality",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "B2",
+      "title": "Shared canonical event contract and owner transactional producer qualification",
+      "lane": "shared",
+      "depends_on": [
+        "A3"
+      ],
+      "exit": "stable event key, atomic evidence, current owner regression",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "E1",
+      "title": "IE-06 typed rule/template/audience/preview",
+      "lane": "evt",
+      "depends_on": [
+        "A3"
+      ],
+      "exit": "no sends, permission/template proof; may parallel B1/B2",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "B3",
+      "title": "IE-02A L1 daily projection and idempotent receipts",
+      "lane": "analytics",
+      "depends_on": [
+        "B1",
+        "B2"
+      ],
+      "exit": "direct SQL reconciliation, duplicate/replay",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "B4",
+      "title": "IE-02B L2 week/decade/month + backfill/rebuild",
+      "lane": "analytics",
+      "depends_on": [
+        "B3"
+      ],
+      "exit": "cross-month week, shadow switch, no gaps/duplicates",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "C1",
+      "title": "IE-03A Customer 360 current-link and permission read slice",
+      "lane": "customer",
+      "depends_on": [
+        "B1",
+        "A3"
+      ],
+      "exit": "direct SQL scope/oracle; no stale identity projection",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "W1",
+      "title": "IE-04A Warehouse 360 live balance and scoped movement view",
+      "lane": "warehouse",
+      "depends_on": [
+        "B1",
+        "A3"
+      ],
+      "exit": "live owner parity, recorded/event basis, assigned scope",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "E2",
+      "title": "IE-07A durable PLACED in-app intent and delivery + MOCK",
+      "lane": "evt",
+      "depends_on": [
+        "E1",
+        "B2"
+      ],
+      "exit": "atomic receipt, lease/fencing, retry/revoke, no external",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "C2",
+      "title": "IE-03B Customer 360 L1/L2 integration",
+      "lane": "customer",
+      "depends_on": [
+        "C1",
+        "B4"
+      ],
+      "exit": "qualified cohort and current link reauthorization",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "W2",
+      "title": "IE-04B Warehouse historical rollups/reconciliation",
+      "lane": "warehouse",
+      "depends_on": [
+        "W1",
+        "B4"
+      ],
+      "exit": "opening/closing, returns and transfers, unknown history",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "W3",
+      "title": "IE-05 ABC/Pareto/XYZ",
+      "lane": "warehouse",
+      "depends_on": [
+        "W2",
+        "B4"
+      ],
+      "exit": "approved thresholds, unit and complete history, UNKNOWN allowed",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "E3",
+      "title": "IE-07B other admitted triggers and deadline scheduling",
+      "lane": "evt",
+      "depends_on": [
+        "E2"
+      ],
+      "exit": "owner transition proof and clock/expiry/renew/reschedule gates; no task mutation",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "X1",
+      "title": "Cross-module MC-01…05 and mixed load",
+      "lane": "integration",
+      "depends_on": [
+        "C2",
+        "W3",
+        "E3",
+        "B4"
+      ],
+      "exit": "owner ledger parity and independent consumers; no regressions",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "G1",
+      "title": "IE-08 integrated service qualification exact SHA",
+      "lane": "gate",
+      "depends_on": [
+        "X1",
+        "P0"
+      ],
+      "exit": "all required CI/PG/BSR/previous tests pass; immutable candidate",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "G2",
+      "title": "IE-09 G2 real OIDC/REST/PWA",
+      "lane": "gate",
+      "depends_on": [
+        "G1"
+      ],
+      "exit": "J1 + I1 role-safe browser journeys",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "G3",
+      "title": "IE-09 G3 controlled pilot/UAT/restore",
+      "lane": "gate",
+      "depends_on": [
+        "G2"
+      ],
+      "exit": "signed user acceptance and restore",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "G4",
+      "title": "IE-09 G4 independent release admission",
+      "lane": "gate",
+      "depends_on": [
+        "G3"
+      ],
+      "exit": "explicit approval, production remains HOLD until decision",
+      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+    },
+    {
+      "id": "R0",
+      "title": "R0.1D close existing Radar qualification",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "A0"
+      ],
+      "exit": "existing mandatory regression/P0 now; full R0.1D family audit remains before expansion; no waiver; 200ms/10%",
+      "status": "EXISTING_GATE_HOLD_EXPANSION_DEFERRED"
+    },
+    {
+      "id": "R1",
+      "title": "R-01 Smart Deadline R0.2",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R0"
+      ],
+      "exit": "explicit owner resumption; G2 for UI",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "R2",
+      "title": "R-02 Universal Signal + Sales Radar",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R0",
+        "B4",
+        "G1"
+      ],
+      "exit": "A1–A6 by vertical and separate CR; proposed post-MVP unless explicit exception",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "R3",
+      "title": "R-03 Customer Radar",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R2",
+        "C2"
+      ],
+      "exit": "A1–A6, current identity and history",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "R4",
+      "title": "R-04 Inventory Radar",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R2",
+        "W3"
+      ],
+      "exit": "A1–A6, current stock and quality",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "R5",
+      "title": "R-05 Financial/FX Radar",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R2"
+      ],
+      "exit": "separate finance/FX qualified source gate not satisfied by these deps",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "R6",
+      "title": "R-06 Predictive Radar",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R2"
+      ],
+      "exit": "separate features/labels/temporal validation, enough history/approval",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "R7",
+      "title": "R-07 Action Advisor",
+      "lane": "radar_deferred",
+      "depends_on": [
+        "R2"
+      ],
+      "exit": "reliable signals, explicit owner command admission; ML optional",
+      "status": "DEFERRED_ANALYTICS_FIRST"
+    }
+  ],
+  "transport": {
+    "current": "POSTGRESQL_OUTBOX_FIRST",
+    "future": "REDIS_DEFERRED_SEPARATE_ADMISSION",
+    "contract": "RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md",
+    "required_at": [
+      "A2",
+      "B2",
+      "B3",
+      "E2",
+      "X1"
+    ],
+    "redis_mvp_dependency": false
+  },
+  "original_source_sha": "cf09e317f04c79b88c0f64276bc4985ccfa4b3aa",
+  "evidence": {
+    "reviewed_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a",
+    "check_snapshot": {
+      "in_progress": 12,
+      "success": 35,
+      "skipped": 2,
+      "failure": 2
+    },
+    "failed_checks": [
+      {
+        "name": "radar-c3-postgresql",
+        "url": "https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506"
+      },
+      {
+        "name": "radar-c2-postgresql",
+        "url": "https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704"
+      }
+    ],
+    "pr": 9,
+    "merged": false,
+    "c3": {
+      "status": "FAIL",
+      "degradation_pct": 12.9,
+      "budget_pct": 10,
+      "overlap_reads": 4963,
+      "job": 138964527506
+    },
+    "c2": {
+      "status": "FAIL",
+      "case": "c202AccountSuspensionBothCommitOrders",
+      "finding": "denial message regression, not evidence of unauthorized admission",
+      "job": 138964525704
+    },
+    "f2": {
+      "status": "PASS",
+      "tests": 8,
+      "degradation_pct": -3.277,
+      "job": 138964526239
+    },
+    "exact_sha_admission": "NOT_CONFIRMED"
+  },
+  "core_merge_exception": {
+    "id": "RADAR-C3-CORE-MERGE-DEFERRAL-01",
+    "status": "TEMPORARY_MANUAL_ONLY",
+    "applies_to": "core code integration only",
+    "c3_qualified": false,
+    "c2_required": true,
+    "branch_protection_verified": false,
+    "restore_before": "Radar resumption or production admission",
+    "threshold_pct": 10,
+    "source_evidence_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a"
+  }
+}

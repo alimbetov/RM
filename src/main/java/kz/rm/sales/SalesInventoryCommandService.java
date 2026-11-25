@@ -2,6 +2,8 @@ package kz.rm.sales;
 
 import kz.rm.iam.DomainPermission;
 import kz.rm.iam.TenantAuthorization;
+import kz.rm.iam.WarehouseStaffScopeService;
+import org.springframework.beans.factory.annotation.Value;
 import kz.rm.inventory.OrderInventoryPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,12 +29,18 @@ public class SalesInventoryCommandService {
     private final TenantAuthorization authorization;
     private final OrderInventoryPort inventory;
     private final JdbcTemplate jdbc;
+    private final WarehouseStaffScopeService warehouseStaff;
+
+    @Value("${rm.mvp.service-mode.enabled:false}")
+    private boolean strictMvpServiceMode;
 
     public SalesInventoryCommandService(TenantAuthorization authorization,
-                                        OrderInventoryPort inventory,JdbcTemplate jdbc) {
+                                        OrderInventoryPort inventory,JdbcTemplate jdbc,
+                                        WarehouseStaffScopeService warehouseStaff) {
         this.authorization=authorization;
         this.inventory=inventory;
         this.jdbc=jdbc;
+        this.warehouseStaff=warehouseStaff;
     }
 
     public record CommandResult(UUID orderId,String status,int affectedLines) {}
@@ -45,6 +53,8 @@ public class SalesInventoryCommandService {
         if(orderId==null || locationId==null)
             throw new IllegalArgumentException("Order and warehouse required");
         String status=lockOrder(tenantId,orderId);
+        if(strictMvpServiceMode)
+            warehouseStaff.requireAssigned(actorId,tenantId,locationId);
         if("CONFIRMED".equals(status)) {
             // A prior successful command must already have a reservation for every line.
             List<Line> lines=lines(tenantId,orderId);
@@ -64,6 +74,9 @@ public class SalesInventoryCommandService {
         if(!"PLACED".equals(status))throw new IllegalStateException("Order not confirmable");
         List<Line> lines=lines(tenantId,orderId);
         if(lines.isEmpty())throw new IllegalStateException("Order has no lines");
+        // Historical lines cannot reconstruct a buyer-accepted SKU from a live offer.
+        if(lines.stream().anyMatch(line->line.itemId()==null))
+            throw new IllegalStateException("UNMAPPED_LEGACY_ORDER: immutable SKU missing");
 
         // State change remains invisible to other transactions until commit.
         updateOrder(tenantId,orderId,"PLACED","CONFIRMED");
@@ -91,6 +104,15 @@ public class SalesInventoryCommandService {
         if("COMPLETED".equals(state) || "OUT_FOR_DELIVERY".equals(state)
                 || "READY_FOR_PICKUP".equals(state) || "REJECTED".equals(state))
             throw new IllegalStateException("Order cannot be cancelled");
+        // FC-40/DEC-SAL-02 conservative policy: physical pick evidence is append-only.
+        // Do not release stock or cancel an order after any line has been picked.
+        // A future audited reverse-pick workflow requires independent approval.
+        Integer picked=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_pick_confirmation
+            WHERE tenant_id=? AND order_id=?
+            """,Integer.class,tenantId,orderId);
+        if(picked!=null && picked>0)
+            throw new IllegalStateException("ORDER_CANCEL_REQUIRES_REVERSE_PICK");
         List<UUID> active=jdbc.query("""
             SELECT id FROM crm.inv_stock_reservation
             WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
@@ -101,6 +123,10 @@ public class SalesInventoryCommandService {
             WHERE tenant_id=? AND order_id=? AND state='FULFILLED'
             """,Integer.class,tenantId,orderId);
         if(fulfilled!=0)throw new IllegalStateException("Shipped items cannot be cancelled");
+        // Do not release warehouse stock merely because the actor has tenant grants.
+        // On a PLACED order there are no reservations and no warehouse effects.
+        if(strictMvpServiceMode && !active.isEmpty())
+            requireStockWarehouseScope(actorId,tenantId,orderId);
         updateOrder(tenantId,orderId,state,"CANCELLED");
         for(UUID reservation:active)inventory.release(salesPermit,stockPermit,reservation);
         appendEvent(tenantId,orderId,"CANCELLED");
@@ -113,6 +139,14 @@ public class SalesInventoryCommandService {
         var stockPermit=authorization.requireForCommand(actorId,tenantId,DomainPermission.INVENTORY_FULFILL);
         if(orderId==null)throw new IllegalArgumentException("Order required");
         String state=lockOrder(tenantId,orderId);
+        // DEC-FUL-01: refuse generic entry point even for a replay against
+        // an already handover-completed order. Route authority is immutable.
+        String fulfillmentMode=jdbc.queryForObject("""
+            SELECT fulfillment_mode FROM crm.sales_order
+            WHERE tenant_id=? AND id=?
+            """,String.class,tenantId,orderId);
+        if(!"STANDARD".equals(fulfillmentMode))
+            throw new IllegalStateException("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         if("COMPLETED".equals(state)) {
             int expected=lines(tenantId,orderId).size();
             Integer completed=jdbc.queryForObject("""
@@ -125,6 +159,15 @@ public class SalesInventoryCommandService {
         }
         if(!"CONFIRMED".equals(state) && !"PREPARING".equals(state))
             throw new IllegalStateException("Order not ready for fulfillment");
+        // FC-40 interim safety fence: once physical picking has begun,
+        // the generic completion path cannot bypass the secure handover.
+        // Full channel classification (DEC-FUL-01) remains a separate admission.
+        Integer picked=jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_pick_confirmation
+            WHERE tenant_id=? AND order_id=?
+            """,Integer.class,tenantId,orderId);
+        if(picked!=null && picked>0)
+            throw new IllegalStateException("ORDER_FULFILL_REQUIRES_PICKUP_PROOF");
         int lineCount=lines(tenantId,orderId).size();
         List<UUID> active=jdbc.query("""
             SELECT id FROM crm.inv_stock_reservation
@@ -133,10 +176,27 @@ public class SalesInventoryCommandService {
             """,(rs,n)->rs.getObject(1,UUID.class),tenantId,orderId);
         if(active.size()!=lineCount || lineCount==0)
             throw new IllegalStateException("Order reservations incomplete");
+        if(strictMvpServiceMode)
+            requireStockWarehouseScope(actorId,tenantId,orderId);
         for(UUID reservation:active)inventory.fulfill(salesPermit,stockPermit,reservation);
         updateOrder(tenantId,orderId,state,"COMPLETED");
         appendEvent(tenantId,orderId,"COMPLETED");
         return new CommandResult(orderId,"COMPLETED",active.size());
+    }
+
+    /** The order row is already locked. Resolve stock scope from persisted
+     * reservations, never an actor- or client-selected warehouse identifier.
+     * QR pickup has its separate mandatory warehouse fence in all modes.
+     */
+    private void requireStockWarehouseScope(UUID actor,UUID tenant,UUID order) {
+        List<UUID> warehouses=jdbc.query("""
+            SELECT DISTINCT location_id FROM crm.inv_stock_reservation
+            WHERE tenant_id=? AND order_id=? AND state='ACTIVE'
+            ORDER BY location_id
+            """,(rs,n)->rs.getObject(1,UUID.class),tenant,order);
+        if(warehouses.size()!=1)
+            throw new SecurityException("WAREHOUSE_SCOPE_AMBIGUOUS");
+        warehouseStaff.requireAssigned(actor,tenant,warehouses.getFirst());
     }
 
     private String lockOrder(UUID tenant,UUID order) {
@@ -150,11 +210,10 @@ public class SalesInventoryCommandService {
 
     private List<Line> lines(UUID tenant,UUID order) {
         return jdbc.query("""
-            SELECT l.id,s.catalog_item_id,l.quantity
-            FROM crm.sales_order_line l JOIN crm.store_offer s
-              ON s.tenant_id=l.tenant_id AND s.id=l.offer_id
+            SELECT l.id,l.catalog_item_id_snapshot,l.quantity
+            FROM crm.sales_order_line l
             WHERE l.tenant_id=? AND l.order_id=?
-            ORDER BY s.catalog_item_id,l.id
+            ORDER BY l.catalog_item_id_snapshot,l.id
             """,(rs,n)->new Line(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                     BigDecimal.valueOf(rs.getLong(3))),tenant,order);
     }

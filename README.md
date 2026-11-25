@@ -31,6 +31,14 @@
 - [Current domain baseline](docs/architecture/RM-DOMAIN-LAYER-BASELINE.md)
 - [FRZ-1 security review](docs/reviews/RM-FRZ1-SECURITY-REVIEW-2026-11-21.md)
 - [SEC-R1.1 tenant roles](docs/spec/RM-SEC-R1.1-TENANT-RBAC.md)
+- [RM-MAIL-OTP-R1.1 — email OTP, KumoMTA mail outbox and localized templates (spec only)](docs/spec/RM-MAIL-OTP-R1.md)
+- [RM-FILES-R1.1 — CRM media registry, entity attachments, access control and storage lifecycle (spec only)](docs/spec/RM-FILES-R1.md)
+- [RM-TENANT-CRUD-COMPLETION-R1 — verified CRUD matrix, tenant isolation and gap-based service backlog](docs/spec/RM-TENANT-CRUD-COMPLETION-R1.md)
+- [RM-TENANT-SERVICES-COMPLETION-R1 — coordinated service development, tenant permissions, domain contracts and QA gates](docs/spec/RM-TENANT-SERVICES-COMPLETION-R1.md)
+- [RM-SVC-FUNCTIONAL-DEPTH-AUDIT-R1 — source-based business functionality, stubs and service completion gaps](docs/reviews/RM-SVC-FUNCTIONAL-DEPTH-AUDIT-2026-11-22.md)
+- [RM-SERVICE-12-PASS-REVIEW-PROTOCOL-R1 — one domain at a time, 12 quality passes](docs/spec/RM-SERVICE-12-PASS-REVIEW-PROTOCOL-R1.md)
+- [RM-INVENTORY-FUNCTIONAL-COMPLETION-R1 — 12-pass INVENTORY audit, domain alignment and phased implementation specification](docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md)
+- [RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE — exact-SHA PostgreSQL evidence, lock contention and 12-pass quantity sign-off](docs/reviews/RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md)
 
 **Document authority:** RM-PLATFORM-STANDARD-R2 defines approved rules; domain docs/ADRs provide detail; reviews document historical evidence; code and tests establish what is implemented. A standard approval is not production approval.
 

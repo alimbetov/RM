@@ -1,0 +1,895 @@
+package kz.rm.storefront;
+
+import kz.rm.iam.*;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+
+import java.time.Instant;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+
+/** RM-STORE-01 service-only tests: no HTTP or fake global storefront privileges. */
+@SpringBootTest
+@org.springframework.test.context.TestPropertySource(properties={
+        "RM_KMS_ROOT_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "RM_IAM_EMAIL_LOOKUP_KEY_BASE64=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+})
+class StorefrontManagementQualificationTest {
+    @Autowired StorefrontManagementService storefronts;
+    @Autowired StorefrontOfferService offers;
+    @Autowired kz.rm.catalog.CatalogItemService catalog;
+    @Autowired kz.rm.autoorder.AutoOrderService autoOrders;
+    @Autowired VerifiedTenantRoleCommands roles;
+    @Autowired OrganizationRepository organizations;
+    @Autowired WorkspaceRepository workspaces;
+    @Autowired UserAccountRepository users;
+    @Autowired OrganizationMembershipRepository memberships;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired javax.sql.DataSource dataSource;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    private record Fixture(UUID tenant, UUID owner, UUID staff, UUID organization) {}
+
+    private Fixture fixture() {
+        var owner = users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "store-owner-" + UUID.randomUUID(), "Store owner"));
+        var staff = users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
+                "store-staff-" + UUID.randomUUID(), "Store seller"));
+        var org = organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
+                "Storefront LLP", "Storefront", "KZ"));
+        var tenant = workspaces.saveAndFlush(
+                WorkspaceEntity.organization(UUID.randomUUID(), org.getId()));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                org.getId(), owner.getId(), OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                org.getId(), staff.getId(), OrganizationMembershipEntity.Role.MEMBER));
+        jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?", tenant.getId());
+        return new Fixture(tenant.getId(), owner.getId(), staff.getId(), org.getId());
+    }
+
+    private VerifiedActor verified(UUID user) {
+        String subject = jdbc.queryForObject(
+                "SELECT external_subject FROM iam_user_account WHERE id=?",
+                String.class, user);
+        JwtDecoder decoder = token -> Jwt.withTokenValue(token)
+                .header("alg", "RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder, users).resolve("synthetic-only");
+    }
+
+    private UUID grant(Fixture fixture, DomainPermission... permissions) {
+        var actor = verified(fixture.owner());
+        var role = roles.createRole(actor, fixture.tenant(),
+                "STORE_" + UUID.randomUUID().toString().replace("-", "")
+                        .substring(0, 12).toUpperCase(),
+                "Storefront seller");
+        for (var permission : permissions)
+            roles.grant(actor, fixture.tenant(), role.id(), permission);
+        roles.assign(actor, fixture.tenant(), fixture.staff(), role.id());
+        roles.enable(actor, fixture.tenant());
+        return role.id();
+    }
+
+    @Test void sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck() {
+        var tenant = fixture();
+        grant(tenant, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var staff = verified(tenant.staff());
+        String slug = "shop-" + UUID.randomUUID();
+        var draft = storefronts.createDraft(staff, tenant.tenant(), slug);
+        assertThat(draft.state()).isEqualTo(StorefrontSettings.State.DRAFT);
+        assertThat(storefronts.get(staff, tenant.tenant(), draft.id()).slug())
+                .isEqualTo(slug);
+
+        var published = storefronts.publish(staff, tenant.tenant(), draft.id(),
+                draft.rowVersion());
+        assertThat(published.state()).isEqualTo(StorefrontSettings.State.PUBLISHED);
+        assertThatThrownBy(() -> storefronts.pause(staff, tenant.tenant(), draft.id(),
+                draft.rowVersion()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STALE");
+
+        var paused = storefronts.pause(staff, tenant.tenant(), draft.id(),
+                published.rowVersion());
+        var resumed = storefronts.publish(staff, tenant.tenant(), draft.id(),
+                paused.rowVersion());
+        // Fresh same-state replay is a no-op: no extra audit entry.
+        storefronts.publish(staff, tenant.tenant(), draft.id(),
+                resumed.rowVersion());
+        assertThatThrownBy(() -> storefronts.pause(staff, tenant.tenant(), draft.id(),
+                published.rowVersion())).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STALE");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.audit_event
+                WHERE tenant_id=? AND entity_id=?
+                  AND action_code IN ('STOREFRONT_CREATED',
+                                     'STOREFRONT_PUBLISHED','STOREFRONT_PAUSED')
+                """, Integer.class, tenant.tenant(), draft.id())).isEqualTo(4);
+    }
+
+    @Test void grantsAreRequiredAndForeignStorefrontIsNotAddressable() {
+        var a = fixture();
+        var b = fixture();
+        grant(a, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        grant(b, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var actorA = verified(a.staff());
+        var actorB = verified(b.staff());
+        var own = storefronts.createDraft(actorA, a.tenant(),
+                "shop-" + UUID.randomUUID());
+
+        assertThatThrownBy(() -> storefronts.get(actorB, b.tenant(), own.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> storefronts.publish(actorB, b.tenant(), own.id(),
+                0L))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(() -> storefronts.createDraft(actorB, a.tenant(),
+                "shop-" + UUID.randomUUID()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(() -> storefronts.publish(actorA, a.tenant(), own.id(),
+                1L))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.store_front WHERE tenant_id=? AND id=?
+                """, String.class, a.tenant(), own.id())).isEqualTo("DRAFT");
+    }
+    @Test void offerVersionCasAndCheckoutSnapshotStayImmutable() {
+        var t = fixture();
+        grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var draftStore = storefronts.createDraft(seller, t.tenant(),
+                "shop-" + UUID.randomUUID());
+        var store = storefronts.publish(seller, t.tenant(), draftStore.id(),
+                draftStore.rowVersion());
+        var catalogId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, t.tenant(), catalogId, "ST-" + UUID.randomUUID());
+        var draft = offers.createDraft(seller, t.tenant(), catalogId,
+                "Widget", new java.math.BigDecimal("10.0000"), "KZT");
+        assertThat(draft.rowVersion()).isZero();
+        var published = offers.publish(seller, t.tenant(), draft.id(), draft.rowVersion());
+        assertThat(published.rowVersion()).isEqualTo(1L);
+        assertThat(published.state()).isEqualTo(StorefrontOfferService.State.PUBLISHED);
+        var order = autoOrders.checkout(store.slug(),
+                "offer-" + UUID.randomUUID() + "@example.kz", "offer-key-0001",
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(), 2)))
+                .order();
+        var changed = offers.updatePrice(seller, t.tenant(), draft.id(),
+                "Widget 2026", new java.math.BigDecimal("12.0000"), "KZT",
+                published.rowVersion());
+        assertThat(changed.rowVersion()).isEqualTo(2L);
+        assertThatThrownBy(() -> offers.updatePrice(seller, t.tenant(), draft.id(),
+                "Stale", java.math.BigDecimal.ONE, "KZT", published.rowVersion()))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("STALE");
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """, java.math.BigDecimal.class, t.tenant(), order.orderId()))
+                .isEqualByComparingTo("10.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """, UUID.class, t.tenant(), order.orderId())).isEqualTo(catalogId);
+        var paused = offers.pause(seller, t.tenant(), draft.id(), changed.rowVersion());
+        assertThat(paused.state()).isEqualTo(StorefrontOfferService.State.PAUSED);
+        assertThatThrownBy(() -> autoOrders.checkout(store.slug(),
+                "other-" + UUID.randomUUID() + "@example.kz", "offer-key-0002",
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(), 1))))
+                .isInstanceOf(IllegalArgumentException.class);
+        var resumed = offers.publish(seller, t.tenant(), draft.id(), paused.rowVersion());
+        assertThat(resumed.rowVersion()).isEqualTo(4L);
+        assertThatThrownBy(() -> offers.hide(seller, t.tenant(), draft.id(),
+                changed.rowVersion())).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STALE");
+    }
+
+    @Test void pass09PausedStorefrontCannotBeBypassedThroughSecondOfferService() {
+        var t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var actor=verified(t.staff());
+        var draftStore=storefronts.createDraft(actor,t.tenant(),"shop-"+UUID.randomUUID());
+        var publishedStore=storefronts.publish(actor,t.tenant(),draftStore.id(),0);
+        UUID sku=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,t.tenant(),sku,"sku-"+UUID.randomUUID());
+        var draftOffer=offers.createDraft(actor,t.tenant(),sku,
+                "Not published while shop paused",java.math.BigDecimal.TEN,"KZT");
+        storefronts.pause(actor,t.tenant(),publishedStore.id(),publishedStore.rowVersion());
+        assertThatThrownBy(()->offers.publish(actor,t.tenant(),draftOffer.id(),0))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STOREFRONT_UNAVAILABLE");
+        assertThat(offers.get(actor,t.tenant(),draftOffer.id()).state())
+                .isEqualTo(StorefrontOfferService.State.DRAFT);
+    }
+
+    @Test void pass09RevocationIsEffectiveAcrossBothOfferEntryPoints() {
+        var t=fixture();
+        var owner=verified(t.owner());
+        var seller=verified(t.staff());
+        var role=roles.createRole(owner,t.tenant(),
+                "SEC_"+UUID.randomUUID().toString().replace("-","").substring(0,14).toUpperCase(),
+                "PASS09 revocable storefront role");
+        roles.grant(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.grant(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        roles.assign(owner,t.tenant(),t.staff(),role.id());
+        roles.enable(owner,t.tenant());
+        var draftStore=storefronts.createDraft(seller,t.tenant(),"shop-"+UUID.randomUUID());
+        storefronts.publish(seller,t.tenant(),draftStore.id(),0);
+        UUID sku=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,t.tenant(),sku,"SEC-"+UUID.randomUUID());
+        var offer=offers.createDraft(seller,t.tenant(),sku,"Protected",
+                java.math.BigDecimal.TEN,"KZT");
+        var published=offers.publish(seller,t.tenant(),offer.id(),0);
+        var paused=offers.pause(seller,t.tenant(),offer.id(),published.rowVersion());
+        roles.revoke(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        assertThatThrownBy(()->offers.publish(seller,t.tenant(),offer.id(),paused.rowVersion()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->storefronts.pause(seller,t.tenant(),draftStore.id(),1))
+                .isInstanceOf(SecurityException.class);
+        assertThat(offers.get(seller,t.tenant(),offer.id()).state())
+                .isEqualTo(StorefrontOfferService.State.PAUSED);
+        roles.revoke(owner,t.tenant(),role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
+        assertThatThrownBy(()->offers.get(seller,t.tenant(),offer.id()))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->offers.updatePrice(seller,t.tenant(),offer.id(),
+                "Protected",new java.math.BigDecimal("20"),"KZT",paused.rowVersion()))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),offer.id())).isEqualTo(paused.rowVersion());
+    }
+
+    @Test void managementAndPublicationPermissionsAreIndependent() {
+        var t = fixture();
+        grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var staff = verified(t.staff());
+        var storefront = storefronts.createDraft(staff, t.tenant(),
+                "shop-" + UUID.randomUUID());
+        UUID sku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, t.tenant(), sku, "ST-" + UUID.randomUUID());
+        var offer = offers.createDraft(staff, t.tenant(), sku,
+                "No publish permission", java.math.BigDecimal.ONE, "KZT");
+        assertThatThrownBy(() -> offers.publish(staff, t.tenant(), offer.id(), 0L))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(() -> storefronts.publish(staff, t.tenant(),
+                storefront.id(), 0L)).isInstanceOf(SecurityException.class);
+        assertThat(offers.get(staff, t.tenant(), offer.id()).state())
+                .isEqualTo(StorefrontOfferService.State.DRAFT);
+    }
+
+
+
+    @Test void sellerEditR1CatalogPriceAndSellerOfferPriceHaveIndependentHistories() {
+        var t=fixture();
+        grant(t,DomainPermission.CATALOG_WRITE,
+                DomainPermission.CATALOG_PRICE_MANAGE,DomainPermission.CATALOG_PUBLISH,
+                DomainPermission.STOREFRONT_OFFER_MANAGE,DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller=verified(t.staff());
+        var draft=catalog.createDraft(seller,t.tenant(),
+                "R1-CAT-"+UUID.randomUUID(),kz.rm.catalog.CatalogItem.Kind.PRODUCT,
+                "ru","Independent catalog price",null);
+        var first=catalog.addPriceRevision(seller,t.tenant(),draft.id(),
+                new java.math.BigDecimal("100.0000"),"KZT",
+                Instant.parse("2026-11-01T00:00:00Z"),0);
+        var product=catalog.publish(seller,t.tenant(),first.id(),first.rowVersion());
+        var storeDraft=storefronts.createDraft(seller,t.tenant(),
+                "r1-independent-"+UUID.randomUUID());
+        var store=storefronts.publish(seller,t.tenant(),storeDraft.id(),
+                storeDraft.rowVersion());
+        var offerDraft=offers.createDraft(seller,t.tenant(),product.id(),
+                "Independent public offer",new java.math.BigDecimal("400.0000"),"KZT");
+        var offer=offers.publish(seller,t.tenant(),offerDraft.id(),offerDraft.rowVersion());
+
+        UUID oldOrder=autoOrders.checkout(store.slug(),
+                "r1-old-"+UUID.randomUUID()+"@example.kz","r1-cat-first-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),1)))
+                .order().orderId();
+
+        var catalogRepriced=catalog.addPriceRevision(seller,t.tenant(),product.id(),
+                new java.math.BigDecimal("150.0000"),"KZT",
+                Instant.parse("2026-11-02T00:00:00Z"),product.rowVersion());
+        assertThat(catalogRepriced.rowVersion()).isEqualTo(product.rowVersion()+1);
+        assertThat(offers.get(seller,t.tenant(),offer.id()).unitPrice())
+                .isEqualByComparingTo("400.0000");
+        assertThat(offers.get(seller,t.tenant(),offer.id()).rowVersion())
+                .isEqualTo(offer.rowVersion());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,t.tenant(),offer.id())).isEqualTo(1);
+
+        var sellerRepriced=offers.updatePrice(seller,t.tenant(),offer.id(),
+                "Independent public offer",new java.math.BigDecimal("450.0000"),
+                "KZT",offer.rowVersion());
+        UUID newOrder=autoOrders.checkout(store.slug(),
+                "r1-new-"+UUID.randomUUID()+"@example.kz","r1-cat-second-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),1)))
+                .order().orderId();
+
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),oldOrder))
+                .isEqualByComparingTo("400.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),newOrder))
+                .isEqualByComparingTo("450.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,t.tenant(),oldOrder)).isEqualTo(product.id());
+        assertThat(jdbc.queryForObject("""
+                SELECT catalog_item_id_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,UUID.class,t.tenant(),newOrder)).isEqualTo(product.id());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_price
+                WHERE tenant_id=? AND item_id=?
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,t.tenant(),offer.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=? AND new_price=450.0000
+                """,Integer.class,t.tenant(),offer.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.cat_item_event
+                WHERE tenant_id=? AND item_id=? AND action_code='PRICE_REVISED'
+                """,Integer.class,t.tenant(),product.id())).isEqualTo(2);
+        assertThat(sellerRepriced.rowVersion()).isEqualTo(offer.rowVersion()+1);
+    }
+
+    @Test void sellerEditR1EmployeePriceAndPublisherRolesCannotRewriteCommittedOrders() {
+        var t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE);
+        var manager=verified(t.staff());
+        var owner=verified(t.owner());
+        UUID publisherId=users.saveAndFlush(new UserAccountEntity(
+                UUID.randomUUID(),"r1-publisher-"+UUID.randomUUID(),"Publisher")).getId();
+        memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),
+                t.organization(),publisherId,OrganizationMembershipEntity.Role.MEMBER));
+        var publishRole=roles.createRole(owner,t.tenant(),
+                "PUBR1_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Publish only");
+        roles.grant(owner,t.tenant(),publishRole.id(),
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        roles.assign(owner,t.tenant(),publisherId,publishRole.id());
+        var publisher=verified(publisherId);
+        assertThat(jdbc.queryForObject("""
+                SELECT enforced FROM public.iam_tenant_rbac_config WHERE tenant_id=?
+                """,Boolean.class,t.tenant())).isTrue();
+
+        var storeDraft=storefronts.createDraft(manager,t.tenant(),
+                "r1-editor-"+UUID.randomUUID());
+        assertThatThrownBy(()->storefronts.publish(manager,t.tenant(),storeDraft.id(),0))
+                .isInstanceOf(SecurityException.class);
+        var storefront=storefronts.publish(publisher,t.tenant(),storeDraft.id(),
+                storeDraft.rowVersion());
+        UUID productId=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,t.tenant(),productId,"R1-"+UUID.randomUUID());
+        var draft=offers.createDraft(manager,t.tenant(),productId,
+                "Original offer",new java.math.BigDecimal("10.0000"),"KZT");
+        assertThatThrownBy(()->offers.publish(manager,t.tenant(),draft.id(),0))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->offers.updatePrice(publisher,t.tenant(),draft.id(),
+                "Unauthorized",new java.math.BigDecimal("11.0000"),"KZT",0))
+                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->offers.updatePrice(owner,t.tenant(),draft.id(),
+                "Owner bypass",new java.math.BigDecimal("11.0000"),"KZT",0))
+                .isInstanceOf(SecurityException.class);
+        var live=offers.publish(publisher,t.tenant(),draft.id(),0);
+        assertThat(live.rowVersion()).isEqualTo(1);
+
+        UUID originalOrder=autoOrders.checkout(storefront.slug(),
+                "r1-buyer-"+UUID.randomUUID()+"@example.kz","r1-order-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(live.id(),2)))
+                .order().orderId();
+        var repriced=offers.updatePrice(manager,t.tenant(),live.id(),
+                "Updated offer",new java.math.BigDecimal("20.0000"),"KZT",1);
+        assertThat(repriced.rowVersion()).isEqualTo(2);
+        assertThat(offers.updatePrice(manager,t.tenant(),live.id(),
+                "Updated offer",new java.math.BigDecimal("20.00"),"KZT",2).rowVersion())
+                .isEqualTo(2);
+        var titleOnly=offers.updatePrice(manager,t.tenant(),live.id(),
+                "Updated title only",new java.math.BigDecimal("20.0000"),"KZT",2);
+        assertThat(titleOnly.rowVersion()).isEqualTo(3);
+        assertThatThrownBy(()->offers.updatePrice(manager,t.tenant(),live.id(),
+                "Stale price",new java.math.BigDecimal("99.0000"),"KZT",1))
+                .isInstanceOf(IllegalStateException.class);
+
+        UUID newOrder=autoOrders.checkout(storefront.slug(),
+                "r1-new-buyer-"+UUID.randomUUID()+"@example.kz",
+                "r1-new-order-"+UUID.randomUUID(),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(live.id(),1)))
+                .order().orderId();
+
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),originalOrder))
+                .isEqualByComparingTo("10.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT title_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,String.class,t.tenant(),originalOrder)).isEqualTo("Original offer");
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),newOrder))
+                .isEqualByComparingTo("20.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT title_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,String.class,t.tenant(),newOrder)).isEqualTo("Updated title only");
+        assertThat(jdbc.queryForObject("""
+                SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,java.math.BigDecimal.class,t.tenant(),originalOrder))
+                .isEqualByComparingTo("20.0000");
+        assertThat(jdbc.queryForObject("""
+                SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,java.math.BigDecimal.class,t.tenant(),newOrder))
+                .isEqualByComparingTo("20.0000");
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,t.tenant(),live.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=? AND old_price=10.0000
+                  AND new_price=20.0000 AND actor_user_id=?
+                """,Integer.class,t.tenant(),live.id(),t.staff())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.audit_event
+                WHERE tenant_id=? AND entity_id=?
+                  AND action_code='STOREFRONT_OFFER_PRICE_UPDATED'
+                """,Integer.class,t.tenant(),live.id())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,Long.class,t.tenant(),live.id())).isEqualTo(3);
+        assertThatThrownBy(()->offers.pause(publisher,t.tenant(),live.id(),3))
+                .isInstanceOf(SecurityException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT state FROM crm.store_offer WHERE tenant_id=? AND id=?
+                """,String.class,t.tenant(),live.id())).isEqualTo("PUBLISHED");
+    }
+
+    @Test void concurrentSellerPriceUpdateAndCheckoutCannotMixCommercialSnapshot() throws Exception {
+        var t = fixture();
+        grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var storefront = storefronts.createDraft(seller, t.tenant(),
+                "shop-" + UUID.randomUUID());
+        storefronts.publish(seller, t.tenant(), storefront.id(), 0L);
+        UUID sku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, t.tenant(), sku, "RACE-" + UUID.randomUUID());
+        var draft = offers.createDraft(seller, t.tenant(), sku,
+                "Original", new java.math.BigDecimal("10.0000"), "KZT");
+        offers.publish(seller, t.tenant(), draft.id(), 0L);
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        String email = "race-" + UUID.randomUUID() + "@example.kz";
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var order = pool.submit(() -> {
+                gate.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                return autoOrders.checkout(storefront.slug(), email, "offer-race-key-001",
+                        java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(), 2)))
+                        .order().orderId();
+            });
+            var price = pool.submit(() -> {
+                gate.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                return offers.updatePrice(seller, t.tenant(), draft.id(),
+                        "Updated", new java.math.BigDecimal("15.0000"), "KZT", 1L);
+            });
+            gate.countDown();
+            UUID orderId = order.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(price.get(30, java.util.concurrent.TimeUnit.SECONDS).rowVersion())
+                    .isEqualTo(2L);
+            var row = jdbc.queryForMap("""
+                    SELECT title_snapshot,unit_price_snapshot,catalog_item_id_snapshot
+                    FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+                    """, t.tenant(), orderId);
+            assertThat(row.get("catalog_item_id_snapshot")).isEqualTo(sku);
+            java.math.BigDecimal amount = (java.math.BigDecimal) row.get("unit_price_snapshot");
+            if (amount.compareTo(new java.math.BigDecimal("10.0000")) == 0)
+                assertThat(row.get("title_snapshot")).isEqualTo("Original");
+            else {
+                assertThat(amount).isEqualByComparingTo("15.0000");
+                assertThat(row.get("title_snapshot")).isEqualTo("Updated");
+            }
+            assertThat(jdbc.queryForObject("""
+                    SELECT total_amount FROM crm.sales_order WHERE tenant_id=? AND id=?
+                    """, java.math.BigDecimal.class, t.tenant(), orderId))
+                    .isEqualByComparingTo(amount.multiply(java.math.BigDecimal.valueOf(2)));
+        }
+    }
+
+    @Test void foreignOfferAndServiceCatalogCannotEnterStockBackedStorefront() {
+        var a = fixture();
+        var b = fixture();
+        grant(a, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        grant(b, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var sellerA = verified(a.staff());
+        var sellerB = verified(b.staff());
+        storefronts.createDraft(sellerA, a.tenant(), "shop-" + UUID.randomUUID());
+        storefronts.createDraft(sellerB, b.tenant(), "shop-" + UUID.randomUUID());
+        UUID serviceSku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'SERVICE','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, a.tenant(), serviceSku, "SVC-" + UUID.randomUUID());
+        assertThatThrownBy(() -> offers.createDraft(sellerA, a.tenant(), serviceSku,
+                "Non-stock service", java.math.BigDecimal.ONE, "KZT"))
+                .isInstanceOf(IllegalStateException.class);
+        UUID productSku = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, a.tenant(), productSku, "ST-" + UUID.randomUUID());
+        var offerA = offers.createDraft(sellerA, a.tenant(), productSku,
+                "Valid", java.math.BigDecimal.ONE, "KZT");
+        assertThatThrownBy(() -> offers.get(sellerB, b.tenant(), offerA.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> offers.publish(sellerB, b.tenant(), offerA.id(), 0L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(offers.get(sellerA, a.tenant(), offerA.id()).rowVersion())
+                .isZero();
+    }
+
+    private void postgresOnly() throws Exception {
+        try (var connection = dataSource.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    connection.getMetaData().getDatabaseProductName().contains("PostgreSQL"),
+                    "Real PostgreSQL row-lock test");
+        }
+    }
+
+    @Test void postgresAdmittedSellerCommandCompletesBeforePermissionRevoke() throws Exception {
+        postgresOnly();
+        var t = fixture();
+        UUID role = grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var owner = verified(t.owner());
+        var draft = storefronts.createDraft(seller, t.tenant(), "shop-" + UUID.randomUUID());
+        var published = storefronts.publish(seller, t.tenant(), draft.id(), 0L);
+        var admitted = new java.util.concurrent.CountDownLatch(1);
+        var attempted = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var mutation = pool.submit(() -> tx.execute(status -> {
+                var paused = storefronts.pause(seller, t.tenant(), draft.id(),
+                        published.rowVersion());
+                admitted.countDown();
+                try {
+                    if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Barrier timeout");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return paused;
+            }));
+            var revoke = pool.submit(() -> {
+                if (!admitted.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Admission timeout");
+                attempted.countDown();
+                roles.revoke(owner, t.tenant(), role,
+                        DomainPermission.STOREFRONT_OFFER_PUBLISH);
+                return true;
+            });
+            assertThat(attempted.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(mutation.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                    .isEqualTo(StorefrontSettings.State.PAUSED);
+            assertThat(revoke.get(20, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
+        assertThatThrownBy(() -> storefronts.publish(seller, t.tenant(),
+                draft.id(), 2L)).isInstanceOf(SecurityException.class);
+        assertThat(storefronts.get(seller, t.tenant(), draft.id()).state())
+                .isEqualTo(StorefrontSettings.State.PAUSED);
+    }
+
+    private record SellerPriceR0(Fixture fixture,VerifiedActor seller,VerifiedActor owner,
+                                 UUID roleId,UUID offerId,long version) {}
+
+    private SellerPriceR0 sellerPriceR0() {
+        var f=fixture();
+        UUID role=grant(f,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller=verified(f.staff());
+        var store=storefronts.createDraft(seller,f.tenant(),"r0-store-"+UUID.randomUUID());
+        storefronts.publish(seller,f.tenant(),store.id(),store.rowVersion());
+        UUID product=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """,f.tenant(),product,"R0-"+UUID.randomUUID());
+        var draft=offers.createDraft(seller,f.tenant(),product,"Initial",
+                new java.math.BigDecimal("100.0000"),"KZT");
+        var published=offers.publish(seller,f.tenant(),draft.id(),draft.rowVersion());
+        return new SellerPriceR0(f,seller,verified(f.owner()),role,
+                published.id(),published.rowVersion());
+    }
+
+    private void assertR0Price(SellerPriceR0 x,String price,long version,int revisions) {
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price FROM crm.store_offer
+                WHERE tenant_id=? AND id=?
+                """,java.math.BigDecimal.class,x.fixture().tenant(),x.offerId()))
+                .isEqualByComparingTo(price);
+        assertThat(jdbc.queryForObject("""
+                SELECT row_version FROM crm.store_offer
+                WHERE tenant_id=? AND id=?
+                """,Long.class,x.fixture().tenant(),x.offerId()))
+                .isEqualTo(version);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,x.fixture().tenant(),x.offerId()))
+                .isEqualTo(revisions);
+    }
+
+    private static void awaitR0(java.util.concurrent.CountDownLatch latch) {
+        try {
+            if(!latch.await(15,java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("Seller price race barrier timed out");
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    @Test void sellerR0PgPriceUpdateCommitsBeforeRoleRevokeKeepsOneRevision() throws Exception {
+        postgresOnly();
+        var x=sellerPriceR0();
+        var admitted=new java.util.concurrent.CountDownLatch(1);
+        var finish=new java.util.concurrent.CountDownLatch(1);
+        var attempted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var price=pool.submit(()->tx.execute(status->{
+                var updated=offers.updatePrice(x.seller(),x.fixture().tenant(),x.offerId(),
+                        "Raised",new java.math.BigDecimal("150.0000"),"KZT",x.version());
+                admitted.countDown();
+                awaitR0(finish);
+                return updated;
+            }));
+            assertThat(admitted.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var revoke=pool.submit(()->{
+                attempted.countDown();
+                roles.revoke(x.owner(),x.fixture().tenant(),x.roleId(),
+                        DomainPermission.STOREFRONT_OFFER_MANAGE);
+                return true;
+            });
+            assertThat(attempted.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->revoke.get(250,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {finish.countDown();}
+            assertThat(price.get(20,java.util.concurrent.TimeUnit.SECONDS).rowVersion())
+                    .isEqualTo(x.version()+1);
+            assertThat(revoke.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {finish.countDown();}
+        assertR0Price(x,"150.0000",x.version()+1,2);
+        assertThatThrownBy(()->offers.updatePrice(x.seller(),x.fixture().tenant(),x.offerId(),
+                "Attempt",new java.math.BigDecimal("200.0000"),"KZT",x.version()+1))
+                .isInstanceOf(SecurityException.class);
+        assertR0Price(x,"150.0000",x.version()+1,2);
+    }
+
+    @Test void sellerR0PgRoleRevokeCommitsBeforePriceUpdateWithoutHistory() throws Exception {
+        postgresOnly();
+        var x=sellerPriceR0();
+        var revoked=new java.util.concurrent.CountDownLatch(1);
+        var finish=new java.util.concurrent.CountDownLatch(1);
+        var attempted=new java.util.concurrent.CountDownLatch(1);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var revoke=pool.submit(()->tx.execute(status->{
+                roles.revoke(x.owner(),x.fixture().tenant(),x.roleId(),
+                        DomainPermission.STOREFRONT_OFFER_MANAGE);
+                revoked.countDown();
+                awaitR0(finish);
+                return true;
+            }));
+            assertThat(revoked.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var price=pool.submit(()->{
+                attempted.countDown();
+                try {
+                    offers.updatePrice(x.seller(),x.fixture().tenant(),x.offerId(),
+                            "Unsafe",new java.math.BigDecimal("175.0000"),"KZT",x.version());
+                    return true;
+                } catch(SecurityException denied) { return false; }
+            });
+            assertThat(attempted.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThatThrownBy(()->price.get(250,java.util.concurrent.TimeUnit.MILLISECONDS))
+                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally {finish.countDown();}
+            assertThat(revoke.get(20,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(price.get(20,java.util.concurrent.TimeUnit.SECONDS)).isFalse();
+        } finally {finish.countDown();}
+        assertR0Price(x,"100.0000",x.version(),1);
+    }
+
+    @Test void postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder() throws Exception {
+        postgresOnly();
+        var t = fixture();
+        grant(t, DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        var seller = verified(t.staff());
+        var draft = storefronts.createDraft(seller, t.tenant(), "shop-" + UUID.randomUUID());
+        var published = storefronts.publish(seller, t.tenant(), draft.id(), 0L);
+        UUID product = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+                """, t.tenant(), product, "PG-" + UUID.randomUUID());
+        var offer = offers.createDraft(seller, t.tenant(), product,
+                "Concurrent", new java.math.BigDecimal("5.0000"), "KZT");
+        offers.publish(seller, t.tenant(), offer.id(), 0L);
+        var paused = new java.util.concurrent.CountDownLatch(1);
+        var checkoutStarted = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var pause = pool.submit(() -> tx.execute(status -> {
+                var result = storefronts.pause(seller, t.tenant(), published.id(),
+                        published.rowVersion());
+                paused.countDown();
+                try {
+                    if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Pause barrier timeout");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return result;
+            }));
+            var checkout = pool.submit(() -> {
+                if (!paused.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IllegalStateException("Pause admission timeout");
+                checkoutStarted.countDown();
+                return autoOrders.checkout(published.slug(),
+                        "pause-" + UUID.randomUUID() + "@example.kz",
+                        "paused-pg-0001", java.util.List.of(
+                                new kz.rm.autoorder.AutoOrderService.Line(offer.id(), 1)));
+            });
+            assertThat(checkoutStarted.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(pause.get(20, java.util.concurrent.TimeUnit.SECONDS).state())
+                    .isEqualTo(StorefrontSettings.State.PAUSED);
+            assertThatThrownBy(() -> checkout.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        } finally {
+            release.countDown();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order WHERE tenant_id=?
+                """, Integer.class, t.tenant())).isZero();
+    }
+
+
+    @Test void curR1cSellerApprovedKztUsesCanonicalRevisionAndRejectsStaleApproval() {
+        Fixture t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        VerifiedActor seller=verified(t.staff());
+        String slug="cur-approved-"+UUID.randomUUID();
+        var storeDraft=storefronts.createDraft(seller,t.tenant(),slug);
+        storefronts.publish(seller,t.tenant(),storeDraft.id(),storeDraft.rowVersion());
+        UUID item=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,t.tenant(),item,"CUR-APPROVAL-"+UUID.randomUUID());
+        var draft=offers.createDraft(seller,t.tenant(),item,"Approved widget",
+                new java.math.BigDecimal("100.0000"),"KZT");
+        var published=offers.publish(seller,t.tenant(),draft.id(),draft.rowVersion());
+        var placed=autoOrders.checkout(slug,"cur-approved-"+UUID.randomUUID()+"@example.kz",
+                "cur-appr-"+UUID.randomUUID().toString().substring(0,15),
+                java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(),1)));
+        var approved=offers.approveSuggestedKzt(seller,t.tenant(),draft.id(),
+                new java.math.BigDecimal("125.0000"),published.rowVersion());
+        assertThat(approved.unitPrice()).isEqualByComparingTo("125.0000");
+        assertThat(approved.rowVersion()).isEqualTo(published.rowVersion()+1);
+        var history=offers.priceHistory(seller,t.tenant(),draft.id(),0,10);
+        assertThat(history).hasSize(2);
+        assertThat(history.getFirst().newPrice()).isEqualByComparingTo("125.0000");
+        assertThat(history.getFirst().actorUserId()).isEqualTo(t.staff());
+        assertThatThrownBy(()->offers.approveSuggestedKzt(seller,t.tenant(),draft.id(),
+                new java.math.BigDecimal("130.0000"),published.rowVersion()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("STALE_OFFER_VERSION");
+        assertThat(offers.priceHistory(seller,t.tenant(),draft.id(),0,10)).hasSize(2);
+        assertThat(jdbc.queryForObject("""
+            SELECT unit_price_snapshot FROM crm.sales_order_line
+            WHERE tenant_id=? AND order_id=?
+            """,java.math.BigDecimal.class,t.tenant(),placed.order().orderId()))
+                .isEqualByComparingTo("100.0000");
+    }
+
+    @Test void curR1cPostgresCheckoutVsApprovedPriceHasSingleSnapshot() throws Exception {
+        try(var db=dataSource.getConnection()) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(db.getMetaData()
+                    .getDatabaseProductName().contains("PostgreSQL"));
+        }
+        Fixture t=fixture();
+        grant(t,DomainPermission.STOREFRONT_OFFER_MANAGE,
+                DomainPermission.STOREFRONT_OFFER_PUBLISH);
+        VerifiedActor seller=verified(t.staff());
+        String slug="cur-race-"+UUID.randomUUID();
+        var storeDraft=storefronts.createDraft(seller,t.tenant(),slug);
+        storefronts.publish(seller,t.tenant(),storeDraft.id(),storeDraft.rowVersion());
+        UUID item=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,t.tenant(),item,"CUR-RACE-"+UUID.randomUUID());
+        var draft=offers.createDraft(seller,t.tenant(),item,"Race widget",
+                new java.math.BigDecimal("100.0000"),"KZT");
+        var pub=offers.publish(seller,t.tenant(),draft.id(),draft.rowVersion());
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var checkout=pool.submit(()->{
+                start.await();
+                return autoOrders.checkout(slug,
+                        "cur-race-"+UUID.randomUUID()+"@example.kz",
+                        "cur-race-"+UUID.randomUUID().toString().substring(0,15),
+                        java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(draft.id(),1)));
+            });
+            var price=pool.submit(()->{
+                start.await();
+                return offers.approveSuggestedKzt(seller,t.tenant(),draft.id(),
+                        new java.math.BigDecimal("110.0000"),pub.rowVersion());
+            });
+            start.countDown();
+            var order=checkout.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(price.get(10,java.util.concurrent.TimeUnit.SECONDS).unitPrice())
+                    .isEqualByComparingTo("110.0000");
+            var snap=jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,java.math.BigDecimal.class,t.tenant(),order.order().orderId());
+            assertThat(snap).isIn(new java.math.BigDecimal("100.0000"),
+                    new java.math.BigDecimal("110.0000"));
+            assertThat(offers.priceHistory(seller,t.tenant(),draft.id(),0,10)).hasSize(2);
+        }
+    }
+
+}

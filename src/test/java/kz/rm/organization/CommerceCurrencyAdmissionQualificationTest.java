@@ -1,0 +1,376 @@
+package kz.rm.organization;
+
+import kz.rm.autoorder.AutoOrderService;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import javax.sql.DataSource;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.*;
+
+@SpringBootTest(properties="rm.currency.commerce-admission.enabled=true")
+class CommerceCurrencyAdmissionQualificationTest {
+    @Autowired JdbcTemplate jdbc;
+    @Autowired AutoOrderService orders;
+    @Autowired CommerceCurrencyAdmission admission;
+    @Autowired kz.rm.storefront.PublishedOfferCardQuery cards;
+    @Autowired kz.rm.iam.UserAccountRepository users;
+    @Autowired kz.rm.iam.OrganizationMembershipRepository memberships;
+    @Autowired kz.rm.iam.VerifiedTenantRoleCommands roles;
+    @Autowired kz.rm.storefront.StorefrontOfferService sellerOffers;
+    @Autowired kz.rm.storefront.PublishedOfferQrService qrCommands;
+    @Autowired PlatformTransactionManager txManager;
+    @Autowired DataSource dataSource;
+    @Autowired kz.rm.iam.OrganizationRepository organizations;
+    @Autowired kz.rm.iam.WorkspaceRepository workspaces;
+
+    private record Store(UUID tenant, UUID offer, String slug) {}
+    private Store setup(String currency,boolean policy) {
+        var org=organizations.saveAndFlush(new kz.rm.iam.OrganizationEntity(
+                UUID.randomUUID(),"CUR-R1C store","Currency admission","KZ"));
+        var workspace=workspaces.saveAndFlush(kz.rm.iam.WorkspaceEntity.organization(
+                UUID.randomUUID(),org.getId()));
+        UUID tenant=workspace.getId(),item=UUID.randomUUID(),offer=UUID.randomUUID();
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
+        String slug="cur-r1c-"+UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO crm.cat_item
+              (tenant_id,id,sku,kind,source_locale,state,created_at)
+            VALUES (?,?,?,'PRODUCT','ru','PUBLISHED',CURRENT_TIMESTAMP)
+            """,tenant,item,"CUR-"+UUID.randomUUID());
+        jdbc.update("""
+            INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at)
+            VALUES (?,?,?,'PUBLISHED',?)
+            """,tenant,UUID.randomUUID(),slug,Timestamp.from(Instant.now()));
+        jdbc.update("""
+            INSERT INTO crm.store_offer
+              (tenant_id,id,title,unit_price,currency,state,catalog_item_id)
+            VALUES (?,?,? ,125.2500,?,'PUBLISHED',?)
+            """,tenant,offer,"Currency product",currency,item);
+        if(policy) {
+            Timestamp now=Timestamp.from(Instant.now());
+            jdbc.update("""
+                INSERT INTO public.tenant_currency_policy
+                  (tenant_id,accounting_currency,market_country,public_price_currency,
+                   status,policy_version,row_version,created_at,updated_at)
+                VALUES (?,'KZT','KZ','KZT','ACTIVE',1,0,?,?)
+                """,tenant,now,now);
+            jdbc.update("""
+                INSERT INTO public.tenant_allowed_currency
+                  (tenant_id,currency_code,purpose,state,row_version,created_at,updated_at)
+                VALUES (?,'KZT','PUBLIC_PRICE','ENABLED',0,?,?)
+                """,tenant,now,now);
+        }
+        return new Store(tenant,offer,slug);
+    }
+
+    private kz.rm.iam.VerifiedActor actor(UUID user) {
+        String subject=jdbc.queryForObject("""
+            SELECT external_subject FROM public.iam_user_account WHERE id=?
+            """,String.class,user);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600)).build();
+        return new kz.rm.iam.OidcActorResolver(decoder,users).resolve("cur-r1c-synthetic");
+    }
+
+    private kz.rm.iam.VerifiedActor seller(Store store) {
+        UUID org=jdbc.queryForObject("""
+            SELECT organization_id FROM public.iam_workspace WHERE id=?
+            """,UUID.class,store.tenant());
+        UUID owner=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(
+                UUID.randomUUID(),"cur-r1c-owner-"+UUID.randomUUID(),"Owner")).getId();
+        UUID staff=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(
+                UUID.randomUUID(),"cur-r1c-staff-"+UUID.randomUUID(),"Staff")).getId();
+        memberships.saveAndFlush(new kz.rm.iam.OrganizationMembershipEntity(
+                UUID.randomUUID(),org,owner,kz.rm.iam.OrganizationMembershipEntity.Role.OWNER));
+        memberships.saveAndFlush(new kz.rm.iam.OrganizationMembershipEntity(
+                UUID.randomUUID(),org,staff,kz.rm.iam.OrganizationMembershipEntity.Role.MEMBER));
+        var ownerActor=actor(owner);
+        var role=roles.createRole(ownerActor,store.tenant(),
+                "CUR_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(),
+                "Currency qualification");
+        roles.grant(ownerActor,store.tenant(),role.id(),
+                kz.rm.iam.DomainPermission.STOREFRONT_OFFER_MANAGE);
+        roles.assign(ownerActor,store.tenant(),staff,role.id());
+        roles.enable(ownerActor,store.tenant());
+        return actor(staff);
+    }
+
+    private String qr(Store store) {
+        UUID actor=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(
+                UUID.randomUUID(),"cur-qr-"+UUID.randomUUID(),"QR staff")).getId();
+        String ref=UUID.randomUUID().toString().replace("-","");
+        jdbc.update("""
+            INSERT INTO crm.store_offer_qr_ref
+            (tenant_id,id,offer_id,active_offer_id,public_ref,generation,
+             state,row_version,issued_at,issued_by)
+            VALUES (?,?,?,?,?,1,'ACTIVE',0,?,?)
+            """,store.tenant(),UUID.randomUUID(),store.offer(),store.offer(),ref,
+                Timestamp.from(Instant.now()),actor);
+        return ref;
+    }
+
+    private AutoOrderService.CheckoutResult checkout(Store store) {
+        return orders.checkout(store.slug(),"cur-r1c-"+UUID.randomUUID()+"@example.kz",
+                "cur-r1c-"+UUID.randomUUID().toString().substring(0,15),
+                List.of(new AutoOrderService.Line(store.offer(),1)));
+    }
+    private int orderCount(Store s) {
+        return jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=?",
+                Integer.class,s.tenant());
+    }
+
+    @Test void curc01MissingPolicyRejectsCheckoutWithoutSideEffects() {
+        Store s=setup("KZT",false);
+        assertThatThrownBy(()->checkout(s)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("CUR_PUBLIC_POLICY_NOT_ACTIVE");
+        assertThat(orderCount(s)).isZero();
+    }
+
+    @Test void curc02AllowedKztCreatesImmutableOrderSnapshot() {
+        Store s=setup("KZT",true);
+        var result=checkout(s);
+        BigDecimal prior=jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,BigDecimal.class,s.tenant(),result.order().orderId());
+        assertThat(prior).isEqualByComparingTo("125.2500");
+        // Only simulate a seller revision after this accepted checkout.
+        jdbc.update("""
+                UPDATE crm.store_offer SET unit_price=130.0000,row_version=row_version+1
+                WHERE tenant_id=? AND id=?
+                """,s.tenant(),s.offer());
+        assertThat(jdbc.queryForObject("""
+                SELECT unit_price_snapshot FROM crm.sales_order_line
+                WHERE tenant_id=? AND order_id=?
+                """,BigDecimal.class,s.tenant(),result.order().orderId()))
+                .isEqualByComparingTo("125.2500");
+    }
+
+    @Test void curc03UsdPublishedLegacyOfferRejectedWithoutOrder() {
+        Store s=setup("USD",true);
+        assertThatThrownBy(()->checkout(s)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+        assertThat(orderCount(s)).isZero();
+    }
+
+    @Test void curc04ReviewRequiredPolicyRejectsCheckout() {
+        Store s=setup("KZT",true);
+        jdbc.update("UPDATE public.tenant_currency_policy SET status='REVIEW_REQUIRED' WHERE tenant_id=?",
+                s.tenant());
+        assertThatThrownBy(()->checkout(s)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("CUR_PUBLIC_POLICY_NOT_ACTIVE");
+        assertThat(orderCount(s)).isZero();
+    }
+
+    @Test void curc05PublicReadGateCannotExposeForeignCurrency() {
+        Store s=setup("USD",true);
+        assertThatThrownBy(()->admission.assertPublicRead(s.tenant(),"USD"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+        assertThatThrownBy(()->admission.assertPublicRead(UUID.randomUUID(),"KZT"))
+                .hasMessage("CUR_PUBLIC_POLICY_NOT_ACTIVE");
+    }
+
+    @Test void curc07KztQrPublicCardShowsPublishedSnapshot() {
+        Store store=setup("KZT",true);
+        String ref=qr(store);
+        var card=cards.findPublished(ref,"ru");
+        assertThat(card.currency()).isEqualTo("KZT");
+        assertThat(card.unitPrice()).isEqualByComparingTo("125.2500");
+    }
+
+    @Test void curc08LegacyForeignQrCardRejectedBeforeMediaExposure() {
+        Store store=setup("USD",true);
+        String ref=qr(store);
+        assertThatThrownBy(()->cards.findPublished(ref,"ru"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+    }
+
+    @Test void curc09ForeignDraftRequiresSalesInternalPurpose() {
+        Store store=setup("KZT",true);
+        var tx=new TransactionTemplate(txManager);
+        assertThatThrownBy(()->tx.execute(status->{
+            admission.lockKzMarket(store.tenant());
+            admission.assertDraftCurrency(store.tenant(),"USD");
+            return null;
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessage("CUR_INTERNAL_CURRENCY_NOT_ALLOWED");
+        Timestamp now=Timestamp.from(Instant.now());
+        jdbc.update("""
+            INSERT INTO public.tenant_allowed_currency
+             (tenant_id,currency_code,purpose,state,row_version,created_at,updated_at)
+            VALUES (?,'USD','SALES_INTERNAL','ENABLED',0,?,?)
+            """,store.tenant(),now,now);
+        tx.execute(status->{
+            admission.lockKzMarket(store.tenant());
+            admission.assertDraftCurrency(store.tenant(),"USD");
+            return null;
+        });
+        assertThatThrownBy(()->admission.assertKzt("USD"))
+                .hasMessage("PUBLIC_MARKET_CURRENCY_NOT_ALLOWED");
+    }
+
+    @Test void curc11QrRevokeAndImmutableReceiptReplayRemainAvailableOnPolicyHold() {
+        Store store=setup("KZT",true);
+        var seller=seller(store);
+        String issueKey="cur-issue-"+UUID.randomUUID().toString().substring(0,15);
+        var issued=qrCommands.issueOrGet(seller,store.tenant(),store.offer(),0L,issueKey);
+        assertThat(issued.state()).isEqualTo(
+                kz.rm.storefront.PublishedOfferQrService.State.ACTIVE);
+        jdbc.update("""
+            UPDATE public.tenant_currency_policy SET status='REVIEW_REQUIRED'
+            WHERE tenant_id=?
+            """,store.tenant());
+        String revokeKey="cur-revoke-"+UUID.randomUUID().toString().substring(0,15);
+        var revoked=qrCommands.revoke(seller,store.tenant(),store.offer(),
+                issued.rowVersion(),revokeKey);
+        assertThat(revoked.state()).isEqualTo(
+                kz.rm.storefront.PublishedOfferQrService.State.REVOKED);
+        // This returns the immutable original receipt, not a newly active QR.
+        var replay=qrCommands.issueOrGet(seller,store.tenant(),store.offer(),0L,issueKey);
+        assertThat(replay.publicRef()).isEqualTo(issued.publicRef());
+        assertThat(replay.state()).isEqualTo(
+                kz.rm.storefront.PublishedOfferQrService.State.ACTIVE);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.store_offer_qr_ref
+            WHERE tenant_id=? AND offer_id=? AND state='ACTIVE'
+            """,Integer.class,store.tenant(),store.offer())).isZero();
+        assertThatThrownBy(()->qrCommands.reissue(seller,store.tenant(),store.offer(),0L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("CUR_PUBLIC_POLICY_NOT_ACTIVE");
+    }
+
+    @Test void curc10PostgresThreeWayCheckoutPriceAndPolicyRaceIsAtomic() throws Exception {
+        try(var db=dataSource.getConnection()) {
+            Assumptions.assumeTrue(db.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Store store=setup("KZT",true);
+        var seller=seller(store);
+        var barrier=new CountDownLatch(1);
+        var tx=new TransactionTemplate(txManager);
+        try(var pool=Executors.newFixedThreadPool(3)) {
+            var checkout=pool.submit(()->{
+                barrier.await();
+                try { return checkout(store).order().orderId(); }
+                catch(IllegalStateException declined) {
+                    if(!"CUR_PUBLIC_POLICY_NOT_ACTIVE".equals(declined.getMessage()))
+                        throw declined;
+                    return (UUID)null;
+                }
+            });
+            var price=pool.submit(()->{
+                barrier.await();
+                try {
+                    return sellerOffers.approveSuggestedKzt(seller,store.tenant(),store.offer(),
+                            new BigDecimal("130.0000"),0).rowVersion();
+                } catch(IllegalStateException declined) {
+                    if(!"CUR_PUBLIC_POLICY_NOT_ACTIVE".equals(declined.getMessage()))
+                        throw declined;
+                    return -1L;
+                }
+            });
+            var policy=pool.submit(()->{
+                barrier.await();
+                return tx.execute(status->{
+                    jdbc.queryForObject("""
+                        SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE
+                        """,UUID.class,store.tenant());
+                    jdbc.update("""
+                        UPDATE public.tenant_currency_policy
+                        SET status='REVIEW_REQUIRED',row_version=row_version+1
+                        WHERE tenant_id=?
+                        """,store.tenant());
+                    return 1;
+                });
+            });
+            barrier.countDown();
+            UUID orderId=checkout.get(12,TimeUnit.SECONDS);
+            long priceVersion=price.get(12,TimeUnit.SECONDS);
+            assertThat(policy.get(12,TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("""
+                SELECT status FROM public.tenant_currency_policy WHERE tenant_id=?
+                """,String.class,store.tenant())).isEqualTo("REVIEW_REQUIRED");
+            assertThat(priceVersion).isIn(-1L,1L);
+            Integer revisions=jdbc.queryForObject("""
+                SELECT count(*) FROM crm.store_offer_price_revision
+                WHERE tenant_id=? AND offer_id=?
+                """,Integer.class,store.tenant(),store.offer());
+            assertThat(revisions).isIn(0,1);
+            assertThat(revisions).isEqualTo(priceVersion==1 ? 1 : 0);
+            assertThat(orderCount(store)).isIn(0,1);
+            if(orderId!=null) {
+                BigDecimal snap=jdbc.queryForObject("""
+                    SELECT unit_price_snapshot FROM crm.sales_order_line
+                    WHERE tenant_id=? AND order_id=?
+                    """,BigDecimal.class,store.tenant(),orderId);
+                assertThat(snap).isIn(new BigDecimal("125.2500"),new BigDecimal("130.0000"));
+            }
+        }
+    }
+
+    @Test void curc06PostgresPolicyChangeVsCheckoutLinearizes() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Store s=setup("KZT",true);
+        var tx=new TransactionTemplate(txManager);
+        var locked=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var policyChange=executor.submit(()->tx.execute(status->{
+                jdbc.queryForObject("""
+                    SELECT tenant_id FROM public.tenant_currency_policy
+                    WHERE tenant_id=? FOR UPDATE
+                    """,UUID.class,s.tenant());
+                locked.countDown();
+                try {
+                    if(!release.await(5,TimeUnit.SECONDS))
+                        throw new IllegalStateException("CUR_RACE_TIMEOUT");
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ex);
+                }
+                jdbc.update("""
+                    UPDATE public.tenant_currency_policy
+                    SET status='REVIEW_REQUIRED',row_version=row_version+1
+                    WHERE tenant_id=?
+                    """,s.tenant());
+                return null;
+            }));
+            assertThat(locked.await(5,TimeUnit.SECONDS)).isTrue();
+            var checkout=executor.submit(()->{
+                try { checkout(s); return "ACCEPTED"; }
+                catch(IllegalStateException denied) { return denied.getMessage(); }
+            });
+            // PostgreSQL must prevent checkout from passing the policy row lock.
+            Thread.sleep(150);
+            assertThat(orderCount(s)).isZero();
+            release.countDown();
+            policyChange.get(5,TimeUnit.SECONDS);
+            assertThat(checkout.get(5,TimeUnit.SECONDS))
+                    .isEqualTo("CUR_PUBLIC_POLICY_NOT_ACTIVE");
+            assertThat(orderCount(s)).isZero();
+        } finally {
+            release.countDown();
+        }
+    }
+}

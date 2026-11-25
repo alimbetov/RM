@@ -60,7 +60,7 @@ class OidcJwtCryptoQualificationTest {
                                long issued,long expires) throws Exception {
         String header="{\"alg\":\"RS256\",\"typ\":\"JWT\"}";
         String body="{\"iss\":\""+iss+"\",\"aud\":[\""+aud+"\"],\"sub\":\""+sub+
-                "\",\"iat\":"+issued+",\"exp\":"+expires+"}";
+                "\",\"typ\":\"Bearer\",\"iat\":"+issued+",\"exp\":"+expires+"}";
         var encoder=Base64.getUrlEncoder().withoutPadding();
         String payload=encoder.encodeToString(header.getBytes(StandardCharsets.UTF_8))+"."
                 +encoder.encodeToString(body.getBytes(StandardCharsets.UTF_8));

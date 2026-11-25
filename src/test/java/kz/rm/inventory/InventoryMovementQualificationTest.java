@@ -142,6 +142,68 @@ class InventoryMovementQualificationTest {
         assertThat(onHand(p)).isEqualByComparingTo("11");
     }
 
+    @Test void postingVersionIsMonotonicPerPositionAndReplayDoesNotAllocateAnother() {
+        var p=position();
+        var first=movements.adjust(p.tenant(),p.location(),p.item(),
+            "stock-posting-001",BigDecimal.ONE);
+        var second=movements.adjust(p.tenant(),p.location(),p.item(),
+            "stock-posting-002",BigDecimal.ONE);
+        long a=jdbc.queryForObject("""
+            SELECT posting_version FROM crm.inv_stock_movement
+            WHERE tenant_id=? AND id=?
+            """,Long.class,p.tenant(),first.id());
+        long b=jdbc.queryForObject("""
+            SELECT posting_version FROM crm.inv_stock_movement
+            WHERE tenant_id=? AND id=?
+            """,Long.class,p.tenant(),second.id());
+        assertThat(a).isPositive();
+        assertThat(b).isGreaterThan(a);
+        assertThat(b).isEqualTo(jdbc.queryForObject("""
+            SELECT row_version FROM crm.inv_stock_balance
+            WHERE tenant_id=? AND location_id=? AND item_id=?
+            """,Long.class,p.tenant(),p.location(),p.item()));
+        assertThat(movements.adjust(p.tenant(),p.location(),p.item(),
+            "stock-posting-002",BigDecimal.ONE).id()).isEqualTo(second.id());
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.inv_stock_movement
+            WHERE tenant_id=? AND location_id=? AND item_id=?
+              AND posting_version IS NOT NULL
+            """,Integer.class,p.tenant(),p.location(),p.item())).isEqualTo(2);
+    }
+
+    @Test void postgresConcurrentDifferentKeysHaveStrictlyIncreasingPostingVersions() throws Exception {
+        try(var connection=dataSource.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                .toLowerCase().contains("postgresql"));
+        }
+        var p=position();
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var left=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return movements.adjust(p.tenant(),p.location(),p.item(),
+                    "stock-pos-race-01",BigDecimal.ONE);
+            });
+            var right=pool.submit(()->{
+                start.await(5,TimeUnit.SECONDS);
+                return movements.adjust(p.tenant(),p.location(),p.item(),
+                    "stock-pos-race-02",BigDecimal.ONE);
+            });
+            start.countDown();
+            left.get(30,TimeUnit.SECONDS);
+            right.get(30,TimeUnit.SECONDS);
+        }
+        var versions=jdbc.query("""
+            SELECT posting_version FROM crm.inv_stock_movement
+            WHERE tenant_id=? AND location_id=? AND item_id=?
+            ORDER BY posting_version
+            """,(rs,n)->rs.getLong(1),p.tenant(),p.location(),p.item());
+        assertThat(versions).hasSize(2);
+        assertThat(versions.get(0)).isPositive();
+        assertThat(versions.get(1)).isGreaterThan(versions.get(0));
+        assertThat(onHand(p)).isEqualByComparingTo("12");
+    }
+
     @Test void concurrentSameKeyPostsExactlyOneMovement() throws Exception {
         var p=position();
         var release=new CountDownLatch(1);

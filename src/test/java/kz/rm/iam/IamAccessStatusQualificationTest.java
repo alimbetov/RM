@@ -224,4 +224,91 @@ class IamAccessStatusQualificationTest {
                 """,Integer.class,f.tenant(),f.staff())).isZero();
     }
 
+    @Test void finalSecGateAdmittedCommandFencesRealGlobalAccountSuspension() throws Exception {
+        try (var connection=source.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Fixture f=createFixture();
+        var commandAdmitted=new CountDownLatch(1);
+        var finishCommand=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try (var pool=Executors.newFixedThreadPool(2)) {
+            var command=pool.submit(()->tx.execute(status->{
+                authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.CRM_READ);
+                commandAdmitted.countDown();
+                try {
+                    if (!finishCommand.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Command release timed out");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(commandAdmitted.await(10,TimeUnit.SECONDS)).isTrue();
+            var suspension=pool.submit(()->{
+                accounts.suspendAccount(actor(f.admin()),f.staff());
+                return true;
+            });
+            try {
+                assertThatThrownBy(()->suspension.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                finishCommand.countDown();
+            }
+            assertThat(command.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(suspension.get(20,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThatThrownBy(()->authorization.require(f.staff(),f.tenant(),DomainPermission.CRM_READ))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test void finalSecGateCommittedRealGlobalSuspensionDeniesWaitingCommand() throws Exception {
+        try (var connection=source.getConnection()) {
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName()
+                    .toLowerCase().contains("postgresql"));
+        }
+        Fixture f=createFixture();
+        var suspensionApplied=new CountDownLatch(1);
+        var allowCommit=new CountDownLatch(1);
+        var tx=new TransactionTemplate(manager);
+        try (var pool=Executors.newFixedThreadPool(2)) {
+            var suspension=pool.submit(()->tx.execute(status->{
+                accounts.suspendAccount(actor(f.admin()),f.staff());
+                suspensionApplied.countDown();
+                try {
+                    if (!allowCommit.await(15,TimeUnit.SECONDS))
+                        throw new IllegalStateException("Suspension release timed out");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            assertThat(suspensionApplied.await(10,TimeUnit.SECONDS)).isTrue();
+            var command=pool.submit(()->{
+                try {
+                    return tx.execute(status->{
+                        authorization.requireForCommand(f.staff(),f.tenant(),DomainPermission.CRM_READ);
+                        return true;
+                    });
+                } catch (SecurityException denied) {
+                    return false;
+                }
+            });
+            try {
+                assertThatThrownBy(()->command.get(300,TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+            } finally {
+                allowCommit.countDown();
+            }
+            assertThat(suspension.get(20,TimeUnit.SECONDS)).isTrue();
+            assertThat(command.get(20,TimeUnit.SECONDS)).isFalse();
+        }
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM public.iam_account_status_event WHERE target_user_id=? AND to_status='SUSPENDED'",
+                Integer.class,f.staff())).isEqualTo(1);
+    }
+
 }

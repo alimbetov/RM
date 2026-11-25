@@ -1,0 +1,175 @@
+name: RM FC-40 Order Execution PostgreSQL Qualification
+
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/kz/rm/sales/SalesInventoryCommandService.java'
+      - 'src/main/java/kz/rm/autoorder/AutoOrderService.java'
+      - 'src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java'
+      - 'src/main/resources/db/changelog/db.changelog-master.sql'
+      - '.github/workflows/rm-fc40-order-execution-pg.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fc40-picked-order-fences:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify exact SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Verify FC-40 lifecycle, QR provenance and immutable channel admission
+        run: |
+          set -o pipefail
+          mkdir -p target/fc40-evidence
+          mvn -B -ntp '-Dtest=SalesInventoryRbacQualificationTest#fc40PickedOrderCannotCancelAndReservationStaysIntact+decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing,PublishedQrCheckoutQualificationTest,QrNegotiatedCheckoutQualificationTest' test 2>&1 | tee target/fc40-evidence/console.log
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('target/surefire-reports')
+          paths=list(root.glob('TEST-*.xml'))
+          assert paths, 'FC40_MISSING_SUREFIRE_XML'
+          cases=[c for p in paths for c in ET.parse(p).getroot().iter('testcase')]
+          required={'fc40PickedOrderCannotCancelAndReservationStaysIntact',
+                    'decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing',
+                    'decFul01QrCheckoutPersistsPickupProofRequiredBeforePreparation',
+                    'decFul01RegularCheckoutRetainsHistoricalStandardChannel',
+                    'decFul01PostgresRejectsDowngradingQrOrderFulfillmentMode',
+                    'qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource'}
+          names={c.get('name') for c in cases}
+          assert required <= names, 'FC40_MISSING_CASES: '+str(sorted(required-names))
+          assert not any(c.find(k) is not None for c in cases
+                         for k in ('error','failure','skipped')), 'FC40_SUREFIRE_NOT_GREEN'
+          assert len(cases)>=6, 'FC40_TOO_FEW_TESTS'
+          PY
+          printf '%s\n' "$GITHUB_SHA" > target/fc40-evidence/exact-sha.txt
+      - name: Preserve FC40 PostgreSQL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fc40-order-execution-${{ github.sha }}
+          path: |
+            target/surefire-reports/
+            target/fc40-evidence/
+          if-no-files-found: warn
+
+
+  fc40-populated-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - name: Checkout historical pre-FC40 migration baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 1b61d8fbac7f7aa113840b72bf2313c447d673bc
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Seed existing historical SALES orders on populated PostgreSQL
+        run: mvn -B -ntp '-Dtest=SalesInventoryRbacQualificationTest#confirmAndCancelAreAtomicAndRetriesAreIdempotent' test
+      - name: Snapshot immutable historical orders and Liquibase checksum records
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -F '|' \
+            -c "SELECT tenant_id,id,status,total_amount,currency,row_version FROM crm.sales_order ORDER BY tenant_id,id" > /tmp/fc40-orders-before.txt
+          test -s /tmp/fc40-orders-before.txt
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -F '|' \
+            -c "SELECT id,md5sum FROM public.databasechangelog WHERE id IN ('0105-crm-r22b-lifecycle-dispute','0120-iam-oidc-revocation-lease-fencing') ORDER BY id" > /tmp/fc40-checksums-before.txt
+          test "$(wc -l < /tmp/fc40-checksums-before.txt)" -eq 2
+      - name: Checkout current exact-SHA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Verify upgrade candidate checkout SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Apply current Liquibase to populated database and execute channel gate
+        run: mvn -B -ntp '-Dtest=SalesInventoryRbacQualificationTest#decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing' test
+      - name: Assert historical row preservation, checksum stability and mode trigger
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/fc40-upgrade-evidence
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -F '|' \
+            -c "SELECT tenant_id,id,status,total_amount,currency,row_version FROM crm.sales_order ORDER BY tenant_id,id" > /tmp/fc40-orders-after.txt
+          if comm -23 /tmp/fc40-orders-before.txt /tmp/fc40-orders-after.txt | grep -q .; then
+            echo "::error::Historical SALES rows mutated during upgrade"; exit 1
+          fi
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -F '|' \
+            -c "SELECT id,md5sum FROM public.databasechangelog WHERE id IN ('0105-crm-r22b-lifecycle-dispute','0120-iam-oidc-revocation-lease-fencing') ORDER BY id" > /tmp/fc40-checksums-after.txt
+          cmp /tmp/fc40-checksums-before.txt /tmp/fc40-checksums-after.txt
+          while IFS='|' read -r tenant order status amount currency version; do
+            actual=$(docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At \
+              -c "SELECT fulfillment_mode FROM crm.sales_order WHERE tenant_id='$tenant' AND id='$order'")
+            test "$actual" = "STANDARD" || { echo "::error::Historical order mode changed: $order"; exit 1; }
+          done < /tmp/fc40-orders-before.txt
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At \
+            -c "SELECT count(*) FROM pg_trigger WHERE tgname='trg_sales_fulfillment_mode_immutable' AND NOT tgisinternal" | grep -qx 1
+          cp /tmp/fc40-orders-before.txt /tmp/fc40-orders-after.txt /tmp/fc40-checksums-before.txt /tmp/fc40-checksums-after.txt target/fc40-upgrade-evidence/
+          printf '%s\n' "$GITHUB_SHA" > target/fc40-upgrade-evidence/exact-sha.txt
+      - name: Preserve populated upgrade proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fc40-populated-${{ github.sha }}
+          path: |
+            target/surefire-reports/
+            target/fc40-upgrade-evidence/
+          if-no-files-found: warn

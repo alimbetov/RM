@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /** Bounded, tenant-isolated stock reads. No dynamic column names or SQL from clients. */
 @Repository
-public class StockBalanceRepository {
+class StockBalanceRepository {
     private final JdbcTemplate jdbc;
     public StockBalanceRepository(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 

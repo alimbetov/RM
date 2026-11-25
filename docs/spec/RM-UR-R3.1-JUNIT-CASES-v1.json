@@ -1,0 +1,164 @@
+{
+  "schema": "RM-UR-R3.1-JUNIT-CASES/v1",
+  "scope": "Service-only role qualification without REST/OIDC/browser",
+  "cases": [
+    {
+      "caseId": "UR-R31-ROLE-FALLBACK",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31AllFiveMembershipRolesHaveFallbackReadButNoImplicitWrite",
+      "requirementIds": [
+        "IAM-01",
+        "STO-01"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U6"
+      ],
+      "dimensions": [
+        "RBAC_OFF",
+        "DENY_NO_GRANT",
+        "ZERO_BUSINESS_WRITE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R31-GRANT-REVOKE",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand",
+      "requirementIds": [
+        "IAM-01",
+        "IAM-02",
+        "STO-01",
+        "STO-04"
+      ],
+      "actorProfiles": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U6",
+        "U11"
+      ],
+      "dimensions": [
+        "RBAC_ON",
+        "ALLOW_WITH_GRANT",
+        "REVOKE",
+        "NO_SUCCESS_AUDIT_ON_DENY"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R31-TENANT-AB",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31TenantAAndBEnforceIndependentGrantsAndNoForeignWrites",
+      "requirementIds": [
+        "IAM-01",
+        "STO-01",
+        "STO-04"
+      ],
+      "actorProfiles": [
+        "U3",
+        "U4",
+        "U6",
+        "U8"
+      ],
+      "dimensions": [
+        "TENANT_A_B",
+        "FOREIGN_DENY",
+        "ZERO_BUSINESS_WRITE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R31-DUAL-TENANT",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31DualTenantMemberHasDifferentPermissionsAndRevocationIsLocal",
+      "requirementIds": [
+        "IAM-01",
+        "IAM-02",
+        "STO-01",
+        "STO-04"
+      ],
+      "actorProfiles": [
+        "U5",
+        "U6",
+        "U9",
+        "U11"
+      ],
+      "dimensions": [
+        "DUAL_MEMBERSHIP",
+        "TENANT_SPECIFIC_GRANTS",
+        "REVOKE_TENANT_A_ONLY",
+        "ZERO_BUSINESS_WRITE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R31-INACTIVE",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31SuspendedActorAndMembershipCannotWriteDespiteExistingGrant",
+      "requirementIds": [
+        "IAM-02",
+        "STO-01",
+        "STO-04"
+      ],
+      "actorProfiles": [
+        "U3",
+        "U4",
+        "U5",
+        "U10",
+        "U11"
+      ],
+      "dimensions": [
+        "ACTOR_SUSPENDED",
+        "MEMBERSHIP_SUSPENDED",
+        "TENANT_SUSPENDED",
+        "ZERO_BUSINESS_WRITE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    },
+    {
+      "caseId": "UR-R31-UNASSIGNED",
+      "junitSuite": "UserRoleMatrixR31QualificationTest",
+      "junitMethod": "urR31UnassignedStaffAndMissingActorAreDeniedWithoutSideEffects",
+      "requirementIds": [
+        "IAM-01",
+        "STO-01"
+      ],
+      "actorProfiles": [
+        "U0",
+        "U5",
+        "U6",
+        "U7"
+      ],
+      "dimensions": [
+        "NO_ROLE_ASSIGNMENT",
+        "UNKNOWN_ACTOR",
+        "NULL_ACTOR",
+        "ZERO_BUSINESS_WRITE"
+      ],
+      "evidenceArtifact": "kms-postgres-surefire",
+      "executionDatabase": "PostgreSQL",
+      "evidenceStatus": "DECLARED_NOT_EXECUTED_ON_CURRENT_SHA",
+      "mandatory": true
+    }
+  ]
+}

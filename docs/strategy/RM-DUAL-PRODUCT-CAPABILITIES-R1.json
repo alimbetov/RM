@@ -1,0 +1,917 @@
+{
+  "schemaVersion": "1.0",
+  "title": "RM Dual Product Capability Foundation",
+  "status": "PLANNING_TRACEABILITY_ONLY",
+  "branch": "base_dev",
+  "reviewedSourceSha": "7409f26a1ca4b62cf4406d3110e6764699aeb491",
+  "strategy": "docs/strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md",
+  "foundation": "docs/architecture/RM-DUAL-PRODUCT-FOUNDATION-R1.md",
+  "acceptanceSpec": "docs/spec/RM-CORE-FUNCTIONAL-CLOSURE-R1.md",
+  "qualificationPolicy": {
+    "fullPlatform": "HOLD",
+    "sourceTestNamesAreNotExecutionEvidence": true,
+    "requiredExactShaForRelease": true,
+    "taskPhase": "AFTER_CORE_P0_P1",
+    "httpAndUi": "STOP",
+    "production": "HOLD",
+    "noIndependentNetworkProduct": true,
+    "coreScenarioCount": 54
+  },
+  "capabilities": [
+    {
+      "id": "BIZ-IAM-01",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Verified first tenant",
+      "owner": "IAM",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/iam/SelfServiceTenantOnboardingService.java",
+          "methods": [
+            "createFirstTenant",
+            "selectTenant"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/OidcActorResolver.java",
+          "methods": [
+            "resolve"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/iam/R4FirstTenantOnboardingQualificationTest.java",
+        "src/test/java/kz/rm/iam/OidcActorResolverQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-IAM-01",
+        "CORE-IAM-02"
+      ],
+      "dependsOn": [],
+      "gate": "FC-10",
+      "openGaps": [
+        "G0 exact SHA",
+        "trusted first tenant and verified email"
+      ]
+    },
+    {
+      "id": "BIZ-STAFF-02",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Employees, roles and warehouse scope",
+      "owner": "IAM",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/iam/TenantMemberEnrollmentService.java",
+          "methods": [
+            "invite",
+            "accept"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/TenantAuthorization.java",
+          "methods": [
+            "requireForCommand"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java",
+          "methods": [
+            "assign",
+            "revoke",
+            "requireAssigned"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/iam/IamUserOnboardingProcessQualificationTest.java",
+        "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+        "src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-IAM-03",
+        "CORE-IAM-04",
+        "CORE-IAM-05",
+        "CORE-IAM-06"
+      ],
+      "dependsOn": [
+        "BIZ-IAM-01"
+      ],
+      "gate": "FC-10",
+      "openGaps": [
+        "DEC-LOC-03 warehouse per-operation grant scope"
+      ]
+    },
+    {
+      "id": "BIZ-ORG-03",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Business locations and lifecycle",
+      "owner": "ORG",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/organization/AuthenticatedOrganizationLocations.java",
+          "methods": [
+            "create",
+            "update",
+            "deactivate",
+            "reactivate",
+            "close",
+            "search"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+          "methods": [
+            "close"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/organization/OrganizationLocationLifecycleQualificationTest.java",
+        "src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-ORG-01",
+        "CORE-ORG-02"
+      ],
+      "dependsOn": [
+        "BIZ-IAM-01",
+        "BIZ-STAFF-02"
+      ],
+      "gate": "FC-10",
+      "openGaps": [
+        "location closure vs active stock and orders"
+      ]
+    },
+    {
+      "id": "BIZ-CRM-04",
+      "product": [
+        "BUSINESS"
+      ],
+      "name": "Customer, contact, contract and interaction",
+      "owner": "CRM",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/crm/AuthenticatedCrmCommands.java",
+          "methods": [
+            "createPerson",
+            "createCompany",
+            "addContact",
+            "archiveCustomer"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmContractService.java",
+          "methods": []
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+          "methods": [
+            "record",
+            "setNextAction",
+            "complete",
+            "history"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java",
+        "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-CRM-01",
+        "CORE-CRM-02",
+        "CORE-CRM-03",
+        "CORE-CRM-04"
+      ],
+      "dependsOn": [
+        "BIZ-IAM-01"
+      ],
+      "gate": "FC-20",
+      "openGaps": [
+        "encrypted NOTE content decision deferred to P1",
+        "open-order archive policy"
+      ]
+    },
+    {
+      "id": "SHR-BUYER-LINK-05",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Explicit CRM buyer link and order history",
+      "owner": "CRM",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "methods": [
+            "propose",
+            "confirm",
+            "orderHistory",
+            "revokeByBuyer",
+            "adjudicateDispute"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-CRM-05",
+        "CORE-CRM-06"
+      ],
+      "dependsOn": [
+        "BIZ-CRM-04",
+        "SHR-CHECKOUT-08"
+      ],
+      "gate": "FC-20",
+      "openGaps": [
+        "no inference from email/name",
+        "dispute, delete and revoke races"
+      ]
+    },
+    {
+      "id": "SHR-CATALOG-06",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Product SKU, publication and historical prices",
+      "owner": "CATALOG",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+          "methods": [
+            "createDraft",
+            "addPriceRevision",
+            "publish",
+            "archive"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/catalog/CatalogQualificationTest.java",
+        "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-CAT-01",
+        "CORE-CAT-02",
+        "CORE-CAT-03"
+      ],
+      "dependsOn": [
+        "BIZ-IAM-01"
+      ],
+      "gate": "FC-30",
+      "openGaps": [
+        "archive races vs stock and published offers"
+      ]
+    },
+    {
+      "id": "SHR-OFFER-07",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Seller storefront and offer",
+      "owner": "STOREFRONT",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+          "methods": [
+            "createDraft",
+            "publish"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+          "methods": [
+            "createDraft",
+            "updatePrice",
+            "publish",
+            "pause",
+            "hide",
+            "priceHistory"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java",
+        "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-STO-01",
+        "CORE-STO-02",
+        "CORE-STO-03"
+      ],
+      "dependsOn": [
+        "SHR-CATALOG-06"
+      ],
+      "gate": "FC-30",
+      "openGaps": [
+        "offer price authority and CAS admission"
+      ]
+    },
+    {
+      "id": "SHR-CHECKOUT-08",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "One seller checkout and immutable order snapshot",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "methods": [
+            "checkout",
+            "checkoutPublishedQr",
+            "checkoutAcceptedQuote"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/PublishedQrCheckoutService.java",
+          "methods": [
+            "checkout"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/autoorder/AutoOrderR1QualificationTest.java",
+        "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+        "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-SAL-01",
+        "CORE-SAL-02"
+      ],
+      "dependsOn": [
+        "SHR-OFFER-07"
+      ],
+      "gate": "FC-40",
+      "openGaps": [
+        "exact idempotency namespace and price ack"
+      ]
+    },
+    {
+      "id": "SHR-INVENTORY-09",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Reserve, receive, move, stocktake, reconcile",
+      "owner": "INVENTORY",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/inventory/OrderInventoryPort.java",
+          "methods": [
+            "reserve",
+            "release",
+            "fulfill"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+          "methods": []
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+          "methods": [
+            "reserve",
+            "release",
+            "fulfill"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+          "methods": []
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/inventory/InventoryReservationQualificationTest.java",
+        "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+        "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-SAL-03",
+        "CORE-SAL-04",
+        "CORE-SAL-05",
+        "CORE-INV-01",
+        "CORE-INV-02"
+      ],
+      "dependsOn": [
+        "BIZ-ORG-03",
+        "SHR-CATALOG-06",
+        "SHR-CHECKOUT-08"
+      ],
+      "gate": "FC-40",
+      "openGaps": [
+        "one warehouse per order at present",
+        "stock conservation and all-or-nothing reservations"
+      ]
+    },
+    {
+      "id": "SHR-SALES-LIFECYCLE-10",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Seller confirmation, cancellation and fulfillment policy",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/sales/AuthenticatedSalesCommands.java",
+          "methods": [
+            "confirm",
+            "cancel",
+            "fulfill"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+          "methods": [
+            "confirm",
+            "cancel",
+            "fulfill"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+        "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-SAL-06",
+        "CORE-SAL-07",
+        "CORE-SAL-08",
+        "CORE-SAL-09",
+        "CORE-SAL-10"
+      ],
+      "dependsOn": [
+        "SHR-INVENTORY-09",
+        "BIZ-STAFF-02"
+      ],
+      "gate": "FC-40",
+      "openGaps": [
+        "DEC-FUL-01 generic fulfill bypass risk",
+        "DEC-SAL-02 picked cancellation",
+        "DEC-LOC-03 location object admission"
+      ]
+    },
+    {
+      "id": "QR-PUBLIC-11",
+      "product": [
+        "QR"
+      ],
+      "name": "Stable QR published offer and safe public card",
+      "owner": "STOREFRONT",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+          "methods": [
+            "issueOrGet",
+            "reprint",
+            "revoke",
+            "reissue"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/storefront/PublishedOfferCardQuery.java",
+          "methods": [
+            "findPublished"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/files/CatalogPublicProductMedia.java",
+          "methods": [
+            "listPublished"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/storefront/PublishedOfferQrQualificationTest.java",
+        "src/test/java/kz/rm/files/CatalogPublicProductMediaQualificationTest.java",
+        "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-QR-01",
+        "CORE-QR-02",
+        "CORE-QR-03"
+      ],
+      "dependsOn": [
+        "SHR-OFFER-07"
+      ],
+      "gate": "FC-50",
+      "openGaps": [
+        "public availability advisory only",
+        "no PII and sanitized media"
+      ]
+    },
+    {
+      "id": "QR-LIST-PRICE-12",
+      "product": [
+        "QR"
+      ],
+      "name": "Public QR checkout with price acknowledgement",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/autoorder/PublishedQrCheckoutService.java",
+          "methods": [
+            "checkout"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "methods": [
+            "checkoutPublishedQr"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-QR-04"
+      ],
+      "dependsOn": [
+        "QR-PUBLIC-11",
+        "SHR-CHECKOUT-08"
+      ],
+      "gate": "FC-50",
+      "openGaps": [
+        "no silent price re-confirm and no order on stale ack"
+      ]
+    },
+    {
+      "id": "QR-NEGOTIATION-13",
+      "product": [
+        "QR"
+      ],
+      "name": "Buyer and seller bargaining with accepted quote",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPriceProposalService.java",
+          "methods": [
+            "submit",
+            "buyerRespond",
+            "sellerRespond"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "methods": [
+            "checkoutAcceptedQuote"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-QR-05",
+        "CORE-QR-06",
+        "CORE-QR-07"
+      ],
+      "dependsOn": [
+        "SHR-OFFER-07",
+        "SHR-CHECKOUT-08"
+      ],
+      "gate": "FC-50",
+      "openGaps": [
+        "alternating actors",
+        "accepted quote consumed once"
+      ]
+    },
+    {
+      "id": "QR-PREPARATION-14",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "Full pick, ready state and buyer credential",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+          "methods": [
+            "startPreparing",
+            "confirmPicked",
+            "markReadyForPickup"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+          "methods": [
+            "issue",
+            "preview"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-PICK-01",
+        "CORE-PICK-02"
+      ],
+      "dependsOn": [
+        "SHR-SALES-LIFECYCLE-10"
+      ],
+      "gate": "FC-50",
+      "openGaps": [
+        "no stock debit before physical handover"
+      ]
+    },
+    {
+      "id": "QR-HANDOVER-15",
+      "product": [
+        "QR"
+      ],
+      "name": "Exactly-once secure physical handover",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+          "methods": [
+            "complete"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/OrderInventoryPort.java",
+          "methods": [
+            "fulfill"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-PICK-03",
+        "CORE-PICK-04",
+        "CORE-PICK-05"
+      ],
+      "dependsOn": [
+        "QR-PREPARATION-14",
+        "SHR-SALES-LIFECYCLE-10"
+      ],
+      "gate": "FC-50",
+      "openGaps": [
+        "DEC-FUL-01 proof boundary",
+        "double scan/JVM/revoke and crash"
+      ]
+    },
+    {
+      "id": "QR-RETURNS-16",
+      "product": [
+        "QR"
+      ],
+      "name": "Return reception, inspection, posting, quarantine",
+      "owner": "SALES",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnRequestService.java",
+          "methods": [
+            "request"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnReviewService.java",
+          "methods": [
+            "approve",
+            "reject"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
+          "methods": [
+            "receive",
+            "inspect",
+            "post"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesReturnQuarantineResolutionService.java",
+          "methods": [
+            "resolve"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/ReturnInventoryPostingPort.java",
+          "methods": [
+            "restock",
+            "quarantine"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-RET-01",
+        "CORE-RET-02",
+        "CORE-RET-03",
+        "CORE-RET-04",
+        "CORE-RET-05"
+      ],
+      "dependsOn": [
+        "QR-HANDOVER-15"
+      ],
+      "gate": "FC-50",
+      "openGaps": [
+        "no premature sellable restock",
+        "returns bounded by original handover"
+      ]
+    },
+    {
+      "id": "SHR-E2E-17",
+      "product": [
+        "BUSINESS",
+        "QR"
+      ],
+      "name": "End-to-end service qualification and exact-SHA",
+      "owner": "CROSS_DOMAIN",
+      "phase": "CORE_P0",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+          "methods": [
+            "checkout"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+          "methods": [
+            "complete"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+          "methods": [
+            "confirm"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/inventory/OrderInventoryPort.java",
+          "methods": [
+            "reserve",
+            "fulfill"
+          ]
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/integration/CommercialCoreE2EQualificationTest.java",
+        "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+        "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java"
+      ],
+      "scenarioIds": [
+        "CORE-XD-01",
+        "CORE-XD-02",
+        "CORE-XD-03",
+        "CORE-XD-04",
+        "CORE-XD-05"
+      ],
+      "dependsOn": [
+        "BIZ-IAM-01",
+        "BIZ-STAFF-02",
+        "BIZ-CRM-04",
+        "SHR-BUYER-LINK-05",
+        "SHR-CATALOG-06",
+        "SHR-OFFER-07",
+        "SHR-CHECKOUT-08",
+        "SHR-INVENTORY-09",
+        "SHR-SALES-LIFECYCLE-10",
+        "QR-PUBLIC-11",
+        "QR-NEGOTIATION-13",
+        "QR-HANDOVER-15",
+        "QR-RETURNS-16"
+      ],
+      "gate": "FC-60",
+      "openGaps": [
+        "full H2/PG/security exact-SHA gate currently not green",
+        "single business+QR service journeys not fully proven"
+      ]
+    },
+    {
+      "id": "BIZ-TASKS-LATER-18",
+      "product": [
+        "BUSINESS"
+      ],
+      "name": "Future TASKS and employee work management",
+      "owner": "TASKS",
+      "phase": "DEFERRED",
+      "sourceStatus": "SCAFFOLD_ONLY",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/tasks/TaskState.java",
+          "methods": []
+        }
+      ],
+      "testSourceAnchors": [],
+      "scenarioIds": [],
+      "dependsOn": [
+        "SHR-E2E-17"
+      ],
+      "gate": "AFTER_P0_P1",
+      "openGaps": [
+        "no TaskService currently; requires separate task policy, PII and PostgreSQL qualification"
+      ]
+    },
+    {
+      "id": "QR-PACKAGING-OPT-19",
+      "product": [
+        "QR"
+      ],
+      "name": "Optional QR-08 packaging service R0",
+      "owner": "SALES",
+      "phase": "OPTIONAL_P1",
+      "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+      "integratedVerdict": "HOLD",
+      "sourceAnchors": [
+        {
+          "path": "src/main/java/kz/rm/sales/OrderPackagingService.java",
+          "methods": [
+            "offer",
+            "decide"
+          ]
+        },
+        {
+          "path": "src/main/java/kz/rm/sales/PackagingServiceCatalogService.java",
+          "methods": []
+        }
+      ],
+      "testSourceAnchors": [
+        "src/test/java/kz/rm/sales/OrderPackagingQualificationTest.java",
+        "src/test/java/kz/rm/sales/PackagingServiceCatalogQualificationTest.java"
+      ],
+      "scenarioIds": [],
+      "dependsOn": [
+        "SHR-CHECKOUT-08"
+      ],
+      "gate": "OPTIONAL_QR08_R0",
+      "openGaps": [
+        "R0 must not post packaging materials or payments",
+        "full regression must still pass"
+      ]
+    }
+  ]
+}

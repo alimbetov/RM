@@ -1,0 +1,205 @@
+name: RM Exact-SHA Qualification Admission
+
+on:
+  push:
+    branches: [base_dev]
+  workflow_dispatch:
+    inputs:
+      require_release:
+        description: Require production release admission (currently HOLD)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  exact-sha-manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - name: Checkout exact SHA before generating evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate CRM-99 business simulations and fail-closed evidence mapping
+        run: |
+          python3 .github/scripts/verify_rm_crm_99_simulations.py
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_crm_99_simulations.py'
+      - name: Validate CRM user journey registry and service evidence boundaries
+        run: |
+          python3 .github/scripts/verify_rm_crm_journey_registry.py
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_crm_journey_registry.py'
+      - name: Validate RM-STRATEGY-R4 planned backlog and dependency ordering
+        run: python3 .github/scripts/verify_rm_r4_priority.py
+      - name: Validate UR-R3.0 75-capability JUnit-only crosswalk
+        run: python3 .github/scripts/verify_rm_user_role_crosswalk.py --output rm-user-role-crosswalk-validation.json
+      - name: Self-test exact-SHA polling state machine
+        run: node --test .github/scripts/test_rm_exact_sha_polling.cjs
+      - name: Aggregate mandatory results for the current base_dev SHA
+        id: qualify
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {classifyGate, pollDecision} = require(process.cwd()+'/.github/scripts/rm_exact_sha_polling.cjs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = 'base_dev';
+            const {data: branchData} = await github.rest.repos.getBranch({owner,repo,branch});
+            const sha = context.sha;
+            // Never qualify a stale branch commit, even if all its jobs were green.
+            if (branchData.commit.sha !== sha)
+              return core.setFailed('Stale qualification SHA: ' + sha);
+            const required = [
+              {name:'RM Domain Security and PostgreSQL Qualification',artifacts:['kms-h2-surefire','kms-postgres-surefire','iam-pii-populated-pg-surefire']},
+              {name:'CRM R1.2 Populated PostgreSQL Upgrade Qualification',artifacts:['crm-r12-populated-upgrade-surefire']},
+              {name:'INVENTORY 0081 Populated PostgreSQL Upgrade Qualification',artifacts:['inventory-0081-populated-postgresql']},
+              {name:'SALES 08.4 Populated PostgreSQL Upgrade Qualification',artifacts:['sales-084-populated-postgresql']},
+              {name:'RustFS Real Infrastructure E2E',artifacts:['rustfs-real-infra-e2e-surefire']},
+              {name:'RM TASK R2 Service Qualification',artifacts:['rm-task-h2-'+sha,'rm-task-postgresql-'+sha]},
+              {name:'RM TASK R3.2A Populated PostgreSQL Upgrade Qualification',artifacts:['rm-task-r32a-populated-pg-'+sha]},
+              {name:'RM TASK R32B T00 PostgreSQL Contract Qualification',artifacts:['rm-task-t00-postgresql-'+sha]},
+              {name:'RM CUR-R2C Policy Schema PostgreSQL Qualification',artifacts:['cur-r2c-policy-pg-'+sha,'cur-r2c-populated-pg-'+sha,'cur-r2c-anchor-populated-pg-'+sha,'cur-r2c-revoke-populated-pg-'+sha]},
+              {name:'RM QR-07 R0-R2 Physical Return PostgreSQL Qualification',artifacts:['qr07-r0-r1-'+sha,'qr07-full-pg-'+sha]}
+            ];
+            const manifest = {
+              schema:'RM-QA-01B/v2',repository:owner+'/'+repo,branch,sha,
+              observed_at:new Date().toISOString(),required:[],
+              // No invented test counts: detailed Surefire XML validation is a separate gate.
+              testCounts:'NOT_YET_AGGREGATED',migrationFingerprint:'NOT_YET_VERIFIED'
+            };
+            let allGreen=false;
+            let decision='WAIT';
+            // Workflows run concurrently. Wait for all exact-SHA evidence rather
+            // than turning early queued jobs into an artificial admission failure.
+            for(let attempt=0;attempt<170;attempt++) {
+              const {data: current} = await github.rest.repos.getBranch({
+                owner,repo,branch
+              });
+              if(current.commit.sha!==sha)
+                return core.setFailed('Branch changed while awaiting qualification');
+              const results = await github.paginate(
+                github.rest.actions.listWorkflowRunsForRepo,
+                {owner,repo,head_sha:sha,branch,per_page:100}
+              );
+              manifest.required=[];
+              for(const gate of required) {
+                const matches=results.filter(r=>r.name===gate.name &&
+                  r.head_sha===sha && r.event==='push').sort((a,b)=>b.id-a.id);
+                const run=matches[0];
+                if (!run) {
+                  manifest.required.push({name:gate.name,status:'MISSING',conclusion:null,
+                    ...classifyGate(null,[],[],gate.artifacts,sha)});
+                  continue;
+                }
+                const evidence={
+                  name:gate.name,id:run.id,sha:run.head_sha,status:run.status,
+                  conclusion:run.conclusion,url:run.html_url,
+                  run_attempt:run.run_attempt,jobs:[],artifacts:[]
+                };
+                if (run.status==='completed' && run.conclusion==='success') {
+                  // The attempt-specific endpoint avoids stale jobs from a
+                  // previous failed attempt after a rerun.
+                  const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,{
+                    owner,repo,run_id:run.id,attempt_number:run.run_attempt,per_page:100
+                  });
+                  evidence.jobs=jobs.map(j=>({
+                    name:j.name,status:j.status,conclusion:j.conclusion,
+                    skippedSteps:(j.steps||[]).filter(st=>st.conclusion==='skipped' &&
+                      !['Post','Complete job'].some(prefix=>st.name.startsWith(prefix))).map(st=>st.name)
+                  }));
+                  // Workflow and jobs endpoints can converge at different times.
+                  const artifacts=await github.paginate(
+                    github.rest.actions.listWorkflowRunArtifacts,
+                    {owner,repo,run_id:run.id,per_page:100}
+                  );
+                  for(const expected of gate.artifacts) {
+                    const candidates=artifacts.filter(a=>a.name===expected && !a.expired &&
+                      a.size_in_bytes>0);
+                    const a=candidates.length===1?candidates[0]:null;
+                    evidence.artifacts.push(a ?
+                      {name:a.name,id:a.id,bytes:a.size_in_bytes} :
+                      {name:expected,status:'MISSING'});
+                  }
+                  Object.assign(evidence,classifyGate(run,jobs,artifacts,gate.artifacts,sha));
+                } else {
+                  Object.assign(evidence,classifyGate(run,[],[],gate.artifacts,sha));
+                }
+                manifest.required.push(evidence);
+              }
+              manifest.observed_at=new Date().toISOString();
+              manifest.pollAttempt=attempt+1;
+              decision=pollDecision(manifest.required,required.length);
+              core.info('Exact-SHA poll '+(attempt+1)+': '+manifest.required.map(r=>
+                r.name+'='+r.qualificationState+' ('+r.qualificationReason+')').join('; '));
+              allGreen=decision==='PASS';
+              if(decision!=='WAIT') break;
+              if(attempt<169) await new Promise(resolve=>setTimeout(resolve,30000));
+            }
+            // Workflow execution proof is not a full release qualification.
+            // A final branch read fences a SHA change during the last poll.
+            const {data: finalBranch} = await github.rest.repos.getBranch({owner,repo,branch});
+            if(finalBranch.commit.sha!==sha) {
+              allGreen=false;
+              decision='STALE_SHA';
+            }
+            manifest.workflowGate = allGreen?'PASS':'FAIL';
+            manifest.workflowGateReason = allGreen?'ALL_EVIDENCE_READY':
+              decision==='WAIT'?'POLL_DEADLINE_EXCEEDED':decision;
+            manifest.admission = 'HOLD';
+            fs.writeFileSync('rm-exact-sha-manifest.json',
+              JSON.stringify(manifest,null,2)+'\n');
+            core.info(JSON.stringify(manifest,null,2));
+            if(!allGreen)
+              core.setFailed('RM-QA-01B: '+manifest.workflowGateReason+' at exact SHA');
+            else
+              core.info('Exact-SHA workflow gate PASS; full qualification remains HOLD pending Surefire counts and migration fingerprints');
+      - name: Self-test fail-closed qualification verifier
+        if: steps.qualify.outcome == 'success'
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Verify Surefire XML, artifact provenance and Liquibase fingerprint
+        if: steps.qualify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/verify_rm_qa_01b.py
+      - name: Generate UR-R3.5 exact-SHA unified maturity report
+        if: steps.qualify.outcome == 'success'
+        run: |
+          python3 .github/scripts/rm_r35_maturity_report.py
+          cat rm-r3-maturity-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce production release gate on explicit release request
+        if: github.event_name == 'workflow_dispatch' && inputs.require_release
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          m = json.loads(Path("rm-exact-sha-manifest.json").read_text())
+          if not (m.get("sha") == os.environ["GITHUB_SHA"]
+                  and m.get("developmentCiGate") == "PASS"
+                  and m.get("businessQualificationGate") == "PASS"
+                  and m.get("productionReleaseGate") == "PASS"
+                  and m.get("admission") == "PASS"):
+              raise SystemExit("Production release denied: exact-SHA admission not granted")
+          PY
+      - name: Publish immutable manifest and per-domain coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-exact-sha-qualification-manifest
+          path: |
+            rm-exact-sha-manifest.json
+            rm-r3-functional-coverage.json
+            rm-r3-functional-coverage.md
+            rm-user-role-crosswalk-validation.json
+            rm-user-role-scenario-results.json
+            rm-r3-maturity-report.json
+            rm-mvp-service-coverage.json
+            rm-r3-maturity-report.md
+          if-no-files-found: error

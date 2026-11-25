@@ -30,21 +30,21 @@ public class OrderInventoryPort {
             TenantAuthorization.Decision stock,
             UUID orderId,UUID orderLineId,UUID locationId,UUID itemId,BigDecimal quantity) {
         verify(seller,stock,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE);
-        return reservations.reserve(stock.tenantId(),orderId,orderLineId,locationId,itemId,quantity);
+        return reservations.reserve(stock.tenantId(),orderId,orderLineId,locationId,itemId,quantity,stock.actorId());
     }
 
     @Transactional(propagation=Propagation.MANDATORY)
     public InventoryReservationService.Reservation release(
             TenantAuthorization.Decision seller,TenantAuthorization.Decision stock,UUID reservationId) {
         verify(seller,stock,DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE);
-        return reservations.release(stock.tenantId(),reservationId);
+        return reservations.release(stock.tenantId(),reservationId,stock.actorId());
     }
 
     @Transactional(propagation=Propagation.MANDATORY)
     public InventoryReservationService.Reservation fulfill(
             TenantAuthorization.Decision seller,TenantAuthorization.Decision stock,UUID reservationId) {
         verify(seller,stock,DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
-        return reservations.fulfill(stock.tenantId(),reservationId);
+        return reservations.fulfill(stock.tenantId(),reservationId,stock.actorId());
     }
 
     private static void verify(TenantAuthorization.Decision sales,

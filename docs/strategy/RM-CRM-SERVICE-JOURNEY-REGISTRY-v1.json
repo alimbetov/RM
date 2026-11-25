@@ -1,0 +1,209 @@
+{
+  "schema": "RM-CRM-SERVICE-JOURNEY-REGISTRY/v1",
+  "source": {
+    "branch": "base_dev",
+    "baselineCatalog": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+    "strategy": "docs/strategy/RM-STRATEGY-R4-GAP-PRIORITY-v1.json"
+  },
+  "baseline": {
+    "domains": 16,
+    "requirements": 75,
+    "implemented": 46,
+    "planned": 29
+  },
+  "policy": {
+    "controllers": "STOP",
+    "restApi": "STOP",
+    "ui": "STOP",
+    "production": "HOLD",
+    "noInferredCustomerOrderAssociation": true,
+    "explicitEvidenceOnly": true
+  },
+  "journeys": [
+    {
+      "id": "CRM-U01",
+      "behavior": "Verified user creates tenant and grants staff access",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "IAM-06",
+        "ORG-05"
+      ],
+      "existingJUnitEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent",
+        "IamUserOnboardingProcessQualificationTest.completePlatformAdminToOwnerToEmployeeRoleAndReadmission"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Real external OIDC/email and complete principal-to-employee role journey",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U02",
+      "behavior": "Employee registers, searches and reloads customer/contact",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "CRM-01",
+        "CRM-06"
+      ],
+      "existingJUnitEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Full write/read/PII role matrix, revocation and persistence after process restart",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U03",
+      "behavior": "Consent grant/revoke controls communication eligibility",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "CRM-02",
+        "MKT-01"
+      ],
+      "existingJUnitEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Marketing dispatch admission, consent-vs-send race, quota and no delivery after revoke",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U04",
+      "behavior": "Employee records, assigns, follows up and completes interaction",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "INT-01",
+        "INT-04"
+      ],
+      "existingJUnitEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads",
+        "CrmInteractionQualificationTest.crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Active/inactive reassignee, both concurrency orders, task owner lifecycle",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U05",
+      "behavior": "Employee writes protected NOTE and communication outcome",
+      "assessment": "GAP",
+      "requirementIds": [
+        "INT-03"
+      ],
+      "existingJUnitEvidence": [],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Encrypted NOTE/outcome body with AAD and purpose-scoped read permissions",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U06",
+      "behavior": "Employee creates and closes linked task from CRM",
+      "assessment": "GAP",
+      "requirementIds": [
+        "TSK-01",
+        "INT-04"
+      ],
+      "existingJUnitEvidence": [],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Tenant-owned TASKS lifecycle and typed interaction reference",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U07",
+      "behavior": "Manager activates and reviews versioned contract",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "CRM-04",
+        "CRM-06"
+      ],
+      "existingJUnitEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Contract deadline, archived parent and all assigned role negative cases",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U08",
+      "behavior": "CRM customer is reliably associated with seller order",
+      "assessment": "BLOCKED_PROVENANCE",
+      "requirementIds": [
+        "SAL-06",
+        "CRM-06"
+      ],
+      "existingJUnitEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "No verified crm.customer→sales_order identity link; never infer from email, name, tenant or line",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U09",
+      "behavior": "Customer sees relationship history through payment",
+      "assessment": "GAP",
+      "requirementIds": [
+        "FIN-01",
+        "SAL-07"
+      ],
+      "existingJUnitEvidence": [],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Finance owner invoice/payment/allocation, no fulfillment-as-payment inference",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U10",
+      "behavior": "Customer file stays tenant and permission bound",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "FIL-05",
+        "FIL-06"
+      ],
+      "existingJUnitEvidence": [
+        "FilesR10bQualificationTest.wrongTenantAndRevokedPermissionNeverReadBinaryStream"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "End-to-end CRM attach→read→revoke→restore with actual RustFS/ClamAV",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U11",
+      "behavior": "Manager safely archives/restores customer and relations",
+      "assessment": "PARTIAL",
+      "requirementIds": [
+        "CRM-03",
+        "CRM-06"
+      ],
+      "existingJUnitEvidence": [
+        "CrmInteractionQualificationTest.crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline"
+      ],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "More multi-resource failure injection, concurrent archive against contract creation, reload",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    },
+    {
+      "id": "CRM-U12",
+      "behavior": "Auditor reviews sanitized cross-domain history",
+      "assessment": "GAP",
+      "requirementIds": [
+        "AUD-03",
+        "AUD-04"
+      ],
+      "existingJUnitEvidence": [],
+      "evidenceSemantic": "SUPPORTING_PARTIAL",
+      "remainingAcceptance": "Bounded cross-domain read model, redaction, isolation, retention proof",
+      "qualification": "NOT_FULLY_QUALIFIED",
+      "controllerUiScope": "STOP"
+    }
+  ]
+}

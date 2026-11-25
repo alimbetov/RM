@@ -1,0 +1,98 @@
+name: RM TASK R2 Service Qualification
+on:
+  push:
+    branches: [base_dev]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  task-h2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify exact SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: H2 task service behavioral tests
+        run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
+      - name: Require thirty-five H2 cases and eighteen expected database skips
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as E
+          p=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskServiceQualificationTest.xml')
+          assert p.is_file(),p
+          cases=list(E.parse(p).getroot().iter('testcase'))
+          assert len(cases)==53,len(cases)
+          assert sum(c.find('skipped') is not None for c in cases)==18
+          assert not any(c.find(x) is not None for c in cases for x in ('failure','error'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rm-task-h2-${{ github.sha }}
+          path: target/surefire-reports/
+          if-no-files-found: error
+  task-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify exact SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: PostgreSQL task lifecycle and concurrency
+        run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
+      - name: Require all fifty-three PostgreSQL cases without skips
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as E
+          p=Path('target/surefire-reports/TEST-kz.rm.tasks.TaskServiceQualificationTest.xml')
+          assert p.is_file(),p
+          cases=list(E.parse(p).getroot().iter('testcase'))
+          assert len(cases)==53,len(cases)
+          assert not any(c.find(x) is not None for c in cases
+                         for x in ('failure','error','skipped'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rm-task-postgresql-${{ github.sha }}
+          path: target/surefire-reports/
+          if-no-files-found: error

@@ -14,14 +14,14 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class StockBalanceQueryService {
+class StockBalanceQueryService {
     private final TenantAuthorization authorization;
     private final StockBalanceRepository repository;
 
-    @Transactional(readOnly = true)
+    @Transactional // shared IAM row locks require a writable PostgreSQL transaction
     public Page<StockBalanceDto> search(UUID authenticatedActorId, UUID tenantId,
                                         StockSearch search, int page, int size) {
-        authorization.require(authenticatedActorId,tenantId,DomainPermission.INVENTORY_STOCK_READ);
+        authorization.requireForCommand(authenticatedActorId,tenantId,DomainPermission.INVENTORY_STOCK_READ);
         if(page<0 || size<1 || size>100)
             throw new IllegalArgumentException("Page must be nonnegative, size 1..100");
         return repository.search(tenantId,search==null?new StockSearch(null,null,false):search,

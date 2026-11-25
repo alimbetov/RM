@@ -1,0 +1,109 @@
+name: CRM-R2.2C Populated PostgreSQL Upgrade
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - '.github/workflows/crm-r22c-populated-upgrade.yml'
+      - 'src/main/resources/db/changelog/db.changelog-master.sql'
+      - 'src/main/java/kz/rm/crm/CrmBuyerLinkService.java'
+      - 'src/main/java/kz/rm/iam/GlobalAccountDeletionService.java'
+      - 'src/main/java/kz/rm/iam/EmailIdentityService.java'
+      - 'src/main/java/kz/rm/iam/EmailIdentityCrypto.java'
+      - 'src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  populated-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - name: Checkout qualified R2.2B baseline
+        uses: actions/checkout@v4
+        with:
+          ref: a7d4ac44482f22cba6ba2f52451ef6d4ff773e75
+          clean: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Populate old schema with buyer links and immutable events
+        run: mvn -B -ntp -Dtest=CrmBuyerLinkQualificationTest test
+      - name: Snapshot old tenant-composite link identities and audit
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_SERVICE_ID" psql -U rm -d rm_test -At -c "SELECT tenant_id::text||'/'||id::text||'/'||status||'/'||row_version FROM crm.customer_buyer_link ORDER BY 1" > /tmp/crm-r22c-links-before.txt
+          docker exec "$PG_SERVICE_ID" psql -U rm -d rm_test -At -c "SELECT tenant_id::text||'/'||id::text||'/'||action_code FROM crm.customer_buyer_link_event ORDER BY 1" > /tmp/crm-r22c-events-before.txt
+          test -s /tmp/crm-r22c-links-before.txt
+          test -s /tmp/crm-r22c-events-before.txt
+          wc -l /tmp/crm-r22c-*-before.txt
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Confirm source SHA
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "sha=$GITHUB_SHA" > crm-r22c-upgrade-provenance.txt
+          echo "run=$GITHUB_RUN_ID" >> crm-r22c-upgrade-provenance.txt
+      - name: Apply Liquibase migration on populated database then test
+        run: mvn -B -ntp -Dtest=CrmBuyerLinkQualificationTest test
+      - name: Verify no existing mappings, audit entries or revisions changed
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_SERVICE_ID" psql -U rm -d rm_test -At -c "SELECT tenant_id::text||'/'||id::text||'/'||status||'/'||row_version FROM crm.customer_buyer_link ORDER BY 1" > /tmp/crm-r22c-links-after.txt
+          docker exec "$PG_SERVICE_ID" psql -U rm -d rm_test -At -c "SELECT tenant_id::text||'/'||id::text||'/'||action_code FROM crm.customer_buyer_link_event ORDER BY 1" > /tmp/crm-r22c-events-after.txt
+          if comm -23 /tmp/crm-r22c-links-before.txt /tmp/crm-r22c-links-after.txt | grep -q .; then
+            echo "::error::Historical buyer link lost or altered"; exit 1
+          fi
+          if comm -23 /tmp/crm-r22c-events-before.txt /tmp/crm-r22c-events-after.txt | grep -q .; then
+            echo "::error::Historical link event lost or altered"; exit 1
+          fi
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
+            DO \$\$ BEGIN
+              IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema='crm' AND table_name='customer_buyer_dispute_decision')
+                OR NOT EXISTS (SELECT 1 FROM pg_indexes
+                  WHERE schemaname='crm' AND indexname='uk_crm_buyer_active_customer')
+              THEN RAISE EXCEPTION 'CRM R2.2C schema not installed'; END IF;
+            END \$\$;"
+          cp /tmp/crm-r22c-*-before.txt .
+          cp /tmp/crm-r22c-*-after.txt .
+      - name: Upload exact-SHA populated-upgrade evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-r22c-populated-upgrade-${{ github.run_id }}
+          path: |
+            crm-r22c-upgrade-provenance.txt
+            crm-r22c-*-before.txt
+            crm-r22c-*-after.txt
+            target/surefire-reports/
+          if-no-files-found: warn

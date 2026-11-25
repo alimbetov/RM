@@ -12,9 +12,15 @@ public enum DomainPermission {
     ORGANIZATION_LOCATION_READ(DomainModule.ORG),
     INVENTORY_STOCK_READ(DomainModule.INVENTORY),
     SALES_ORDER_READ(DomainModule.SALES),
+    SALES_PROPOSAL_RESPOND(DomainModule.SALES),
     SALES_ORDER_CONFIRM(DomainModule.SALES),
     SALES_ORDER_CANCEL(DomainModule.SALES),
     SALES_ORDER_FULFILL(DomainModule.SALES),
+    SALES_RETURN_REVIEW(DomainModule.SALES),
+    SALES_RETURN_RECEIVE(DomainModule.SALES),
+    SALES_RETURN_INSPECT(DomainModule.SALES),
+    SALES_RETURN_POST(DomainModule.SALES),
+    SALES_PACKAGING_MANAGE(DomainModule.SALES),
     INVENTORY_RECEIVE(DomainModule.INVENTORY),
     INVENTORY_ADJUST(DomainModule.INVENTORY),
     INVENTORY_RESERVE(DomainModule.INVENTORY),
@@ -23,7 +29,21 @@ public enum DomainPermission {
     CRM_PII_READ(DomainModule.CRM),
     CRM_WRITE(DomainModule.CRM),
     ORGANIZATION_LOCATION_WRITE(DomainModule.ORG),
-    INVENTORY_SETTINGS_MANAGE(DomainModule.INVENTORY);
+    INVENTORY_SETTINGS_MANAGE(DomainModule.INVENTORY),
+    FILES_UPLOAD(DomainModule.FILES),
+    FILES_READ(DomainModule.FILES),
+    FILES_ATTACH(DomainModule.FILES),
+    FILES_DETACH(DomainModule.FILES),
+    FILES_DELETE(DomainModule.FILES),
+    CATALOG_READ(DomainModule.CATALOG),
+    CATALOG_WRITE(DomainModule.CATALOG),
+    CATALOG_PRICE_MANAGE(DomainModule.CATALOG),
+    CATALOG_PUBLISH(DomainModule.CATALOG),
+    STOREFRONT_OFFER_MANAGE(DomainModule.SALES),
+    STOREFRONT_OFFER_PUBLISH(DomainModule.SALES),
+    TASK_READ(DomainModule.TASKS),
+    TASK_MANAGE(DomainModule.TASKS),
+    TASK_EXECUTE(DomainModule.TASKS);
 
     private final DomainModule module;
     DomainPermission(DomainModule module) { this.module = module; }

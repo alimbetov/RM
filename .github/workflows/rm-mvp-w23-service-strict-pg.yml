@@ -1,0 +1,108 @@
+name: RM MVP W2-W5 Service Journeys PostgreSQL Qualification
+
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - 'src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java'
+      - 'src/main/java/kz/rm/sales/SalesInventoryCommandService.java'
+      - 'src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java'
+      - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
+      - 'src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java'
+      - 'src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java'
+      - 'docs/operations/RM-MVP-SERVICE-CURRENCY-PREFLIGHT.sql'
+      - '.github/scripts/verify_rm_qa_01b.py'
+      - '.github/workflows/rm-mvp-w23-service-strict-pg.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mvp-strict-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Test strict W2-W5 service journeys in real PostgreSQL
+        run: >-
+          mvn -B -ntp clean test
+          '-Dtest=MvpServiceWarehouseAdmissionQualificationTest,MvpServiceCurrencyStartupQualificationTest,BusMvpServiceJourneyQualificationTest,QrMvpServiceJourneyQualificationTest'
+      - name: Require W2-W5 strict tests (none skipped)
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          paths=list(Path('target/surefire-reports').glob('TEST-*.xml'))
+          assert paths, 'MVP_NO_SUREFIRE_XML'
+          cases=[x for p in paths for x in ET.parse(p).getroot().iter('testcase')]
+          expected={'mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill',
+                    'mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation',
+                    'mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled',
+                    'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg',
+                    'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
+                    'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
+          got={c.get('name') for c in cases}
+          assert expected <= got, 'MVP_MISSING_REQUIRED_CASES: '+str(expected-got)
+          assert not any(c.find(tag) is not None for c in cases
+                         for tag in ('failure','error','skipped')), 'MVP_TEST_FAILURE_OR_SKIP'
+          PY
+      - name: Run populated strict service preflight against valid fixtures
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker cp docs/operations/RM-MVP-SERVICE-CURRENCY-PREFLIGHT.sql "$PG_SERVICE_ID:/tmp/mvp-preflight.sql"
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -f /tmp/mvp-preflight.sql
+      - name: Prove preflight fails on forbidden currency policy state
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
+            UPDATE public.tenant_currency_policy
+            SET status='REVIEW_REQUIRED'
+            WHERE tenant_id=(SELECT tenant_id FROM crm.store_front LIMIT 1);
+          "
+          if docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -f /tmp/mvp-preflight.sql > /tmp/mvp-negative.log 2>&1; then
+            cat /tmp/mvp-negative.log
+            echo "::error::MVP_CURRENCY_PREFLIGHT_ACCEPTED_UNSAFE_POLICY"
+            exit 1
+          fi
+          grep -q 'MVP_CURRENCY_POLICY_PREFLIGHT_HOLD' /tmp/mvp-negative.log
+      - name: Preserve strict service evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-mvp-w25-strict-pg-${{ github.sha }}
+          path: |
+            target/surefire-reports/
+          if-no-files-found: warn

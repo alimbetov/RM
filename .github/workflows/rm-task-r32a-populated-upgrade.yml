@@ -1,0 +1,199 @@
+name: RM TASK R3.2A Populated PostgreSQL Upgrade Qualification
+
+on:
+  push:
+    branches: [base_dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  task-r32a-populated-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+    steps:
+      - name: Checkout pre-snapshot R3.1 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 38a082073b1f9975794c5d7f42e4760dc51f3a70
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Populate actual pre-0149 CRM and task data
+        run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
+      - name: Capture pre-upgrade rows and assert snapshot schema absent
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+            SELECT CASE WHEN to_regclass('crm.task_reconciliation_snapshot') IS NULL
+              THEN 'PRE_SNAPSHOT_SCHEMA' ELSE 'ALREADY_EXISTS' END;" > /tmp/task-pre-schema.txt
+          grep -Fx PRE_SNAPSHOT_SCHEMA /tmp/task-pre-schema.txt
+          for table in task_item task_event customer_interaction; do
+            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+              SELECT tenant_id::text || '/' || id::text FROM crm.$table ORDER BY 1"               > "/tmp/task-before-$table.txt"
+          done
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+            SELECT tenant_id::text || '/' || task_id::text FROM crm.task_crm_followup ORDER BY 1"             > /tmp/task-before-followup-keys.txt
+          test -s /tmp/task-before-task_item.txt
+          test -s /tmp/task-before-task_event.txt
+          test -s /tmp/task-before-followup-keys.txt
+      - name: Checkout exact target commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Verify exact source SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Apply 0149-0153 on the populated database and qualify R3.2A
+        run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
+      - name: Assert all historical task and CRM keys survive
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          for table in task_item task_event customer_interaction; do
+            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+              SELECT tenant_id::text || '/' || id::text FROM crm.$table ORDER BY 1" > "/tmp/task-after-$table.txt"
+            if comm -23 "/tmp/task-before-$table.txt" "/tmp/task-after-$table.txt" | grep -q .; then
+              echo "Historical crm.$table keys were lost"; exit 1
+            fi
+          done
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+            SELECT tenant_id::text || '/' || task_id::text FROM crm.task_crm_followup ORDER BY 1"             > /tmp/task-after-followup-keys.txt
+          if comm -23 /tmp/task-before-followup-keys.txt /tmp/task-after-followup-keys.txt | grep -q .; then
+            echo "Historical followup keys were lost"; exit 1
+          fi
+          for table in task_reconciliation_snapshot task_reconciliation_snapshot_item task_reconciliation_snapshot_seal; do
+            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+              SELECT to_regclass('crm.$table') IS NOT NULL" | grep -Fx t
+          done
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+            SELECT count(*) FROM pg_trigger
+            WHERE tgrelid='crm.task_reconciliation_snapshot_seal'::regclass
+              AND tgname='trg_task_snapshot_seal_transaction_fence'
+              AND NOT tgisinternal" | grep -Fx 1
+      - name: Verify post-commit manifest digest from persisted PostgreSQL rows
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "CREATE EXTENSION IF NOT EXISTS pgcrypto"
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
+            DO \$\$ DECLARE invalid_count bigint;
+            BEGIN
+              SELECT count(*) INTO invalid_count
+              FROM crm.task_reconciliation_snapshot s
+              LEFT JOIN crm.task_reconciliation_snapshot_seal z
+                ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+              LEFT JOIN LATERAL (
+                SELECT count(*) AS item_count,
+                  encode(digest(coalesce(string_agg(
+                    i.task_id::text || '|' || i.captured_state || '|' ||
+                    i.captured_version::text || chr(10), ''
+                    ORDER BY i.task_id),''), 'sha256'),'hex') AS recomputed
+                FROM crm.task_reconciliation_snapshot_item i
+                WHERE i.tenant_id=s.tenant_id AND i.snapshot_id=s.id
+              ) d ON true
+              WHERE z.snapshot_id IS NULL OR s.item_count<>d.item_count
+                 OR z.items_sha256<>d.recomputed;
+              IF invalid_count<>0 THEN RAISE EXCEPTION 'snapshot integrity failures: %',invalid_count; END IF;
+              IF NOT EXISTS(SELECT 1 FROM crm.task_reconciliation_snapshot)
+                THEN RAISE EXCEPTION 'no populated snapshots to validate'; END IF;
+            END \$\$;"
+      - name: Backup and restore qualified populated database
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_CONTAINER" pg_dump -U rm -Fc rm_test -f /tmp/r32a.dump
+          docker exec "$PG_CONTAINER" createdb -U rm rm_restore
+          docker exec "$PG_CONTAINER" pg_restore -U rm -d rm_restore --exit-on-error /tmp/r32a.dump
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_restore -At -c "
+            SELECT count(*) FROM crm.task_reconciliation_snapshot s
+            JOIN crm.task_reconciliation_snapshot_seal z
+              ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id" | grep -E '^[1-9][0-9]*$'
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_restore -At -c "
+            SELECT count(*) FROM crm.task_reconciliation_snapshot" > /tmp/task-restore-count.txt
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At -c "
+            SELECT count(*) FROM crm.task_reconciliation_snapshot" > /tmp/task-original-count.txt
+          diff -u /tmp/task-original-count.txt /tmp/task-restore-count.txt
+          for db in rm_test rm_restore; do
+            docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
+              SELECT s.tenant_id::text || '/' || s.id::text || '/' || z.items_sha256
+              FROM crm.task_reconciliation_snapshot s
+              JOIN crm.task_reconciliation_snapshot_seal z
+                ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+              ORDER BY 1" > "/tmp/task-$db-seals.txt"
+          done
+          diff -u /tmp/task-rm_test-seals.txt /tmp/task-rm_restore-seals.txt
+          docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d rm_restore -c "
+            DO \$\$ DECLARE invalid_count bigint;
+            BEGIN
+              SELECT count(*) INTO invalid_count
+              FROM crm.task_reconciliation_snapshot s
+              JOIN crm.task_reconciliation_snapshot_seal z
+                ON z.tenant_id=s.tenant_id AND z.snapshot_id=s.id
+              JOIN LATERAL (
+                SELECT count(*) AS item_count,
+                  encode(digest(coalesce(string_agg(
+                    i.task_id::text || '|' || i.captured_state || '|' ||
+                    i.captured_version::text || chr(10), ''
+                    ORDER BY i.task_id),''), 'sha256'),'hex') AS recomputed
+                FROM crm.task_reconciliation_snapshot_item i
+                WHERE i.tenant_id=s.tenant_id AND i.snapshot_id=s.id
+              ) d ON true
+              WHERE s.item_count<>d.item_count OR z.items_sha256<>d.recomputed;
+              IF invalid_count<>0 THEN RAISE EXCEPTION 'restored snapshot digest mismatch'; END IF;
+            END \$\$;"
+      - name: Capture PostgreSQL migration / sealed snapshot / restore proof
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "commit=$GITHUB_SHA"
+            echo "postgres=17"
+            echo "changeset=0153"
+            for db in rm_test rm_restore; do
+              echo "database=$db"
+              docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
+                SELECT 'sealed_snapshots=' || count(*) FROM crm.task_reconciliation_snapshot_seal"
+              docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U rm -d "$db" -At -c "
+                SELECT 'snapshot_items=' || count(*) FROM crm.task_reconciliation_snapshot_item"
+            done
+            echo "digest_before_restore=PASS"
+            echo "digest_after_restore=PASS"
+          } > rm-task-r32a-pg-evidence.txt
+      - name: Publish populated migration and restore Surefire evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-task-r32a-populated-pg-${{ github.sha }}
+          path: |
+            target/surefire-reports/
+            rm-task-r32a-pg-evidence.txt
+          if-no-files-found: error

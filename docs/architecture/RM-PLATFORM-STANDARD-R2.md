@@ -2,7 +2,7 @@
 
 **Версия:** R2.2 (R2.0 + пользовательские сценарии + базовый DTO-контракт) · **Базовая версия R2.0:** PR #3, merge `5dd2af44f3495ec2a67c69548c6b2c024c0b9dae` · **Сценарии R2.1:** PR #5, merge `378dba6ccbd79687ea979dab2ad952ef2fbbbd51` · **DTO R2.2:** включён в `main` через PR #6 (`27373aca6bdb9a36396e7396ca411bf30b8af362`). Статус описания не означает реализацию API или production.
 **Источник фактической реализации:** код и точный SHA `main`, а не версия ТЗ. Базовый внедрённый R2-код: PR #2; IAM hardening из [PR #4](https://github.com/alimbetov/RM/pull/4) включён в `main` (`bb6baf3392943525c29cc49232509e47591a54dd`). Отдельное независимое security-одобрение и production admission — **HOLD**.
-**Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`.
+**Важно:** утверждение стандарта **не равно** допуску production, завершению всех доменов или утверждению бизнес-прав, для которых ниже указано `DECISION REQUIRED`. **IAM-PII-R2.5 (§25): R2.5A/B/C реализованы как внутренние сервисы в `base_dev`; R2.5D — синтетическая проверка переноса и контролируемый ручной cutover, без production-допуска.**
 
 ## 1. Назначение и продукт
 
@@ -26,7 +26,7 @@ RM — **CRM-first business platform**: единая рабочая среда �
 
 | Контекст | Владеет данными и поведением | R2-доставка |
 |---|---|---|
-| IAM | global identity, account status, membership, tenant roles, grants | Ядро и IAM lifecycle в main; независимый production security sign-off HOLD |
+| IAM | global identity, account status, membership, tenant roles, grants, защищённый профиль | IAM lifecycle в main; в `base_dev` IAM R2.3–R2.5D (PR #9), включая encrypted profile и изменение email; полный production cutover и внешняя авторизация **HOLD** |
 | ORG | организация, подразделения/локации | Базовые сервисы и чтение реализованы |
 | GEO | справочник КАТО/территорий | Справочные контракты, реальная полнота определяется тестами |
 | FILES | метаданные и доступ к файлам, хранение | Расширение по отдельной вертикали |
@@ -47,6 +47,7 @@ RM — **CRM-first business platform**: единая рабочая среда �
 ## 4. Идентичность и tenant
 
 - Один глобальный `userId` для физического пользователя, одна связь с внешним OIDC subject; пользователь может входить в несколько организаций.
+- **Профиль IAM — глобальный, не tenant PII.** Email и профиль пользователя нельзя шифровать DEK одной организации. Существующие `iam_email_identity.email_envelope/lookup_hmac` уже защищают глобальный email; `iam_user_account.display_name/email_normalized/phone_e164` пока могут храниться открыто. Их миграция регламентируется §25.
 - **`tenantId = iam_workspace.id`** для организационных данных. `organizationId` — бизнес-сущность организации, не `tenantId`. Склад, филиал, KATO/регион, проект и профиль клиента **не являются** самостоятельными tenant по умолчанию.
 - Пользователь явно выбирает рабочую организацию, но **любой указанный tenantId проверяется сервером** по активным account, workspace, membership; нельзя принимать доверие к tenant/actor из HTTP body/query.
 - Операции другого tenant и чтение чужих идентификаторов — **deny by default**, включая вложенные JOIN, поисковые запросы, файлы, экспорт, фоновые задания.
@@ -82,6 +83,7 @@ CRM решает видимость клиентов/контактов и ра�
 
 ## 6. Доменные границы и пользовательский процесс
 
+- **IAM:** регистрация `emailVerified=false`; подтверждение конкретного адреса — только после one-time proof. При смене email старый адрес остаётся текущим до подтверждения нового. Статус почты не равен OIDC-login или tenant permission; подробнее §25.
 - **CRM:** создание/поиск клиента и контакта, история взаимодействий и согласий, ответственное лицо; PII раскрывается только после отдельного `CRM_PII_READ`. Создание контакта не означает согласие на рассылку. Полнота портфеля/назначений — отдельный контракт.
 - **SALES:** от коммерческого предложения/заказа к подтверждению, отмене и исполнению. Один seller tenant на заказ; фиксировать цены/состояния и сохранять историю. `COMPLETED` в текущей реализации нельзя автоматически трактовать как подтверждение доставки, оплаты или финансового закрытия.
 - **INVENTORY:** склад/позиция → поступление → доступный остаток → резерв → выдача/списание → неизменяемое движение. `available = on_hand - reserved`, `on_hand >= reserved >= 0`; причина коррекции, requestKey и audit обязательны.
@@ -97,6 +99,7 @@ CRM решает видимость клиентов/контактов и ра�
 5. При изменении схемы только **новые Liquibase changesets**; применённые не переписывать. Не удалять реальные записи клиентов, бухгалтерские данные, события/аудит и старые migrations ради документационной чистоты.
 6. Для пользовательских списков — ограниченная пагинация, стабильный порядок, серверная tenant фильтрация; COUNT и PAGE в разных запросах не дают консистентный export-snapshot. Файлы/PII/экспорт имеют собственные объектные проверки.
 7. История значимых бизнес-операций и изменений прав — append-only; исправление ошибочной записи новым событием. Не писать секреты, токены, расшифрованные PII в логи и audit. Ключи KMS не являются обычными правами `OWNER`.
+7a. **PII-by-default:** перед сохранением каждого нового личного поля указать владельца данных (global IAM или tenant CRM), режим шифрования, AAD, lookup-index, права расшифровки, миграцию/retention и negative tests. Ни JPA Entity, ни DTO, ни audit не становятся обходом PII-границы; существующие legacy plaintext IAM-поля должны исчезнуть после доказуемого cutover R2.5.
 8. Системные задачи/воркеры получают ограниченную service identity и явный tenant context. Не использовать «универсального системного пользователя» с доступом ко всем данным.
 
 ## 8. Готовность и доказательства
@@ -576,3 +579,202 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 
 
 **Git workflow (2026-11-21):** `main` — проверенная интеграционная ветка; `base_dev` — единственная постоянная ветка разработки. H2 и PostgreSQL запускаются на push в обе ветки и на PR. Допуск изменений в `main` — по PR с review и точным CI. Архивные ветки не считаются активной разработкой.
+
+---
+
+## 23. IAM — внутренний процесс входа и раздачи ролей (service-only R2.3)
+
+**Решение:** один процесс аутентификации для каждого человека (покупатель, сотрудник, владелец организации, администратор RM); полномочия определяются **после** проверки identity. Не делать разные логины или отдельные аккаунты по типам пользователя. Не создавать контроллеры до подтверждения доверенного HTTP/OIDC admission.
+
+**Целевой процесс и текущая реализация в `base_dev` (до merge — кандидат):**
+
+| Шаг | Кто действует | Внутренний сервис | Проверки и последствия |
+|---|---|---|---|
+| A. Identity | Любой человек | `OidcActorResolver` → `VerifiedActor` | Только подтверждённый subject, ACTIVE account и действующий токен; настоящий HTTP/BFF пока HOLD |
+| A2. Email proof | Любой новый/сменяющий адрес пользователь | Существующий `EmailIdentityService` + проектируемый R2.5 email-change flow | При первой регистрации `emailVerified=false`; при смене новое значение требует **нового** подтверждения, старое CURRENT до успешного proof; см. §25 |
+| A1. Свои контексты | Любой вошедший пользователь | `MyAccessService.myTenants/myGlobalRoles/myFunctionalRoles` | Список только ACTIVE организаций текущего пользователя; глобальные роли отдельно; функциональные роли только своего tenant |
+| B. Назначить владельца новой компании | Глобальный `PLATFORM_ADMIN` | `PlatformTenantBootstrapService.provision` | ACTIVE admin, ACTIVE существующий user, создать organization/workspace/OWNER atomically; global admin **не получает** бизнес-прав |
+| C. Изолировать новую организацию | Система | шаг B | `iam_tenant_rbac_config.enforced=TRUE` немедленно; **default deny** любых бизнес-прав до конкретного назначения |
+| D. Пригласить сотрудника | Активный OWNER организации | `TenantMemberEnrollmentService.invite` | Только существующий ACTIVE global account; INVITED membership в одном tenant, без прав; один invite event |
+| E. Принять приглашение | Сам приглашённый сотрудник | `TenantMemberEnrollmentService.accept` | `VerifiedActor.userId` точно совпадает с адресатом; ACTIVE workspace, enforced RBAC; переход INVITED→ACTIVE, единичный audit |
+| F. Создать функциональную роль | OWNER | `VerifiedTenantRoleCommands.createRole/grant` | Tenant-owned роль, разрешения только из `DomainPermission`, `TENANT_RBAC_MANAGE` не делегировать |
+| G. Назначить роль сотруднику | OWNER | `VerifiedTenantRoleCommands.assign` | Сотрудник ACTIVE в том же tenant, роль ACTIVE; ни одного бизнес-permission до успешного назначения |
+| H. Работать в CRM/SALES/INVENTORY | Сотрудник | `TenantAuthorization.require/requireForCommand` | ACTIVE user+workspace+membership, актуальная роль и конкретное permission; дополнительно объектная политика домена |
+| I. Уволить, отозвать доступ | OWNER / PLATFORM_ADMIN по своей области | `TenantAccessStatusService`, `GlobalAccountStatusService` | Tenant suspension не равно global suspension; отзыв сериализован с командами, права не переходят в другой tenant |
+
+**Граница доверия:** платформа не принимает `actorId` из body/DTO. Global `PLATFORM_ADMIN` может создать организацию с первым OWNER; это **не универсальный администратор CRM**. OWNER создаёт произвольно названные функциональные роли и назначает их сотрудникам; не получает автоматически все права продаж, склада или PII.
+
+**Статусы и повтор:** повтор `provision` с тем же tenant UUID и тем же владельцем/реквизитами возвращает созданную пару; другой payload с тем же tenant UUID отклоняется. Повтор `invite` для INVITED и `accept` для ACTIVE — no-op без повторного audit. При потере ACTIVE account, блокировке workspace, неправильной роли, попытке самоприглашения или обращении к чужой организации — DENY. Новая организация по умолчанию **строже**, чем старый tenant в compatibility mode: `enforced=TRUE` с момента создания.
+
+**Граница §23 после внутреннего IAM-R2.4:** первичное доверенное назначение `PLATFORM_ADMIN`, выдача/отзыв глобального admin, подтверждённая передача `OWNER` и аварийное восстановление описаны в §24 и реализуются сервисами в `base_dev` (кандидат до merge). По-прежнему нет создания глобального пользователя из произвольного email, SMTP-приглашений, HTTP/BFF/OIDC-провайдера, подтверждения владения юридическим лицом, миграции заполненной БД, восстановления без действующего сотрудника и независимого security approval.
+
+### 23.1 Критерии процессной квалификации (без контроллеров)
+
+1. Platform admin → organization/tenant/OWNER; replay без второго tenant и audit; чужой пользователь не может provision.
+2. OWNER → role → grant → invite staff; до активации нельзя назначить роль; до назначения роль не даёт доступ.
+3. Сотрудник принимает приглашение **своим** verified principal; active membership сам по себе не обходит enforced RBAC.
+4. Один сотрудник в двух tenant видит обе свои организации, но роль SALES одного tenant не действует в другом; гость без membership не видит организации. Suspended account немедленно теряет доступ к чтению даже со старым VerifiedActor.
+5. OWNER назначает рабочее permission; сотрудник получает только его и не может назначать себе/другим права.
+6. Platform admin не читает CRM другого tenant, даже если создал организацию. Сотрудник А не получает роль/данные организации B.
+7. Два параллельных принятия приглашения → одна активация, один MEMBER_JOINED event; повторная команда идемпотентна.
+8. Suspended/LEFT membership, suspended account и tenant запрещают операции; отзыв доступа не допускает race с новой изменяющей командой.
+9. Синтетический `VerifiedActor`/OIDC resolver и реальные PostgreSQL/H2 service tests достаточны **только для внутренней квалификации**. Реальные токены, пользовательский HTTP/BFF, SMTP/invite, security/least-privilege и production load — отдельные gates.
+
+**Ограничение архитектуры:** не строить универсальный workflow/ABAC, не создавать controller и формы входа пока этот service-only сценарий не пройдёт PostgreSQL и H2 на точном SHA. Новые таблицы допустимы только при реальной необходимости; текущий шаг использует существующую IAM-схему и добавляет только значения событий аудита Liquibase `0037`.
+
+---
+
+## 24. IAM — первичный администратор, двухсторонняя передача OWNER и emergency recovery
+
+**Рубеж RM-IAM-R2.4:** сервисы + PostgreSQL/H2 процессные тесты. **Кандидат в `base_dev`**, до merge не является готовностью `main`; без HTTP-контроллеров, пользовательского UI, отдельного RBAC-движка и автоматических системных ролей. Основной стандарт §4–§5 остаётся без изменений.
+
+### 24.1 Доверенная первичная выдача PLATFORM_ADMIN (GOV-01)
+
+**Участник:** оператор развёртывания с заранее выданным случайным одноразовым секретом длиной от 32 символов; получатель — уже существующий **ACTIVE OIDC-linked** RM account, представленный `VerifiedActor`.
+
+1. Bootstrapping **выключен по умолчанию** (`RM_IAM_BOOTSTRAP_ENABLED=false`). Оператор временно разрешает его из доверенного окружения, передавая **SHA-256 hex** bootstrap-секрета через `RM_IAM_BOOTSTRAP_TOKEN_SHA256`, а сам секрет — исключительно во внутреннюю команду `PlatformAdminGovernanceService.bootstrapFirstAdmin`. Не хранить открытый секрет в application.yml, Git, DB, журнале или параметрах HTTP; приложение не получает встроенный пароль администратора.
+2. Сервис сравнивает digest в постоянном времени и **в одной транзакции** блокирует аккаунт кандидата и singleton `iam_global_admin_guard`. Отказывает, если секрет/конфигурация неверны, аккаунт неактивен/не связан с OIDC, guard уже использован **или когда-либо существовал** `PLATFORM_ADMIN`.
+3. Один первый `PLATFORM_ADMIN` появляется в `iam_global_role_assignment`, guard становится необратимо `bootstrapped=TRUE`, событие `ADMIN_BOOTSTRAPPED` добавляется в append-only `iam_global_role_event`. Повтор — DENY, не новый администратор.
+4. Для обновления ранее существовавшей установки Liquibase `0042` закрывает bootstrap по наличию исторической роли `PLATFORM_ADMIN` (в том числе отозванной). При потере **всех** глобальных администраторов нельзя повторно открыть bootstrap; это отдельная offline disaster-recovery процедура с внешней проверкой личности.
+
+**Владелец полномочий:** `PLATFORM_ADMIN` не получает автоматически `CRM_READ`, `CRM_PII_READ`, `INVENTORY_*` и права OWNER в любой компании. Его полномочия — только узкие глобальные IAM-операции.
+
+### 24.2 Выдача и отзыв глобального администратора (GOV-02)
+
+**Участник:** существующий `PLATFORM_ADMIN` с ACTIVE account.
+
+- `grantAdmin(actor,targetUserId)`: target ACTIVE и OIDC-linked; повтор не создаёт второй active grant, отзывное назначение повторно активируется с новым событием. Аудит `ADMIN_GRANTED`.
+- `revokeAdmin(actor,targetUserId)`: защита от self-revoke и потери последнего действующего администратора; аудит `ADMIN_REVOKED`. Не изменяет членство в организациях. Любой account suspension глобального администратора возможен только после отдельного отзыва его global role.
+- Глобальные изменения сериализованы блокировкой `iam_global_admin_guard`. Роли организаций из `iam_tenant_role` от этого не меняются.
+
+**Граница безопасности:** исходный актор всегда `VerifiedActor` с проверкой ACTIVE-статуса в DB, а не UUID, предоставленный клиентом. Привилегии оцениваются по текущему DB-гранту, не по старому JWT claim или кэшу.
+
+### 24.3 Передача владельца организации (OWN-01)
+
+**Участники:** действующий **OWNER** и его выбранный преемник, имеющий ACTIVE OIDC-linked account и ACTIVE membership именно в этом tenant.
+
+1. OWNER вызывает `TenantOwnershipTransferService.requestTransfer(owner,tenantId,successorId)`. Проверяются активность владельца, tenant и преемника. Сохраняется один запрос `PENDING` на tenant с `requestId` и сроком действия **24 часа**; повтор той же команды возвращает тот же запрос. Параллельный другой запрос запрещён.
+2. Преемник **собственным `VerifiedActor`** вызывает `acceptTransfer(successor,tenantId,requestId)`. Проверяются точный адресат, актуальность, срок, статус членов и собственное согласие преемника, а не согласие старого OWNER за него.
+3. **Одна транзакция:** преемник получает неделегируемую membership-роль `OWNER`; предыдущий владелец переводится в `MEMBER`; запрос `ACCEPTED`; событие `OWNER_TRANSFER_ACCEPTED`. При любом отказе весь переход откатывается. До принятия первый OWNER сохраняет право управления.
+4. `cancelTransfer` до принятия доступен только инициатору; записи остаются в `iam_tenant_rbac_event`. Истёкший, отменённый, чужой или поддельный запрос — DENY. Повтор принятого запроса идемпотентен до создания следующего запроса.
+
+**Правило:** перевод `OWNER` не копирует функциональные grants и не выдаёт права просмотра PII или складских операций. Наличие нескольких владельцев в другой организации никак не влияет на данную.
+
+### 24.4 Аварийное восстановление (OWN-02)
+
+**Участник:** проверенный `PLATFORM_ADMIN` с документированным incident/ticket ID (`incidentCode` формата `[A-Z0-9_-]{6,80}`). **Строгий допуск:** в целевой организации **нет ни одного действующего OWNER** (одновременно ACTIVE membership + ACTIVE global account).
+
+- `PlatformTenantRecoveryService.recoverOwner(admin,tenantId,targetUserId,incidentCode)` доступен только для ORGANIZATION workspace в состоянии ACTIVE или SUSPENDED, и только если кандидат — **уже существующий ACTIVE участник данного tenant** с OIDC-linked account, **не OWNER и не сам инициирующий PLATFORM_ADMIN**. Стороннего человека он присоединить не может.
+- Под блокировкой глобальной роли, учётной записи кандидата и workspace транзакция демотирует прежние неработоспособные OWNER в MEMBER, делает кандидата OWNER, аннулирует ожидающий перевод **с отдельным аудируемым событием отмены** и фиксирует `OWNER_DEMOTED_BY_RECOVERY` / `OWNER_RECOVERED`. Это гарантирует, что восстановление старого аккаунта не вернёт ему право OWNER автоматически.
+- Если workspace SUSPENDED, новый владелец восстанавливает его **отдельной** командой `TenantAccessStatusService.restoreTenant`. Восстановление не превращает PLATFORM_ADMIN в сотрудника, владельца либо получателя клиентских данных.
+- Если хотя бы один владелец всё ещё активен, либо нет действующего сотрудника, сервис отказывает: первый случай требует обычной передачи OWN-01, второй — отдельного offline emergency-runbook (пока HOLD).
+
+### 24.5 Конкурентные и негативные проверки
+
+| ID | Проверка | Ожидаемое поведение |
+|---|---|---|
+| GOV-T01 | Bootstrap отключён, неверный или повторный секрет, отсутствует OIDC | DENY; никакого `PLATFORM_ADMIN`, счётчик событий не растёт |
+| GOV-T02 | В БД уже была любая глобальная admin role, включая отозванную | Bootstrap запрещён, сохранённая история не переписывается |
+| GOV-T03 | Grant / revoke / повтор / self-revoke | Идемпотентные события, запрет саморевокации и потери последнего admin |
+| OWN-T01 | OWNER запросил передачу; target ещё не принял | Первый OWNER остаётся единственным полномочным владельцем |
+| OWN-T02 | Target принял сам, две параллельные попытки | Один принятый запрос, один audit, атомарная замена владельца |
+| OWN-T03 | Target не состоит в tenant, SUSPENDED, запрос истёк или отменён | DENY без смены OWNER |
+| OWN-T04 | Попытка recovery при хотя бы одном ACTIVE OWNER | DENY |
+| OWN-T05 | Legacy tenant без ACTIVE OWNER; есть ACTIVE сотрудник | Сотрудник становится OWNER, старые OWNER не восстанавливаются автоматически |
+| OWN-T06 | Два конкурентных admin recovery на одного tenant | Только один успешный выбор владельца |
+| OWN-T07 | SUSPENDED tenant без рабочего OWNER | Owner восстановлен отдельно от статуса workspace; затем `restoreTenant` |
+| SEC-T01 | Глобальный администратор пытается читать CRM/PII tenant | DENY без tenant membership/permission |
+| PG-T01 | Вмешательство в глобальную audit-history | PostgreSQL trigger отклоняет UPDATE и DELETE |
+
+**Техническая реализация:** Liquibase `0038–0043` аддитивно добавляет guard, append-only evidence, состояние запроса передачи и дополнительные коды tenant audit. Уже применённые миграции `0001–0037` не переписываются. Не вводить Redis, серверные сессии, брокер или универсальный workflow engine.
+
+**Не открывать production:** даже после H2/PG service GREEN остаются независимый security-review, реальный trusted issuer/OIDC/BFF, физическое хранение и доставка operator bootstrap secret, least-privilege DB, populated-upgrade/recovery и подготовленный offline recovery runbook.
+
+
+---
+
+## 25. IAM-PII-R2.5 — глобальное шифрование профиля и подтверждение email
+
+**Статус:** R2.5A и R2.5B — внутренние сервисы + H2/PostgreSQL испытания в `base_dev` (до merge кандидаты); R2.5C — encrypted profile service + opt-in offline migration, с отдельным обязательным populated-PostgreSQL cutover gate. **Полная R2.5 НЕ production-ready.** Нормативные требования этого раздела обязательны для последующих IAM-вертикалей. Подробный процессный и миграционный контракт — [RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION](../spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md). **Никаких контроллеров до квалификации сервисов.**
+
+### 25.1 Принятые продуктовые инварианты
+
+1. **Первая регистрация:** `emailVerified=false` без исключений. Не считать наличие email либо `email_verified` claim из внешнего OIDC доказательством RM-верификации. В уже существующем `iam_email_identity` источник истины — `verified_at IS NOT NULL` для действующего адреса; **не хранить второй противоречивый BOOLEAN**. Если email отсутствует, `emailVerified=false`.
+2. **Изменение адреса:** новый email **обязательно проверяется заново**; `pendingEmailVerified=false` до успешного challenge. Пока проверка не пройдена, старый подтверждённый email остаётся действующим и его `currentEmailVerified` не сбрасывается. Только атомарное принятие proof делает новый CURRENT и verified; старый становится HISTORICAL. Указание идентичного нормализованного email — no-op, не изменение.
+3. **Email proof ≠ аутентификация.** Проверка почты не выдаёт `VerifiedActor`, OIDC session, membership, tenant role, `CRM_PII_READ`, OWNER или PLATFORM_ADMIN; не восстанавливает SUSPENDED/DELETED пользователя. Email-dependent recovery, activation of email invitations и buyer order claim требуют **текущего** подтверждённого email и своей предметной проверки.
+4. **Глобальный ключевой контур:** email, display name и phone принадлежат глобальному IAM. **Запрещено шифровать профиль tenant DEK**. Применять AES-256-GCM, независимый от него глобальный IAM encryption key и доменно-разделённый per-field AAD (userId, поле, версия); HMAC-SHA-256 blind index для equality email/phone. Секреты вне исходников/логов; неправильная generation/secret → fail closed.
+5. **Не ломать существующий checkout:** `crm.sales_order.pending_email_identity_id` связывает исторический заказ с конкретным email identity. Нельзя при email change просто переписать `email_envelope`/HMAC у старой identity — сохранять immutable old identity. Перед cutover `findOrProvision`, verify и buyer-order claim обязаны исключать переназначение старых заказов.
+6. **Фактическая защищённость `base_dev`:** `EmailIdentityCrypto`/`EmailIdentityService` реализуют encrypted email, HMAC, challenge и CHANGE_EMAIL; `GlobalUserProfileCrypto/Service` сохраняют новые имена и телефоны зашифрованно. **Legacy-колонки `iam_user_account.display_name/email_normalized/phone_e164` физически присутствуют и могут содержать plaintext до офлайн-миграции и DB seal R2.5D.** Доставка провайдером и полный release admission HOLD. Не выдавать шифрование CRM/KMS за защиту всех IAM-полей.
+
+### 25.2 Сервисный контракт, без нового framework
+
+| Сценарий | Вход и предварительные условия | Правило результата |
+|---|---|---|
+| IAM-PII-01 Первичная регистрация | Новый user / trusted signup; email нормализуется текущим IAM codec | Encrypted PENDING identity, `verified_at=NULL`, `emailVerified=false` |
+| IAM-PII-02 Подтверждение | Высокоэнтропийный one-time token, purpose и конкретная email identity | Проверка TTL/one-use (база: 15 минут), `verified_at`, единичное audit событие |
+| IAM-PII-03 Смена почты | Текущий `VerifiedActor`, новый email и будущая step-up policy | Новый PENDING, старый CURRENT не теряется до proof; после успешного proof одно атомарное переключение |
+| IAM-PII-04 Отмена / повтор / конфликт | Текущий пользователь; активный request | Повторы идемпотентны, истёкшие токены и чужие email не работают; ответ без account enumeration |
+| IAM-PII-05 Профиль | Текущий `VerifiedActor`; имя/телефон и `rowVersion` | Профиль AES-GCM в отдельной `iam_pii` области, собственные PII только по self-access, нет plaintext-DTO для посторонних |
+| IAM-PII-06 Исторические заказы | Checkout до и после смены email | Старые `email_identity_id`/order IDs неизменны; чужая перепривязка невозможна |
+
+### 25.3 Данные и миграции
+
+- `iam_user_account`: `userId`, статусы, `rowVersion` оставить типизированными; `external_subject` временно остаётся equality lookup OIDC под least-privilege DB (отдельный зафиксированный риск, не утверждать тотальное шифрование).
+- `iam_pii.user_profile_secret`: целевые encrypted `display_name` и `phone` с keyed `phone_lookup_hmac`. Email **не дублировать** — использовать `iam_email_identity`.
+- Существующий `iam_email_identity` требует минимальной версионируемой модели **PENDING/CURRENT/HISTORICAL**; у пользователя максимум один CURRENT и один PENDING, конкуренция подтверждений защищается индексами/транзакциями. Отказаться от прежнего `UNIQUE(user_id)` только с миграцией на partial uniqueness и изменением запросов. Historical identity нельзя считать разрешением login/recovery.
+- Существующие `iam_email_verification_challenge` и `iam_email_delivery_outbox` **переиспользовать**; challenge привязать к purpose/target email, исключить proof из другого процесса; не плодить новый mail subsystem.
+- Миграцию делать только новыми Liquibase changesets: additive schema → backfill из legacy → проверка на **заполненной** PostgreSQL с order FKs → переключение чтений/записей → удаление plaintext. Старые значения без проверяемого evidence **не превращать в verified=true** автоматически. Требуется безопасный план rollback/cutover и key recovery.
+
+### 25.4 Обязательные критерии приёмки
+
+**Не считать R2.5 завершённой**, пока H2 + PostgreSQL не доказали: регистрация `emailVerified=false`, первый proof → true, смена A→B с неизменным CURRENT до proof, cross-purpose и replay DENY, два одновременных владельца одного email → единственный победитель, invalid/suspended account DENY, integrity/AAD failure для ciphertext, отсутствие утечек через DTO/logs, сохранение исторических заказов, заполненная PG миграция/восстановление и fail-closed при недоступном глобальном IAM ключе.
+
+**Граница:** всё выше — требования к следующей сервисной разработке в `base_dev`. Не писать контроллеры, SMTP-отправку, Redis, second identity service или universal privacy engine. Даже после сервисного GREEN остаются независимое security-review, реальный issuer/JWKS/OIDC/BFF, provider delivery, least-privilege, секреты/ротация, проверка backup/restore и production approval.
+
+### 25.5 Результат IAM-PII-R2.5A — только внутренние сервисы
+
+**Реализовано в `base_dev` (кандидат до merge):**
+- `EmailIdentityService.registerPendingEmail(rawEmail)`: внутренний signup с прежним глобальным email dedup; новая identity имеет `verified_at=NULL`, шифруется AES-GCM и ищется по HMAC. Не раскрывает существование чужого пользователя. Для ACTIVE-аккаунтов этот неаутентифицированный путь не создаёт новый proof.
+- `requestInitialVerification(VerifiedActor,email)`: первая почта активного OIDC-linked пользователя, проверка чужих и legacy адресов; не позволяет заменить уже привязанный email.
+- `myVerificationStatus(VerifiedActor)`: self-only `emailVerified` из `iam_email_identity.verified_at`; отдельного BOOLEAN нет.
+- `verifyRegistration(challengeId,token)`: одноразовое подтверждение только с purpose `REGISTRATION`; прежний checkout proof принимает только `CHECKOUT`. Email proof не выдаёт OIDC-session, tenant-роль или buyer-order claim.
+- Liquibase `0044–0045`: purpose с DEFAULT CHECKOUT для прежних записей; события успешного proof и PostgreSQL immutability trigger. Существующие email identity IDs и order FK остаются без изменения.
+- TTL challenge 15 минут, cooldown повторного registration challenge 60 секунд; это не заменяет HTTP anti-abuse и provider limits.
+
+**Тесты:** `IamInitialEmailRegistrationQualificationTest` проверяет false до proof, encrypted envelope, single-use, purpose isolation, неактивные аккаунты, OIDC self-access, запрет смены email через initial method, конкурентные signup и proof, immutable event в PostgreSQL. Закреплять точный commit/CI при gate.
+
+**Последующие этапы:** R2.5B реализован внутренними сервисами, квалификация и схема приведены в §25.6. R2.5C реализует encrypted CRUD и сервис отключённой по умолчанию миграции, но полный populated-PG production cutover ещё HOLD (§25.7). Real SMTP/email delivery, OIDC/BFF, key recovery и independent security review — HOLD.
+
+### 25.6 Реализация R2.5B — смена почты с новой проверкой и сохранением заказов
+
+**Изменения в `base_dev`, без HTTP:**
+- `EmailIdentityService.requestEmailChange(VerifiedActor,newEmail)` создаёт отдельный CHANGE_EMAIL PENDING; старый verified CURRENT остаётся действующим. Повтор идентичного email — no-op; смена на чужой адрес или занятую активную identity — DENY.
+- `confirmEmailChange(VerifiedActor,challengeId,token)` проверяет адресата, challenge purpose, expiry, hash и статус аккаунта. В **одной транзакции** прежний CURRENT становится HISTORICAL, новый PENDING становится CURRENT с `verified_at`; токен consumed и append-only audit. Отмена/повтор/неверный токен не меняет CURRENT.
+- `cancelEmailChange(VerifiedActor)` отменяет только текущий CHANGE_EMAIL PENDING, не снимая подтверждения со старого адреса. Старые токены не могут активировать HISTORICAL identity.
+- Новые Liquibase `0046–0048`: `lifecycle_state` (`PENDING`/`CURRENT`/`HISTORICAL`), `pending_reason`, отдельный `active_lookup_hmac`; уникальные nullable `current_owner_id`/`pending_owner_id` и active lookup. Исторические `lookup_hmac` и `email_envelope` сохраняются неизменными. **Существующие `crm.sales_order.pending_email_identity_id` не перезаписываются.**
+- `AutoOrderService.verifyEmail/buyerOrders` учитывает только CURRENT verified email при подтверждении buyer claim. `findOrProvision` использует active lookup и не присваивает старый аккаунт владельцу заново зарегистрированного адреса.
+- Внутренние тесты: нормальная смена, отмена, replay/cross-purpose, cross-account, повторное использование исторического адреса, параллельные подтверждения и реальный SALES order linkage. Реальный почтовый провайдер, BFF и rate limits на внешней границе пока HOLD.
+
+### 25.7 Реализация R2.5C — AES-GCM профиля и staged plaintext removal
+
+**Изменения в `base_dev`:**
+- `GlobalUserProfileCrypto` использует собственные **глобальные IAM** ключи `RM_IAM_PROFILE_ENCRYPTION_KEY_BASE64` и `RM_IAM_PHONE_LOOKUP_KEY_BASE64`, не tenant DEK и не email lookup key. Для каждого поля AEAD AAD включает `userId` и имя поля; неправильная подпись, ключ и контекст отвергаются без plaintext fallback.
+- `GlobalUserProfileService.myProfile/saveOwnProfile` возвращает/меняет только собственные имя и телефон по `VerifiedActor`, сверяя ACTIVE account, ограничение E.164 и `rowVersion`; возвращение plaintext разрешено только self. Сохраняет ciphertext/phone HMAC в `iam_pii.user_profile_secret` и audit без PII.
+- `UserAccountEntity` больше не отображает legacy `display_name`, `phone_e164`, `email_normalized` для JPA-чтения/записи. Новый checkout не создаёт plaintext placeholder имени. Шифрование телефонов и имён нельзя обходить прямой записью JPA.
+- Liquibase `0049–0051` добавляет отдельную IAM PII-таблицу и append-only audit; legacy `display_name` становится nullable. Старые колонки **пока физически существуют** ради безопасной offline migration.
+- `LegacyIamPiiMigrationService.migrateUser/migrateBatch`: явный opt-in (`RM_IAM_PII_MIGRATION_ENABLED`, по умолчанию `false`), предназначен только для остановленного legacy контура. В транзакции зашифровывает имя/телефон, нормализует/шифрует legacy email при отсутствии identity, **не считает его подтверждённым**, проверяет конфликты и лишь затем очищает три plaintext-поля. При конфликте либо потере ключа — полный rollback.
+- **Не закрыто:** автоматическая миграция в работающем сервисе, заполненная production-копия PostgreSQL с реальными коллизиями, завершение backup/restore, удаление legacy колонок/DB-пользовательских прав, доказательство отсутствия альтернативных SQL writers, управление жизненным циклом/ротацией глобальных IAM ключей. Сервисная миграция и зелёный synthetic CI не заменяют cutover-gate.
+
+**Условия допуска:** отдельное security-review PR #9, прогон migration и восстановления на обезличенной копии заполненной БД, проверка возможных конфликтов почты, обязательная сверка исторических заказов, внешний anti-abuse/SMTP/OIDC и DB least-privilege. Текущая стадия — разработка сервисов и квалификация; `main` не изменять до согласования.
+
+### 25.8 IAM-PII-R2.5D — квалификация переноса заполненной PostgreSQL и контроль остаточного plaintext
+
+**Статус:** внутренний preflight и изолированное тестирование **синтетических** заполненных данных, без доступа к производственной БД. Не утверждать реальный production migration/restore, пока он не проведён оператором и не подтверждён независимой проверкой. [Операционный регламент](../operations/RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION.md) · [ручной seal SQL](../operations/RM-IAM-PII-R2.5D-POSTGRES-SEAL.sql).
+
+- `LegacyIamPiiMigrationService` должен сохранять целостность: если encrypted profile уже создан, расшифровать и сравнить доступные legacy имя и телефон; при несоответствии **DENY и полный rollback** до очистки. Email-only пользователь без имени мигрирует адрес без выдуманного персонального имени. Существующие email, повреждённый ключ/AAD и чужой HMAC-claim должны блокировать стирание исходника.
+- `IamPiiMigrationQualificationService.inventory()` возвращает **только агрегаты**, без userId, адреса, ФИО, телефона или ключей. `assertBackfillAdmissible()` проверяет нормализованные глобальные email claim, расхождение legacy/encrypted, все encrypted profile/email envelopes и HMAC, наличие доступных IAM-ключей. `assertReadyForPlaintextSeal()` требует ровно **0** строк с ненулевыми legacy PII и целостный ciphertext.
+- Новая выделенная CI-задача `postgres-pii-populated` проверяет перенос **200 синтетических аккаунтов** в чистой PostgreSQL 17: 150 имя+телефон+email, 30 email-only, 20 имя-only; несколько транзакционных партий; negative tests коллизий, повреждённого ciphertext, недоступных ключей и запрета SQL plaintext.
+- Сценарий ручного **DB seal** выполняется оператором только после резервной копии, проверки восстановления, остановки **всех** legacy writers и успешного Java preflight на той же БД. В одном PG transaction берёт exclusive lock, подтверждает zero residual и валидирует `CHECK(display_name IS NULL AND phone_e164 IS NULL AND email_normalized IS NULL)`; это запрещает будущую запись открытых значений. Автоматически Liquibase этот seal **не применяет**.
+- Сами legacy-колонки физически сохраняются пустыми до отдельного доказуемого refactoring всех SQL legacy-queries и безопасного `DROP COLUMN`. Старые резервные копии/логи требуют собственной процедуры retention. Глобальный `external_subject` также остаётся сознательным нешифрованным lookup под отдельной политикой.
+
+**Релизные критерии:** для внутреннего candidate нужны exact-SHA GREEN трёх заданий (`h2-smoke`, `postgres-integration`, `postgres-pii-populated`). Для production обязательны миграция **реальной авторизованной копии** наполненной БД, evidence snapshot/restore и seal, DB least privilege, независимое security-review, управление глобальными ключами, SMTP и OIDC/BFF. Без этого **PRODUCTION HOLD**; `main` не менять до отдельного решения.

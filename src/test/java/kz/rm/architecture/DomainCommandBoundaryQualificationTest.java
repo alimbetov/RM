@@ -1,8 +1,22 @@
 package kz.rm.architecture;
 
 import kz.rm.iam.TenantAuthorization;
+import kz.rm.crm.AuthenticatedCrmCommands;
+import kz.rm.files.AuthenticatedFilesCommands;
+import kz.rm.files.AuthenticatedFilesQueries;
+import kz.rm.crm.AuthenticatedCrmQueries;
+import kz.rm.crm.dto.CustomerSearch;
+import kz.rm.crm.dto.ContactSearch;
+import kz.rm.crm.CrmCustomerService;
+import kz.rm.organization.AuthenticatedOrganizationLocations;
+import kz.rm.organization.OrganizationLocationEntity;
+import kz.rm.organization.dto.LocationSearch;
 import kz.rm.iam.VerifiedActor;
 import kz.rm.inventory.AuthenticatedInventoryCommands;
+import kz.rm.inventory.AuthenticatedInventoryQueries;
+import kz.rm.inventory.dto.StockSearch;
+import kz.rm.sales.AuthenticatedSalesQueries;
+import kz.rm.sales.dto.SalesOrderSearch;
 import kz.rm.inventory.InventoryAuthorizedCommandService;
 import kz.rm.inventory.InventoryMovementService;
 import kz.rm.inventory.InventoryReservationService;
@@ -31,6 +45,19 @@ class DomainCommandBoundaryQualificationTest {
         assertThat(Modifier.isPublic(InventoryReservationService.class
                 .getDeclaredMethod("fulfill",UUID.class,UUID.class)
                 .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(InventoryReservationService.class
+                .getDeclaredMethod("release",UUID.class,UUID.class)
+                .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(SalesInventoryCommandService.class
+                .getDeclaredMethod("cancel",UUID.class,UUID.class,UUID.class)
+                .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(SalesInventoryCommandService.class
+                .getDeclaredMethod("fulfill",UUID.class,UUID.class,UUID.class)
+                .getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(InventoryAuthorizedCommandService.class
+                .getDeclaredMethod("correct",UUID.class,UUID.class,UUID.class,UUID.class,
+                        String.class,BigDecimal.class).getModifiers())).isFalse();
+
         assertThat(Modifier.isPublic(InventoryMovementService.class
                 .getDeclaredMethod("adjust",UUID.class,UUID.class,UUID.class,
                         String.class,BigDecimal.class).getModifiers())).isFalse();
@@ -44,6 +71,70 @@ class DomainCommandBoundaryQualificationTest {
         assertThat(Modifier.isPublic(InventoryAuthorizedCommandService.class
                 .getDeclaredMethod("receive",UUID.class,UUID.class,UUID.class,UUID.class,
                         String.class,BigDecimal.class).getModifiers())).isFalse();
+    }
+
+    @Test void publicReadBoundariesRequireVerifiedActorAndRawBeansAreNotPublic() throws Exception {
+        assertThat(AuthenticatedSalesQueries.class.getDeclaredMethod("search",
+                VerifiedActor.class,UUID.class,SalesOrderSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(AuthenticatedInventoryQueries.class.getDeclaredMethod("search",
+                VerifiedActor.class,UUID.class,StockSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.sales.SalesOrderQueryService").getModifiers()))
+                .isFalse();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.sales.SalesOrderRepository").getModifiers()))
+                .isFalse();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.inventory.StockBalanceQueryService").getModifiers()))
+                .isFalse();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.inventory.StockBalanceRepository").getModifiers()))
+                .isFalse();
+    }
+
+
+    @Test void crmAndOrganizationRawEntryPointsStayInternal() throws Exception {
+        assertThat(AuthenticatedCrmCommands.class.getDeclaredMethod("createCompany",
+                VerifiedActor.class,UUID.class,String.class,String.class)).isNotNull();
+        assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("customers",
+                VerifiedActor.class,UUID.class,CustomerSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("contacts",
+                VerifiedActor.class,UUID.class,ContactSearch.class,int.class,int.class))
+                .isNotNull();
+        assertThat(AuthenticatedCrmCommands.class.getDeclaredMethod("recordEmailConsentOnce",
+                VerifiedActor.class,UUID.class,UUID.class,boolean.class,
+                String.class,String.class,String.class,String.class)).isNotNull();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.crm.CrmSearchService").getModifiers()))
+                .isFalse();
+        assertThat(AuthenticatedCrmQueries.class.getDeclaredMethod("getContact",
+                VerifiedActor.class,UUID.class,UUID.class)).isNotNull();
+        assertThat(AuthenticatedOrganizationLocations.class.getDeclaredMethod("create",
+                VerifiedActor.class,UUID.class,OrganizationLocationEntity.Type.class,
+                String.class,String.class,String.class)).isNotNull();
+        assertThat(AuthenticatedOrganizationLocations.class.getDeclaredMethod("search",
+                VerifiedActor.class,UUID.class,LocationSearch.class,int.class,int.class))
+                .isNotNull();
+        for(var method:CrmCustomerService.class.getDeclaredMethods())
+            if(java.util.Set.of("createPerson","createCompany","getCustomer","addContact",
+                    "getContact","recordEmailConsent","hasEmailConsent").contains(method.getName()))
+                assertThat(Modifier.isPublic(method.getModifiers()))
+                        .as("CRM raw actor boundary: "+method).isFalse();
+        assertThat(Modifier.isPublic(Class.forName(
+                "kz.rm.organization.OrganizationLocationService").getModifiers())).isFalse();
+        assertThat(Modifier.isPublic(Class.forName(
+                "kz.rm.organization.OrganizationLocationQueryService").getModifiers())).isFalse();
+        // Spring Data still constructs the bean, but other domains cannot import
+        // the inherited unscoped JpaRepository.findAll/findById methods.
+        assertThat(Modifier.isPublic(Class.forName(
+                "kz.rm.organization.OrganizationLocationRepository").getModifiers())).isFalse();
+    }
+
+    @Test void filesMetadataIsAccessibleOnlyThroughVerifiedPrincipalFacades() throws Exception {
+        assertThat(AuthenticatedFilesCommands.class.getDeclaredMethod("begin",
+                VerifiedActor.class,UUID.class,String.class,long.class,String.class)).isNotNull();
+        assertThat(AuthenticatedFilesQueries.class.getDeclaredMethod("ownStaged",
+                VerifiedActor.class,UUID.class,UUID.class)).isNotNull();
+        assertThat(Modifier.isPublic(Class.forName("kz.rm.files.FileMetadataService").getModifiers()))
+                .isFalse();
     }
 
     @Test void exposedCommandPortsRequireVerifiedIdentity() throws Exception {

@@ -2,8 +2,9 @@ package kz.rm.geo;
 
 import kz.rm.iam.*;
 import kz.rm.organization.OrganizationLocationEntity;
-import kz.rm.organization.OrganizationLocationRepository;
-import kz.rm.organization.OrganizationLocationService;
+import kz.rm.organization.dto.LocationSearch;
+import kz.rm.organization.AuthenticatedOrganizationLocations;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,13 +18,23 @@ import static org.assertj.core.api.Assertions.*;
 class KatoTerritoryQualificationTest {
     @Autowired KatoTerritoryRepository kato;
     @Autowired KatoTerritoryDirectory directory;
-    @Autowired OrganizationLocationRepository locations;
-    @Autowired OrganizationLocationService service;
+    @Autowired AuthenticatedOrganizationLocations service;
     @Autowired OrganizationRepository orgs;
     @Autowired WorkspaceRepository workspaces;
     @Autowired UserAccountRepository users;
     @Autowired OrganizationMembershipRepository memberships;
     @Autowired JdbcTemplate jdbc;
+
+    private VerifiedActor verified(UUID id) {
+        String subject=jdbc.queryForObject(
+                "SELECT external_subject FROM public.iam_user_account WHERE id=?",
+                String.class,id);
+        org.springframework.security.oauth2.jwt.JwtDecoder decoder=token->
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                .header("alg","RS256").subject(subject).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300)).build();
+        return new OidcActorResolver(decoder,users).resolve("synthetic-only");
+    }
 
     @Test void sourceSnapshotPreservesActiveAndDeletedRows() {
         assertThat(kato.count()).isEqualTo(100);
@@ -56,41 +67,46 @@ class KatoTerritoryQualificationTest {
         jdbc.update("UPDATE iam_workspace SET status='ACTIVE' WHERE id=?",workspace.getId());
         String activeCode=jdbc.queryForObject(
                 "SELECT code FROM ref_kato_territory WHERE is_deleted=FALSE AND level_no <= 3 ORDER BY code LIMIT 1",String.class);
-        var branch=service.create(actor.getId(),workspace.getId(),OrganizationLocationEntity.Type.BRANCH,
+        var branch=service.create(verified(actor.getId()),workspace.getId(),OrganizationLocationEntity.Type.BRANCH,
                 "Head office",activeCode,"Office 1");
-        var warehouse=service.create(actor.getId(),workspace.getId(),OrganizationLocationEntity.Type.WAREHOUSE,
+        var warehouse=service.create(verified(actor.getId()),workspace.getId(),OrganizationLocationEntity.Type.WAREHOUSE,
                 "Stock 1",activeCode,"Industrial zone");
-        var pos=service.create(actor.getId(),workspace.getId(),OrganizationLocationEntity.Type.POINT_OF_SALE,
+        var pos=service.create(verified(actor.getId()),workspace.getId(),OrganizationLocationEntity.Type.POINT_OF_SALE,
                 "Retail 1",activeCode,"Street 10");
-        assertThat(locations.findByWorkspaceId(workspace.getId())).hasSize(3);
-        assertThat(locations.findByIdAndWorkspaceId(branch.getId(),UUID.randomUUID())).isEmpty();
-        assertThat(branch.getKatoCode()).isEqualTo(activeCode);
-        assertThat(warehouse.getKatoCode()).isEqualTo(activeCode);
-        assertThat(pos.getKatoCode()).isEqualTo(activeCode);
+        // Cross-module tests use the verified-actor application boundary, not raw JPA.
+        var ownerPrincipal=verified(actor.getId());
+        assertThat(service.search(ownerPrincipal,workspace.getId(),
+                new LocationSearch(null,null,null),0,10).getTotalElements()).isEqualTo(3);
+        assertThat(service.get(ownerPrincipal,workspace.getId(),branch.id()).id()).isEqualTo(branch.id());
+        assertThatThrownBy(() -> service.get(ownerPrincipal,workspace.getId(),UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(branch.katoCode()).isEqualTo(activeCode);
+        assertThat(warehouse.katoCode()).isEqualTo(activeCode);
+        assertThat(pos.katoCode()).isEqualTo(activeCode);
         var outsider=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
                 "subject-"+UUID.randomUUID(),"Outsider"));
-        assertThatThrownBy(()->service.create(outsider.getId(),workspace.getId(),
+        assertThatThrownBy(()->service.create(verified(outsider.getId()),workspace.getId(),
                 OrganizationLocationEntity.Type.BRANCH,"Forbidden",activeCode,null))
                 .isInstanceOf(SecurityException.class);
         var viewer=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),
                 "subject-"+UUID.randomUUID(),"Viewer"));
         memberships.saveAndFlush(new OrganizationMembershipEntity(UUID.randomUUID(),org.getId(),viewer.getId(),
                 OrganizationMembershipEntity.Role.VIEWER));
-        assertThatThrownBy(()->service.create(viewer.getId(),workspace.getId(),
+        assertThatThrownBy(()->service.create(verified(viewer.getId()),workspace.getId(),
                 OrganizationLocationEntity.Type.BRANCH,"Read only",activeCode,null))
                 .isInstanceOf(SecurityException.class);
         String settlementCode=jdbc.queryForObject(
                 "SELECT code FROM ref_kato_territory WHERE level_no > 3 AND is_deleted=FALSE ORDER BY code LIMIT 1",String.class);
-        assertThatThrownBy(() -> service.create(actor.getId(),workspace.getId(),OrganizationLocationEntity.Type.WAREHOUSE,
+        assertThatThrownBy(() -> service.create(verified(actor.getId()),workspace.getId(),OrganizationLocationEntity.Type.WAREHOUSE,
                 "Too detailed",settlementCode,null)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("oblast/district level");
         String deletedCode=jdbc.queryForObject(
                 "SELECT code FROM ref_kato_territory WHERE is_deleted=TRUE ORDER BY code LIMIT 1",String.class);
-        assertThatThrownBy(() -> service.create(actor.getId(),workspace.getId(),OrganizationLocationEntity.Type.BRANCH,
+        assertThatThrownBy(() -> service.create(verified(actor.getId()),workspace.getId(),OrganizationLocationEntity.Type.BRANCH,
                 "Obsolete",deletedCode,null)).isInstanceOf(IllegalArgumentException.class);
         var user=users.saveAndFlush(new UserAccountEntity(UUID.randomUUID(),"subject-"+UUID.randomUUID(),"Private"));
         var personal=workspaces.saveAndFlush(WorkspaceEntity.personal(UUID.randomUUID(),user.getId()));
-        assertThatThrownBy(() -> service.create(actor.getId(),personal.getId(),OrganizationLocationEntity.Type.BRANCH,
+        assertThatThrownBy(() -> service.create(verified(actor.getId()),personal.getId(),OrganizationLocationEntity.Type.BRANCH,
                 "Not permitted",activeCode,null)).isInstanceOf(SecurityException.class);
     }
 

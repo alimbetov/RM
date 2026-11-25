@@ -1,0 +1,213 @@
+name: RustFS Real Infrastructure E2E
+
+on:
+  push:
+    branches:
+      - base_dev
+  workflow_dispatch:
+
+# Run qualification for the latest branch revision; do not accumulate stale SHA jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rustfs-real-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+      RM_TEST_DB_USERNAME: rm
+      RM_TEST_DB_PASSWORD: rm_ci_only
+      RM_RUSTFS_LIVE_E2E: "true"
+      RM_RUSTFS_E2E_ENDPOINT: http://127.0.0.1:9000
+      RM_RUSTFS_E2E_BUCKET: rm-files-e2e
+      RM_RUSTFS_E2E_ACCESS: rm-rustfs-ci
+      RM_RUSTFS_E2E_SECRET: rm-rustfs-ci-only-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Start actual RustFS with persisted Docker volume
+        run: |
+          set -euo pipefail
+          docker pull rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
+          IMAGE_ID=$(docker image inspect rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a --format='{{.Id}}')
+          echo "Qualified RustFS image ID: $IMAGE_ID"
+          test "$IMAGE_ID" = 'sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a'
+          export RM_RUSTFS_IMAGE_ID="$IMAGE_ID"
+          echo "RM_RUSTFS_IMAGE_ID=$IMAGE_ID" >> "$GITHUB_ENV"
+          docker volume create rm-rustfs-e2e-data
+          docker run -d --name rm-rustfs-e2e --restart no \
+            -p 127.0.0.1:9000:9000 -v rm-rustfs-e2e-data:/data \
+            -e RUSTFS_ACCESS_KEY="$RM_RUSTFS_E2E_ACCESS" \
+            -e RUSTFS_SECRET_KEY="$RM_RUSTFS_E2E_SECRET" \
+            -e RUSTFS_ADDRESS=0.0.0.0:9000 \
+            -e RUSTFS_OBS_LOGGER_LEVEL=error \
+            "$RM_RUSTFS_IMAGE_ID" /data
+
+      - name: Wait for real RustFS S3 readiness
+        run: |
+          set -euo pipefail
+          for n in $(seq 1 90); do
+            if curl -fsS --max-time 2 http://127.0.0.1:9000/health >/dev/null; then
+              echo "Real RustFS healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs --tail 100 rm-rustfs-e2e
+          exit 1
+
+      - name: Real PostgreSQL and RustFS service E2E
+        run: mvn -B -ntp test -Dtest=RustFsLiveInfrastructureE2ETest
+
+      - name: Start actual ClamAV daemon with signature database
+        run: |
+          set -euo pipefail
+          docker pull clamav/clamav@sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8
+          CLAM_ID=$(docker image inspect clamav/clamav@sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8 --format='{{.Id}}')
+          echo "ClamAV CI image ID: $CLAM_ID"
+          test "$CLAM_ID" = 'sha256:12177441d1b40cef3c47b44c4090d59d4babc4c67bedd5af0fa315e603aa6dd8'
+          docker run -d --name rm-clamd-e2e --restart no \
+            -p 127.0.0.1:3310:3310 "$CLAM_ID"
+          for n in $(seq 1 210); do
+            if timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/3310; printf "zPING\\0" >&3; IFS= read -r -d "" response <&3; [[ "$response" == PONG ]]' 2>/dev/null; then
+              echo "Live ClamAV PONG, signature daemon ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs --tail 150 rm-clamd-e2e
+          exit 1
+
+      - name: Real RustFS and real ClamAV clean EICAR error qualification
+        env:
+          RM_CLAMAV_LIVE_E2E: "true"
+        run: mvn -B -ntp test -Dtest=RustFsRealClamAvE2ETest
+
+      - name: Seed an object for a real daemon restart
+        env:
+          RM_RUSTFS_E2E_PHASE: seed
+        run: mvn -B -ntp test -Dtest=RustFsRestartProbeTest
+
+      - name: Restart RustFS daemon without deleting its data volume
+        run: |
+          set -euo pipefail
+          docker restart rm-rustfs-e2e
+          for n in $(seq 1 90); do
+            if curl -fsS --max-time 2 http://127.0.0.1:9000/health >/dev/null; then
+              echo "Restarted RustFS healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs --tail 100 rm-rustfs-e2e
+          exit 1
+
+      - name: Verify prior bytes after real RustFS restart
+        env:
+          RM_RUSTFS_E2E_PHASE: verify
+          RM_RUSTFS_E2E_KEEP_OBJECT: "true"
+        run: mvn -B -ntp test -Dtest=RustFsRestartProbeTest
+
+      - name: Stop RustFS and verify outage does not masquerade as corruption
+        run: docker stop rm-rustfs-e2e
+      - name: Run real network outage negative test
+        env:
+          RM_RUSTFS_E2E_PHASE: outage
+        run: mvn -B -ntp test -Dtest=RustFsRestartProbeTest
+
+      - name: Quiesced PostgreSQL binary backup and restored database
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_SERVICE_ID" pg_dump -U rm -d rm_test -Fc -f /tmp/rm-files-rustfs.dump
+          docker exec "$PG_SERVICE_ID" createdb -U rm rm_restore
+          docker exec "$PG_SERVICE_ID" pg_restore --exit-on-error --no-owner --no-acl \
+            -U rm -d rm_restore /tmp/rm-files-rustfs.dump
+          docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_restore \
+            -c "SELECT count(*) FROM crm.file_storage WHERE provider='RUSTFS' AND state='ACTIVE';"
+
+      - name: Offline backup RustFS persisted volume
+        run: |
+          set -euo pipefail
+          mkdir -p target/rustfs-volume-backup
+          docker run --rm -v rm-rustfs-e2e-data:/data:ro \
+            -v "$PWD/target/rustfs-volume-backup:/backup" \
+            alpine:3.20 sh -c 'cd /data && tar -cf /backup/rustfs-data.tar .'
+          test -s target/rustfs-volume-backup/rustfs-data.tar
+
+      - name: Restore backup to a fresh Docker volume and new RustFS container
+        run: |
+          set -euo pipefail
+          docker rm rm-rustfs-e2e
+          docker volume create rm-rustfs-restored-data
+          docker run --rm -v rm-rustfs-restored-data:/data \
+            -v "$PWD/target/rustfs-volume-backup:/backup:ro" \
+            alpine:3.20 sh -c 'cd /data && tar -xf /backup/rustfs-data.tar'
+          docker run -d --name rm-rustfs-restored --restart no \
+            -p 127.0.0.1:9000:9000 -v rm-rustfs-restored-data:/data \
+            -e RUSTFS_ACCESS_KEY="$RM_RUSTFS_E2E_ACCESS" \
+            -e RUSTFS_SECRET_KEY="$RM_RUSTFS_E2E_SECRET" \
+            -e RUSTFS_ADDRESS=0.0.0.0:9000 \
+            "$RM_RUSTFS_IMAGE_ID" /data
+          for n in $(seq 1 90); do
+            if curl -fsS --max-time 2 http://127.0.0.1:9000/health >/dev/null; then
+              echo "Restored RustFS healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs --tail 150 rm-rustfs-restored
+          exit 1
+
+      - name: Check restored PostgreSQL metadata against restored RustFS object SHA
+        env:
+          RM_RUSTFS_RESTORE_E2E: "true"
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_restore
+        run: mvn -B -ntp test -Dtest=RustFsRestoredDatabaseE2ETest
+
+      - name: Verify original object through restored fresh RustFS volume and delete
+        env:
+          RM_RUSTFS_E2E_PHASE: verify
+        run: mvn -B -ntp test -Dtest=RustFsRestartProbeTest
+
+      - name: Upload RustFS real-infra evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustfs-real-infra-e2e-surefire
+          path: target/surefire-reports/
+          if-no-files-found: warn
+
+      - name: Container diagnostics on failure
+        if: failure()
+        run: |
+          docker ps -a
+          docker logs --tail 150 rm-rustfs-e2e || true
+          docker logs --tail 150 rm-rustfs-restored || true
+          docker logs --tail 150 rm-clamd-e2e || true

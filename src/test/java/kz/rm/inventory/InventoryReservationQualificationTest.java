@@ -44,6 +44,7 @@ class InventoryReservationQualificationTest {
         var org=organizations.saveAndFlush(new OrganizationEntity(
                 UUID.randomUUID(),"Reservation Shop LLP","Reservation Shop","KZ"));
         UUID tenant=workspaces.saveAndFlush(WorkspaceEntity.organization(UUID.randomUUID(),org.getId())).getId();
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",tenant);
         Timestamp now=Timestamp.from(Instant.now());
         UUID location=UUID.randomUUID(),item=UUID.randomUUID(),offer=UUID.randomUUID();
         String slug="res-"+UUID.randomUUID();
@@ -209,4 +210,44 @@ class InventoryReservationQualificationTest {
             DELETE FROM crm.inv_reservation_event WHERE tenant_id=? AND reservation_id=?
             """,a.tenant(),r.id())).isInstanceOf(Exception.class);
     }
+
+    @Test void q123ReservationRejectsInactiveWarehouseServiceAndArchiveButHonorsOldCommit() {
+        Store s=store(10);
+        OrderLine one=order(s,2,true);
+        jdbc.update("""
+                UPDATE public.org_location SET status='INACTIVE'
+                WHERE workspace_id=? AND id=?
+                """,s.tenant(),s.location());
+        assertThatThrownBy(()->reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2)))
+                .isInstanceOf(IllegalArgumentException.class);
+        jdbc.update("""
+                UPDATE public.org_location SET status='ACTIVE'
+                WHERE workspace_id=? AND id=?
+                """,s.tenant(),s.location());
+        jdbc.update("UPDATE crm.cat_item SET kind='SERVICE' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item());
+        assertThatThrownBy(()->reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2)))
+                .isInstanceOf(IllegalArgumentException.class);
+        jdbc.update("UPDATE crm.cat_item SET kind='PRODUCT' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item());
+        var active=reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2));
+        // The second order must be PLACED before SKU archival. A new checkout
+        // after archival correctly fails in SALES PASS 08.
+        OrderLine two=order(s,1,true);
+        jdbc.update("UPDATE crm.cat_item SET state='ARCHIVED' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item());
+        assertThat(reservations.reserve(s.tenant(),one.order(),one.line(),
+                s.location(),s.item(),BigDecimal.valueOf(2)).id()).isEqualTo(active.id());
+        assertThat(reservations.fulfill(s.tenant(),active.id()).state())
+                .isEqualTo(InventoryReservationService.State.FULFILLED);
+        assertThat(stock(s,"on_hand")).isEqualByComparingTo("8");
+        assertThat(stock(s,"reserved")).isEqualByComparingTo("0");
+        assertThatThrownBy(()->reservations.reserve(s.tenant(),two.order(),two.line(),
+                s.location(),s.item(),BigDecimal.ONE))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
 }

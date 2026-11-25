@@ -9,9 +9,11 @@ import java.util.UUID;
 public class UserAccountEntity {
     @Id private UUID id;
     @Column(name="external_subject", length=255, unique=true) private String externalSubject;
-    @Column(name="email_normalized", length=320, unique=true) private String emailNormalized;
-    @Column(name="phone_e164", length=24, unique=true) private String phoneE164;
-    @Column(name="display_name", nullable=false, length=200) private String displayName;
+    // Legacy plaintext columns are excluded from JPA read/write. Encrypted
+    // global IAM identity/profile services are the only supported owners.
+    @Transient private String emailNormalized;
+    @Transient private String phoneE164;
+    @Transient private String displayName;
     @Enumerated(EnumType.STRING) @Column(nullable=false, length=20) private Status status;
     @Column(name="created_at", nullable=false) private Instant createdAt;
     @Column(name="updated_at", nullable=false) private Instant updatedAt;

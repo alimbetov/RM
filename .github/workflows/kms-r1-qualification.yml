@@ -8,10 +8,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Run qualification for the latest branch revision; do not accumulate stale SHA jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
+  # Synthetic CI keys only, never production credentials.
+  # Required by full CRM deletion/email suites in both H2 and PostgreSQL.
   h2-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -25,6 +32,9 @@ jobs:
       - name: Maven test (H2 / dev profile)
         env:
           SPRING_PROFILES_ACTIVE: dev
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
         run: mvn -B -ntp clean verify
       - name: Upload H2 test results
         if: always()
@@ -64,11 +74,95 @@ jobs:
           RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
           RM_TEST_DB_USERNAME: rm
           RM_TEST_DB_PASSWORD: rm_ci_only
-        run: mvn -B -ntp clean verify
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: '4'
+          SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: '1'
+        run: |
+          # Generic PG qualification runs the dedicated QR-06B multi-JVM
+          # scenarios too. Supply the same real dependency classpath instead
+          # of skipping or silently downgrading those process tests.
+          mvn -B -ntp org.apache.maven.plugins:maven-dependency-plugin:3.9.0:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile="$RUNNER_TEMP/qr06b-classpath.txt"
+          export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat "$RUNNER_TEMP/qr06b-classpath.txt")"
+          mvn -B -ntp clean verify
+      - name: Qualify synthetic least-privilege runtime role
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker cp docs/operations/RM-FINAL-SEC-GATE-DB-ROLE-QUALIFICATION.sql "${PG_SERVICE_ID}:/tmp/rm-role-gate.sql"
+          docker exec "${PG_SERVICE_ID}" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -f /tmp/rm-role-gate.sql
       - name: Upload PostgreSQL test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: kms-postgres-surefire
+          path: target/surefire-reports/
+          if-no-files-found: warn
+
+
+  postgres-pii-populated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Separate, clean PostgreSQL database: no dependencies on test ordering or
+    # previously generated fixtures from the general IAM qualification.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rm
+          POSTGRES_PASSWORD: rm_ci_only
+          POSTGRES_DB: rm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rm -d rm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Populate 200 synthetic IAM accounts, migrate in bounded batches, verify security
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
+          RM_TEST_DB_USERNAME: rm
+          RM_TEST_DB_PASSWORD: rm_ci_only
+          RM_KMS_ROOT_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          RM_IAM_EMAIL_LOOKUP_KEY_BASE64: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+        run: >-
+          mvn -B -ntp clean verify
+          -Dtest=IamPiiPopulatedDatabaseQualificationTest
+          -Drm.pii.populated=true
+      - name: Synthetic populated database dump and restore qualification
+        env:
+          PG_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "${PG_SERVICE_ID}" pg_dump -U rm -d rm_test -Fc -f /tmp/rm-gate-backup.dump
+          docker exec "${PG_SERVICE_ID}" createdb -U rm rm_gate_restore
+          docker exec "${PG_SERVICE_ID}" pg_restore --exit-on-error --no-owner --no-acl -U rm -d rm_gate_restore /tmp/rm-gate-backup.dump
+          docker exec "${PG_SERVICE_ID}" psql -v ON_ERROR_STOP=1 -U rm -d rm_gate_restore -c "
+            DO \$\$ BEGIN
+              IF (SELECT count(*) FROM public.iam_user_account) <> 200
+                 OR (SELECT count(*) FROM public.iam_user_account
+                     WHERE display_name IS NOT NULL OR email_normalized IS NOT NULL OR phone_e164 IS NOT NULL) <> 0
+                 OR (SELECT count(*) FROM iam_pii.user_profile_secret) <> 170
+                 OR (SELECT count(*) FROM public.iam_email_identity) <> 180
+                 OR (SELECT count(*) FROM iam_pii.user_profile_event WHERE action_code='PROFILE_MIGRATED') <> 170
+              THEN
+                RAISE EXCEPTION 'Synthetic populated database restore invariant failed';
+              END IF;
+            END \$\$;"
+      - name: Upload populated PostgreSQL test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam-pii-populated-pg-surefire
           path: target/surefire-reports/
           if-no-files-found: warn
