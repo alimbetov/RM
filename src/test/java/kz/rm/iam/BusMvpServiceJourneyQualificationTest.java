@@ -376,8 +376,31 @@ class BusMvpServiceJourneyQualificationTest {
                 assertThat(row.group().id()).isEqualTo(newRoot);assertThat(row.in()).isEqualByComparingTo("5");});
             assertThatThrownBy(()->dimensions.stock(otherOwner,otherTenant,List.of(warehouse.id()),from,until,31))
                 .isInstanceOf(SecurityException.class);
+            // The second owner has no operational role: authorization is checked before lookup.
             assertThatThrownBy(()->groups.assign(otherOwner,otherTenant,published.id(),newRoot,0))
-                .hasMessage("CAT_ASSIGNMENT_ITEM_NOT_FOUND");
+                .isInstanceOf(SecurityException.class).hasMessage("Tenant RBAC permission denied");
+            // Separately prove the data boundary AFTER successful admission within tenant B.
+            UUID otherStaffId=account("bus-other-dimension-staff");
+            VerifiedActor otherStaff=actor(otherStaffId);
+            assertThat(enrollment.invite(otherOwner,otherTenant,otherStaffId).status()).isEqualTo("INVITED");
+            assertThat(enrollment.accept(otherStaff,otherTenant).status()).isEqualTo("ACTIVE");
+            var otherRole=roles.createRole(otherOwner,otherTenant,"DIMENSION_TEST","Dimension isolation test");
+            for(var permission:List.of(DomainPermission.CATALOG_WRITE,DomainPermission.SALES_ORDER_READ,
+                    DomainPermission.INVENTORY_STOCK_READ))
+                roles.grant(otherOwner,otherTenant,otherRole.id(),permission);
+            roles.assign(otherOwner,otherTenant,otherStaffId,otherRole.id());
+            roles.enable(otherOwner,otherTenant);
+            assertThat(dimensions.booked(otherStaff,otherTenant,from,until,31)).isEmpty();
+            assertThatThrownBy(()->groups.assign(otherStaff,otherTenant,published.id(),newRoot,0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("CAT_ASSIGNMENT_ITEM_NOT_FOUND");
+            var otherItem=catalog.createDraft(otherStaff,otherTenant,"OTHER-"+UUID.randomUUID(),
+                CatalogItem.Kind.PRODUCT,"ru","Other tenant item",null);
+            assertThatThrownBy(()->groups.assign(otherStaff,otherTenant,otherItem.id(),newRoot,0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("CAT_ASSIGNMENT_GROUP_NOT_FOUND");
+            var otherGroup=groups.appendNode(otherStaff,otherTenant,CatalogItem.Kind.PRODUCT,"01","Other tenant group",null,0);
+            assertThat(groups.assign(otherStaff,otherTenant,otherItem.id(),otherGroup.id(),0).groupId()).isEqualTo(otherGroup.id());
+            assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
             assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThatThrownBy(()->jdbc.update("UPDATE crm.int_movement_dimension SET region_code=region_code WHERE tenant_id=?",tenant))
