@@ -6282,3 +6282,23 @@ CREATE TRIGGER trg_int_source_rev_event_no_truncate BEFORE TRUNCATE ON crm.int_s
 --rollback DROP TRIGGER trg_int_source_rev_baseline_no_truncate ON crm.int_source_revision;
 --rollback DROP TRIGGER trg_int_source_rev_baseline_immutable ON crm.int_source_revision;
 --rollback CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO crm.int_source_revision(tenant_id,revision) VALUES(NEW.tenant_id,1) ON CONFLICT(tenant_id) DO UPDATE SET revision=int_source_revision.revision+1; RETURN NEW; END; $$;
+
+
+--changeset rm:0204b-int-source-revision-trigger-privilege dbms:postgresql splitStatements:false
+-- A restricted business writer can cause an actual journal event only through
+-- the already installed owner-source trigger. Do not grant it journal INSERT.
+CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_OP<>'INSERT' OR TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN
+ ('sales_order_status_event','sales_order_line','inv_stock_movement','int_canonical_fact',
+  'int_sales_line_dimension','int_movement_dimension') THEN
+   RAISE EXCEPTION 'INT_SOURCE_REVISION_TRIGGER_SCOPE' USING ERRCODE='23514';
+ END IF;
+ INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_bump_source_revision() FROM PUBLIC;
+--rollback GRANT EXECUTE ON FUNCTION crm.int_bump_source_revision() TO PUBLIC;
+--rollback CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS $$ BEGIN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id); RETURN NEW; END; $$;
+--rollback ALTER FUNCTION crm.int_bump_source_revision() RESET search_path;

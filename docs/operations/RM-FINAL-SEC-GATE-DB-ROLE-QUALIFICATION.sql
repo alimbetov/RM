@@ -37,6 +37,8 @@ BEGIN
     PERFORM set_config('rm.gate_tenant',source_order.tenant_id::text,true);
     PERFORM set_config('rm.gate_order',probe_order::text,true);
     PERFORM set_config('rm.gate_event',probe_event::text,true);
+    PERFORM set_config('rm.gate_revision_before',(SELECT count(*) FROM crm.int_source_revision_event
+        WHERE tenant_id=source_order.tenant_id)::text,true);
 END
 $$;
 
@@ -74,6 +76,17 @@ BEGIN
        OR has_column_privilege(current_user,'crm.sales_order','total_amount','UPDATE')
        OR has_column_privilege(current_user,'crm.sales_order','currency','UPDATE')
     THEN RAISE EXCEPTION 'INT_RUNTIME_EXCESSIVE_PRIVILEGES'; END IF;
+    IF has_table_privilege(current_user,'crm.int_source_revision_event','INSERT')
+       OR has_any_column_privilege(current_user,'crm.int_source_revision_event','UPDATE')
+       OR has_table_privilege(current_user,'crm.int_source_revision_event','DELETE')
+       OR has_table_privilege(current_user,'crm.int_source_revision_event','TRUNCATE')
+       OR has_function_privilege(current_user,'crm.int_bump_source_revision()','EXECUTE')
+    THEN RAISE EXCEPTION 'INT_RUNTIME_REVISION_PRIVILEGES'; END IF;
+    BEGIN
+        INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(t);
+        RAISE EXCEPTION 'INT_RUNTIME_DIRECT_REVISION_ACCEPTED';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
     INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at)
     VALUES(t,e,o,'PLACED',CURRENT_TIMESTAMP);
     IF NOT EXISTS (SELECT 1 FROM crm.sales_order
@@ -99,6 +112,13 @@ BEGIN
 END
 $$;
 RESET ROLE;
+DO $
+BEGIN
+    IF (SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=current_setting('rm.gate_tenant')::uuid)
+       <> current_setting('rm.gate_revision_before')::bigint+2
+    THEN RAISE EXCEPTION 'INT_RUNTIME_REVISION_EVENT_COUNT'; END IF;
+END
+$;
 
 -- P2: separate synthetic delivery identity. Locking a row requires a column
 -- UPDATE grant in PostgreSQL; immutable triggers still forbid actual changes.
