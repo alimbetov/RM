@@ -6689,3 +6689,108 @@ CREATE TRIGGER trg_int_l3_membership_invalidate AFTER INSERT OR DELETE ON crm.in
 --rollback DROP TRIGGER trg_int_l3_membership_immutable ON crm.int_l3_cell_order;
 --rollback DROP TRIGGER trg_int_l3_membership_guard ON crm.int_l3_cell_order;
 --rollback DROP FUNCTION crm.int_l3_membership_guard();
+
+
+--changeset rm:0212-int-dim-proof-revisions
+ALTER TABLE crm.int_dim_revision ADD COLUMN receipt_revision BIGINT NOT NULL DEFAULT 0 CHECK(receipt_revision>=0);
+ALTER TABLE crm.int_dim_revision ADD COLUMN materialization_revision BIGINT NOT NULL DEFAULT 0 CHECK(materialization_revision>=0);
+CREATE TABLE crm.int_dim_coverage_proof (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,proof_id UUID NOT NULL,
+ observed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ source_revision BIGINT NOT NULL CHECK(source_revision>=0),
+ dirty_revision BIGINT NOT NULL CHECK(dirty_revision>=0),
+ receipt_revision BIGINT NOT NULL CHECK(receipt_revision>=0),
+ materialization_revision BIGINT NOT NULL CHECK(materialization_revision>=0),
+ lifecycle_revision BIGINT NOT NULL CHECK(lifecycle_revision>=0),
+ delivery_mismatches BIGINT NOT NULL CHECK(delivery_mismatches>=0),
+ contribution_mismatches BIGINT NOT NULL CHECK(contribution_mismatches>=0),
+ period_mismatches BIGINT NOT NULL CHECK(period_mismatches>=0),
+ cell_mismatches BIGINT NOT NULL CHECK(cell_mismatches>=0),
+ membership_mismatches BIGINT NOT NULL CHECK(membership_mismatches>=0),
+ PRIMARY KEY(tenant_id,generation_id,proof_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_l2_consumer(tenant_id,generation_id)
+);
+--rollback DROP TABLE crm.int_dim_coverage_proof;
+--rollback ALTER TABLE crm.int_dim_revision DROP COLUMN materialization_revision;
+--rollback ALTER TABLE crm.int_dim_revision DROP COLUMN receipt_revision;
+
+--changeset rm:0213-int-dim-proof-fences dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_dim_receipt_revision() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE g uuid;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_fact_consumer_receipt' OR TG_OP<>'INSERT'
+ THEN RAISE EXCEPTION 'INT_DIM_RECEIPT_SCOPE'; END IF;
+ SELECT generation_id INTO g FROM crm.int_l2_consumer
+ WHERE tenant_id=NEW.tenant_id AND consumer_code=NEW.consumer_code;
+ IF FOUND THEN
+   PERFORM crm.int_dim_lock_building(NEW.tenant_id,g);
+   UPDATE crm.int_dim_revision SET receipt_revision=receipt_revision+1
+   WHERE tenant_id=NEW.tenant_id AND generation_id=g;
+ END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_receipt_revision() FROM PUBLIC;
+CREATE TRIGGER trg_int_dim_receipt_revision AFTER INSERT ON crm.int_fact_consumer_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_receipt_revision();
+CREATE FUNCTION crm.int_dim_materialization_revision() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN ('int_l3_period','int_l3_cell','int_l3_cell_order')
+ OR TG_OP NOT IN ('INSERT','UPDATE','DELETE') THEN RAISE EXCEPTION 'INT_DIM_MATERIALIZATION_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ UPDATE crm.int_dim_revision SET materialization_revision=materialization_revision+1
+ WHERE tenant_id=t AND generation_id=g;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_REVISION_MISSING'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_materialization_revision() FROM PUBLIC;
+CREATE TRIGGER trg_int_dim_period_revision AFTER INSERT OR UPDATE OR DELETE ON crm.int_l3_period
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_materialization_revision();
+CREATE TRIGGER trg_int_dim_cell_revision AFTER INSERT OR UPDATE OR DELETE ON crm.int_l3_cell
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_materialization_revision();
+CREATE TRIGGER trg_int_dim_member_revision AFTER INSERT OR DELETE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_materialization_revision();
+CREATE TRIGGER trg_int_dim_proof_immutable BEFORE UPDATE OR DELETE ON crm.int_dim_coverage_proof
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_dim_proof_no_truncate BEFORE TRUNCATE ON crm.int_dim_coverage_proof
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+-- Reservation identity is analytically significant. Track actual changes without
+-- serializing unrelated source writes or invalidating for state-only transitions.
+CREATE FUNCTION crm.int_dim_reservation_revision() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'inv_stock_reservation' OR TG_OP NOT IN ('INSERT','UPDATE','DELETE')
+ THEN RAISE EXCEPTION 'INT_DIM_RESERVATION_SCOPE'; END IF;
+ IF TG_OP='UPDATE' THEN
+   IF (OLD.tenant_id,OLD.id,OLD.order_id,OLD.order_line_id,OLD.location_id,OLD.item_id)
+      IS NOT DISTINCT FROM (NEW.tenant_id,NEW.id,NEW.order_id,NEW.order_line_id,NEW.location_id,NEW.item_id)
+   THEN RETURN NEW; END IF;
+ END IF;
+ IF TG_OP<>'INSERT' THEN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(OLD.tenant_id); END IF;
+ IF TG_OP='INSERT' THEN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ ELSIF TG_OP='UPDATE' AND OLD.tenant_id<>NEW.tenant_id THEN
+   INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_reservation_revision() FROM PUBLIC;
+CREATE TRIGGER trg_int_dim_reservation_revision AFTER INSERT OR UPDATE OR DELETE ON crm.inv_stock_reservation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_reservation_revision();
+--rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_dim_coverage_proof) THEN RAISE EXCEPTION 'INT_DIM_PROOF_ROLLBACK_UNSAFE'; END IF; END; $$;
+--rollback DROP TRIGGER trg_int_dim_reservation_revision ON crm.inv_stock_reservation;
+--rollback DROP FUNCTION crm.int_dim_reservation_revision();
+--rollback DROP TRIGGER trg_int_dim_proof_no_truncate ON crm.int_dim_coverage_proof;
+--rollback DROP TRIGGER trg_int_dim_proof_immutable ON crm.int_dim_coverage_proof;
+--rollback DROP TRIGGER trg_int_dim_member_revision ON crm.int_l3_cell_order;
+--rollback DROP TRIGGER trg_int_dim_cell_revision ON crm.int_l3_cell;
+--rollback DROP TRIGGER trg_int_dim_period_revision ON crm.int_l3_period;
+--rollback DROP FUNCTION crm.int_dim_materialization_revision();
+--rollback DROP TRIGGER trg_int_dim_receipt_revision ON crm.int_fact_consumer_receipt;
+--rollback DROP FUNCTION crm.int_dim_receipt_revision();

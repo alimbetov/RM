@@ -111,6 +111,38 @@ final class L1ProjectionJourneyEvidence {
         });
         assertThat(jdbc.queryForObject("SELECT refreshed_revision FROM crm.int_l3_period WHERE tenant_id=? AND generation_id=? AND period_code='D' AND from_day=?",Long.class,tenant,gen,bookedDay)).isEqualTo(dimBefore);
         assertThat(l3.refresh(tenant,gen,PeriodResolver.Code.D,bookedDay)).isEqualTo(roll);
+        var dimProof=new MultidimensionalCoverageService(jdbc,manager);
+        var incomplete=dimProof.prove(tenant,gen);
+        assertThat(incomplete.delivery()).isZero();
+        assertThat(incomplete.contributions()).isZero();
+        assertThat(incomplete.cells()).isZero();
+        assertThat(incomplete.memberships()).isZero();
+        assertThat(incomplete.periods()).isPositive();
+        assertThat(dimProof.status(tenant,gen,incomplete.id())).isEqualTo(MultidimensionalCoverageService.Status.INCOMPLETE);
+        // Complete manifest of all fully contained periods, including empty days.
+        for(var code:PeriodResolver.Code.values()){
+            LocalDate cursor=from;
+            while(cursor.isBefore(until)){
+                var interval=PeriodResolver.resolve(code,cursor,new PeriodResolver.Policy(g.zone(),calendarVersion));
+                LocalDate a=interval.startInclusive().atZone(g.zone()).toLocalDate();
+                LocalDate b=interval.endExclusive().atZone(g.zone()).toLocalDate();
+                if(!a.isBefore(from)&&!b.isAfter(until))l3.refresh(tenant,gen,code,cursor);
+                cursor=b;
+            }
+        }
+        var complete=dimProof.prove(tenant,gen);
+        assertThat(complete.parity()).isTrue();
+        assertThat(dimProof.status(tenant,gen,complete.id())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+        tx.executeWithoutResult(status->{
+            jdbc.update("DELETE FROM crm.int_l3_cell_order WHERE tenant_id=? AND generation_id=? AND period_code='D' AND from_day=?",tenant,gen,bookedDay);
+            status.setRollbackOnly();
+        });
+        assertThat(dimProof.status(tenant,gen,complete.id())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+        l3.refresh(tenant,gen,PeriodResolver.Code.D,bookedDay);
+        assertThat(dimProof.status(tenant,gen,complete.id())).isEqualTo(MultidimensionalCoverageService.Status.STALE);
+        var refreshedProof=dimProof.prove(tenant,gen);
+        assertThat(refreshedProof.parity()).isTrue();
+        assertThatThrownBy(()->dimProof.status(otherTenant,gen,refreshedProof.id())).hasMessage("INT_DIM_GENERATION_NOT_FOUND");
         var beforeLate=l1.prove(tenant,gen);
         assertThat(beforeLate.parity()).isTrue();
         assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
@@ -133,6 +165,7 @@ final class L1ProjectionJourneyEvidence {
                 .isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
         });
         assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.STALE);
+        assertThat(dimProof.status(tenant,gen,refreshedProof.id())).isEqualTo(MultidimensionalCoverageService.Status.STALE);
         var stale=l1.prove(tenant,gen);
         assertThat(stale.pendingFacts()).isEqualTo(1);
         assertThat(stale.bucketMismatches()).isPositive();
