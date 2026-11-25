@@ -112,13 +112,13 @@ BEGIN
 END
 $$;
 RESET ROLE;
-DO $
+DO $$
 BEGIN
     IF (SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=current_setting('rm.gate_tenant')::uuid)
        <> current_setting('rm.gate_revision_before')::bigint+2
     THEN RAISE EXCEPTION 'INT_RUNTIME_REVISION_EVENT_COUNT'; END IF;
 END
-$;
+$$;
 
 -- P2: separate synthetic delivery identity. Locking a row requires a column
 -- UPDATE grant in PostgreSQL; immutable triggers still forbid actual changes.
