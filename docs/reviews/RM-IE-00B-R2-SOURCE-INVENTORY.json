@@ -81,8 +81,9 @@
     {
       "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
       "designBlob": "a572038d74d4d0a15be588a270c11cadcf350407",
-      "baselineBlob": "a572038d74d4d0a15be588a270c11cadcf350407",
-      "status": "UNCHANGED"
+      "baselineBlob": "efa40ffbb3dfee859135a5b8ce4b4a04a69af143",
+      "status": "DRIFT",
+      "previousBaselineBlob": "a572038d74d4d0a15be588a270c11cadcf350407"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",

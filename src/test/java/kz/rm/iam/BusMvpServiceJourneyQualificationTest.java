@@ -204,10 +204,13 @@ class BusMvpServiceJourneyQualificationTest {
 
         stock.receive(staff,tenant,warehouse.id(),published.id(),
                 "bus-receipt-"+UUID.randomUUID(),new BigDecimal("10"));
-        UUID orderId=checkout.checkout(store.slug(),
-                "bus-buyer-"+UUID.randomUUID()+"@example.kz",
-                "bus-order-"+UUID.randomUUID(),
-                List.of(new AutoOrderService.Line(offer.id(),3))).order().orderId();
+        String checkoutEmail="bus-buyer-"+UUID.randomUUID()+"@example.kz";
+        String checkoutKey="bus-order-"+UUID.randomUUID();
+        var checkoutLines=List.of(new AutoOrderService.Line(offer.id(),3));
+        UUID orderId=checkout.checkout(store.slug(),checkoutEmail,checkoutKey,checkoutLines).order().orderId();
+        UUID placedEvent=CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,orderId);
+        assertThat(checkout.checkout(store.slug(),checkoutEmail,checkoutKey,checkoutLines).order().orderId()).isEqualTo(orderId);
+        assertThat(CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,orderId)).isEqualTo(placedEvent);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.inv_stock_reservation
                 WHERE tenant_id=? AND order_id=?
@@ -252,6 +255,7 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(orderReads.detail(staff,tenant,orderId)).isNotNull();
         UUID cancelOrder=checkout.checkout(store.slug(),"bus-cancel-"+UUID.randomUUID()+"@example.kz",
                 "bus-cancel-order-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),2))).order().orderId();
+        CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,cancelOrder);
         assertThat(sales.confirm(staff,tenant,cancelOrder,warehouse.id()).status()).isEqualTo("CONFIRMED");
         assertThat(sales.cancel(staff,tenant,cancelOrder).status()).isEqualTo("CANCELLED");
         assertThat(sales.cancel(staff,tenant,cancelOrder).affectedLines()).isZero();
@@ -296,6 +300,10 @@ class BusMvpServiceJourneyQualificationTest {
         if(scenario==CanonicalCase.ADMISSION_ROLLBACK){
             CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
             CanonicalFactJourneyEvidence.rejectUnsealedSourceOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            String faultKey="bus-fact-failure-"+UUID.randomUUID();
+            String faultEmail="bus-fact-failure-"+UUID.randomUUID()+"@example.kz";
+            CanonicalFactJourneyEvidence.checkoutAppendFailureOnPostgres(jdbc,canonicalTransactions,tenant,faultKey,
+                ()->checkout.checkout(store.slug(),faultEmail,faultKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
             return;
         }
         CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);

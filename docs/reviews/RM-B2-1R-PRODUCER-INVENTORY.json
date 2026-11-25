@@ -7,7 +7,8 @@
       "table": "sales_order_status_event",
       "sites": 2,
       "method": "checkoutInternal / negotiated checkout",
-      "canonical": "ORDER_PLACED, one per accepted order"
+      "canonical": "ORDER_PLACED, one per accepted order",
+      "integration": "B2.2A.1: mandatory append after both owner event INSERT sites"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
@@ -66,6 +67,6 @@
   "limitations": [
     "Manifest gate fails on new or missing literal insert sites",
     "Additional static checks cover quoted SQL identifiers, adjacent Java literals, ORM mappings, MERGE/COPY and SQL/XML inserts; not a proof for arbitrary generated SQL, external writers or database procedures",
-    "No producer wiring yet"
+    "Only AutoOrderService ORDER_PLACED wired; other producers pending B2.2A.2/B2.2A.3/B2.2B"
   ]
 }

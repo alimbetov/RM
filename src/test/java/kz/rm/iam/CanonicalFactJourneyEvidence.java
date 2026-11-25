@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 import org.springframework.transaction.TransactionDefinition;
 import static org.assertj.core.api.Assertions.*;
 
-/** Real committed owner sources, isolated fixture; this does not claim producer wiring. */
+/** Owner-source evidence, including actual ORDER_PLACED producer wiring. */
 final class CanonicalFactJourneyEvidence {
     static void verify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
                        UUID tenant,UUID order,UUID foreignTenant){
@@ -25,10 +25,9 @@ final class CanonicalFactJourneyEvidence {
             """,UUID.class,tenant,order);
         var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event);
         assertThatThrownBy(()->appender.append(key)).isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
-        tx.executeWithoutResult(s->{assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);s.setRollbackOnly();});
-        assertThat(count(jdbc,tenant,event)).isZero();
-        CanonicalFactAppender.Outcome inserted=tx.execute(s->appender.append(key));
-        assertThat(inserted).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+        assertThat(CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,order)).isEqualTo(event);
+        tx.executeWithoutResult(s->{assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);s.setRollbackOnly();});
+        assertThat(count(jdbc,tenant,event)).isEqualTo(1);
         CanonicalFactAppender.Outcome replay=tx.execute(s->appender.append(key));
         assertThat(replay).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
         assertThat(count(jdbc,tenant,event)).isEqualTo(1);
@@ -59,9 +58,9 @@ final class CanonicalFactJourneyEvidence {
         var event=new AtomicReference<UUID>();
         tx.executeWithoutResult(status->{
             order.set(createOrder.get());
-            event.set(statusEvent(jdbc,tenant,order.get(),"PLACED"));
+            event.set(CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,order.get()));
             var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event.get());
-            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
             assertThat(count(jdbc,tenant,event.get())).isEqualTo(1);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND idempotency_key=?",Integer.class,tenant,requestKey)).isEqualTo(1);
             status.setRollbackOnly();
@@ -73,6 +72,32 @@ final class CanonicalFactJourneyEvidence {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",Integer.class,tenant,order.get())).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=?",Integer.class,tenant,order.get())).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND idempotency_key=?",Integer.class,tenant,requestKey)).isZero();
+    }
+
+    /** Real checkout must fail atomically if canonical INSERT is rejected.
+     * Test-only transactional constraint, rolled back together with owner writes.
+     */
+    static void checkoutAppendFailureOnPostgres(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                                UUID tenant,String requestKey,Supplier<UUID> createOrder){
+        var tx=new TransactionTemplate(manager);
+        var tables=List.of("sales_order","sales_order_line","sales_order_status_event",
+            "sales_checkout_receipt","sales_order_qr_reference","int_canonical_fact");
+        var before=tables.stream().map(table->jdbc.queryForObject(
+            "SELECT count(*) FROM crm."+table+" WHERE tenant_id=?",Long.class,tenant)).toList();
+        assertThatThrownBy(()->tx.executeWithoutResult(status->{
+            jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_test_checkout_fact_failure CHECK (false) NOT VALID");
+            createOrder.get();
+        })).isInstanceOf(org.springframework.dao.DataAccessException.class)
+            .hasStackTraceContaining("ck_test_checkout_fact_failure");
+        var after=tables.stream().map(table->jdbc.queryForObject(
+            "SELECT count(*) FROM crm."+table+" WHERE tenant_id=?",Long.class,tenant)).toList();
+        assertThat(after).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid='crm.int_canonical_fact'::regclass AND conname='ck_test_checkout_fact_failure'",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND idempotency_key=?",Integer.class,tenant,requestKey)).isZero();
+        UUID recovered=createOrder.get();
+        CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,recovered);
+        assertThat(createOrder.get()).isEqualTo(recovered);
+        CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,recovered);
     }
 
     static void concurrentReplayOnPostgres(JdbcTemplate jdbc,PlatformTransactionManager manager,
@@ -246,8 +271,10 @@ final class CanonicalFactJourneyEvidence {
         boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
             c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
         if(!pg)return;
-        UUID event=statusEvent(jdbc,tenant,order,"PLACED");
-        var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event);
+        // The real checkout now already owns PLACED; use the still-unwired
+        // CONFIRMED event of the cancelled-order fixture for insert/rollback contention.
+        UUID event=statusEvent(jdbc,tenant,order,"CONFIRMED");
+        var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_CONFIRMED,event);
         assertThat(count(jdbc,tenant,event)).isZero();
         var tx=new TransactionTemplate(manager);
         tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);

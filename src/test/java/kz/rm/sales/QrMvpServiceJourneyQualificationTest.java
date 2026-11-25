@@ -322,9 +322,14 @@ class QrMvpServiceJourneyQualificationTest {
 
     @Test void qrMvpJ1VerifiedListPriceToHandoverAndRestockPg() throws Exception {
         Scenario s=setup();
+        String requestKey=key();
         UUID order=listCheckout.checkoutVerified(s.buyer(),s.publicQr(),3,
-                s.offerVersion(),new BigDecimal("100.0000"),"KZT",key())
+                s.offerVersion(),new BigDecimal("100.0000"),"KZT",requestKey)
                 .order().orderId();
+        UUID placed=kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order);
+        assertThat(listCheckout.checkoutVerified(s.buyer(),s.publicQr(),3,
+                s.offerVersion(),new BigDecimal("100.0000"),"KZT",requestKey).order().orderId()).isEqualTo(order);
+        assertThat(kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order)).isEqualTo(placed);
         assertThat(jdbc.queryForObject("""
                 SELECT buyer_user_id FROM crm.sales_order WHERE tenant_id=? AND id=?
                 """,UUID.class,s.tenant(),order)).isEqualTo(s.buyer().userId());
@@ -359,13 +364,14 @@ class QrMvpServiceJourneyQualificationTest {
                 new BigDecimal("80.0000"),"KZT",key());
         var accepted=proposals.sellerRespond(s.staff(),s.tenant(),proposed.proposalId(),
                 proposed.revision(),SalesPriceProposalService.Action.ACCEPT,null,key());
-        UUID order=quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),
-                accepted.quoteId(),
-                // Accepted quote snapshots the revision being accepted, not
-                // the incremented terminal proposal revision.
-                new AutoOrderService.AcceptedQuoteAck(proposed.revision(),2,
-                        new BigDecimal("80.0000"),"KZT"),
-                key()).order().orderId();
+        String requestKey=key();
+        // Accepted quote snapshots the revision being accepted, not the incremented terminal proposal revision.
+        var ack=new AutoOrderService.AcceptedQuoteAck(proposed.revision(),2,new BigDecimal("80.0000"),"KZT");
+        UUID order=quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),accepted.quoteId(),ack,requestKey).order().orderId();
+        UUID placed=kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order);
+        assertThat(quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),accepted.quoteId(),ack,requestKey)
+                .order().orderId()).isEqualTo(order);
+        assertThat(kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order)).isEqualTo(placed);
         assertThat(jdbc.queryForObject("""
                 SELECT unit_price_snapshot FROM crm.sales_order_line
                 WHERE tenant_id=? AND order_id=?
