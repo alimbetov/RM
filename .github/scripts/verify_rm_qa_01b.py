@@ -234,6 +234,9 @@ def verify():
         "sha256": digest.hexdigest(), "fileCount": len(migrations)}
     total = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
     passed_cases = {}  # strictly validated PostgreSQL artifact cases
+    full_passes = {}
+    full_skips = []
+    class_identities = {}
     ret04_artifacts = {}
     manifest["ret04DurableQualification"] = {"status": "HOLD", "sha": sha,
         "mappingVerdict": "SUPPORTING_PARTIAL", "productionAdmission": "HOLD"}
@@ -286,11 +289,16 @@ def verify():
                 counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
                 skipped_cases = []
                 executed_cases = set()
+                qualified_cases = set()
+                qualified_skips = []
+                artifact_classes = {}
                 for member in xmls:
                     suite_root = ET.fromstring(archive.read(member))
                     if suite_root.tag != "testsuite":
                         raise ValueError(f"Unexpected XML root in {member}")
-                    suite = suite_root.get("name", "").split(".")[-1]
+                    full_suite = suite_root.get("name", "")
+                    suite = full_suite.split(".")[-1]
+                    artifact_classes.setdefault(suite, set()).add(full_suite)
                     if not suite:
                         raise ValueError(f"Unnamed test suite in {member}")
                     values = {}
@@ -316,8 +324,10 @@ def verify():
                             actual[{"failure": "failures", "error": "errors", "skipped": "skipped"}[outcomes[0]]] += 1
                         else:
                             executed_cases.add((suite, case_name))
+                            qualified_cases.add((full_suite, case_name))
                         skip = case.find("skipped")
                         if skip is not None:
+                            qualified_skips.append((full_suite, case_name, skip.get("message") or skip.text or "UNSPECIFIED"))
                             skipped_cases.append({
                                 "suite": suite, "test": case.get("name"),
                                 "reason": skip.get("message") or skip.text or "UNSPECIFIED"
@@ -435,6 +445,12 @@ def verify():
                 if not missing_cases and counts["tests"] > 0 and not (
                         counts["failures"] or counts["errors"]) and counts["skipped"] <= counts["tests"]:
                     passed_cases[artifact_name] = executed_cases
+                    for short, identities in artifact_classes.items():
+                        class_identities.setdefault(short, set()).update(identities)
+                    for key in qualified_cases:
+                        full_passes.setdefault(key, set()).add(artifact_name)
+                    full_skips.extend((artifact_name, cls, method, reason)
+                                      for cls, method, reason in qualified_skips)
                     if ret04_verified is not None:
                         ret04_artifacts[artifact_name] = dict(ret04_verified,
                             artifactId=artifact["id"], artifactSha256=hashlib.sha256(data).hexdigest())
@@ -452,6 +468,43 @@ def verify():
                 problems.append(f"{name}: mandatory suite {suite} missing or entirely skipped")
         gate["suites"] = sorted(discovered_suites)
     manifest["testCounts"] = total
+    collisions = {short: sorted(names) for short, names in class_identities.items()
+                  if len(names) > 1}
+    if collisions:
+        problems.append("Ambiguous short suite identifiers: " + str(collisions))
+
+    def evidence_environment(name):
+        if "h2" in name:
+            return "H2"
+        if name.startswith("rustfs-real-infra"):
+            return "REAL_INFRA"
+        if "postgres" in name or "-pg-" in name or name.startswith("qr07-"):
+            return "POSTGRESQL"
+        return "UNCLASSIFIED"
+
+    skip_inventory = []
+    for artifact_name, cls, method, reason in sorted(full_skips):
+        environment = evidence_environment(artifact_name)
+        alternatives = sorted(full_passes.get((cls, method), set()) - {artifact_name})
+        same_environment = [a for a in alternatives
+                            if evidence_environment(a) == environment and environment != "UNCLASSIFIED"]
+        status = ("PASS_ELSEWHERE_SAME_ENV" if same_environment else
+                  "PASS_ELSEWHERE_OTHER_ENV" if alternatives else "NO_ALTERNATIVE_PASS")
+        skip_inventory.append({"artifact": artifact_name, "class": cls, "method": method,
+                               "reason": reason, "environment": environment,
+                               "status": status, "alternativePasses": alternatives,
+                               "sameEnvironmentPasses": same_environment,
+                               "policyVerdict": "REVIEW_REQUIRED"})
+    manifest["skipAudit"] = {
+        "schema": "RM-QA-02B/v1", "sha": sha,
+        "scope": "verified mandatory artifacts only; alternative execution is not skip approval",
+        "classIdentityCollisions": collisions,
+        "uniquePassingMethods": len(full_passes),
+        "inventoryComplete": len(skip_inventory) == total["skipped"],
+        "counts": {status: sum(row["status"] == status for row in skip_inventory)
+                   for status in ("PASS_ELSEWHERE_SAME_ENV", "PASS_ELSEWHERE_OTHER_ENV", "NO_ALTERNATIVE_PASS")},
+        "executions": skip_inventory,
+    }
     target = ret04_artifacts.get("qr07-r0-r1-" + sha)
     full = ret04_artifacts.get("qr07-full-pg-" + sha)
     if target is not None and full is not None:
