@@ -83,7 +83,24 @@ jobs:
           # Generic PG qualification runs the dedicated QR-06B multi-JVM
           # scenarios too. Supply the same real dependency classpath instead
           # of skipping or silently downgrading those process tests.
-          mvn -B -ntp org.apache.maven.plugins:maven-dependency-plugin:3.9.0:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile="$RUNNER_TEMP/qr06b-classpath.txt"
+          # Retry dependency resolution only on Maven Central rate limiting.
+          # Never retry the qualification tests or suppress their failure.
+          for attempt in 1 2 3; do
+            log="$RUNNER_TEMP/qr06b-classpath-attempt-$attempt.log"
+            rm -f "$RUNNER_TEMP/qr06b-classpath.txt"
+            if mvn -B -ntp -U org.apache.maven.plugins:maven-dependency-plugin:3.9.0:build-classpath -Dmdep.includeScope=test -Dmdep.outputFile="$RUNNER_TEMP/qr06b-classpath.txt" >"$log" 2>&1; then
+              cat "$log"
+              test -s "$RUNNER_TEMP/qr06b-classpath.txt"
+              break
+            else
+              rc=$?
+              cat "$log"
+              if [[ "$attempt" == 3 ]] || ! grep -Eq 'status code: 429|Too Many Requests \(429\)' "$log"; then
+                exit "$rc"
+              fi
+              sleep "$((attempt * 30))"
+            fi
+          done
           export RM_QR06B_JAVA_CLASSPATH="$PWD/target/test-classes:$PWD/target/classes:$(cat "$RUNNER_TEMP/qr06b-classpath.txt")"
           mvn -B -ntp clean verify
       - name: Qualify synthetic least-privilege runtime role
