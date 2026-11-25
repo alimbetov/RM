@@ -2,7 +2,7 @@ import unittest
 import uuid
 from copy import deepcopy
 from decimal import Decimal
-from verify_ret04_checkout_e6c import check_rows,check_registration,FIELDS,PHASES
+from verify_ret04_checkout_e6c import check_rows,check_registration,check_physical,FIELDS,PHASES
 
 class CheckoutEvidenceTest(unittest.TestCase):
     def setUp(self):
@@ -132,6 +132,75 @@ class RegistrationTransitionTest(unittest.TestCase):
     def test_missing_phase(self):
         del self.states["WRONG_PURPOSE_DENIED"]
         with self.assertRaisesRegex(ValueError,"phase order"):
+            self.check()
+class PhysicalEvidenceTest(unittest.TestCase):
+    def setUp(self):
+        ids={k:str(uuid.uuid4()) for k in ("return_id","order_id","handover_id","sku","warehouse_id",
+              "buyer","posting_id","intake_id","movement_id","staff")}
+        self.meta={"staff":ids["staff"]}
+        self.row=dict(ids,order_status="COMPLETED",reservation_state="FULFILLED",quantity=5,
+            fulfilled_quantity=5,reservation_quantity=5,reservation_warehouse=ids["warehouse_id"],
+            reservation_item=ids["sku"],return_quantity=2,posted_quantity=2,intake_quantity=2,
+            allocated_quantity=2,disposition="QUARANTINE",posting_sellable_movement=None,
+            posting_quarantine_movement=ids["intake_id"],intake_return=ids["return_id"],
+            posting_actor=ids["staff"],intake_actor=ids["staff"],posting_warehouse=ids["warehouse_id"],
+            intake_warehouse=ids["warehouse_id"],posting_item=ids["sku"],intake_item=ids["sku"],
+            intake_before=0,intake_after=2,invoice_rows=0)
+        self.tables={k:(1,"unused") for k in ("sales_return_posting","inv_return_quarantine_movement",
+            "sales_pickup_handover","sales_pickup_handover_line","sales_order","sales_order_line")}
+        self.tables["fin_invoice"]=(0,"unused")
+        self.req=dict(id=ids["return_id"],order_id=ids["order_id"],source_handover_id=ids["handover_id"],
+                      buyer_user_id=ids["buyer"],state="QUARANTINED",row_version=6)
+        self.proj=dict(sales_return_request=[self.req],sales_return_quarantine_resolution=[],
+                       inv_stock_movement=[],sales_return_event=[])
+    def check(self):
+        check_physical([self.row],self.meta,self.tables,self.proj)
+    def settle(self,action):
+        x=self.row
+        self.req.update(state="RESTOCKED" if action=="RESTOCK" else "DISPOSED",row_version=7)
+        self.res=dict(return_id=x["return_id"],action_code=action,warehouse_id=x["warehouse_id"],
+            item_id=x["sku"],actor_user_id=x["staff"],quantity=2,before_quantity=2,after_quantity=0,
+            stock_movement_id=x["movement_id"] if action=="RESTOCK" else None)
+        self.proj["sales_return_quarantine_resolution"]=[self.res]
+        self.proj["sales_return_event"]=[dict(return_id=x["return_id"],from_state="QUARANTINED",
+            to_state=self.req["state"],expected_row_version=6,actor_user_id=x["staff"])]
+        if action=="RESTOCK":
+            self.proj["inv_stock_movement"]=[dict(id=x["movement_id"],location_id=x["warehouse_id"],
+                item_id=x["sku"],delta_quantity=2,balance_before=15,balance_after=17)]
+    def test_quarantined(self):
+        self.check()
+    def test_restock(self):
+        self.settle("RESTOCK");self.check()
+    def test_dispose(self):
+        self.settle("DISPOSE");self.check()
+    def test_wrong_source(self):
+        self.req["source_handover_id"]=str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError,"source binding"):
+            self.check()
+    def test_wrong_capacity(self):
+        self.row["allocated_quantity"]=6
+        with self.assertRaisesRegex(ValueError,"capacity"):
+            self.check()
+    def test_original_posting_sellable(self):
+        self.row["posting_sellable_movement"]=str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError,"posting invariant"):
+            self.check()
+    def test_wrong_restock_movement(self):
+        self.settle("RESTOCK")
+        self.proj["inv_stock_movement"][0]["item_id"]=str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError,"restock movement"):
+            self.check()
+    def test_dispose_stock_pointer(self):
+        self.settle("DISPOSE");self.res["stock_movement_id"]=self.row["movement_id"]
+        with self.assertRaisesRegex(ValueError,"dispose linked"):
+            self.check()
+    def test_wrong_terminal_event(self):
+        self.settle("RESTOCK");self.proj["sales_return_event"][0]["expected_row_version"]=5
+        with self.assertRaisesRegex(ValueError,"terminal event invariant"):
+            self.check()
+    def test_invoice_side_effect(self):
+        self.tables["fin_invoice"]=(1,"unused")
+        with self.assertRaisesRegex(ValueError,"invoice side effect"):
             self.check()
 if __name__=="__main__":
     unittest.main()

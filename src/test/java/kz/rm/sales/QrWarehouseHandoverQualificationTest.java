@@ -3576,7 +3576,7 @@ class QrWarehouseHandoverQualificationTest {
             }
             // Explicit projections are independent reads, not service return values.
             for(String projection:List.of(
-                    "SELECT id,state,row_version FROM crm.sales_return_request WHERE tenant_id=?",
+                    "SELECT id,state,row_version,order_id,source_handover_id,buyer_user_id FROM crm.sales_return_request WHERE tenant_id=?",
                     "SELECT location_id,item_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=?",
                     "SELECT warehouse_id,item_id,quantity,row_version FROM crm.inv_return_quarantine_balance WHERE tenant_id=?",
                     "SELECT return_id,warehouse_id,item_id,quantity,before_quantity,after_quantity,action_code,stock_movement_id,actor_user_id FROM crm.sales_return_quarantine_resolution WHERE tenant_id=?",
@@ -3651,7 +3651,24 @@ class QrWarehouseHandoverQualificationTest {
                             WHERE pr.tenant_id=item.tenant_id AND pr.item_id=item.id
                               AND pr.unit_price=l.unit_price_snapshot AND pr.currency=l.currency
                               AND pr.valid_from<=o.created_at) AS price_rows,
-                         ho.id AS handover_id,ho.warehouse_id,ho.staff_actor_id AS handover_staff
+                         ho.id AS handover_id,ho.warehouse_id,ho.staff_actor_id AS handover_staff,
+                         o.status AS order_status,rl.quantity AS return_quantity,
+                         hl.quantity AS fulfilled_quantity,rs.quantity AS reservation_quantity,
+                         rs.state AS reservation_state,rs.location_id AS reservation_warehouse,
+                         rs.item_id AS reservation_item,
+                         p0.posting_id,p0.disposition,p0.quantity AS posted_quantity,
+                         p0.actor_user_id AS posting_actor,p0.warehouse_id AS posting_warehouse,
+                         p0.item_id AS posting_item,p0.movement_id AS posting_sellable_movement,
+                         p0.quarantine_movement_id AS posting_quarantine_movement,
+                         qm.id AS intake_id,qm.return_id AS intake_return,qm.delta_quantity AS intake_quantity,qm.before_quantity AS intake_before,
+                         qm.after_quantity AS intake_after,qm.actor_user_id AS intake_actor,
+                         qm.warehouse_id AS intake_warehouse,qm.item_id AS intake_item,
+                         (SELECT COALESCE(SUM(cap.quantity),0) FROM crm.sales_return_line cap
+                             JOIN crm.sales_return_request rr ON rr.tenant_id=cap.tenant_id AND rr.id=cap.return_id
+                             WHERE cap.tenant_id=l.tenant_id AND cap.order_id=o.id AND cap.order_line_id=l.id
+                               AND rr.state NOT IN ('REJECTED','CANCELLED_BY_BUYER')) AS allocated_quantity,
+                         (SELECT count(*) FROM crm.fin_invoice fi WHERE fi.tenant_id=o.tenant_id
+                               AND fi.order_id=o.id) AS invoice_rows
                   FROM crm.sales_return_request r
                   JOIN crm.sales_order o ON o.tenant_id=r.tenant_id AND o.id=r.order_id
                   JOIN public.iam_email_identity e ON e.id=o.pending_email_identity_id
@@ -3668,6 +3685,15 @@ class QrWarehouseHandoverQualificationTest {
                     AND q.active_offer_id=off.id AND q.public_ref=?
                   JOIN crm.sales_pickup_handover ho ON ho.tenant_id=r.tenant_id AND ho.order_id=o.id
                     AND ho.id=r.source_handover_id
+                  JOIN crm.sales_return_line rl ON rl.tenant_id=r.tenant_id AND rl.return_id=r.id
+                    AND rl.order_id=o.id AND rl.order_line_id=l.id
+                  JOIN crm.inv_stock_reservation rs ON rs.tenant_id=o.tenant_id AND rs.order_id=o.id
+                    AND rs.order_line_id=l.id
+                  JOIN crm.sales_pickup_handover_line hl ON hl.tenant_id=ho.tenant_id AND hl.handover_id=ho.id
+                    AND hl.reservation_id=rs.id
+                  JOIN crm.sales_return_posting p0 ON p0.tenant_id=r.tenant_id AND p0.return_id=r.id
+                  JOIN crm.inv_return_quarantine_movement qm ON qm.tenant_id=p0.tenant_id
+                    AND qm.id=p0.quarantine_movement_id AND qm.return_id=r.id
                   WHERE r.tenant_id=?
                 ) p ORDER BY 1
                 """,String.class,c.strictQrRef(),c.tenant());

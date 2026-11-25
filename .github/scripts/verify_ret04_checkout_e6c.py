@@ -14,7 +14,7 @@ import verify_ret04_evidence as d
 import verify_ret04_identity_e3a as a
 import verify_ret04_revocation_e3b as b
 
-SCHEMA="RET04-E6C/v3"
+SCHEMA="RET04-E6C/v4"
 SUITE=d.SUITE
 GROUPS=(("sql",d.METHODS),("identity-e3",a.METHODS),("revocation-e3b",b.METHODS))
 require=d.require
@@ -58,6 +58,66 @@ def check_rows(rows,meta,returns,log):
         registration=f"RET04E6A registration proof actor={meta['buyer']} identity={x['identity_id']} challenge={x['challenge_id']}"
         checkout=f"RET04E6B verified checkout tenant={meta['tenant']} buyer={meta['buyer']} order={x['order_id']} offer={x['offer_id']} sku={x['sku']}"
         require(registration in log.splitlines() and checkout in log.splitlines(),"missing service lineage marker")
+
+def check_physical(rows,meta,tables,projections):
+    # BSR §14.3 / SQL-BSR-07 and 09: validate the original source
+    # and the terminal effect independently from the service result.
+    reqs={x["id"]:x for x in projections["sales_return_request"]}
+    resolutions={x["return_id"]:x for x in projections["sales_return_quarantine_resolution"]}
+    movements={x["id"]:x for x in projections["inv_stock_movement"]}
+    events=[x for x in projections["sales_return_event"] if x["from_state"]=="QUARANTINED"]
+    require(len(reqs)==len(rows) and len(resolutions)==len(projections["sales_return_quarantine_resolution"]) and
+            len(movements)==len(projections["inv_stock_movement"]),"duplicate physical projection")
+    require(set(resolutions)<=set(reqs),"foreign resolution")
+    require(len(events)==len(resolutions) and {x["return_id"] for x in events}==set(resolutions),
+            "terminal event binding")
+    require(all(tables[k][0]==len(rows) for k in ("sales_return_posting","inv_return_quarantine_movement",
+                "sales_pickup_handover","sales_pickup_handover_line","sales_order","sales_order_line")) and
+            tables["fin_invoice"][0]==0,"original ledger cardinality or invoice side effect")
+    require(len({x["posting_id"] for x in rows})==len(rows) and len({x["intake_id"] for x in rows})==len(rows),
+            "duplicate original posting/intake")
+    for x in rows:
+        r=reqs[x["return_id"]]
+        require(r["order_id"]==x["order_id"] and r["source_handover_id"]==x["handover_id"] and
+                r["buyer_user_id"]==x["buyer"],"physical source binding")
+        require(x["order_status"]=="COMPLETED" and x["reservation_state"]=="FULFILLED" and
+                x["quantity"]==x["fulfilled_quantity"]==x["reservation_quantity"]==5 and
+                x["reservation_warehouse"]==x["warehouse_id"] and x["reservation_item"]==x["sku"],
+                "original fulfillment invariant")
+        q=Decimal(x["return_quantity"])
+        require(q in (Decimal(2),Decimal(3)) and q==Decimal(x["posted_quantity"])==Decimal(x["intake_quantity"]) and
+                q==Decimal(x["allocated_quantity"])<=Decimal(x["fulfilled_quantity"]),"return capacity/quantity invariant")
+        require(canonical(x["posting_id"]) and canonical(x["intake_id"]) and
+                x["disposition"]=="QUARANTINE" and x["posting_sellable_movement"] is None and
+                x["posting_quarantine_movement"]==x["intake_id"] and x["intake_return"]==x["return_id"] and
+                x["posting_actor"]==x["intake_actor"]==meta["staff"] and
+                x["posting_warehouse"]==x["intake_warehouse"]==x["warehouse_id"] and
+                x["posting_item"]==x["intake_item"]==x["sku"] and
+                Decimal(x["intake_before"])>=0 and Decimal(x["intake_after"])-Decimal(x["intake_before"])==q and
+                x["invoice_rows"]==0,"original quarantine posting invariant")
+        resolved=resolutions.get(x["return_id"])
+        if r["state"]=="QUARANTINED":
+            require(r["row_version"]==6 and resolved is None,"premature resolution")
+            continue
+        require(r["state"] in ("RESTOCKED","DISPOSED") and r["row_version"]==7 and resolved is not None,
+                "terminal resolution missing")
+        action="RESTOCK" if r["state"]=="RESTOCKED" else "DISPOSE"
+        require(resolved["action_code"]==action and resolved["warehouse_id"]==x["warehouse_id"] and
+                resolved["item_id"]==x["sku"] and resolved["actor_user_id"]==meta["staff"] and
+                Decimal(resolved["quantity"])==q and
+                Decimal(resolved["before_quantity"])-Decimal(resolved["after_quantity"])==q and
+                Decimal(resolved["after_quantity"])>=0,"resolution source/quantity invariant")
+        event=next(e for e in events if e["return_id"]==x["return_id"])
+        require(event["to_state"]==r["state"] and event["actor_user_id"]==meta["staff"] and
+                event["expected_row_version"]==6,"terminal event invariant")
+        if action=="DISPOSE":
+            require(resolved["stock_movement_id"] is None,"dispose linked sellable movement")
+        else:
+            movement=movements.get(resolved["stock_movement_id"])
+            require(movement is not None and movement["location_id"]==x["warehouse_id"] and
+                    movement["item_id"]==x["sku"] and Decimal(movement["delta_quantity"])==q and
+                    Decimal(movement["balance_after"])-Decimal(movement["balance_before"])==q,
+                    "restock movement binding/quantity")
 
 PHASES=("BEFORE","PENDING","WRONG_PURPOSE_DENIED","CURRENT","REPLAY_DENIED")
 COUNTS=("identities","challenges","events","deliveries")
@@ -163,11 +223,12 @@ def verify(xml,evidence,sha):
             registration_meta={}
             hashes=[]
             for snap in snapshots:
-                meta,_,projections=d.snapshot(snap,sha,method)
+                meta,tables,projections=d.snapshot(snap,sha,method)
                 path=proofs/snap.name
                 rows=load(path,sha,method,meta["tenant"])
                 try:
                     check_rows(rows,meta,projections["sales_return_request"],log)
+                    check_physical(rows,meta,tables,projections)
                 except (ValueError,KeyError,TypeError) as exc:
                     raise ValueError(f"{method}/{snap.name}: {exc}") from exc
                 # Exact stable lineage across resolution, denied attempts, crash and replay.
