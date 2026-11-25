@@ -187,6 +187,61 @@ class TaskCalendarQualificationTest {
         var early=new Filter(null,null,Set.of(EARLY_50),DateBasis.COMPLETED,
             f.dateFrom(),f.dateTo(),f.zone(),false);
         assertSameAsFullPg(t,page(t,early,100,null),100,null);
+        assertPageDueHistory(t,early);
+    }
+
+    // Independent reference is the unchanged full relation and point read.
+    // Two due changes separated by a STARTED event must use the previous
+    // due-change rather than the immediately preceding generic event.
+    private void assertPageDueHistory(Tenant t,Filter early)throws Exception{
+        clock.at(BASE);
+        Instant original=BASE.plusSeconds(20);
+        var x=create(t,original);
+        clock.at(BASE.plusSeconds(10));
+        tasks.reschedule(t.manager(),t.id(),x.id(),BASE.plusSeconds(3*86400),0,"f-due-"+UUID.randomUUID());
+        tasks.start(t.staff(),t.id(),x.id(),1);
+        clock.at(BASE.plusSeconds(15));
+        tasks.reschedule(t.manager(),t.id(),x.id(),BASE.plusSeconds(4*86400),2,"f-due-"+UUID.randomUUID());
+        clock.at(BASE.plusSeconds(86400));
+        tasks.complete(t.staff(),t.id(),x.id(),3);
+        // Invalid prior change chain with the same valid completion.
+        UUID bad=raw(t,"COMPLETED",BASE.plusSeconds(4*86400));
+        jdbc.update("UPDATE crm.task_item SET row_version=4 WHERE tenant_id=? AND id=?",t.id(),bad);
+        String insert="""
+            INSERT INTO crm.task_event(tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
+               previous_version,new_version,occurred_at,previous_due_at,next_due_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            """;
+        String[] actions={"CREATED","DUE_DATE_CHANGED","STARTED","DUE_DATE_CHANGED","COMPLETED"};
+        String[] from={null,"OPEN","OPEN","IN_PROGRESS","IN_PROGRESS"};
+        String[] to={"OPEN","OPEN","IN_PROGRESS","IN_PROGRESS","COMPLETED"};
+        for(int v=0;v<5;v++){
+            final int version=v;
+            jdbc.update(insert,ps->{
+                ps.setObject(1,t.id());ps.setObject(2,UUID.randomUUID());ps.setObject(3,bad);
+                ps.setObject(4,t.staff().userId());ps.setString(5,actions[version]);
+                ps.setString(6,from[version]);ps.setString(7,to[version]);
+                if(version==0)ps.setNull(8,Types.BIGINT);else ps.setLong(8,version-1);
+                ps.setLong(9,version);
+                ps.setObject(10,BASE.plusSeconds(version==4?86400:version).atOffset(ZoneOffset.UTC));
+                // Second change deliberately disagrees with first next_due_at.
+                Instant previous=version==1?original:version==3?BASE.plusSeconds(3*86400+1):null;
+                Instant next=version==1?BASE.plusSeconds(3*86400):version==3?BASE.plusSeconds(4*86400):null;
+                ps.setObject(11,previous==null?null:previous.atOffset(ZoneOffset.UTC),Types.TIMESTAMP_WITH_TIMEZONE);
+                ps.setObject(12,next==null?null:next.atOffset(ZoneOffset.UTC),Types.TIMESTAMP_WITH_TIMEZONE);
+            });
+        }
+        var p=page(t,early,100,null);
+        assertSameAsFullPg(t,p,100,null);
+        var good=p.items().stream().filter(row->row.timing().taskId().equals(x.id())).findFirst().orElseThrow().timing();
+        var broken=p.items().stream().filter(row->row.timing().taskId().equals(bad)).findFirst().orElseThrow().timing();
+        assertThat(good).isEqualTo(timing.getMine(t.staff(),t.id(),x.id()).timing());
+        assertThat(good.originalDueAt()).isEqualTo(original);
+        assertThat(good.deadlineChanged()).isTrue();
+        assertThat(broken).isEqualTo(timing.getMine(t.staff(),t.id(),bad).timing());
+        assertThat(broken.originalEvidenceCode()).isEqualTo(TaskTimingSnapshot.OriginalEvidence.UNKNOWN);
+        assertThat(broken.originalDueAt()).isNull();
+        assertThat(broken.timeliness()).isEqualTo(EARLY_50);
     }
     @Test void f04HalfOpenLeapYearAndMonthBoundaries()throws Exception{
         var t=tenant();Instant start=Instant.parse("2028-02-29T00:00:00Z"),end=Instant.parse("2028-03-01T00:00:00Z");

@@ -130,6 +130,29 @@ final class TaskTimingEngine {
     // Scope event evidence before windowing. Composite tenant/task is mandatory.
     // The previous due-change pointer ignores intervening non-deadline events.
     private static String eventSummary(boolean point,boolean pageOnly) {
+        // For bounded calendar pages, the predecessor of a due-change
+        // event is LAG within the due-change partition. Non-change rows
+        // never use that predecessor. UNIQUE(tenant_id,task_id,new_version)
+        // makes this exactly the same row as the legacy self-join, including
+        // an invalid NULL next_due_at. Keep point/full reference SQL intact.
+        String previousChange=pageOnly?"""
+                    LAG(new_version) OVER(PARTITION BY tenant_id,task_id,
+                        CASE WHEN action_code='DUE_DATE_CHANGED' THEN 1 ELSE 0 END
+                        ORDER BY new_version) AS prev_change,
+                    LAG(next_due_at) OVER(PARTITION BY tenant_id,task_id,
+                        CASE WHEN action_code='DUE_DATE_CHANGED' THEN 1 ELSE 0 END
+                        ORDER BY new_version) AS prior_next_due,
+            """:"""
+                    MAX(CASE WHEN action_code='DUE_DATE_CHANGED' THEN new_version END)
+                        OVER(PARTITION BY tenant_id,task_id ORDER BY new_version
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_change,
+            """;
+        String predecessor=pageOnly?"e.prior_next_due":"prior.next_due_at";
+        String missing=pageOnly?"":"prior.new_version IS NULL OR ";
+        String previousJoin=pageOnly?"":"""
+                LEFT JOIN crm.task_event prior ON prior.tenant_id=e.tenant_id
+                AND prior.task_id=e.task_id AND prior.new_version=e.prev_change
+            """;
         return """
             SELECT e.tenant_id,e.task_id,COUNT(*) AS event_count,
                    MIN(e.new_version) AS first_version,MAX(e.new_version) AS last_version,
@@ -148,7 +171,7 @@ final class TaskTimingEngine {
                                       OR e.from_state NOT IN ('OPEN','IN_PROGRESS','BLOCKED')
                                       OR e.from_state IS DISTINCT FROM e.to_state
                                       OR (e.prev_change IS NOT NULL AND
-                                          (prior.new_version IS NULL OR e.previous_due_at IS DISTINCT FROM prior.next_due_at)))
+                                          (%se.previous_due_at IS DISTINCT FROM %s)))
                             THEN 1 ELSE 0 END) AS change_bad,
                    SUM(CASE WHEN e.action_code<>'DUE_DATE_CHANGED'
                                   AND (e.previous_due_at IS NOT NULL OR e.next_due_at IS NOT NULL)
@@ -158,7 +181,7 @@ final class TaskTimingEngine {
                                  AND e.from_state IN ('OPEN','IN_PROGRESS','BLOCKED')
                                  AND e.previous_version=e.new_version-1 AND e.prev_version=e.new_version-1
                                  AND e.prev_state=e.from_state
-                                 AND (e.prev_change IS NULL OR e.previous_due_at IS NOT DISTINCT FROM prior.next_due_at)
+                                 AND (e.prev_change IS NULL OR e.previous_due_at IS NOT DISTINCT FROM %s)
                             THEN 1 ELSE 0 END) AS valid_changes,
                    MAX(CASE WHEN e.action_code='DUE_DATE_CHANGED' AND e.prev_change IS NULL THEN e.previous_due_at END) AS first_due,
                    MAX(CASE WHEN e.action_code='DUE_DATE_CHANGED' AND e.new_version=e.last_change THEN e.next_due_at END) AS last_due,
@@ -168,16 +191,14 @@ final class TaskTimingEngine {
                     LAG(new_version) OVER(PARTITION BY tenant_id,task_id ORDER BY new_version) AS prev_version,
                     LAG(to_state) OVER(PARTITION BY tenant_id,task_id ORDER BY new_version) AS prev_state,
                     MAX(new_version) OVER(PARTITION BY tenant_id,task_id) AS max_version,
-                    MAX(CASE WHEN action_code='DUE_DATE_CHANGED' THEN new_version END)
-                        OVER(PARTITION BY tenant_id,task_id ORDER BY new_version
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_change,
+                    %s
                     MAX(CASE WHEN action_code='DUE_DATE_CHANGED' THEN new_version END)
                         OVER(PARTITION BY tenant_id,task_id) AS last_change
                 FROM crm.task_event x WHERE tenant_id=? %s
-            ) e LEFT JOIN crm.task_event prior ON prior.tenant_id=e.tenant_id
-                AND prior.task_id=e.task_id AND prior.new_version=e.prev_change
+            ) e %s
             GROUP BY e.tenant_id,e.task_id
-            """.formatted(transition(),terminalAggregates(),point?"AND task_id=?":pageOnly?"AND task_id IN (SELECT id FROM page_keys)":"");
+            """.formatted(transition(),missing,predecessor,predecessor,terminalAggregates(),previousChange,
+                point?"AND task_id=?":pageOnly?"AND task_id IN (SELECT id FROM page_keys)":"",previousJoin);
     }
 
 
