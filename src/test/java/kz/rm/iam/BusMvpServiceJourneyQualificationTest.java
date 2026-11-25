@@ -258,5 +258,6 @@ class BusMvpServiceJourneyQualificationTest {
                 .isEqualTo("COMPLETED");
         CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
         CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+        CanonicalFactJourneyEvidence.tenantCollision(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
     }
 }

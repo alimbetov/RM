@@ -239,6 +239,55 @@ final class CanonicalFactJourneyEvidence {
         }
     }
 
+    /** Actual distinct workspaces; synthetic tenant-owned order rows, rolled back after the probe. */
+    static void tenantCollision(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                CanonicalFactAppender appender,UUID tenant,UUID order,UUID otherTenant){
+        UUID event=statusEvent(jdbc,tenant,order,"PLACED");
+        String original=jdbc.queryForObject("""
+            SELECT digest FROM crm.int_canonical_fact
+            WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?
+            """,String.class,tenant,event);
+        assertThat(original).isNotNull();
+        var tx=new TransactionTemplate(manager);
+        tx.executeWithoutResult(status->{
+            UUID store=UUID.randomUUID(),offer=UUID.randomUUID(),otherOrder=UUID.randomUUID();
+            jdbc.update("INSERT INTO crm.store_front(tenant_id,id,slug,state,created_at) VALUES (?,?,?,'DRAFT',CURRENT_TIMESTAMP)",
+                otherTenant,store,"canonical-collision-"+store);
+            jdbc.update("INSERT INTO crm.store_offer(tenant_id,id,title,unit_price,currency,state) VALUES (?,?,?,19,'KZT','DRAFT')",
+                otherTenant,offer,"Synthetic independent tenant offer");
+            assertThat(jdbc.update("""
+                INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,status,total_amount,currency,created_at,fulfillment_mode)
+                SELECT ?,?,pending_email_identity_id,'PLACED',19,'KZT',CURRENT_TIMESTAMP,'STANDARD'
+                FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,otherTenant,otherOrder,tenant,order)).isEqualTo(1);
+            jdbc.update("""
+                INSERT INTO crm.sales_order_line(tenant_id,id,order_id,offer_id,title_snapshot,quantity,unit_price_snapshot,currency)
+                VALUES (?,?,?,?,'Synthetic independent tenant line',1,19,'KZT')
+                """,otherTenant,UUID.randomUUID(),otherOrder,offer);
+            jdbc.update("INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at) VALUES (?,?,?,'PLACED',CURRENT_TIMESTAMP)",
+                otherTenant,event,otherOrder);
+            var key=new CanonicalFactKey(otherTenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event);
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+            assertThat(jdbc.queryForObject("""
+                SELECT subject_id FROM crm.int_canonical_fact
+                WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?
+                """,UUID.class,otherTenant,event)).isEqualTo(otherOrder);
+            assertThat(jdbc.queryForObject("""
+                SELECT digest FROM crm.int_canonical_fact
+                WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?
+                """,String.class,otherTenant,event)).isNotEqualTo(original);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE source_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'",Integer.class,event)).isEqualTo(2);
+            status.setRollbackOnly();
+        });
+        assertThat(count(jdbc,otherTenant,event)).isZero();
+        assertThat(count(jdbc,tenant,event)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+            SELECT digest FROM crm.int_canonical_fact
+            WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?
+            """,String.class,tenant,event)).isEqualTo(original);
+    }
+
     private record Race(UUID event,CanonicalFactKey.Kind kind,int calls){}
     private record Attempt(int backend,CanonicalFactAppender.Outcome outcome){}
     private static void race(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
