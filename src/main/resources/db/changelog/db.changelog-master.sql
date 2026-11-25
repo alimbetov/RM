@@ -5080,3 +5080,33 @@ CREATE INDEX idx_task_radar_active_due ON crm.task_item(tenant_id,due_at,id)
  WHERE status IN ('OPEN','IN_PROGRESS','BLOCKED')
    AND assignee_user_id IS NOT NULL AND due_at IS NOT NULL;
 --rollback DROP INDEX crm.idx_task_radar_active_due;
+
+--changeset rm:0173-int-calendar-policy
+CREATE TABLE crm.int_calendar_policy (
+ tenant_id UUID NOT NULL,
+ version BIGINT NOT NULL,
+ zone_id VARCHAR(64) NOT NULL,
+ effective_from TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_by UUID NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_int_calendar_policy PRIMARY KEY(tenant_id,version),
+ CONSTRAINT fk_int_calendar_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_int_calendar_actor FOREIGN KEY(created_by) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_int_calendar_version CHECK(version>0),
+ CONSTRAINT ck_int_calendar_zone CHECK(length(trim(zone_id))>0),
+ CONSTRAINT ck_int_calendar_effective CHECK(effective_from=created_at)
+);
+--rollback DROP TABLE crm.int_calendar_policy;
+
+--changeset rm:0174-int-calendar-policy-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_reject_calendar_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CALENDAR_POLICY_IMMUTABLE';
+END; $$;
+CREATE TRIGGER trg_int_calendar_immutable BEFORE UPDATE OR DELETE ON crm.int_calendar_policy
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_calendar_mutation();
+CREATE TRIGGER trg_int_calendar_no_truncate BEFORE TRUNCATE ON crm.int_calendar_policy
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_calendar_mutation();
+--rollback DROP TRIGGER trg_int_calendar_no_truncate ON crm.int_calendar_policy;
+--rollback DROP TRIGGER trg_int_calendar_immutable ON crm.int_calendar_policy;
+--rollback DROP FUNCTION crm.int_reject_calendar_mutation();

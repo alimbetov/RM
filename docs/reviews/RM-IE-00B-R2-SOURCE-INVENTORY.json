@@ -44,8 +44,9 @@
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
       "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "baselineBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "status": "UNCHANGED"
+      "baselineBlob": "04787d596700e2a7a04d25013587893b25891503",
+      "status": "DRIFT",
+      "priorBaselineBlob": "121f3c8929975a673058b95bd90666743be70bd6"
     },
     {
       "path": "src/main/java/kz/rm/crm/ContractExpiryPolicy.java",
@@ -765,5 +766,5 @@
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
   "lastObservedChangeset": "0172-task-radar-active-due-index",
-  "sourceInventoryRevision": "B1.1 intentional changes; prior blob recorded"
+  "sourceInventoryRevision": "B1.2 intentional append-only migration; prior blob recorded"
 }
