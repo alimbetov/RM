@@ -562,6 +562,8 @@ def verify():
         manifest["mvpServiceQualification"] = {
             "json": "rm-mvp-service-coverage.json",
             "gate": mvp["gate"],
+            "missingExecution": mvp["missingExecution"],
+            "semanticGaps": mvp["semanticGaps"],
             "totalCoreP0": mvp["totalCoreP0"],
             "verifiedCoreP0": mvp["verifiedCoreP0"],
             "taskAddendumTotal": mvp["taskAddendumTotal"],
@@ -570,20 +572,36 @@ def verify():
             "uniqueExecutedMethodsMapped": mvp["uniqueExecutedMethodsMapped"],
             "ret04DurableEvidence": manifest["ret04DurableQualification"]["status"]
         }
-        if mvp["gate"] != "CORE_SERVICE_EVIDENCE_QUALIFIED":
+        if mvp["missingExecution"]:
             problems.append("RM-MVP W6 missing exact-SHA PostgreSQL evidence: "
-                            + str(mvp["missingExecution"])
-                            + "; semantic gaps: " + str(mvp["semanticGaps"]))
+                            + str(mvp["missingExecution"]))
+        if mvp["gate"] not in {"HOLD", "CORE_SERVICE_EVIDENCE_QUALIFIED"}:
+            problems.append("RM-MVP W6 unexpected qualification gate")
+        if mvp["gate"] == "HOLD" and not (
+                mvp["semanticGaps"] or mvp["missingExecution"] or problems):
+            problems.append("RM-MVP W6 unexplained qualification HOLD")
     except (ValueError, KeyError, OSError, TypeError) as exc:
         problems.append("RM-MVP W6 evidence mapping invalid: "
                         + type(exc).__name__ + ": " + str(exc))
         manifest["mvpServiceQualification"] = {"gate": "HOLD"}
     manifest["evidenceErrors"] = problems
     manifest["qa01bGate"] = "PASS" if not problems else "FAIL"
+    manifest["developmentCiGate"] = manifest["qa01bGate"]
+    business = manifest["mvpServiceQualification"]
+    manifest["businessQualificationGate"] = (
+        "PASS" if not problems and business.get("gate") == "CORE_SERVICE_EVIDENCE_QUALIFIED"
+        and business.get("missingExecution") == [] and business.get("semanticGaps") == []
+        and business.get("verifiedCoreP0") == business.get("totalCoreP0") == 54
+        and business.get("verifiedTaskAddenda") == business.get("taskAddendumTotal") == 2
+        else "HOLD")
+    manifest["productionReleaseGate"] = "HOLD"
     # A passing QA evidence gate is still NOT public security/production admission.
     manifest["admission"] = "HOLD"
     MANIFEST.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({"qa01bGate": manifest["qa01bGate"],
+                      "businessQualificationGate": manifest["businessQualificationGate"],
+                      "productionReleaseGate": manifest["productionReleaseGate"],
+                      "semanticGapCount": len(business.get("semanticGaps", [])),
                       "tests": total, "errors": problems}, indent=2))
     return 0 if not problems else 1
 

@@ -4,6 +4,11 @@ on:
   push:
     branches: [base_dev]
   workflow_dispatch:
+    inputs:
+      require_release:
+        description: Require production release admission (currently HOLD)
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -168,6 +173,21 @@ jobs:
         run: |
           python3 .github/scripts/rm_r35_maturity_report.py
           cat rm-r3-maturity-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce production release gate on explicit release request
+        if: github.event_name == 'workflow_dispatch' && inputs.require_release
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          m = json.loads(Path("rm-exact-sha-manifest.json").read_text())
+          if not (m.get("sha") == os.environ["GITHUB_SHA"]
+                  and m.get("developmentCiGate") == "PASS"
+                  and m.get("businessQualificationGate") == "PASS"
+                  and m.get("productionReleaseGate") == "PASS"
+                  and m.get("admission") == "PASS"):
+              raise SystemExit("Production release denied: exact-SHA admission not granted")
+          PY
       - name: Publish immutable manifest and per-domain coverage evidence
         if: always()
         uses: actions/upload-artifact@v4

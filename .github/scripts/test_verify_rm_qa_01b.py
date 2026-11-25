@@ -276,6 +276,8 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         result = json.loads(self.manifest_path.read_text())
         self.assertEqual(result["qa01bGate"], "PASS")
         self.assertEqual(result["admission"], "HOLD")
+        self.assertEqual(result["businessQualificationGate"], "PASS")
+        self.assertEqual(result["productionReleaseGate"], "HOLD")
         self.assertTrue(result["migrationFingerprint"]["sha256"])
         self.assertGreater(result["testCounts"]["tests"], 0)
 
@@ -291,21 +293,24 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             real["scenarios"][0]["mappingVerdict"] = "SUPPORTING_PARTIAL"
             real["scenarios"][0]["openRequirement"] = "Synthetic missing business variant"
             (self.root / MVP_MAPPING).write_text(json.dumps(real))
-        self.assertEqual(gate.verify(), 1)
+        self.assertEqual(gate.verify(), 0)
         result = json.loads(self.manifest_path.read_text())
-        self.assertEqual(result["qa01bGate"], "FAIL")
+        self.assertEqual(result["qa01bGate"], "PASS")
         self.assertEqual(result["mvpServiceQualification"]["gate"], "HOLD")
         self.assertEqual(result["admission"], "HOLD")
-        self.assertTrue(any("semantic gaps:" in e for e in result["evidenceErrors"]))
+        self.assertEqual(result["evidenceErrors"], [])
+        self.assertEqual(result["businessQualificationGate"], "HOLD")
+        self.assertEqual(result["productionReleaseGate"], "HOLD")
+        self.assertTrue(result["mvpServiceQualification"]["semanticGaps"])
         report = json.loads((self.root / "rm-mvp-service-coverage.json").read_text())
         self.assertEqual(report["missingExecution"], [])
         self.assertTrue(report["semanticGaps"])
 
     def test_ret04_partial_verdict_is_not_promoted_by_synthetic_execution(self):
         # All fixture methods execute, but the explicit RET04-D guard remains.
-        self.assertEqual(gate.verify(), 1)
+        self.assertEqual(gate.verify(), 0)
         result = json.loads(self.manifest_path.read_text())
-        self.assertEqual(result["qa01bGate"], "FAIL")
+        self.assertEqual(result["qa01bGate"], "PASS")
         self.assertEqual(result["mvpServiceQualification"]["gate"], "HOLD")
         self.assertEqual(result["admission"], "HOLD")
         report = json.loads((self.root / "rm-mvp-service-coverage.json").read_text())
@@ -315,6 +320,20 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             [("CORE-RET-04", "SUPPORTING_PARTIAL")],
         )
 
+    def test_missing_mapped_execution_still_blocks_development_ci(self):
+        real_assessor = gate.assess_mvp_service
+
+        def missing_fixture(root, passed_cases, sha, admission_pass):
+            report = real_assessor(root, passed_cases, sha, admission_pass)
+            return dict(report, gate="HOLD", missingExecution=[{"id": "missing-probe"}])
+
+        with mock.patch.object(gate, "assess_mvp_service", side_effect=missing_fixture):
+            self.assertEqual(gate.verify(), 1)
+        result = json.loads(self.manifest_path.read_text())
+        self.assertEqual(result["developmentCiGate"], "FAIL")
+        self.assertEqual(result["businessQualificationGate"], "HOLD")
+        self.assertTrue(any("missing exact-SHA" in e for e in result["evidenceErrors"]))
+
     def test_ret04_missing_raw_evidence_blocks_global_gate(self):
         with mock.patch.object(gate,"verify_target_archive",side_effect=ValueError("missing RET04 snapshots")):
             self.assertEqual(gate.verify(),1)
@@ -323,7 +342,7 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         self.assertTrue(any("missing RET04 snapshots" in e for e in result["evidenceErrors"]))
 
     def test_ret04_reverified_evidence_does_not_promote_semantic_verdict(self):
-        self.assertEqual(gate.verify(),1)
+        self.assertEqual(gate.verify(), 0)
         result=json.loads(self.manifest_path.read_text())
         self.assertEqual(result["ret04DurableQualification"]["status"],"PG_EVIDENCE_REVERIFIED")
         self.assertEqual(result["ret04DurableQualification"]["cases"],56)
@@ -385,7 +404,7 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             ET.SubElement(root, "testcase", {"name": "probe"})
             target.writestr("TEST-AuditProbeTest.xml", ET.tostring(root))
         self.artifact_bytes[pg] = output.getvalue()
-        self.assertEqual(gate.verify(), 1)  # semantic HOLD remains
+        self.assertEqual(gate.verify(), 0)  # semantic HOLD does not fail development CI
         audit = json.loads(self.manifest_path.read_text())["skipAudit"]
         row = next(x for x in audit["executions"] if x["class"] == "kz.rm.AuditProbeTest")
         self.assertEqual(row["status"], "PASS_ELSEWHERE_OTHER_ENV")
