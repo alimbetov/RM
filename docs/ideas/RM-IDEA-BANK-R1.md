@@ -45,6 +45,7 @@
 | **IDEA-15** | **KF-01 InstantDeal & KF-02 Promise Engine** | Быстрый B2B offer→order и достоверное обещание доступности | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
 | **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | R0.1 ONLY AUTHORIZED (timeliness + calendar reads R1.1) / остальные PARKED | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) · [R0.1](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) |
 | **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | SPEC_EXISTS / Post-MVP, F2R-00 documentation only | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
+| **IDEA-18** | **RM-RADAR-VISION-R1 — Intelligent Business Control Center** | Единая лента операционных рисков и действий: TASK, SALES, CRM, INVENTORY, Financial/FX, прогнозы и рекомендации | SPEC_EXISTS / POST-MVP PARKED / отдельный scope после R0.1D | [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) |
 
 **Неактивные направления:** Business Network / межорганизационная торговая сеть (старый KF-05), полный бухгалтерский/налоговый ledger, масштабная маркетинговая платформа без канонических данных, автономное изменение остатков ML — **не включать в текущий план**.
 
@@ -225,6 +226,10 @@ RM-INSIGHT-R5: проверенные аналитические события 
 
 **Текущий статус:** `SPEC_EXISTS / POST-MVP PARKED`. Квалификация FIN компонентов не переносится автоматически в RM. Текущая задача только документальная, без Java/SQL/REST/Tribuo изменений.
 
+## 13B. IDEA-18 — Intelligent Business Control Center
+
+**Потребность:** продавец и руководитель видят не только задачи, но и проверяемые риски продаж, клиентов, склада и финансов с объяснением и разрешённым следующим действием. **Статус:** SPEC_EXISTS / POST-MVP PARKED; R0.1D остаётся обязательным текущим приоритетом. R0.2 требует отдельного scope. Переиспользуются IDEA-01…07, IDEA-10, IDEA-16/17 и канонические owner read contracts; не создаётся второй INSIGHT, FX calculator, EVT или ledger. ML/Advisor только после качества фактов и отдельного допуска, без автоматических бизнес-команд. Стратегическое ТЗ: [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) — 8 этапов roadmap включая R0.1/R0.2, каталог сигналов, 48 будущих BV семейств, точные ограничения и open decisions. Оценка ценности/сложности — предварительная гипотеза. Никакой новой разработки/production admission.
+
 ## 14. Связанные документы и история решений
 
 - [Активная стратегия RM Business + QR Commerce](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md)
@@ -247,5 +252,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | 2026-11-24 | R1.2 | CR-MVP-KF-RADAR-01: только R0.1 Overdue Task Signal разрешён к сервисной реализации, все прочие идеи остаются PARKED. |
 | 2026-11-24 | R1.3 | CR-MVP-KF-RADAR-01A: зелёные классы досрочного/своевременного выполнения, фильтры, пагинация, календарный read contract R1.1; UI design only until G2. |
 | 2026-11-24 | R1.4 | Создано [RM-KF-RADAR-R0.2 — Smart Deadline Reminder Text](../spec/RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md), SPECIFIED / DOC-ONLY, отдельный допуск реализации требуется. CRM contract-expiration остаётся PARKED. |
+| 2026-11-25 | R1.5 | IDEA-18: [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md), отдельное стратегическое ТЗ, DOC-ONLY / PARKED. Не расширяет CR-MVP-KF-RADAR-01/01A. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.
