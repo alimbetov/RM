@@ -3,8 +3,8 @@ package kz.rm.intelligence;
 import java.time.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static kz.rm.intelligence.PeriodResolverPrototype.*;
-import static kz.rm.intelligence.MetricRegistryPrototype.Selection.*;
+import static kz.rm.intelligence.PeriodResolver.*;
+import static kz.rm.intelligence.MetricRegistry.Selection.*;
 
 class IntelligenceB1ContractTest {
     private final Policy policy=new Policy(ZoneId.of("Europe/Berlin"),1);
@@ -37,20 +37,20 @@ class IntelligenceB1ContractTest {
         assertThrows(IllegalArgumentException.class,()->new Policy(policy.zone(),0));
     }
     @Test void registryRejectsWrongSelectionAndVersion() {
-        var c=MetricRegistryPrototype.Code.CURRENT_AVAILABLE;
-        assertThrows(IllegalArgumentException.class,()->MetricRegistryPrototype.require(c,1,ORDER_PERIOD));
-        assertThrows(IllegalArgumentException.class,()->MetricRegistryPrototype.require(c,2,LIVE_POSITION));
-        assertTrue(MetricRegistryPrototype.require(c,1,LIVE_POSITION).warehouseAssignment());
+        var c=MetricRegistry.Code.CURRENT_AVAILABLE;
+        assertThrows(IllegalArgumentException.class,()->MetricRegistry.require(c,1,ORDER_PERIOD));
+        assertThrows(IllegalArgumentException.class,()->MetricRegistry.require(c,2,LIVE_POSITION));
+        assertTrue(MetricRegistry.require(c,1,LIVE_POSITION).warehouseAssignment());
     }
     @Test void allEightMetricDefinitionsAreExplicit() {
-        assertEquals(8,MetricRegistryPrototype.Code.values().length);
-        for(var c:MetricRegistryPrototype.Code.values()) {
+        assertEquals(8,MetricRegistry.Code.values().length);
+        for(var c:MetricRegistry.Code.values()) {
             var s=switch(c) {
                 case CURRENT_AVAILABLE -> LIVE_POSITION;
                 case STOCK_IN_QTY,STOCK_OUT_QTY -> MOVEMENT_PERIOD;
                 default -> ORDER_PERIOD;
             };
-            var d=MetricRegistryPrototype.require(c,1,s);
+            var d=MetricRegistry.require(c,1,s);
             assertEquals(s!=ORDER_PERIOD,d.warehouseAssignment());
             assertEquals(s==ORDER_PERIOD?"SALES_ORDER_READ":"INVENTORY_STOCK_READ",d.permission());
         }

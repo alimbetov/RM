@@ -2,14 +2,14 @@ package kz.rm.intelligence;
 
 import java.util.Objects;
 
-/** Test-source executable whitelist; no data access or permission grants. */
-final class MetricRegistryPrototype {
-    enum Code { PLACED_ORDERS,BOOKED_ORDER_AMOUNT,CONFIRMED_ORDERS,FULFILLED_ORDERS,CANCELLED_ORDERS,STOCK_IN_QTY,STOCK_OUT_QTY,CURRENT_AVAILABLE }
-    enum Selection { ORDER_PERIOD,MOVEMENT_PERIOD,LIVE_POSITION }
-    enum Basis { STATUS_OCCURRED,STOCK_RECORDED,LIVE_POSITION }
-    enum Unit { COUNT,CURRENCY_AMOUNT,SKU_QUANTITY }
-    record Definition(Code code,int version,Selection selection,Basis basis,Unit unit,String permission,boolean warehouseAssignment) {}
-    static Definition require(Code code,int version,Selection selection) {
+/** Typed runtime whitelist; no data access or permission grants. */
+public final class MetricRegistry {
+    public enum Code { PLACED_ORDERS,BOOKED_ORDER_AMOUNT,CONFIRMED_ORDERS,FULFILLED_ORDERS,CANCELLED_ORDERS,STOCK_IN_QTY,STOCK_OUT_QTY,CURRENT_AVAILABLE }
+    public enum Selection { ORDER_PERIOD,MOVEMENT_PERIOD,LIVE_POSITION }
+    public enum Basis { STATUS_OCCURRED,STOCK_RECORDED,LIVE_POSITION }
+    public enum Unit { COUNT,CURRENCY_AMOUNT,SKU_QUANTITY }
+    public record Definition(Code code,int version,Selection selection,Basis basis,Unit unit,String permission,boolean warehouseAssignment) {}
+    public static Definition require(Code code,int version,Selection selection) {
         Objects.requireNonNull(code); Objects.requireNonNull(selection);
         if(version!=1) throw new IllegalArgumentException("Unknown method version");
         Definition d=switch(code) {

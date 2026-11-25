@@ -4,18 +4,18 @@ import java.time.*;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Objects;
 
-/** Test-source executable specification; not a runtime service. */
-final class PeriodResolverPrototype {
-    enum Code { D,W,DEC,M,Q,H,Y }
-    record Policy(ZoneId zone,long version) {
-        Policy {
+/** Pure calendar computation; no persistence or implicit timezone. */
+public final class PeriodResolver {
+    public enum Code { D,W,DEC,M,Q,H,Y }
+    public record Policy(ZoneId zone,long version) {
+        public Policy {
             Objects.requireNonNull(zone);
             if (!ZoneId.getAvailableZoneIds().contains(zone.getId()) || version < 1)
                 throw new IllegalArgumentException("Explicit IANA zone and positive version required");
         }
     }
-    record Period(Instant startInclusive,Instant endExclusive,String zoneId,long calendarVersion) {}
-    static Period resolve(Code code,LocalDate anchor,Policy policy) {
+    public record Period(Instant startInclusive,Instant endExclusive,String zoneId,long calendarVersion) {}
+    public static Period resolve(Code code,LocalDate anchor,Policy policy) {
         Objects.requireNonNull(code); Objects.requireNonNull(anchor); Objects.requireNonNull(policy);
         LocalDate start = switch(code) {
             case D -> anchor;

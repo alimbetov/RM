@@ -37,8 +37,9 @@
     {
       "path": "src/main/java/kz/rm/architecture/DomainModule.java",
       "designBlob": "0f73b7ba8a128dcf4702e888c0de277ded260d2c",
-      "baselineBlob": "0f73b7ba8a128dcf4702e888c0de277ded260d2c",
-      "status": "UNCHANGED"
+      "baselineBlob": "1a50a7617d17d65bf9a1744ccb222c77dea138d8",
+      "status": "DRIFT",
+      "priorBaselineBlob": "0f73b7ba8a128dcf4702e888c0de277ded260d2c"
     },
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
@@ -764,5 +765,5 @@
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
   "lastObservedChangeset": "0172-task-radar-active-due-index",
-  "sourceInventoryRevision": "A1 producer oracle increment; baselineSha remains original comparison origin"
+  "sourceInventoryRevision": "B1.1 intentional changes; prior blob recorded"
 }

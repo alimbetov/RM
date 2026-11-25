@@ -34,6 +34,8 @@ public final class DomainStandards {
         add(m,DomainModule.KMS,DataScope.TENANT,Retention.KEY_REVOKE,Privacy.KEY_MATERIAL,PartitionPlan.UNPARTITIONED);
         add(m,DomainModule.SUBSCRIPTION,DataScope.MIXED,Retention.MIXED,Privacy.NO_PII_BY_DESIGN,PartitionPlan.UNPARTITIONED);
         add(m,DomainModule.STOREFRONT,DataScope.TENANT,Retention.LIFECYCLE,Privacy.CLASSIFIED_FIELDS,PartitionPlan.UNPARTITIONED);
+        add(m,DomainModule.INTELLIGENCE,DataScope.TENANT,Retention.MIXED,Privacy.CLASSIFIED_FIELDS,PartitionPlan.TIME_TENANT_CANDIDATE);
+        add(m,DomainModule.EVT,DataScope.TENANT,Retention.MIXED,Privacy.CLASSIFIED_FIELDS,PartitionPlan.TIME_TENANT_CANDIDATE);
         if(m.size()!=DomainModule.values().length)throw new IllegalStateException("Incomplete domain standards");
         return Map.copyOf(m);
     }
