@@ -249,10 +249,10 @@ DECLARE t UUID:=current_setting('rm.gate_tenant')::uuid;
 BEGIN
  SELECT * INTO STRICT l FROM crm.sales_order_line WHERE tenant_id=t AND order_id=o ORDER BY id LIMIT 1;
  INSERT INTO crm.int_dim_revision(tenant_id,generation_id) VALUES(t,g);
- INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount)
- VALUES(t,g,'BOOKED',l.id,l.id,o,day_key,l.currency,l.quantity*l.unit_price_snapshot);
- INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount)
- VALUES(t,g,'BOOKED',l.id,l.id,o,day_key,l.currency,l.quantity*l.unit_price_snapshot) ON CONFLICT DO NOTHING;
+ INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount,sku_id)
+ VALUES(t,g,'BOOKED',l.id,l.id,o,day_key,l.currency,l.quantity*l.unit_price_snapshot,l.catalog_item_id_snapshot);
+ INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount,sku_id)
+ VALUES(t,g,'BOOKED',l.id,l.id,o,day_key,l.currency,l.quantity*l.unit_price_snapshot,l.catalog_item_id_snapshot) ON CONFLICT DO NOTHING;
  IF (SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g)<>1
  THEN RAISE EXCEPTION 'INT_DIM_REPLAY_REVISION'; END IF;
  BEGIN
@@ -263,7 +263,18 @@ BEGIN
  END;
  IF (SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g)<>1
  THEN RAISE EXCEPTION 'INT_DIM_ROLLBACK_REVISION'; END IF;
+ BEGIN
+   UPDATE crm.int_l2_contribution SET amount=amount+1 WHERE tenant_id=t AND generation_id=g;
+   RAISE EXCEPTION 'INT_L2_FORGED_AMOUNT_ACCEPTED';
+ EXCEPTION WHEN check_violation THEN
+   IF SQLERRM<>'INT_L2_SOURCE_MISMATCH' THEN RAISE; END IF;
+ END;
  INSERT INTO crm.int_l3_period VALUES(t,g,'D',day_key,day_key+1,1);
+ INSERT INTO crm.int_l3_cell(tenant_id,generation_id,period_code,from_day,cell_id,stream_code,currency,amount,qty_in,qty_out,distinct_orders)
+ VALUES(t,g,'D',day_key,gen_random_uuid(),'BOOKED',l.currency,l.quantity*l.unit_price_snapshot,0,0,1);
+ IF EXISTS(SELECT 1 FROM crm.int_l3_period WHERE tenant_id=t AND generation_id=g AND refreshed_revision IS NOT NULL)
+ THEN RAISE EXCEPTION 'INT_L3_CELL_STAMP_NOT_INVALIDATED'; END IF;
+ UPDATE crm.int_l3_period SET refreshed_revision=1 WHERE tenant_id=t AND generation_id=g;
  UPDATE crm.int_l2_contribution SET amount=amount WHERE tenant_id=t AND generation_id=g;
  BEGIN
    UPDATE crm.int_l3_period SET refreshed_revision=1 WHERE tenant_id=t AND generation_id=g;

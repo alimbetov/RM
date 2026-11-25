@@ -107,7 +107,7 @@ public class CanonicalFactDeliveryService {
     }
     private static void requireGenericConsumer(String code){
         consumerCode(code);
-        if(code.startsWith("l1:"))throw new IllegalArgumentException("CANONICAL_RESERVED_CONSUMER");
+        if(ProjectionKind.reserved(code))throw new IllegalArgumentException("CANONICAL_RESERVED_CONSUMER");
     }
     public void openConsumer(UUID tenant,String code){
         Objects.requireNonNull(tenant);requireGenericConsumer(code);
@@ -124,13 +124,18 @@ public class CanonicalFactDeliveryService {
     }
     /** Under the consumer lock, in the same transaction as each effect/receipt. */
     private void requireProjectionBuilding(UUID tenant,String code){
-        if(!code.startsWith("l1:"))return;
-        String state=jdbc.query("""
+        if(!ProjectionKind.reserved(code))return;
+        boolean l2=code.startsWith(ProjectionKind.L2.prefix());
+        String state=jdbc.query(l2 ? """
+            SELECT l.lifecycle_state FROM crm.int_projection_lifecycle l
+            JOIN crm.int_l2_consumer b ON b.tenant_id=l.tenant_id AND b.generation_id=l.generation_id
+            WHERE l.tenant_id=? AND b.consumer_code=? FOR SHARE OF l
+            """ : """
             SELECT l.lifecycle_state FROM crm.int_projection_lifecycle l
             JOIN crm.int_projection_generation g ON g.tenant_id=l.tenant_id AND g.generation_id=l.generation_id
             WHERE l.tenant_id=? AND g.consumer_code=? FOR SHARE OF l
             """,rs->rs.next()?rs.getString(1):null,tenant,code);
-        if(!"BUILDING".equals(state))throw new IllegalStateException("L1_GENERATION_NOT_BUILDING");
+        if(!"BUILDING".equals(state))throw new IllegalStateException(l2?"L2_GENERATION_NOT_BUILDING":"L1_GENERATION_NOT_BUILDING");
     }
     private static Envelope envelope(ResultSet rs) throws SQLException {
         Timestamp recorded=rs.getTimestamp("recorded_at");
@@ -221,7 +226,11 @@ public class CanonicalFactDeliveryService {
     // Package-internal reserved route, used only by the typed L1 service.
     List<Step> consumeProjectionBatch(UUID tenant,UUID generation,int limit,DatabaseHandler handler){
         Objects.requireNonNull(generation);
-        return consumeInternalBatch(tenant,"l1:"+generation,limit,handler);
+        return consumeProjectionBatch(tenant,ProjectionKind.L1,generation,limit,handler);
+    }
+    List<Step> consumeProjectionBatch(UUID tenant,ProjectionKind kind,UUID generation,int limit,DatabaseHandler handler){
+        Objects.requireNonNull(generation);
+        return consumeInternalBatch(tenant,kind.consumer(generation),limit,handler);
     }
     private List<Step> consumeInternalBatch(UUID tenant,String code,int limit,DatabaseHandler handler){
         batch(limit);var results=new ArrayList<Step>(limit);

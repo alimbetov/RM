@@ -6499,3 +6499,125 @@ CREATE TRIGGER trg_int_l3_cell_no_truncate BEFORE TRUNCATE ON crm.int_l3_cell
 --rollback DROP FUNCTION crm.int_l2_dirty();
 --rollback DROP FUNCTION crm.int_dim_lock_building(UUID,UUID);
 --rollback DROP INDEX crm.uq_int_l3_cell_grain;
+
+
+--changeset rm:0208-int-l2-consumer-binding
+-- Separate consumer identity, same immutable calendar/range and terminal lifecycle.
+CREATE TABLE crm.int_l2_consumer (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL, consumer_code VARCHAR(96) NOT NULL,
+ PRIMARY KEY(tenant_id,generation_id), UNIQUE(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_dim_revision(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,consumer_code) REFERENCES crm.int_fact_consumer(tenant_id,consumer_code)
+);
+CREATE INDEX idx_int_l2_order_reconcile ON crm.int_l2_contribution(tenant_id,generation_id,stream_code,order_id);
+ALTER TABLE crm.int_l2_contribution ADD CONSTRAINT fk_int_l2_movement_exact
+ FOREIGN KEY(tenant_id,movement_id,sku_id,warehouse_id)
+ REFERENCES crm.inv_stock_movement(tenant_id,id,item_id,location_id);
+ALTER TABLE crm.int_l3_period ALTER COLUMN refreshed_revision DROP NOT NULL;
+--rollback ALTER TABLE crm.int_l3_period ALTER COLUMN refreshed_revision SET NOT NULL;
+--rollback ALTER TABLE crm.int_l2_contribution DROP CONSTRAINT fk_int_l2_movement_exact;
+--rollback DROP INDEX crm.idx_int_l2_order_reconcile;
+--rollback DROP TABLE crm.int_l2_consumer;
+
+--changeset rm:0209-int-l2-provenance-and-rollup-fence dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_int_l2_consumer_immutable BEFORE UPDATE OR DELETE ON crm.int_l2_consumer
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l2_consumer_no_truncate BEFORE TRUNCATE ON crm.int_l2_consumer
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_l2_binding_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.consumer_code <> 'l2:'||NEW.generation_id::text THEN
+   RAISE EXCEPTION 'INT_L2_CONSUMER_IDENTITY' USING ERRCODE='23514';
+ END IF;
+ PERFORM crm.int_dim_lock_building(NEW.tenant_id,NEW.generation_id);
+ RETURN NEW;
+END; $$;
+-- Guard executes in a narrowly scoped privileged context, not through a public helper grant.
+ALTER FUNCTION crm.int_l2_binding_guard() SECURITY DEFINER;
+ALTER FUNCTION crm.int_l2_binding_guard() SET search_path=pg_catalog,pg_temp;
+REVOKE ALL ON FUNCTION crm.int_l2_binding_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l2_binding_guard BEFORE INSERT ON crm.int_l2_consumer
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l2_binding_guard();
+
+-- Source-derived contributions, separate from the authorized L0 aggregation oracle.
+-- Keep exact leaf revision, UNKNOWN dimensions, and original booked price.
+CREATE VIEW crm.int_l2_expected_source AS
+WITH eligible AS (
+ SELECT tenant_id,order_id,event_type,min(occurred_at) AS event_at
+ FROM crm.sales_order_status_event WHERE event_type IN ('PLACED','COMPLETED')
+ GROUP BY tenant_id,order_id,event_type HAVING count(*)=1
+)
+SELECT l.tenant_id,'BOOKED'::varchar AS stream_code,l.id AS source_id,l.id AS line_id,
+ NULL::uuid AS movement_id,l.order_id,e.event_at,
+ NULL::varchar AS region_code,d.group_id,d.item_kind,NULL::uuid AS warehouse_id,
+ l.catalog_item_id_snapshot AS sku_id,trim(l.currency)::varchar AS currency,
+ (l.quantity*l.unit_price_snapshot)::numeric AS amount,0::numeric AS qty_in,0::numeric AS qty_out
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='PLACED'
+UNION ALL
+SELECT m.tenant_id,'FULFILLED',m.id,l.id,m.id,l.order_id,e.event_at,
+ md.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,trim(l.currency),
+ (-m.delta_quantity*l.unit_price_snapshot)::numeric,0::numeric,0::numeric
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+JOIN crm.inv_stock_reservation r ON r.tenant_id=l.tenant_id AND r.order_line_id=l.id AND r.order_id=l.order_id
+JOIN crm.inv_stock_movement m ON m.tenant_id=r.tenant_id AND m.reservation_id=r.id
+ AND m.location_id=r.location_id AND m.item_id=r.item_id AND m.movement_kind='FULFILLMENT'
+LEFT JOIN crm.int_movement_dimension md ON md.tenant_id=m.tenant_id AND md.movement_id=m.id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='COMPLETED'
+UNION ALL
+SELECT m.tenant_id,'STOCK',m.id,NULL::uuid,m.id,NULL::uuid,m.recorded_at,
+ d.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,NULL::varchar,
+ 0::numeric,greatest(m.delta_quantity,0),greatest(-m.delta_quantity,0)
+FROM crm.inv_stock_movement m
+LEFT JOIN crm.int_movement_dimension d ON d.tenant_id=m.tenant_id AND d.movement_id=m.id;
+
+CREATE FUNCTION crm.int_l2_provenance_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l2_contribution' OR TG_OP NOT IN ('INSERT','UPDATE')
+ THEN RAISE EXCEPTION 'INT_L2_TRIGGER_SCOPE'; END IF;
+ IF NOT EXISTS(
+   SELECT 1 FROM crm.int_l2_expected_source e
+   JOIN crm.int_projection_generation g ON g.tenant_id=e.tenant_id AND g.generation_id=NEW.generation_id
+   JOIN crm.int_calendar_policy p ON p.tenant_id=g.tenant_id AND p.version=g.calendar_version
+   WHERE e.tenant_id=NEW.tenant_id AND e.stream_code=NEW.stream_code AND e.source_id=NEW.source_id
+     AND (e.line_id,e.movement_id,e.order_id,(e.event_at AT TIME ZONE p.zone_id)::date,
+          e.region_code,e.group_id,e.item_kind,e.warehouse_id,e.sku_id,e.currency,e.amount,e.qty_in,e.qty_out)
+     IS NOT DISTINCT FROM
+         (NEW.line_id,NEW.movement_id,NEW.order_id,NEW.local_day,
+          NEW.region_code,NEW.group_id,NEW.item_kind,NEW.warehouse_id,NEW.sku_id,NEW.currency,NEW.amount,NEW.qty_in,NEW.qty_out)
+ ) THEN RAISE EXCEPTION 'INT_L2_SOURCE_MISMATCH' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l2_provenance_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l2_provenance BEFORE INSERT OR UPDATE ON crm.int_l2_contribution
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l2_provenance_guard();
+
+-- Any cell mutation invalidates the period stamp. A future refresh must stamp last.
+CREATE FUNCTION crm.int_l3_invalidate_stamp() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid; c varchar; f date;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l3_cell' OR TG_OP NOT IN ('INSERT','UPDATE','DELETE')
+ THEN RAISE EXCEPTION 'INT_L3_TRIGGER_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id; c:=OLD.period_code; f:=OLD.from_day;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; c:=NEW.period_code; f:=NEW.from_day; END IF;
+ UPDATE crm.int_l3_period SET refreshed_revision=NULL
+ WHERE tenant_id=t AND generation_id=g AND period_code=c AND from_day=f AND refreshed_revision IS NOT NULL;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_invalidate_stamp() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_invalidate_stamp AFTER INSERT OR UPDATE OR DELETE ON crm.int_l3_cell
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_invalidate_stamp();
+--rollback DROP TRIGGER trg_int_l3_invalidate_stamp ON crm.int_l3_cell;
+--rollback DROP FUNCTION crm.int_l3_invalidate_stamp();
+--rollback DROP TRIGGER trg_int_l2_provenance ON crm.int_l2_contribution;
+--rollback DROP FUNCTION crm.int_l2_provenance_guard();
+--rollback DROP VIEW crm.int_l2_expected_source;
+--rollback DROP TRIGGER trg_int_l2_binding_guard ON crm.int_l2_consumer;
+--rollback DROP FUNCTION crm.int_l2_binding_guard();
+--rollback DROP TRIGGER trg_int_l2_consumer_no_truncate ON crm.int_l2_consumer;
+--rollback DROP TRIGGER trg_int_l2_consumer_immutable ON crm.int_l2_consumer;

@@ -76,6 +76,18 @@ final class L1ProjectionJourneyEvidence {
         finally{pool.shutdownNow();}
         assertThat(l1.advance(tenant,gen,500)).isEmpty();
         expected(l1,tenant,gen,from,until,"2","375","10");
+        var l2=new L2ProjectionService(jdbc,manager,delivery);
+        String l2Code=l2.open(tenant,gen);
+        assertThat(l2.open(tenant,gen)).isEqualTo(l2Code);
+        assertThatThrownBy(()->delivery.openConsumer(tenant,l2Code)).hasMessage("CANONICAL_RESERVED_CONSUMER");
+        assertThat(delivery.consumerCoverage(tenant,l2Code).pending()).isPositive();
+        assertThat(l2.advance(tenant,gen,500)).isNotEmpty();
+        assertThat(delivery.consumerCoverage(tenant,l2Code).caughtUp()).isTrue();
+        assertThat(jdbc.queryForObject("SELECT sum(amount) FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND stream_code='BOOKED'",BigDecimal.class,tenant,gen)).isEqualByComparingTo("375");
+        assertThat(jdbc.queryForObject("SELECT sum(qty_in) FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND stream_code='STOCK'",BigDecimal.class,tenant,gen)).isEqualByComparingTo("10");
+        long dimBefore=jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?",Long.class,tenant,gen);
+        assertThat(l2.advance(tenant,gen,500)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?",Long.class,tenant,gen)).isEqualTo(dimBefore);
         var beforeLate=l1.prove(tenant,gen);
         assertThat(beforeLate.parity()).isTrue();
         assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
@@ -108,6 +120,8 @@ final class L1ProjectionJourneyEvidence {
             AND EXISTS(SELECT 1 FROM crm.sales_order_status_event e WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id AND e.event_type='PLACED')
             """,BigDecimal.class,tenant,order);
         expected(l1,tenant,gen,from,until,"1",remaining.toPlainString(),"10");
+        assertThat(l2.advance(tenant,gen,500)).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT sum(amount) FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND stream_code='BOOKED'",BigDecimal.class,tenant,gen)).isEqualByComparingTo(remaining);
         var beforeMissing=l1.prove(tenant,gen);
         assertThat(beforeMissing.parity()).isTrue();
         assertThat(l1.fenceStatus(tenant,gen,beforeMissing.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
@@ -136,6 +150,9 @@ final class L1ProjectionJourneyEvidence {
         assertThat(l1.prove(tenant,gen).pendingFacts()).isEqualTo(1);
         assertThat(l1.advance(tenant,gen,500)).hasSize(1);
         expected(l1,tenant,gen,from,until,"1",remaining.toPlainString(),"20");
+        assertThat(l2.advance(tenant,gen,500)).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT sum(qty_in) FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND stream_code='STOCK'",BigDecimal.class,tenant,gen)).isEqualByComparingTo("20");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND stream_code='STOCK' AND source_id=? AND group_id IS NULL AND region_code IS NULL",Long.class,tenant,gen,movement)).isEqualTo(1L);
         assertThat(l1.prove(tenant,gen).parity()).isTrue();
         assertThat(l1.buckets(tenant,gen,from.plusDays(1))).anySatisfy(bucket->{
             assertThat(bucket.metric()).isEqualTo(MetricRegistry.Code.STOCK_IN_QTY);
