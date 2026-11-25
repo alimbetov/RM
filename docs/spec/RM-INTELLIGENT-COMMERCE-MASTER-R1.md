@@ -6,6 +6,8 @@
 **Статус:** MASTER SPEC / SCOPED MVP INT-01…03 + EVT-01 SELECTED / RADAR EXPANSION DEFERRED ANALYTICS FIRST / PRODUCTION HOLD.  
 **Решение владельца:** объединить в общее ТЗ четыре ранее выбранных направления MVP и полное ТЗ расширения Radar. Это не самостоятельное разрешение новых Radar-функций, ML, внешних рассылок или production. Действующее CR-MVP-INTELLIGENCE-EVT-01 сохраняется; дальнейшее включение Radar R0.2/R1+ в фактический MVP требует отдельного явного решения о возобновлении и scope.
 
+> **IE-00A (2026-11-25):** [Source & Contract Inventory](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md) и [Execution DAG R1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) уточняют общую последовательность §C: independent A1/A2 → A3 admission → parallel B1/B2/E1 → bounded Customer/Warehouse/EVT convergence. Source inventory complete for MVP candidates; IE-00 admission OPEN, no code/DDL until gate. Radar deferred, mandatory P0/regression preserved. DAG refines original milestones, does not expand scope.
+
 ## A. Назначение, границы и нормативность
 
 RM становится единой платформой интеллектуального управления торговым бизнесом: учёт фактов → достоверная аналитика → управленческие представления → контролируемые уведомления → объяснимые сигналы → прогнозы и рекомендации. Не строить независимую ERP или финансовую систему; не добавлять третий order/stock/price engine. Два продукта RM Business и RM QR Commerce, обязательные BUS-MVP-J1 и QR-MVP-J1 неизменны. BUS-MVP-I1 — дополнительный обязательный сценарий расширенного MVP согласно CR. Будущий BUS-RADAR-I2 — отдельный acceptance slice, не обязательный для текущего MVP без нового CR.
