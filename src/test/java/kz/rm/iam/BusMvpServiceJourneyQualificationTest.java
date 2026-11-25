@@ -257,5 +257,6 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
         CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
+        CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
     }
 }

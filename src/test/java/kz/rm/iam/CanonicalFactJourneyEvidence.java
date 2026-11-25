@@ -212,6 +212,33 @@ final class CanonicalFactJourneyEvidence {
             """,UUID.randomUUID(),targetOrder,tenant,sourceOrder)).isEqualTo(1);
     }
 
+    /** Invalid historical/synthetic snapshot must not be promoted to canonical truth. */
+    static void rejectInconsistentSnapshots(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                             CanonicalFactAppender appender,UUID tenant,UUID templateOrder){
+        var tx=new TransactionTemplate(manager);
+        for(String expected:List.of("CANONICAL_SNAPSHOT_EMPTY","CANONICAL_SNAPSHOT_AMOUNT_MISMATCH",
+                "CANONICAL_SNAPSHOT_CURRENCY_MISMATCH")){
+            UUID order=UUID.randomUUID(),event=UUID.randomUUID();
+            assertThatThrownBy(()->tx.executeWithoutResult(status->{
+                boolean wrongAmount=expected.endsWith("AMOUNT_MISMATCH");
+                boolean wrongCurrency=expected.endsWith("CURRENCY_MISMATCH");
+                assertThat(jdbc.update("""
+                    INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
+                    SELECT tenant_id,?,pending_email_identity_id,buyer_user_id,'PLACED',total_amount+?,
+                        CASE WHEN ? THEN CASE WHEN currency='USD' THEN 'KZT' ELSE 'USD' END ELSE currency END,
+                        created_at,fulfillment_mode
+                    FROM crm.sales_order WHERE tenant_id=? AND id=?
+                    """,order,wrongAmount?1:0,wrongCurrency,tenant,templateOrder)).isEqualTo(1);
+                if(!expected.endsWith("EMPTY"))copyLine(jdbc,tenant,templateOrder,order);
+                jdbc.update("INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at) VALUES (?,?,?,'PLACED',CURRENT_TIMESTAMP)",
+                    tenant,event,order);
+                appender.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event));
+            })).isInstanceOf(IllegalStateException.class).hasMessage(expected);
+            assertThat(count(jdbc,tenant,event)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=? AND id=?",Integer.class,tenant,order)).isZero();
+        }
+    }
+
     private record Race(UUID event,CanonicalFactKey.Kind kind,int calls){}
     private record Attempt(int backend,CanonicalFactAppender.Outcome outcome){}
     private static void race(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,

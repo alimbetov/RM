@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -21,18 +22,20 @@ public class CanonicalFactAppender {
     public CanonicalFactAppender(JdbcTemplate jdbc){this.jdbc=jdbc;}
     private record Fact(UUID subject,Instant occurred,Instant recorded,String payload,Long sourceVersion,String extended){}
     private record Stored(int version,String digest){}
+    private record BookedHeader(BigDecimal amount,String currency,boolean sealed){}
+    private record BookedLine(int quantity,BigDecimal price,String currency,String encoded){}
     @Transactional(propagation=Propagation.MANDATORY)
     public Outcome append(CanonicalFactKey key){
         Objects.requireNonNull(key);
-        Fact fact=load(key);
+        boolean pg=Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
+        Fact fact=load(key,pg);
         if(fact==null)throw new IllegalStateException("CANONICAL_SOURCE_NOT_FOUND");
         String legacy=sha256("RM-FACT-V1|"+key.tenantId()+"|"+key.owner().name()+"|"+key.kind().name()+"|"+
             key.sourceId()+"|"+fact.subject()+"|"+fact.occurred()+"|"+(fact.recorded()==null?"NULL":fact.recorded())+"|"+fact.payload());
         String digest=sha256(frame("RM-FACT-V2",legacy,fact.extended()));
         // PostgreSQL atomic insert-or-ignore avoids aborting the owner transaction on exact replay.
         // H2 is a test-only dialect; serialize via tenant row before check/insert.
-        boolean pg=Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
-            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
         if(!pg)jdbc.queryForObject("SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE",UUID.class,key.tenantId());
         Stored prior=existing(key);
         if(prior!=null)return verify(prior,legacy,digest);
@@ -56,7 +59,7 @@ public class CanonicalFactAppender {
                 (prior.version()==2 && digest.equals(prior.digest()))))throw new IllegalStateException("CANONICAL_FACT_CONFLICT");
         return Outcome.ALREADY_PRESENT;
     }
-    private Fact load(CanonicalFactKey k){
+    private Fact load(CanonicalFactKey k,boolean pg){
         if(k.owner()==CanonicalFactKey.Owner.SALES){
             String event=switch(k.kind()){
                 case ORDER_PLACED -> "PLACED";
@@ -71,19 +74,41 @@ public class CanonicalFactAppender {
                 """,rs->rs.next()?new Fact(rs.getObject(1,UUID.class),rs.getTimestamp(2).toInstant(),null,event,null,null):null,
                 k.tenantId(),k.sourceId(),event);
             if(status==null)return null;
-            String header=jdbc.query("""
-                SELECT total_amount,currency FROM crm.sales_order WHERE tenant_id=? AND id=?
-                """,rs->rs.next()?frame(rs.getBigDecimal(1),rs.getString(2).trim()):null,k.tenantId(),status.subject());
+            // PostgreSQL source admission explicitly requires the owner sealing invariant.
+            // H2 supports functional tests only and does not claim an equivalent database fence.
+            String headerSql="SELECT total_amount,currency,"+(pg?"booked_snapshot_sealed":"TRUE")
+                +" FROM crm.sales_order WHERE tenant_id=? AND id=?";
+            BookedHeader header=jdbc.query(headerSql,rs->rs.next()?
+                new BookedHeader(rs.getBigDecimal(1),rs.getString(2).trim(),rs.getBoolean(3)):null,
+                k.tenantId(),status.subject());
             if(header==null)throw new IllegalStateException("CANONICAL_ORDER_NOT_FOUND");
+            if(!header.sealed())throw new IllegalStateException("CANONICAL_SOURCE_NOT_SEALED");
             var lines=jdbc.query("""
                 SELECT id,offer_id,catalog_item_id_snapshot,quantity,unit_price_snapshot,currency,price_source,accepted_quote_id
                 FROM crm.sales_order_line WHERE tenant_id=? AND order_id=? ORDER BY id
-                """,(rs,n)->frame(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
-                    rs.getInt(4),rs.getBigDecimal(5),rs.getString(6).trim(),rs.getString(7),rs.getObject(8,UUID.class)),
-                k.tenantId(),status.subject());
-            // Sort encoded rows in Java to avoid dialect-specific UUID ordering.
-            lines.sort(String::compareTo);
-            return new Fact(status.subject(),status.occurred(),null,event,null,frame(header,frame(lines.toArray())));
+                """,(rs,n)->{
+                    int quantity=rs.getInt(4);
+                    BigDecimal price=rs.getBigDecimal(5);
+                    String currency=rs.getString(6).trim();
+                    return new BookedLine(quantity,price,currency,frame(rs.getObject(1,UUID.class),
+                        rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),quantity,price,currency,
+                        rs.getString(7),rs.getObject(8,UUID.class)));
+                },k.tenantId(),status.subject());
+            if(lines.isEmpty())throw new IllegalStateException("CANONICAL_SNAPSHOT_EMPTY");
+            BigDecimal booked=BigDecimal.ZERO;
+            for(BookedLine line:lines){
+                if(line.quantity()<=0 || line.price().signum()<0)
+                    throw new IllegalStateException("CANONICAL_SNAPSHOT_INVALID_LINE");
+                if(!header.currency().equals(line.currency()))
+                    throw new IllegalStateException("CANONICAL_SNAPSHOT_CURRENCY_MISMATCH");
+                booked=booked.add(line.price().multiply(BigDecimal.valueOf(line.quantity())));
+            }
+            if(booked.compareTo(header.amount())!=0)
+                throw new IllegalStateException("CANONICAL_SNAPSHOT_AMOUNT_MISMATCH");
+            // Preserve the existing V2 byte contract; sort framed rows independently of SQL UUID order.
+            Object[] encoded=lines.stream().map(BookedLine::encoded).sorted().toArray();
+            return new Fact(status.subject(),status.occurred(),null,event,null,
+                frame(frame(header.amount(),header.currency()),frame(encoded)));
         }
         return jdbc.query("""
             SELECT item_id,occurred_at,recorded_at,location_id,delta_quantity,balance_before,balance_after,
