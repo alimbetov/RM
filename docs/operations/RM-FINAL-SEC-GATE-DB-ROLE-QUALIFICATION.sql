@@ -129,6 +129,31 @@ GRANT SELECT,INSERT ON crm.int_canonical_fact,crm.int_fact_consumer,crm.int_fact
     crm.int_fact_backfill_run,crm.int_fact_backfill_receipt TO rm_int_worker_gate;
 GRANT UPDATE(consumer_code) ON crm.int_fact_consumer TO rm_int_worker_gate;
 GRANT UPDATE(run_id) ON crm.int_fact_backfill_run TO rm_int_worker_gate;
+
+-- Two tenants share the consumer code but not their generation.
+DO $$
+DECLARE t UUID := current_setting('rm.gate_tenant')::uuid;
+        other_t UUID; actor UUID; v BIGINT; gen UUID; tenant RECORD;
+BEGIN
+ SELECT id INTO STRICT other_t FROM public.iam_workspace WHERE id<>t ORDER BY id LIMIT 1;
+ SELECT id INTO STRICT actor FROM public.iam_user_account ORDER BY id LIMIT 1;
+ FOR tenant IN SELECT unnest(ARRAY[t,other_t]) AS id LOOP
+   SELECT coalesce(max(version),0)+1 INTO v FROM crm.int_calendar_policy WHERE tenant_id=tenant.id;
+   INSERT INTO crm.int_calendar_policy(tenant_id,version,zone_id,effective_from,created_by,created_at)
+   VALUES(tenant.id,v,'UTC',CURRENT_TIMESTAMP,actor,CURRENT_TIMESTAMP);
+   INSERT INTO crm.int_fact_consumer(tenant_id,consumer_code) VALUES(tenant.id,'projection-role-probe');
+   gen:=gen_random_uuid();
+   INSERT INTO crm.int_projection_generation(tenant_id,generation_id,projection_code,consumer_code,
+       method_version,calendar_version,from_day,until_day)
+   VALUES(tenant.id,gen,'L1','projection-role-probe',1,v,CURRENT_DATE,CURRENT_DATE+1);
+   IF tenant.id=t THEN PERFORM set_config('rm.gate_projection',gen::text,true);
+   ELSE PERFORM set_config('rm.gate_other_tenant',other_t::text,true);
+        PERFORM set_config('rm.gate_other_projection',gen::text,true);
+   END IF;
+ END LOOP;
+END
+$$;
+
 SET LOCAL ROLE rm_int_worker_gate;
 DO $$
 DECLARE
@@ -153,6 +178,33 @@ BEGIN
     PERFORM consumer_code FROM crm.int_fact_consumer WHERE tenant_id=t AND consumer_code='p2-role-probe' FOR UPDATE;
     INSERT INTO crm.int_fact_consumer_receipt(tenant_id,consumer_code,owner_module,source_kind,source_id,digest,schema_version,disposition)
     VALUES(t,'p2-role-probe','SALES','ORDER_PLACED',e,repeat('a',64),2,'APPLIED');
+
+    IF has_table_privilege(current_user,'crm.int_projection_generation','SELECT')
+       OR has_table_privilege(current_user,'crm.int_projection_generation','INSERT')
+       OR has_any_column_privilege(current_user,'crm.int_projection_generation','UPDATE')
+       OR has_table_privilege(current_user,'crm.int_projection_generation','DELETE')
+       OR has_table_privilege(current_user,'crm.int_projection_revision','INSERT')
+       OR has_any_column_privilege(current_user,'crm.int_projection_revision','UPDATE')
+       OR has_table_privilege(current_user,'crm.int_projection_revision','DELETE')
+       OR has_table_privilege(current_user,'crm.int_projection_revision','TRUNCATE')
+       OR has_function_privilege(current_user,'crm.int_bump_projection_receipt_revision()','EXECUTE')
+       OR has_function_privilege(current_user,'crm.int_bump_projection_revision()','EXECUTE')
+    THEN RAISE EXCEPTION 'INT_PROJECTION_WORKER_EXCESSIVE_PRIVILEGES'; END IF;
+    BEGIN
+      INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision)
+      VALUES(t,current_setting('rm.gate_projection')::uuid,99);
+      RAISE EXCEPTION 'INT_PROJECTION_DIRECT_REVISION_ACCEPTED';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN
+      INSERT INTO crm.int_fact_consumer_receipt(tenant_id,consumer_code,owner_module,source_kind,source_id,digest,schema_version,disposition) VALUES(t,'projection-role-probe','SALES','ORDER_PLACED',e,repeat('a',64),2,'APPLIED');
+      RAISE EXCEPTION 'INT_PROJECTION_ROLLBACK_PROBE';
+    EXCEPTION WHEN raise_exception THEN
+      IF SQLERRM<>'INT_PROJECTION_ROLLBACK_PROBE' THEN RAISE; END IF;
+    END;
+    INSERT INTO crm.int_fact_consumer_receipt(tenant_id,consumer_code,owner_module,source_kind,source_id,digest,schema_version,disposition) VALUES(t,'projection-role-probe','SALES','ORDER_PLACED',e,repeat('a',64),2,'APPLIED');
+    INSERT INTO crm.int_fact_consumer_receipt(tenant_id,consumer_code,owner_module,source_kind,source_id,digest,schema_version,disposition) VALUES(t,'projection-role-probe','SALES','ORDER_PLACED',e,repeat('a',64),2,'APPLIED') ON CONFLICT DO NOTHING;
+
     INSERT INTO crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind,range_start,range_end)
     VALUES(t,r,'SALES','ORDER_PLACED',CURRENT_TIMESTAMP-INTERVAL '1 day',CURRENT_TIMESTAMP+INTERVAL '1 day');
     PERFORM run_id FROM crm.int_fact_backfill_run WHERE tenant_id=t AND run_id=r FOR UPDATE;
@@ -173,4 +225,17 @@ BEGIN
 END
 $$;
 RESET ROLE;
+
+DO $$
+BEGIN
+ IF (SELECT revision FROM crm.int_projection_revision
+     WHERE tenant_id=current_setting('rm.gate_tenant')::uuid
+       AND generation_id=current_setting('rm.gate_projection')::uuid) IS DISTINCT FROM 1::bigint
+ THEN RAISE EXCEPTION 'INT_PROJECTION_RECEIPT_REVISION_COUNT'; END IF;
+ IF EXISTS(SELECT 1 FROM crm.int_projection_revision
+     WHERE tenant_id=current_setting('rm.gate_other_tenant')::uuid
+       AND generation_id=current_setting('rm.gate_other_projection')::uuid)
+ THEN RAISE EXCEPTION 'INT_PROJECTION_CROSS_TENANT_REVISION'; END IF;
+END
+$$;
 ROLLBACK;

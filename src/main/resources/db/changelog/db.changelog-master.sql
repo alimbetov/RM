@@ -6302,3 +6302,49 @@ REVOKE ALL ON FUNCTION crm.int_bump_source_revision() FROM PUBLIC;
 --rollback GRANT EXECUTE ON FUNCTION crm.int_bump_source_revision() TO PUBLIC;
 --rollback CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS $$ BEGIN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id); RETURN NEW; END; $$;
 --rollback ALTER FUNCTION crm.int_bump_source_revision() RESET search_path;
+
+
+--changeset rm:0205-int-projection-revision-trigger-privilege dbms:postgresql splitStatements:false
+-- Follow 0204b: internal revision maintenance without direct worker grants.
+CREATE OR REPLACE FUNCTION crm.int_bump_projection_receipt_revision() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE g UUID;
+BEGIN
+ IF TG_OP<>'INSERT' OR TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_fact_consumer_receipt' THEN
+   RAISE EXCEPTION 'INT_PROJECTION_REVISION_TRIGGER_SCOPE' USING ERRCODE='23514';
+ END IF;
+ SELECT generation_id INTO g FROM crm.int_projection_generation
+ WHERE tenant_id=NEW.tenant_id AND consumer_code=NEW.consumer_code;
+ IF FOUND THEN
+   INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(NEW.tenant_id,g,1)
+   ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_bump_projection_receipt_revision() FROM PUBLIC;
+CREATE OR REPLACE FUNCTION crm.int_bump_projection_revision() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t UUID; g UUID;
+BEGIN
+ IF TG_OP NOT IN ('INSERT','UPDATE','DELETE') OR TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN ('int_daily_bucket','int_l1_sales_contribution') THEN
+   RAISE EXCEPTION 'INT_PROJECTION_REVISION_TRIGGER_SCOPE' USING ERRCODE='23514';
+ END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE
+   t:=NEW.tenant_id; g:=NEW.generation_id;
+   IF TG_OP='UPDATE' THEN
+     IF OLD.tenant_id<>t OR OLD.generation_id<>g THEN
+       RAISE EXCEPTION 'INT_PROJECTION_REVISION_IDENTITY' USING ERRCODE='23514';
+     END IF;
+   END IF;
+ END IF;
+ INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(t,g,1)
+ ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_bump_projection_revision() FROM PUBLIC;
+--rollback ALTER FUNCTION crm.int_bump_projection_receipt_revision() SECURITY INVOKER;
+--rollback ALTER FUNCTION crm.int_bump_projection_receipt_revision() RESET search_path;
+--rollback GRANT EXECUTE ON FUNCTION crm.int_bump_projection_receipt_revision() TO PUBLIC;
+--rollback ALTER FUNCTION crm.int_bump_projection_revision() SECURITY INVOKER;
+--rollback ALTER FUNCTION crm.int_bump_projection_revision() RESET search_path;
+--rollback GRANT EXECUTE ON FUNCTION crm.int_bump_projection_revision() TO PUBLIC;
