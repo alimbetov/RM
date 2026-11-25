@@ -30,7 +30,8 @@ def verify(m):
         need(r["unit"] == ("CURRENCY_AMOUNT" if r["code"] == "BOOKED_ORDER_AMOUNT" else "COUNT" if sales else "SKU_QUANTITY"), "metric unit: " + r["code"])
     d = m["decisions"]
     need(len(d) == 15 and {r["id"] for r in d} == {f"DEC-R2-{i:02}" for i in range(1,16)}, "decision inventory")
-    need(all(r["state"] in {"BASELINE_SELECTED","PROPOSED","OPEN","DEFERRED"} and r["contract"].strip() for r in d), "decision state")
+    need(all(r["state"] in {"OWNER_APPROVED"} and r["contract"].strip() for r in d), "decision state")
+    need(m.get("ownerApproval", {}).get("runtimeAdmission") == "HOLD", "approval is not runtime admission")
     c = m["calendar"]
     need(c["periods"] == ["D","W","DEC","M","Q","H","Y"] and c["zone"] == "EXPLICIT_IANA"
          and c["versioned"] is True and c["defaultZoneAllowed"] is False and c["interval"] == "HALF_OPEN", "calendar contract")

@@ -7,77 +7,77 @@
   "decisions": [
     {
       "id": "DEC-R2-01",
-      "state": "BASELINE_SELECTED",
+      "state": "OWNER_APPROVED",
       "contract": "Sales status occurred_at; stock movement recorded_at; live position gauge"
     },
     {
       "id": "DEC-R2-02",
-      "state": "BASELINE_SELECTED",
+      "state": "OWNER_APPROVED",
       "contract": "Explicit versioned tenant IANA zone; no implicit default; half-open intervals"
     },
     {
       "id": "DEC-R2-03",
-      "state": "BASELINE_SELECTED",
-      "contract": "Eight D02 metrics only; no paid revenue, margin, monetary refunds"
+      "state": "OWNER_APPROVED",
+      "contract": "Eight D02 metrics; typed Native SQL registry; no paid revenue, margin or monetary refunds"
     },
     {
       "id": "DEC-R2-04",
-      "state": "BASELINE_SELECTED",
-      "contract": "Current confirmed buyer link and independent CRM_READ plus SALES_ORDER_READ"
+      "state": "OWNER_APPROVED",
+      "contract": "Current confirmed buyer link; CRM_READ and SALES_ORDER_READ independently"
     },
     {
       "id": "DEC-R2-05",
-      "state": "BASELINE_SELECTED",
+      "state": "OWNER_APPROVED",
       "contract": "INVENTORY_STOCK_READ plus active warehouse assignment; manager exception deferred"
     },
     {
       "id": "DEC-R2-06",
-      "state": "PROPOSED",
-      "contract": "ABC tenant and currency booked line snapshots; warehouse attribution blocked"
+      "state": "OWNER_APPROVED",
+      "contract": "ABC booked line snapshots per tenant/currency; warehouse attribution blocked"
     },
     {
       "id": "DEC-R2-07",
-      "state": "DEFERRED",
-      "contract": "ABC numeric thresholds require W3 decision"
+      "state": "OWNER_APPROVED",
+      "contract": "ABC 80/95/100 using cumulativeBefore and stable key tie break"
     },
     {
       "id": "DEC-R2-08",
-      "state": "DEFERRED",
-      "contract": "XYZ horizon and thresholds require W3 decision"
+      "state": "OWNER_APPROVED",
+      "contract": "XYZ population CV on 12 completed weekly fulfilled quantity buckets; X <=10%, Y <=25%, Z >25%; unknown for incomplete/zero mean"
     },
     {
       "id": "DEC-R2-09",
-      "state": "PROPOSED",
-      "contract": "PLACED first; in-app/mock only; immutable rule revision binding"
+      "state": "OWNER_APPROVED",
+      "contract": "PLACED first; typed DSL, PostgreSQL outbox, in-app/mock, immutable rule revision"
     },
     {
       "id": "DEC-R2-10",
-      "state": "DEFERRED",
-      "contract": "Deadline schedule semantics at E3"
+      "state": "OWNER_APPROVED",
+      "contract": "Versioned deadline schedule, invalidation and expired-window no-send"
     },
     {
       "id": "DEC-R2-11",
-      "state": "PROPOSED",
-      "contract": "int_ and evt_ module prefixes; no grants or worker identity until reviewed"
+      "state": "OWNER_APPROVED",
+      "contract": "INT/EVT modular monolith, int_/evt_ prefixes; explicit grants and worker identity review"
     },
     {
       "id": "DEC-R2-12",
-      "state": "PROPOSED",
-      "contract": "Bounded queries and workers; workload measurement before budgets"
+      "state": "OWNER_APPROVED",
+      "contract": "L0 native SQL then L1 daily and L2 rollups; measured workloads before budgets"
     },
     {
       "id": "DEC-R2-13",
-      "state": "OPEN",
-      "contract": "Retention and replay horizon not approved"
+      "state": "OWNER_APPROVED",
+      "contract": "Separate retention; daily 36 months, monthly 60 months, notification/log 90 days and retired generation 7 days candidate values; dedup >= replay horizon; automatic cleanup deferred"
     },
     {
       "id": "DEC-R2-14",
-      "state": "DEFERRED",
-      "contract": "Radar requires explicit resumption"
+      "state": "OWNER_APPROVED",
+      "contract": "Radar SignalProvider contract; implementation deferred until separate admission"
     },
     {
       "id": "DEC-R2-15",
-      "state": "BASELINE_SELECTED",
+      "state": "OWNER_APPROVED",
       "contract": "base_dev only; no design branch merge; preserve main"
     }
   ],
@@ -198,5 +198,10 @@
     "customerLink": "CURRENT_CONFIRMED",
     "workerMayMintActor": false
   },
-  "productionAdmission": "HOLD"
+  "productionAdmission": "HOLD",
+  "ownerApproval": {
+    "date": "2026-11-25",
+    "scope": "All 15 decisions explicitly approved by user",
+    "runtimeAdmission": "HOLD"
+  }
 }
