@@ -43,6 +43,7 @@ class IntelligenceSourceSchemaQualificationTest {
         new Source("crm","int_dim_revision",List.of("tenant_id","generation_id"),List.of("dirty_revision")),
         new Source("crm","int_l2_contribution",List.of("tenant_id","generation_id","stream_code","source_id"),List.of("line_id","movement_id","order_id","local_day","region_code","group_id","item_kind","warehouse_id","sku_id","currency","amount","qty_in","qty_out")),
         new Source("crm","int_l3_period",List.of("tenant_id","generation_id","period_code","from_day"),List.of("until_day","refreshed_revision")),
+        new Source("crm","int_l3_cell_order",List.of("tenant_id","generation_id","period_code","from_day","cell_id","order_id"),List.of()),
         new Source("crm","int_l3_cell",List.of("tenant_id","generation_id","period_code","from_day","cell_id"),List.of("stream_code","region_code","group_id","item_kind","warehouse_id","sku_id","currency","amount","qty_in","qty_out","distinct_orders")),
         new Source("public","iam_warehouse_staff_scope",List.of("tenant_id","warehouse_id","actor_user_id"),List.of("state","row_version"))
     );

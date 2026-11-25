@@ -6621,3 +6621,71 @@ CREATE TRIGGER trg_int_l3_invalidate_stamp AFTER INSERT OR UPDATE OR DELETE ON c
 --rollback DROP FUNCTION crm.int_l2_binding_guard();
 --rollback DROP TRIGGER trg_int_l2_consumer_no_truncate ON crm.int_l2_consumer;
 --rollback DROP TRIGGER trg_int_l2_consumer_immutable ON crm.int_l2_consumer;
+
+
+--changeset rm:0210-int-l3-exact-order-membership
+CREATE TABLE crm.int_l3_cell_order (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL, period_code VARCHAR(3) NOT NULL,
+ from_day DATE NOT NULL, cell_id UUID NOT NULL, order_id UUID NOT NULL,
+ PRIMARY KEY(tenant_id,generation_id,period_code,from_day,cell_id,order_id),
+ FOREIGN KEY(tenant_id,generation_id,period_code,from_day,cell_id)
+ REFERENCES crm.int_l3_cell(tenant_id,generation_id,period_code,from_day,cell_id),
+ FOREIGN KEY(tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id)
+);
+CREATE INDEX idx_int_l3_order_union ON crm.int_l3_cell_order(tenant_id,generation_id,period_code,from_day,order_id);
+--rollback DROP TABLE crm.int_l3_cell_order;
+
+--changeset rm:0211-int-l3-membership-guard dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_l3_membership_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid; c varchar; f date;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l3_cell_order' OR TG_OP NOT IN ('INSERT','DELETE')
+ THEN RAISE EXCEPTION 'INT_L3_MEMBERSHIP_SCOPE' USING ERRCODE='23514'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id; c:=OLD.period_code; f:=OLD.from_day;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; c:=NEW.period_code; f:=NEW.from_day; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ PERFORM 1 FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_REVISION_MISSING'; END IF;
+ IF TG_OP='INSERT' AND NOT EXISTS (
+   SELECT 1 FROM crm.int_l3_cell x
+   JOIN crm.int_l3_period p USING(tenant_id,generation_id,period_code,from_day)
+   JOIN crm.int_l2_contribution l ON l.tenant_id=x.tenant_id AND l.generation_id=x.generation_id
+     AND l.local_day>=p.from_day AND l.local_day<p.until_day
+     AND (l.stream_code,l.region_code,l.group_id,l.item_kind,l.warehouse_id,l.sku_id,l.currency)
+       IS NOT DISTINCT FROM (x.stream_code,x.region_code,x.group_id,x.item_kind,x.warehouse_id,x.sku_id,x.currency)
+   WHERE x.tenant_id=t AND x.generation_id=g AND x.period_code=c AND x.from_day=f
+     AND x.cell_id=NEW.cell_id AND l.order_id=NEW.order_id AND x.stream_code IN ('BOOKED','FULFILLED')
+ ) THEN RAISE EXCEPTION 'INT_L3_MEMBERSHIP_SOURCE' USING ERRCODE='23514'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_membership_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_membership_guard BEFORE INSERT OR DELETE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_membership_guard();
+CREATE TRIGGER trg_int_l3_membership_immutable BEFORE UPDATE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l3_membership_no_truncate BEFORE TRUNCATE ON crm.int_l3_cell_order
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_l3_membership_invalidate() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid; c varchar; f date;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l3_cell_order' OR TG_OP NOT IN ('INSERT','DELETE')
+ THEN RAISE EXCEPTION 'INT_L3_MEMBERSHIP_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id; c:=OLD.period_code; f:=OLD.from_day;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; c:=NEW.period_code; f:=NEW.from_day; END IF;
+ UPDATE crm.int_l3_period SET refreshed_revision=NULL
+ WHERE tenant_id=t AND generation_id=g AND period_code=c AND from_day=f AND refreshed_revision IS NOT NULL;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_membership_invalidate() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_membership_invalidate AFTER INSERT OR DELETE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_membership_invalidate();
+--rollback DROP TRIGGER trg_int_l3_membership_invalidate ON crm.int_l3_cell_order;
+--rollback DROP FUNCTION crm.int_l3_membership_invalidate();
+--rollback DROP TRIGGER trg_int_l3_membership_no_truncate ON crm.int_l3_cell_order;
+--rollback DROP TRIGGER trg_int_l3_membership_immutable ON crm.int_l3_cell_order;
+--rollback DROP TRIGGER trg_int_l3_membership_guard ON crm.int_l3_cell_order;
+--rollback DROP FUNCTION crm.int_l3_membership_guard();

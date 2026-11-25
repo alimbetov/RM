@@ -88,6 +88,29 @@ final class L1ProjectionJourneyEvidence {
         long dimBefore=jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?",Long.class,tenant,gen);
         assertThat(l2.advance(tenant,gen,500)).isEmpty();
         assertThat(jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?",Long.class,tenant,gen)).isEqualTo(dimBefore);
+        var l3=new L3RollupService(jdbc,manager);
+        LocalDate bookedDay=orderTime.atZone(ZoneOffset.UTC).toLocalDate();
+        var roll=l3.refresh(tenant,gen,PeriodResolver.Code.D,bookedDay);
+        assertThat(roll.cells()).isPositive();
+        assertThat(roll.memberships()).isPositive();
+        assertThat(roll.revision()).isEqualTo(dimBefore);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(DISTINCT o.order_id) FROM crm.int_l3_cell_order o
+            JOIN crm.int_l3_cell x USING(tenant_id,generation_id,period_code,from_day,cell_id)
+            WHERE o.tenant_id=? AND o.generation_id=? AND o.period_code='D' AND o.from_day=? AND x.stream_code='BOOKED'
+            """,Long.class,tenant,gen,bookedDay)).isEqualTo(jdbc.queryForObject("""
+            SELECT count(DISTINCT order_id) FROM crm.int_l2_contribution
+            WHERE tenant_id=? AND generation_id=? AND local_day=? AND stream_code='BOOKED'
+            """,Long.class,tenant,gen,bookedDay));
+        assertThatThrownBy(()->l3.refresh(tenant,gen,PeriodResolver.Code.Y,bookedDay)).hasMessage("L3_PARTIAL_PERIOD");
+        assertThatThrownBy(()->l3.refresh(otherTenant,gen,PeriodResolver.Code.D,bookedDay)).hasMessage("L3_GENERATION_NOT_BUILDING");
+        tx.executeWithoutResult(status->{
+            assertThat(jdbc.update("DELETE FROM crm.int_l3_cell_order WHERE tenant_id=? AND generation_id=? AND period_code='D' AND from_day=?",tenant,gen,bookedDay)).isPositive();
+            assertThat(jdbc.queryForObject("SELECT refreshed_revision FROM crm.int_l3_period WHERE tenant_id=? AND generation_id=? AND period_code='D' AND from_day=?",Long.class,tenant,gen,bookedDay)).isNull();
+            status.setRollbackOnly();
+        });
+        assertThat(jdbc.queryForObject("SELECT refreshed_revision FROM crm.int_l3_period WHERE tenant_id=? AND generation_id=? AND period_code='D' AND from_day=?",Long.class,tenant,gen,bookedDay)).isEqualTo(dimBefore);
+        assertThat(l3.refresh(tenant,gen,PeriodResolver.Code.D,bookedDay)).isEqualTo(roll);
         var beforeLate=l1.prove(tenant,gen);
         assertThat(beforeLate.parity()).isTrue();
         assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
