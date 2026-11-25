@@ -1,4 +1,8 @@
 # RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1 — Parallel implementation & integration plan
+## R1.2 — operative amendment
+
+Owner-approved RM-A3-DEV, 2026-11-25. This supersedes the historical pause and gate descriptions below. PR #9 merged; A2 approved 15/15; source schema run 45591134734 and producer run 45588358130 succeeded. A3 (A3-DEV) admits implementation in base_dev, depending on A0/A2/Q1; A1 remaining runtime evidence is required at A3-QUAL, which depends on A1/B1/B2/E1 and gates G1. All functional exit criteria, G2–G4, C3 and Radar deferral remain intact. No production release. JSON R1.2 is operative. Historical snapshot follows.
+
 ## R1.1 · 2026-11-25 · reviewed HEAD e1bced6cf1538bdb9fb7ec22a354255456964e7a
 
 Original inventory snapshot cf09e317f04c79b88c0f64276bc4985ccfa4b3aa retained.
