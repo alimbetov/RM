@@ -482,6 +482,11 @@ def verify():
             return "POSTGRESQL"
         return "UNCLASSIFIED"
 
+    # A skip is not approved by a generic reason or an arbitrary alternate pass.
+    # Exact TASK H2 omissions are explicitly mandated by the existing gate.
+    task_pg_only_prefixes = ("t04", "t05", "t08", "t14", "t15", "t21", "t27",
+                             "t28", "t35", "t36", "t38", "t42", "t46", "t47",
+                             "t48", "t51", "t52", "t53")
     skip_inventory = []
     for artifact_name, cls, method, reason in sorted(full_skips):
         environment = evidence_environment(artifact_name)
@@ -490,11 +495,17 @@ def verify():
                             if evidence_environment(a) == environment and environment != "UNCLASSIFIED"]
         status = ("PASS_ELSEWHERE_SAME_ENV" if same_environment else
                   "PASS_ELSEWHERE_OTHER_ENV" if alternatives else "NO_ALTERNATIVE_PASS")
+        policy = "REVIEW_REQUIRED"
+        if (artifact_name.startswith("rm-task-h2-") and
+                cls.rsplit(".", 1)[-1] == "TaskServiceQualificationTest" and
+                method.startswith(task_pg_only_prefixes) and
+                "rm-task-postgresql-" + sha in alternatives):
+            policy = "EXPECTED_SKIP_CONFIRMED"
         skip_inventory.append({"artifact": artifact_name, "class": cls, "method": method,
                                "reason": reason, "environment": environment,
                                "status": status, "alternativePasses": alternatives,
                                "sameEnvironmentPasses": same_environment,
-                               "policyVerdict": "REVIEW_REQUIRED"})
+                               "policyVerdict": policy})
     manifest["skipAudit"] = {
         "schema": "RM-QA-02B/v1", "sha": sha,
         "scope": "verified mandatory artifacts only; alternative execution is not skip approval",
@@ -503,6 +514,8 @@ def verify():
         "inventoryComplete": len(skip_inventory) == total["skipped"],
         "counts": {status: sum(row["status"] == status for row in skip_inventory)
                    for status in ("PASS_ELSEWHERE_SAME_ENV", "PASS_ELSEWHERE_OTHER_ENV", "NO_ALTERNATIVE_PASS")},
+        "policyCounts": {status: sum(row["policyVerdict"] == status for row in skip_inventory)
+                         for status in ("EXPECTED_SKIP_CONFIRMED", "REVIEW_REQUIRED")},
         "executions": skip_inventory,
     }
     target = ret04_artifacts.get("qr07-r0-r1-" + sha)
