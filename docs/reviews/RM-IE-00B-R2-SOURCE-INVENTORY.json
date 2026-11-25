@@ -44,9 +44,10 @@
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
       "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "baselineBlob": "89e171cbb13da84a801c5cdb9797c306b092b23b",
+      "baselineBlob": "dde80b04e4ca8c5b5bb328a088910b96246cb5de",
       "status": "DRIFT",
-      "priorBaselineBlob": "fb00bde7a0d48359c483b21a4ac921b982eba8fb"
+      "priorBaselineBlob": "fb00bde7a0d48359c483b21a4ac921b982eba8fb",
+      "previousBaselineBlob": "89e171cbb13da84a801c5cdb9797c306b092b23b"
     },
     {
       "path": "src/main/java/kz/rm/crm/ContractExpiryPolicy.java",

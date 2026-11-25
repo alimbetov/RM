@@ -5227,3 +5227,104 @@ CREATE TRIGGER trg_inv_movement_no_truncate BEFORE TRUNCATE ON crm.inv_stock_mov
  FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
 --rollback DROP TRIGGER trg_inv_movement_no_truncate ON crm.inv_stock_movement;
 --rollback DROP TRIGGER trg_sales_line_no_truncate ON crm.sales_order_line;
+
+
+--changeset rm:0183-int-durable-discovery
+-- Internal consumer identity is a target/epoch, not a global cursor.
+CREATE TABLE crm.int_fact_consumer (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ consumer_code VARCHAR(96) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,consumer_code),
+ CHECK(length(trim(consumer_code))>0)
+);
+CREATE TABLE crm.int_fact_consumer_receipt (
+ tenant_id UUID NOT NULL,
+ consumer_code VARCHAR(96) NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,
+ digest VARCHAR(64) NOT NULL CHECK(length(digest)=64),
+ schema_version INTEGER NOT NULL CHECK(schema_version IN (1,2)),
+ disposition VARCHAR(24) NOT NULL,
+ error_code VARCHAR(64),
+ processed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,consumer_code,owner_module,source_kind,source_id),
+ FOREIGN KEY(tenant_id,consumer_code) REFERENCES crm.int_fact_consumer(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,owner_module,source_kind,source_id)
+   REFERENCES crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id),
+ CHECK((disposition IN ('APPLIED','OUTSIDE_COVERAGE') AND error_code IS NULL)
+    OR (disposition='REJECTED' AND error_code IS NOT NULL))
+);
+--rollback DROP TABLE crm.int_fact_consumer_receipt;
+--rollback DROP TABLE crm.int_fact_consumer;
+
+--changeset rm:0184-int-bounded-backfill
+CREATE TABLE crm.int_fact_backfill_run (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ run_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ range_start TIMESTAMP WITH TIME ZONE NOT NULL,
+ range_end TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,run_id),
+ UNIQUE(tenant_id,run_id,owner_module,source_kind),
+ CHECK(range_start<range_end),
+ CHECK((owner_module='SALES' AND source_kind IN ('ORDER_PLACED','ORDER_CONFIRMED','ORDER_COMPLETED','ORDER_CANCELLED'))
+    OR (owner_module='INVENTORY' AND source_kind='STOCK_MOVEMENT'))
+);
+CREATE TABLE crm.int_fact_backfill_receipt (
+ tenant_id UUID NOT NULL,
+ run_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,
+ disposition VARCHAR(16) NOT NULL,
+ digest VARCHAR(64),
+ schema_version INTEGER,
+ error_code VARCHAR(64),
+ processed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,run_id,owner_module,source_kind,source_id),
+ FOREIGN KEY(tenant_id,run_id,owner_module,source_kind)
+   REFERENCES crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind),
+ CHECK((disposition IN ('INSERTED','VERIFIED') AND digest IS NOT NULL AND length(digest)=64
+        AND schema_version IS NOT NULL AND schema_version IN (1,2) AND error_code IS NULL)
+    OR (disposition IN ('CONFLICT','INVALID') AND digest IS NULL AND schema_version IS NULL AND error_code IS NOT NULL))
+);
+--rollback DROP TABLE crm.int_fact_backfill_receipt;
+--rollback DROP TABLE crm.int_fact_backfill_run;
+
+--changeset rm:0185-int-backfill-range-indexes
+CREATE INDEX idx_int_backfill_sales_range ON crm.sales_order_status_event(tenant_id,event_type,occurred_at,id);
+CREATE INDEX idx_int_backfill_inventory_range ON crm.inv_stock_movement(tenant_id,occurred_at,id);
+CREATE INDEX idx_int_fact_range ON crm.int_canonical_fact(tenant_id,owner_module,source_kind,occurred_at,source_id);
+--rollback DROP INDEX crm.idx_int_fact_range;
+--rollback DROP INDEX crm.idx_int_backfill_inventory_range;
+--rollback DROP INDEX crm.idx_int_backfill_sales_range;
+
+--changeset rm:0186-int-discovery-evidence-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_int_consumer_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_consumer
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_consumer_no_truncate BEFORE TRUNCATE ON crm.int_fact_consumer
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_consumer_receipt_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_consumer_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_consumer_receipt_no_truncate BEFORE TRUNCATE ON crm.int_fact_consumer_receipt
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_run_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_backfill_run
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_run_no_truncate BEFORE TRUNCATE ON crm.int_fact_backfill_run
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_receipt_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_backfill_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_receipt_no_truncate BEFORE TRUNCATE ON crm.int_fact_backfill_receipt
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_backfill_receipt_no_truncate ON crm.int_fact_backfill_receipt;
+--rollback DROP TRIGGER trg_int_backfill_receipt_immutable ON crm.int_fact_backfill_receipt;
+--rollback DROP TRIGGER trg_int_backfill_run_no_truncate ON crm.int_fact_backfill_run;
+--rollback DROP TRIGGER trg_int_backfill_run_immutable ON crm.int_fact_backfill_run;
+--rollback DROP TRIGGER trg_int_consumer_receipt_no_truncate ON crm.int_fact_consumer_receipt;
+--rollback DROP TRIGGER trg_int_consumer_receipt_immutable ON crm.int_fact_consumer_receipt;
+--rollback DROP TRIGGER trg_int_consumer_no_truncate ON crm.int_fact_consumer;
+--rollback DROP TRIGGER trg_int_consumer_immutable ON crm.int_fact_consumer;

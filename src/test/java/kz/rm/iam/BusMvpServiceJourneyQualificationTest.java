@@ -64,6 +64,7 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired AuthenticatedSalesQueries orderReads;
     @Autowired JdbcTemplate jdbc;
     @Autowired kz.rm.intelligence.CanonicalFactAppender canonicalFacts;
+    @Autowired kz.rm.intelligence.CanonicalFactDeliveryService canonicalDelivery;
     @Autowired org.springframework.transaction.PlatformTransactionManager canonicalTransactions;
     @Autowired kz.rm.intelligence.MetricQueryService intelligence;
     @Autowired kz.rm.intelligence.CalendarPolicyService calendar;
@@ -95,7 +96,7 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
-    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT }
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY }
 
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
         runBusJourney(CanonicalCase.FULL);
@@ -119,6 +120,10 @@ class BusMvpServiceJourneyQualificationTest {
 
     @Test void canonicalTenantSourceCollisionPg() {
         runNamedPostgresCase(CanonicalCase.TENANT);
+    }
+
+    @Test void p2CanonicalDurableDiscoveryReplayAndBackfillPg() {
+        runNamedPostgresCase(CanonicalCase.DELIVERY);
     }
 
     private void runNamedPostgresCase(CanonicalCase scenario){
@@ -301,6 +306,11 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(onboarding.createFirstTenant(otherOwner,otherTenant,
                 "RM Canonical Isolation LLP","RM Canonical Isolation","KZ").tenantId()).isEqualTo(otherTenant);
         currencies.initialize(otherOwner,otherTenant);
+        if(scenario==CanonicalCase.DELIVERY){
+            CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
+                tenant,otherTenant,orderId);
+            return;
+        }
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
         if(scenario==CanonicalCase.TENANT){
             CanonicalFactJourneyEvidence.tenantCollision(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);

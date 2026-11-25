@@ -99,4 +99,58 @@ BEGIN
 END
 $$;
 RESET ROLE;
+
+-- P2: separate synthetic delivery identity. Locking a row requires a column
+-- UPDATE grant in PostgreSQL; immutable triggers still forbid actual changes.
+CREATE ROLE rm_int_worker_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+GRANT USAGE ON SCHEMA crm TO rm_int_worker_gate;
+GRANT SELECT ON crm.sales_order,crm.sales_order_line,crm.sales_order_status_event,crm.inv_stock_movement TO rm_int_worker_gate;
+GRANT SELECT,INSERT ON crm.int_canonical_fact,crm.int_fact_consumer,crm.int_fact_consumer_receipt,
+    crm.int_fact_backfill_run,crm.int_fact_backfill_receipt TO rm_int_worker_gate;
+GRANT UPDATE(consumer_code) ON crm.int_fact_consumer TO rm_int_worker_gate;
+GRANT UPDATE(run_id) ON crm.int_fact_backfill_run TO rm_int_worker_gate;
+SET LOCAL ROLE rm_int_worker_gate;
+DO $$
+DECLARE
+    t UUID := current_setting('rm.gate_tenant')::uuid;
+    e UUID := current_setting('rm.gate_event')::uuid;
+    r UUID := gen_random_uuid();
+    tab TEXT;
+BEGIN
+    FOREACH tab IN ARRAY ARRAY['crm.sales_order_status_event','crm.sales_order_line','crm.inv_stock_movement']
+    LOOP
+        IF has_table_privilege(current_user,tab,'INSERT') OR has_any_column_privilege(current_user,tab,'UPDATE')
+           OR has_table_privilege(current_user,tab,'DELETE') OR has_table_privilege(current_user,tab,'TRUNCATE')
+        THEN RAISE EXCEPTION 'P2_WORKER_OWNER_WRITE_GRANTED'; END IF;
+    END LOOP;
+    FOREACH tab IN ARRAY ARRAY['crm.int_canonical_fact','crm.int_fact_consumer_receipt','crm.int_fact_backfill_receipt']
+    LOOP
+        IF has_any_column_privilege(current_user,tab,'UPDATE') OR has_table_privilege(current_user,tab,'DELETE')
+           OR has_table_privilege(current_user,tab,'TRUNCATE')
+        THEN RAISE EXCEPTION 'P2_WORKER_EVIDENCE_MUTATION_GRANTED'; END IF;
+    END LOOP;
+    INSERT INTO crm.int_fact_consumer(tenant_id,consumer_code) VALUES(t,'p2-role-probe');
+    PERFORM consumer_code FROM crm.int_fact_consumer WHERE tenant_id=t AND consumer_code='p2-role-probe' FOR UPDATE;
+    INSERT INTO crm.int_fact_consumer_receipt(tenant_id,consumer_code,owner_module,source_kind,source_id,digest,schema_version,disposition)
+    VALUES(t,'p2-role-probe','SALES','ORDER_PLACED',e,repeat('a',64),2,'APPLIED');
+    INSERT INTO crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind,range_start,range_end)
+    VALUES(t,r,'SALES','ORDER_PLACED',CURRENT_TIMESTAMP-INTERVAL '1 day',CURRENT_TIMESTAMP+INTERVAL '1 day');
+    PERFORM run_id FROM crm.int_fact_backfill_run WHERE tenant_id=t AND run_id=r FOR UPDATE;
+    INSERT INTO crm.int_fact_backfill_receipt(tenant_id,run_id,owner_module,source_kind,source_id,disposition,digest,schema_version)
+    VALUES(t,r,'SALES','ORDER_PLACED',e,'VERIFIED',repeat('a',64),2);
+    BEGIN
+        UPDATE crm.int_fact_consumer SET consumer_code=consumer_code WHERE tenant_id=t AND consumer_code='p2-role-probe';
+        RAISE EXCEPTION 'P2_CONSUMER_MUTATION_ACCEPTED';
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM <> 'CANONICAL_FACT_IMMUTABLE' THEN RAISE; END IF;
+    END;
+    BEGIN
+        UPDATE crm.int_fact_backfill_run SET run_id=run_id WHERE tenant_id=t AND run_id=r;
+        RAISE EXCEPTION 'P2_BACKFILL_MUTATION_ACCEPTED';
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM <> 'CANONICAL_FACT_IMMUTABLE' THEN RAISE; END IF;
+    END;
+END
+$$;
+RESET ROLE;
 ROLLBACK;

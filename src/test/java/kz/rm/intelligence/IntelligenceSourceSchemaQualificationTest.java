@@ -21,6 +21,10 @@ class IntelligenceSourceSchemaQualificationTest {
         new Source("crm","inv_stock_balance",List.of("tenant_id","location_id","item_id"),List.of("on_hand","reserved")),
         new Source("crm","inv_stock_movement",List.of("tenant_id","id"),List.of("location_id","item_id","delta_quantity","occurred_at","recorded_at")),
         new Source("crm","customer_buyer_link",List.of("tenant_id","id"),List.of("customer_id","buyer_user_id","status","confirmed_at")),
+        new Source("crm","int_fact_consumer",List.of("tenant_id","consumer_code"),List.of("created_at")),
+        new Source("crm","int_fact_consumer_receipt",List.of("tenant_id","consumer_code","owner_module","source_kind","source_id"),List.of("digest","schema_version","disposition","error_code","processed_at")),
+        new Source("crm","int_fact_backfill_run",List.of("tenant_id","run_id"),List.of("owner_module","source_kind","range_start","range_end","created_at")),
+        new Source("crm","int_fact_backfill_receipt",List.of("tenant_id","run_id","owner_module","source_kind","source_id"),List.of("digest","schema_version","disposition","error_code","processed_at")),
         new Source("public","iam_warehouse_staff_scope",List.of("tenant_id","warehouse_id","actor_user_id"),List.of("state","row_version"))
     );
 
