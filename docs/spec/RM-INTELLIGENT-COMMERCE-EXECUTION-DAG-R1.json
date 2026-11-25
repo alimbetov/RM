@@ -9,7 +9,7 @@
       "title": "Core mandatory CI and verified P0 corrections",
       "lane": "core",
       "depends_on": [],
-      "exit": "fix mandatory defects including C2/C3, retain 200ms/10%, full required regression",
+      "exit": "fix mandatory defects including C2; C3 manual-only temporary core-merge exception, retain 200ms/10% for Radar/production",
       "status": "ACTIVE_STABILIZATION"
     },
     {
@@ -19,7 +19,7 @@
       "depends_on": [
         "P0"
       ],
-      "exit": "all applicable mandatory CI/PG/security/migration/manifest checks GREEN on latest candidate; only approved skips; verify PR status and head; no expanded I1 requirement for code merge",
+      "exit": "remaining mandatory exact-SHA CI/PG/security/migration/manifest GREEN; only explicit C3 core-merge deferral and approved skips; actual branch protection must permit; not Radar or production PASS",
       "status": "HOLD_REQUIRED_CHECKS"
     },
     {
@@ -393,5 +393,16 @@
       "job": 138964526239
     },
     "exact_sha_admission": "NOT_CONFIRMED"
+  },
+  "core_merge_exception": {
+    "id": "RADAR-C3-CORE-MERGE-DEFERRAL-01",
+    "status": "TEMPORARY_MANUAL_ONLY",
+    "applies_to": "core code integration only",
+    "c3_qualified": false,
+    "c2_required": true,
+    "branch_protection_verified": false,
+    "restore_before": "Radar resumption or production admission",
+    "threshold_pct": 10,
+    "source_evidence_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a"
   }
 }

@@ -1,7 +1,8 @@
 name: RM Radar R0.1C3 PostgreSQL Performance
+# Temporary owner-requested diagnostic deferral for core integration.
+# Keep the full workload, thresholds and real failure status on manual runs.
+# Not a PASS, not a production/Radar qualification waiver.
 on:
-  push:
-    branches: [base_dev]
   workflow_dispatch:
 permissions:
   contents: read

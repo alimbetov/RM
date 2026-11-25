@@ -5,6 +5,8 @@
 
 ## Текущая очередь (R1.9)
 
+> **Дополнение к очереди 2026-11-25 (owner request: failing Radar tests interfere with core merge).** C3 performance temporarily manual-only (`workflow_dispatch`), not deleted, not marked PASS. Latest observed C3 +12.900% remains unresolved against 10%; current core code integration may proceed without a fresh C3 run only if all remaining mandatory gates including C2 are GREEN and actual GitHub protection permits it. C2 is NOT deferred: preserve concurrency/security checks; fix the denial message contract. Full R0.1D / Radar expansion / production admission still require C3 PASS under unchanged workload/threshold and all prior obligations. No permission bypass or branch-protection changes. Re-enable push C3 before Radar resumption / production admission. If C3 is externally required, PR remains HOLD; branch protection not accessible (403). See [decision](https://github.com/alimbetov/RM/blob/base_dev/docs/reviews/RM-RADAR-C3-TEMPORARY-MERGE-DEFERRAL-R1.md). This narrow exception supersedes earlier statements requiring C3 push PASS for core-only merge, not any qualification or release threshold.
+
 **Stabilization First / MERGE HOLD.** Reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`: C3 +12.900% >10%, C2 c202 denial-message regression, F2 8/8 PASS. [PR #9](https://github.com/alimbetov/RM/pull/9) — merge только после всех обязательных exact-SHA проверок. IE-00A source inventory выполнена, IE-00B открыта и приостановлена до проверенного core merge. Затем A1/A2 → A3 → B1/B2/E1 parallel. Выбранные четыре направления MVP не отменены; расширение Radar после квалифицированной аналитики и отдельного допуска. Merge не означает production release.
 
 - [Master R1.1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md)

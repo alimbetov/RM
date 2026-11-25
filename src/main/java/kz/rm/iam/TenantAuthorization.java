@@ -159,8 +159,16 @@ public class TenantAuthorization {
                     WHERE a.status='ACTIVE'
                     FOR SHARE OF workspace) w
                     """,rs->rs.next()?rs.getObject(1,UUID.class):null,actorId,tenantId);
-            if(!tenantId.equals(locked))
-                throw new SecurityException("Actor or tenant unavailable");
+            if(!tenantId.equals(locked)) {
+                // The combined fence returned no admitted pair. Preserve
+                // the established denial classification on this failure-only
+                // path; never turn a failed fence into successful admission.
+                String actorStatus=jdbc.query(commandActorLockSql,rs->
+                    rs.next()?rs.getString(1):null,actorId);
+                if(!"ACTIVE".equals(actorStatus))
+                    throw new SecurityException("Actor inactive or unknown");
+                throw new SecurityException("Tenant unavailable");
+            }
         } else {
             lockActorAndTenant(actorId,tenantId);
         }
