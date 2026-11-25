@@ -5155,3 +5155,25 @@ ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_schema CHECK(schem
 --changeset rm:0178-int-canonical-fact-hex dbms:postgresql
 ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_hex CHECK(digest ~ '^[0-9a-f]{64}$');
 --rollback ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_hex;
+
+--changeset rm:0179-sales-canonical-status-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_sales_status_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_sales_status_event_no_truncate
+ BEFORE TRUNCATE ON crm.sales_order_status_event
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_sales_status_event_no_truncate ON crm.sales_order_status_event;
+--rollback DROP TRIGGER trg_sales_status_event_immutable ON crm.sales_order_status_event;
+
+--changeset rm:0180-sales-canonical-booked-header-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_sales_booked_header_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.total_amount IS DISTINCT FROM OLD.total_amount OR NEW.currency IS DISTINCT FROM OLD.currency
+ THEN RAISE EXCEPTION 'SALES_BOOKED_HEADER_IMMUTABLE'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_booked_header_immutable BEFORE UPDATE ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_booked_header_mutation();
+--rollback DROP TRIGGER trg_sales_booked_header_immutable ON crm.sales_order;
+--rollback DROP FUNCTION crm.reject_sales_booked_header_mutation();

@@ -63,6 +63,8 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired AuthenticatedSalesCommands sales;
     @Autowired AuthenticatedSalesQueries orderReads;
     @Autowired JdbcTemplate jdbc;
+    @Autowired kz.rm.intelligence.CanonicalFactAppender canonicalFacts;
+    @Autowired org.springframework.transaction.PlatformTransactionManager canonicalTransactions;
     @Autowired kz.rm.intelligence.MetricQueryService intelligence;
     @Autowired kz.rm.intelligence.CalendarPolicyService calendar;
 
@@ -225,6 +227,7 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
                 2, "375", 2, 1, 1, "10", "3", "7");
+        CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,UUID.randomUUID());
         calendar.append(owner,tenant,"Etc/UTC",0);
         var period=new kz.rm.intelligence.MetricSelection.PeriodChoice(
             kz.rm.intelligence.PeriodResolver.Code.Y,java.time.LocalDate.now(java.time.ZoneOffset.UTC),1);
