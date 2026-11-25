@@ -1,10 +1,23 @@
 # RM-RADAR-VISION-R1 — Intelligent Business Control Center
-## Стратегическое техническое задание R1.0
+## Стратегическое техническое задание R1.1 — Analytics First
 
 **Дата:** 2026-11-25. **Репозиторий:** alimbetov/RM. **Ветка:** base_dev. **Source review:** 4e55c82c653efc761bb7f381cb87d5a7ff9f7058.  
 **Идентификатор:** IDEA-18, связь с IDEA-16/KF-03.  
 **Статус:** SPEC_EXISTS / DOC-ONLY / POST-MVP PARKED / IMPLEMENTATION NOT AUTHORIZED / PRODUCTION HOLD.  
 **Решение владельца:** сформировать отдельное ТЗ развития Radar и зарегистрировать его в банке идей. Не является снятием freeze, допуском к реализации или утверждением конкретных будущих SLA.
+
+## 0. Owner roadmap decision — Analytics First (2026-11-25)
+
+Владелец предложил отложить доработку Radar до развития аналитической базы: Radar должен получать достоверные показатели и исторические факты, а не создавать конкурирующий расчётный контур. **IDEA-18: DEFERRED / ANALYTICS_FIRST / POST-MVP PARKED.** Пауза плановых расширений и самостоятельной оптимизации Radar; существующий R0.1 сохраняется в коде, обязательные regression/security gates, минимальные исправления реальных блокеров и R0.1D acceptance requirements не отменяются. Незакрытую квалификацию не считать PASS; до отдельного возобновления не назначать Radar новым продуктовым приоритетом. R0.2 и все R1+ этапы остаются PARKED. Это решение не разрешает реализацию аналитики вопреки MVP freeze.
+
+Порядок после соответствующего scope admission:
+1. RM-INSIGHT-R1: owner-owned достоверные SALES/INVENTORY facts, immutable history, source admission, reconciliation, replay/rebuild, tenant-safe read contracts, фактическая нагрузочная квалификация.
+2. RM-INSIGHT-FIN-ADAPT-R1 / IDEA-17: Metric Registry, Period Resolver, Native SQL, lineage/versioning; затем обоснованные L1 daily / L2 period projections, Customer 360, Warehouse 360, KPI; не переносить FIN runtime.
+3. ABC/Pareto/XYZ и аналитические признаки по мере достаточности истории; отсутствие фактов/denominator/COGS = UNKNOWN/NOT_MEASURABLE. ML не обязателен для первых deterministic signals.
+4. Возобновить Radar отдельным owner decision после проверки источников соответствующей вертикали; закрыть R0.1D и актуальную регрессию до нового функционала. Начать с минимального Sales provider поверх уже квалифицированных метрик/фактов, не строить универсальный движок заранее.
+5. Customer/Inventory/FX/Financial providers допускаются по мере готовности своих источников, Predictive/Advisor только после качественной истории, квалификации features и пилота.
+
+Proposed resume gate (не утверждение новых SLA): A1 — canonical source/permission and metric definitions versioned; A2 — independent SQL oracle + ledger reconciliation, returns/cancellations and missingness; A3 — tenant-safe period, currency/unit, freshness/asOf and provenance; A4 — reproducible projection rebuild and failure behavior if projections used; A5 — documented PG load and owner command regression within approved bounds (no relaxation of current Radar 200ms/10%); A6 — one user-validated actionable use case and explicit scope authorization. Gate applies per vertical, not a requirement to finish all analytics or ML before any signal. No fake readiness from documentation. Main/production unchanged.
 
 ## 1. Продуктовая цель и scope
 
@@ -27,9 +40,9 @@ Source inventory подтверждает наличие классов, но н
 
 | Этап | Результат | Приоритет | Ценность / сложность (1–10, гипотеза) | Входной gate |
 |---|---|---|---|---|
-| R0.1 | Завершить Task Radar, 60 RAD/CAL семейств по применимости | P0 | существующий scope | R0.1D, текущие CI, 200ms/10% |
+| R0.1 | Сохранить Task Radar; незакрытая квалификация при возобновлении, 60 RAD/CAL семейств | HOLD / обязательная регрессия | существующий scope | R0.1D, текущие CI, 200ms/10%; без waiver |
 | R0.2 | Smart Deadline Text, локали, countdown без новых business writes | P1 | 8/2 | отдельный scope, R0.1D; G2 для UI |
-| R1.0 | Universal Business Signal Engine (минимальный контракт + композиция) | P1 | 9/4 | post-MVP scope decision; G1 и domain review |
+| R1.0 | Universal Business Signal Engine (минимальный контракт + композиция) | после INSIGHT | 9/4 | Analytics First A1–A6 для первого provider; R0.1D; post-MVP scope decision; G1/domain review |
 | R1.1 | Sales Radar | P1 | 10/4 | qualified SALES/QR + signal foundation |
 | R1.2 | Customer & Contract Radar | P1 | 9/5 | CRM scope, consent, analytics quality |
 | R1.3 | Inventory Radar | P2 | 9/5 | INVENTORY + Warehouse 360; прогноз отдельно |
@@ -184,7 +197,7 @@ Trace matrix per approved slice maps applicable BV subcases to concrete methods,
 
 ## 13. Delivery and approval
 
-V0: this document + IDEA-18 only. R0.1D must finish first; no dependency on unrelated global CI for already authorized local engineering, no global release bypass. Each future stage V1+ requires explicit owner scope, relevant MVP G3/post-MVP rule or explicit authorized exception, actual domain inventory, acceptance tests and cost/benefit decision. R1.0 foundation and R1.1 pilot should be reviewed together to avoid unused abstraction; other providers opt-in. G2 REST/UI separately authorized; G3 controlled pilot, G4 production release separate. Status scale SPECIFIED → IMPLEMENTED → SERVICE TESTED → PG QUALIFIED → USER ACCEPTED → RELEASE ADMITTED; no forward promotion solely by document. Global production remains HOLD, base_dev only, main unchanged. Do not extend current TASK R0.1 backlog with any BV future features.
+V0: this document + IDEA-18 only. Analytics First §0 supersedes the immediate Radar development sequence. Preserve mandatory regression and security gates; R0.1D must be qualified before new Radar feature admission, not asserted complete during pause. No global release bypass. Each future stage V1+ requires explicit owner scope, relevant MVP G3/post-MVP rule or explicit authorized exception, actual domain inventory, acceptance tests and cost/benefit decision. R1.0 foundation and R1.1 pilot should be reviewed together to avoid unused abstraction; other providers opt-in. G2 REST/UI separately authorized; G3 controlled pilot, G4 production release separate. Status scale SPECIFIED → IMPLEMENTED → SERVICE TESTED → PG QUALIFIED → USER ACCEPTED → RELEASE ADMITTED; no forward promotion solely by document. Global production remains HOLD, base_dev only, main unchanged. Do not extend current TASK R0.1 backlog with any BV future features.
 
 ## 14. Open decisions before coding
 
@@ -193,3 +206,5 @@ D-V01: exact active status/age fields, permissions and source sufficiency for fi
 ## 15. Revision log
 
 R1.0 — 2026-11-25: strategic vision and future signal catalogue, service boundaries, staged roadmap, acceptance matrix; IDEA-18 registered. No code, SQL, migrations, scheduler, API, UI, ML or production change.
+
+R1.1 — 2026-11-25: Owner Analytics First decision; defer Radar development pending qualified INSIGHT facts/metrics by vertical and explicit resumption. Existing R0.1 code and gates preserved, no scope extension or production admission.
