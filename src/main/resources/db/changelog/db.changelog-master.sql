@@ -6348,3 +6348,154 @@ REVOKE ALL ON FUNCTION crm.int_bump_projection_revision() FROM PUBLIC;
 --rollback ALTER FUNCTION crm.int_bump_projection_revision() SECURITY INVOKER;
 --rollback ALTER FUNCTION crm.int_bump_projection_revision() RESET search_path;
 --rollback GRANT EXECUTE ON FUNCTION crm.int_bump_projection_revision() TO PUBLIC;
+
+
+--changeset rm:0206-int-l2-l3-storage
+-- Opt-in dimensional extension of an immutable generation scope. No active route.
+CREATE TABLE crm.int_dim_revision (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL,
+ dirty_revision BIGINT NOT NULL DEFAULT 0 CHECK(dirty_revision>=0),
+ PRIMARY KEY(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id)
+);
+CREATE TABLE crm.int_l2_contribution (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL,
+ stream_code VARCHAR(16) NOT NULL CHECK(stream_code IN ('BOOKED','FULFILLED','STOCK')),
+ source_id UUID NOT NULL, line_id UUID, movement_id UUID, order_id UUID,
+ local_day DATE NOT NULL, region_code VARCHAR(16), group_id UUID,
+ item_kind VARCHAR(20), warehouse_id UUID, sku_id UUID, currency VARCHAR(3),
+ amount NUMERIC NOT NULL DEFAULT 0 CHECK(amount>=0),
+ qty_in NUMERIC NOT NULL DEFAULT 0 CHECK(qty_in>=0),
+ qty_out NUMERIC NOT NULL DEFAULT 0 CHECK(qty_out>=0),
+ PRIMARY KEY(tenant_id,generation_id,stream_code,source_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_dim_revision(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,line_id) REFERENCES crm.sales_order_line(tenant_id,id),
+ FOREIGN KEY(tenant_id,movement_id) REFERENCES crm.inv_stock_movement(tenant_id,id),
+ FOREIGN KEY(tenant_id,order_id,line_id) REFERENCES crm.sales_order_line(tenant_id,order_id,id),
+ FOREIGN KEY(tenant_id,group_id,item_kind) REFERENCES crm.cat_group_node(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,warehouse_id) REFERENCES public.org_location(workspace_id,id),
+ FOREIGN KEY(tenant_id,sku_id) REFERENCES crm.cat_item(tenant_id,id),
+ CHECK(group_id IS NULL OR item_kind IS NOT NULL),
+ CHECK(item_kind IS NULL OR item_kind IN ('PRODUCT','SERVICE')),
+ CHECK((stream_code='BOOKED' AND line_id IS NOT NULL AND source_id=line_id AND order_id IS NOT NULL
+       AND movement_id IS NULL AND warehouse_id IS NULL AND region_code IS NULL AND currency IS NOT NULL
+       AND qty_in=0 AND qty_out=0)
+    OR (stream_code='FULFILLED' AND movement_id IS NOT NULL AND source_id=movement_id AND line_id IS NOT NULL
+       AND order_id IS NOT NULL AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NOT NULL
+       AND qty_in=0 AND qty_out=0)
+    OR (stream_code='STOCK' AND movement_id IS NOT NULL AND source_id=movement_id AND line_id IS NULL
+       AND order_id IS NULL AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NULL
+       AND amount=0 AND ((qty_in>0 AND qty_out=0) OR (qty_out>0 AND qty_in=0))))
+);
+CREATE INDEX idx_int_l2_scope_day ON crm.int_l2_contribution(tenant_id,generation_id,local_day,stream_code);
+-- L3 cells retain leaf identity and warehouse. DISTINCT counts are not additive.
+-- A period is visible only when its certified refresh revision matches dirty_revision.
+CREATE TABLE crm.int_l3_period (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL,
+ period_code VARCHAR(3) NOT NULL CHECK(period_code IN ('D','W','DEC','M','Q','H','Y')),
+ from_day DATE NOT NULL, until_day DATE NOT NULL CHECK(from_day<until_day),
+ refreshed_revision BIGINT NOT NULL CHECK(refreshed_revision>=0),
+ PRIMARY KEY(tenant_id,generation_id,period_code,from_day),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_dim_revision(tenant_id,generation_id)
+);
+CREATE TABLE crm.int_l3_cell (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL, period_code VARCHAR(3) NOT NULL,
+ from_day DATE NOT NULL, cell_id UUID NOT NULL,
+ stream_code VARCHAR(16) NOT NULL CHECK(stream_code IN ('BOOKED','FULFILLED','STOCK')),
+ region_code VARCHAR(16), group_id UUID, item_kind VARCHAR(20), warehouse_id UUID, sku_id UUID, currency VARCHAR(3),
+ amount NUMERIC NOT NULL CHECK(amount>=0), qty_in NUMERIC NOT NULL CHECK(qty_in>=0),
+ qty_out NUMERIC NOT NULL CHECK(qty_out>=0), distinct_orders BIGINT NOT NULL CHECK(distinct_orders>=0),
+ PRIMARY KEY(tenant_id,generation_id,period_code,from_day,cell_id),
+ FOREIGN KEY(tenant_id,generation_id,period_code,from_day)
+ REFERENCES crm.int_l3_period(tenant_id,generation_id,period_code,from_day),
+ FOREIGN KEY(tenant_id,group_id,item_kind) REFERENCES crm.cat_group_node(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,warehouse_id) REFERENCES public.org_location(workspace_id,id),
+ FOREIGN KEY(tenant_id,sku_id) REFERENCES crm.cat_item(tenant_id,id),
+ CHECK(group_id IS NULL OR item_kind IS NOT NULL),
+ CHECK((stream_code='BOOKED' AND warehouse_id IS NULL AND region_code IS NULL AND currency IS NOT NULL AND qty_in=0 AND qty_out=0)
+    OR (stream_code='FULFILLED' AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NOT NULL AND qty_in=0 AND qty_out=0)
+    OR (stream_code='STOCK' AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NULL AND amount=0 AND distinct_orders=0))
+);
+--rollback DROP TABLE crm.int_l3_cell;
+--rollback DROP TABLE crm.int_l3_period;
+--rollback DROP TABLE crm.int_l2_contribution;
+--rollback DROP TABLE crm.int_dim_revision;
+
+--changeset rm:0207-int-l2-l3-transactional-revision dbms:postgresql splitStatements:false
+CREATE UNIQUE INDEX uq_int_l3_cell_grain ON crm.int_l3_cell
+ (tenant_id,generation_id,period_code,from_day,stream_code,region_code,group_id,item_kind,warehouse_id,sku_id,currency)
+ NULLS NOT DISTINCT;
+-- All writers take lifecycle SHARE before the dimension revision row.
+-- A future refresh holds that same row FOR UPDATE until cells and period stamp commit.
+CREATE FUNCTION crm.int_dim_lock_building(p_t UUID,p_g UUID) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ PERFORM 1 FROM crm.int_projection_lifecycle WHERE tenant_id=p_t AND generation_id=p_g
+   AND lifecycle_state='BUILDING' FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_NOT_BUILDING' USING ERRCODE='23514'; END IF;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_lock_building(UUID,UUID) FROM PUBLIC;
+CREATE FUNCTION crm.int_l2_dirty() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t UUID; g UUID;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l2_contribution' OR TG_OP NOT IN ('INSERT','UPDATE','DELETE')
+ THEN RAISE EXCEPTION 'INT_DIM_TRIGGER_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; END IF;
+ IF TG_OP='UPDATE' AND (OLD.tenant_id,OLD.generation_id,OLD.stream_code,OLD.source_id)
+    IS DISTINCT FROM (NEW.tenant_id,NEW.generation_id,NEW.stream_code,NEW.source_id)
+ THEN RAISE EXCEPTION 'INT_DIM_IDENTITY' USING ERRCODE='23514'; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ IF TG_OP<>'DELETE' AND NOT EXISTS(SELECT 1 FROM crm.int_projection_generation s
+    WHERE s.tenant_id=t AND s.generation_id=g AND NEW.local_day>=s.from_day AND NEW.local_day<s.until_day)
+ THEN RAISE EXCEPTION 'INT_DIM_DAY_SCOPE' USING ERRCODE='23514'; END IF;
+ UPDATE crm.int_dim_revision SET dirty_revision=dirty_revision+1 WHERE tenant_id=t AND generation_id=g;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_REVISION_MISSING'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l2_dirty() FROM PUBLIC;
+-- AFTER avoids false increments on INSERT ... ON CONFLICT DO NOTHING.
+CREATE TRIGGER trg_int_l2_dirty AFTER INSERT OR UPDATE OR DELETE ON crm.int_l2_contribution
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l2_dirty();
+CREATE TRIGGER trg_int_l2_no_truncate BEFORE TRUNCATE ON crm.int_l2_contribution
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_l3_write_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t UUID; g UUID; r BIGINT;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN ('int_l3_period','int_l3_cell')
+    OR TG_OP NOT IN ('INSERT','UPDATE','DELETE') THEN RAISE EXCEPTION 'INT_DIM_TRIGGER_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; END IF;
+ IF TG_OP='UPDATE' AND (OLD.tenant_id,OLD.generation_id,OLD.period_code,OLD.from_day)
+    IS DISTINCT FROM (NEW.tenant_id,NEW.generation_id,NEW.period_code,NEW.from_day)
+ THEN RAISE EXCEPTION 'INT_DIM_IDENTITY' USING ERRCODE='23514'; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ SELECT dirty_revision INTO STRICT r FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g FOR UPDATE;
+ IF TG_TABLE_NAME='int_l3_period' AND TG_OP<>'DELETE' THEN
+   IF NEW.refreshed_revision<>r THEN RAISE EXCEPTION 'INT_DIM_STALE_REFRESH' USING ERRCODE='23514'; END IF;
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_write_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_period_guard BEFORE INSERT OR UPDATE OR DELETE ON crm.int_l3_period
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_write_guard();
+CREATE TRIGGER trg_int_l3_cell_guard BEFORE INSERT OR UPDATE OR DELETE ON crm.int_l3_cell
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_write_guard();
+CREATE TRIGGER trg_int_l3_period_no_truncate BEFORE TRUNCATE ON crm.int_l3_period
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l3_cell_no_truncate BEFORE TRUNCATE ON crm.int_l3_cell
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_l3_cell_no_truncate ON crm.int_l3_cell;
+--rollback DROP TRIGGER trg_int_l3_period_no_truncate ON crm.int_l3_period;
+--rollback DROP TRIGGER trg_int_l3_cell_guard ON crm.int_l3_cell;
+--rollback DROP TRIGGER trg_int_l3_period_guard ON crm.int_l3_period;
+--rollback DROP FUNCTION crm.int_l3_write_guard();
+--rollback DROP TRIGGER trg_int_l2_no_truncate ON crm.int_l2_contribution;
+--rollback DROP TRIGGER trg_int_l2_dirty ON crm.int_l2_contribution;
+--rollback DROP FUNCTION crm.int_l2_dirty();
+--rollback DROP FUNCTION crm.int_dim_lock_building(UUID,UUID);
+--rollback DROP INDEX crm.uq_int_l3_cell_grain;

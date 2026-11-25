@@ -238,4 +238,43 @@ BEGIN
  THEN RAISE EXCEPTION 'INT_PROJECTION_CROSS_TENANT_REVISION'; END IF;
 END
 $$;
+
+-- B4.4 storage/dirty revision probe, fixture owner only; no runtime grants.
+DO $$
+DECLARE t UUID:=current_setting('rm.gate_tenant')::uuid;
+ g UUID:=current_setting('rm.gate_projection')::uuid;
+ o UUID:=current_setting('rm.gate_order')::uuid;
+ l crm.sales_order_line%ROWTYPE;
+ day_key DATE:=CURRENT_DATE;
+BEGIN
+ SELECT * INTO STRICT l FROM crm.sales_order_line WHERE tenant_id=t AND order_id=o ORDER BY id LIMIT 1;
+ INSERT INTO crm.int_dim_revision(tenant_id,generation_id) VALUES(t,g);
+ INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount)
+ VALUES(t,g,'BOOKED',l.id,l.id,o,day_key,l.currency,l.quantity*l.unit_price_snapshot);
+ INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount)
+ VALUES(t,g,'BOOKED',l.id,l.id,o,day_key,l.currency,l.quantity*l.unit_price_snapshot) ON CONFLICT DO NOTHING;
+ IF (SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g)<>1
+ THEN RAISE EXCEPTION 'INT_DIM_REPLAY_REVISION'; END IF;
+ BEGIN
+   DELETE FROM crm.int_l2_contribution WHERE tenant_id=t AND generation_id=g;
+   RAISE EXCEPTION 'INT_DIM_ROLLBACK_PROBE';
+ EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM<>'INT_DIM_ROLLBACK_PROBE' THEN RAISE; END IF;
+ END;
+ IF (SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g)<>1
+ THEN RAISE EXCEPTION 'INT_DIM_ROLLBACK_REVISION'; END IF;
+ INSERT INTO crm.int_l3_period VALUES(t,g,'D',day_key,day_key+1,1);
+ UPDATE crm.int_l2_contribution SET amount=amount WHERE tenant_id=t AND generation_id=g;
+ BEGIN
+   UPDATE crm.int_l3_period SET refreshed_revision=1 WHERE tenant_id=t AND generation_id=g;
+   RAISE EXCEPTION 'INT_DIM_STALE_REFRESH_ACCEPTED';
+ EXCEPTION WHEN check_violation THEN
+   IF SQLERRM<>'INT_DIM_STALE_REFRESH' THEN RAISE; END IF;
+ END;
+ IF (SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g)<>2
+ THEN RAISE EXCEPTION 'INT_DIM_DIRTY_REVISION'; END IF;
+ IF EXISTS(SELECT 1 FROM crm.int_dim_revision WHERE tenant_id=current_setting('rm.gate_other_tenant')::uuid)
+ THEN RAISE EXCEPTION 'INT_DIM_CROSS_TENANT_REVISION'; END IF;
+END
+$$;
 ROLLBACK;

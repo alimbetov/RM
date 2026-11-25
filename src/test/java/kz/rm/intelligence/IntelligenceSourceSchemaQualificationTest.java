@@ -39,6 +39,10 @@ class IntelligenceSourceSchemaQualificationTest {
         new Source("crm","int_l1_sales_contribution",List.of("tenant_id","generation_id","event_kind","order_id"),List.of("local_day","currency","booked_amount")),
         new Source("crm","int_projection_coverage",List.of("tenant_id","generation_id","proof_id"),List.of("observed_at","missing_facts","orphan_facts","pending_facts","rejected_facts","receipt_mismatches","bucket_mismatches")),
         new Source("crm","int_fact_backfill_receipt",List.of("tenant_id","run_id","owner_module","source_kind","source_id"),List.of("digest","schema_version","disposition","error_code","processed_at")),
+        new Source("crm","int_dim_revision",List.of("tenant_id","generation_id"),List.of("dirty_revision")),
+        new Source("crm","int_l2_contribution",List.of("tenant_id","generation_id","stream_code","source_id"),List.of("line_id","movement_id","order_id","local_day","region_code","group_id","item_kind","warehouse_id","sku_id","currency","amount","qty_in","qty_out")),
+        new Source("crm","int_l3_period",List.of("tenant_id","generation_id","period_code","from_day"),List.of("until_day","refreshed_revision")),
+        new Source("crm","int_l3_cell",List.of("tenant_id","generation_id","period_code","from_day","cell_id"),List.of("stream_code","region_code","group_id","item_kind","warehouse_id","sku_id","currency","amount","qty_in","qty_out","distinct_orders")),
         new Source("public","iam_warehouse_staff_scope",List.of("tenant_id","warehouse_id","actor_user_id"),List.of("state","row_version"))
     );
 
