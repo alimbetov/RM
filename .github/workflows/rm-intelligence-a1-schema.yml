@@ -137,12 +137,12 @@ jobs:
           docker exec -i "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -At < "$p/RM-B2-1R-POPULATED-SEAL-SNAPSHOT.sql" > "$p/after.txt"
           diff -u "$p/before.txt" "$p/after.txt"
           docker exec -i "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test < "$p/RM-B2-1R-POPULATED-SEAL-VERIFY.sql"
-          cp target/surefire-reports/TEST-kz.rm.intelligence.IntelligenceSourceSchemaQualificationTest.xml "$p/current.xml"
+          cp target/surefire-reports/TEST-kz.rm.intelligence.IntelligenceSourceSchemaQualificationTest.xml "$p/TEST-kz.rm.intelligence.IntelligenceSourceSchemaQualificationTest.xml"
           python3 - "$p" <<'PY'
           import sys, xml.etree.ElementTree as ET
           from pathlib import Path
           p=Path(sys.argv[1])
-          for name, expected in [('baseline.xml',{'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg'}),('current.xml',{'migratedSourceColumnsAndOrderedTenantPrimaryKeys','sourceNumericAndTimestampTypesArePreserved'})]:
+          for name, expected in [('baseline.xml',{'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg'}),('TEST-kz.rm.intelligence.IntelligenceSourceSchemaQualificationTest.xml',{'migratedSourceColumnsAndOrderedTenantPrimaryKeys','sourceNumericAndTimestampTypesArePreserved'})]:
               cases=list(ET.parse(p/name).getroot().iter('testcase'))
               assert expected <= {c.get('name') for c in cases}
               assert not any(c.find(tag) is not None for c in cases for tag in ('failure','error','skipped'))

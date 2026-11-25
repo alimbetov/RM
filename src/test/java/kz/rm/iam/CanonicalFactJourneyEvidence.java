@@ -415,6 +415,18 @@ final class CanonicalFactJourneyEvidence {
 
         // Capture a new V2 fact through the real appender, then independently corrupt the
         // stored envelope in a fresh rollback-only fixture while preserving its valid digest.
+        String header=jdbc.query("""
+            SELECT total_amount,currency FROM crm.sales_order WHERE tenant_id=? AND id=?
+            """,rs->{if(!rs.next())throw new AssertionError("Missing booked header");
+                return oracleFrame(rs.getBigDecimal(1),rs.getString(2).trim());},tenant,cancelledOrder);
+        var lines=jdbc.query("""
+            SELECT id,offer_id,catalog_item_id_snapshot,quantity,unit_price_snapshot,currency,price_source,accepted_quote_id
+            FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+            """,(rs,n)->oracleFrame(rs.getObject(1),rs.getObject(2),rs.getObject(3),rs.getInt(4),
+                rs.getBigDecimal(5),rs.getString(6).trim(),rs.getString(7),rs.getObject(8)),tenant,cancelledOrder);
+        assertThat(lines).isNotEmpty();
+        String expectedV2=oracleHash(oracleFrame("RM-FACT-V2",legacy,
+            oracleFrame(header,oracleFrame(lines.stream().sorted().toArray()))));
         var v2=new AtomicReference<String>();
         tx.executeWithoutResult(s->{
             assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
@@ -423,7 +435,7 @@ final class CanonicalFactJourneyEvidence {
             assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
             s.setRollbackOnly();
         });
-        assertThat(v2.get()).matches("[0-9a-f]{64}").isNotEqualTo(legacy);
+        assertThat(v2.get()).isEqualTo(expectedV2).isNotEqualTo(legacy);
         for(String scenario:List.of("V2_BAD_SUBJECT","V2_BAD_VERSION","V2_BAD_DIGEST")){
             assertThatThrownBy(()->tx.executeWithoutResult(s->{
                 seedFact(jdbc,tenant,event,scenario.equals("V2_BAD_SUBJECT")?UUID.randomUUID():cancelledOrder,
@@ -433,6 +445,84 @@ final class CanonicalFactJourneyEvidence {
             })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_FACT_CONFLICT");
             assertThat(count(jdbc,tenant,event)).isZero();
         }
+    }
+
+    /** Read only owner rows; never call production framing/digest helpers. */
+    static void inventoryDigestOracle(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                      CanonicalFactAppender appender,UUID tenant,UUID order){
+        var f=jdbc.query("""
+            SELECT id,item_id,occurred_at,recorded_at,location_id,delta_quantity,balance_before,balance_after,
+                   posting_version,reason_code,movement_kind,source_type,source_id,reservation_id,actor_user_id,business_reason_code,request_key
+            FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER'
+                  AND source_id=? AND movement_kind='FULFILLMENT'
+            """,rs->{
+                if(!rs.next())throw new AssertionError("Missing fulfillment movement");
+                Object[] values=new Object[17];
+                for(int i=0;i<17;i++)values[i]=rs.getObject(i+1);
+                values[2]=rs.getTimestamp(3).toInstant();
+                values[3]=rs.getTimestamp(4).toInstant();
+                if(rs.next())throw new AssertionError("Multiple fulfillment movements");
+                return values;
+            },tenant,order);
+        UUID event=(UUID)f[0],subject=(UUID)f[1];
+        var occurred=(java.time.Instant)f[2];
+        var recorded=(java.time.Instant)f[3];
+        Long version=(Long)f[8];
+        assertThat(version).isNotNull();
+        String legacy=oracleHash(String.join("|","RM-FACT-V1",tenant.toString(),"INVENTORY","STOCK_MOVEMENT",
+            event.toString(),subject.toString(),occurred.toString(),recorded.toString(),f[4].toString(),
+            oracleValue(f[5]),oracleValue(f[6]),oracleValue(f[7])));
+        String v2=oracleHash(oracleFrame("RM-FACT-V2",legacy,oracleFrame(java.util.Arrays.copyOfRange(f,8,17))));
+        var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,event);
+        var tx=new TransactionTemplate(manager);
+        assertThat(count(jdbc,tenant,event)).isZero();
+        tx.executeWithoutResult(status->{
+            seedInventory(jdbc,tenant,event,subject,occurred,recorded,null,1,legacy);
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+            status.setRollbackOnly();
+        });
+        tx.executeWithoutResult(status->{
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+            assertThat(jdbc.queryForObject("SELECT digest FROM crm.int_canonical_fact WHERE tenant_id=? AND source_id=?",
+                String.class,tenant,event)).isEqualTo(v2);
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+            status.setRollbackOnly();
+        });
+        for(int schema:List.of(1,2)){
+            assertThatThrownBy(()->tx.executeWithoutResult(status->{
+                seedInventory(jdbc,tenant,event,subject,occurred,recorded.plusSeconds(1),schema==1?null:version,schema,schema==1?legacy:v2);
+                appender.append(key);
+            })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_FACT_CONFLICT");
+            assertThat(count(jdbc,tenant,event)).isZero();
+        }
+        assertThatThrownBy(()->tx.executeWithoutResult(status->{
+            seedInventory(jdbc,tenant,event,subject,occurred,recorded,version+1,2,v2);
+            appender.append(key);
+        })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_FACT_CONFLICT");
+        assertThat(count(jdbc,tenant,event)).isZero();
+    }
+    private static String oracleValue(Object value){
+        return value instanceof java.math.BigDecimal d?d.stripTrailingZeros().toPlainString():String.valueOf(value);
+    }
+    private static String oracleFrame(Object... values){
+        return java.util.Arrays.stream(values).map(v->{
+            if(v==null)return "-1:";
+            String value=oracleValue(v);
+            return Integer.toString(value.length())+":"+value;
+        }).collect(java.util.stream.Collectors.joining());
+    }
+    private static String oracleHash(String value){
+        try{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
+        catch(java.security.NoSuchAlgorithmException e){throw new AssertionError(e);}
+    }
+    private static void seedInventory(JdbcTemplate jdbc,UUID tenant,UUID event,UUID subject,java.time.Instant occurred,
+                                      java.time.Instant recorded,Long version,int schema,String digest){
+        assertThat(jdbc.update("""
+            INSERT INTO crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id,subject_id,
+                occurred_at,recorded_at,source_version,schema_version,digest)
+            VALUES(?,'INVENTORY','STOCK_MOVEMENT',?,?,?,?,?,?,?)
+            """,tenant,event,subject,java.sql.Timestamp.from(occurred),java.sql.Timestamp.from(recorded),version,schema,digest)).isEqualTo(1);
     }
 
     private static void seedFact(JdbcTemplate jdbc,UUID tenant,UUID event,UUID subject,

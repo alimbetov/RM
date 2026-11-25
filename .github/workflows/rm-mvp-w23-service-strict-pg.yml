@@ -59,6 +59,7 @@ jobs:
                     'mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation',
                     'mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled',
                     'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg',
+                    'canonicalSalesAndInventoryDigestOraclePg',
                     'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
                     'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
           got={c.get('name') for c in cases}

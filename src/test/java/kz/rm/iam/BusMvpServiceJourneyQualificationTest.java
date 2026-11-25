@@ -96,6 +96,14 @@ class BusMvpServiceJourneyQualificationTest {
     }
 
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
+        runBusJourney(false);
+    }
+
+    @Test void canonicalSalesAndInventoryDigestOraclePg() {
+        runBusJourney(true);
+    }
+
+    private void runBusJourney(boolean digestOnly) {
         UUID ownerId=account("bus-owner"),staffId=account("bus-staff");
         proveInitialOwnerEmail(ownerId);
         VerifiedActor owner=actor(ownerId),staff=actor(staffId);
@@ -227,6 +235,11 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
                 2, "375", 2, 1, 1, "10", "3", "7");
+        if(digestOnly){
+            CanonicalFactJourneyEvidence.digestReplayContract(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
+            CanonicalFactJourneyEvidence.inventoryDigestOracle(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            return;
+        }
         UUID otherOwnerId=account("bus-other-owner");
         proveInitialOwnerEmail(otherOwnerId);
         VerifiedActor otherOwner=actor(otherOwnerId);
@@ -260,6 +273,5 @@ class BusMvpServiceJourneyQualificationTest {
         CanonicalFactJourneyEvidence.sealingPermutations(jdbc,canonicalTransactions,tenant,orderId);
         CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
         CanonicalFactJourneyEvidence.tenantCollision(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
-        CanonicalFactJourneyEvidence.digestReplayContract(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
     }
 }

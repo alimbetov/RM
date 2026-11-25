@@ -24,6 +24,23 @@ def main():
         print(f"{key[0]} :: {key[1]} expected={expected.get(key, 0)} actual={actual.get(key, 0)}")
     if actual != expected:
         raise SystemExit("CANONICAL_PRODUCER_INVENTORY_DRIFT")
+    # Conservative secondary inventory: ORM table mappings and SQL resource
+    # writes may bypass the literal Java INSERT contract. No approved alternate
+    # producers currently exist. Flag them for explicit owner review.
+    names = r"(?:sales_order_status_event|inv_stock_movement)"
+    alternate = re.compile(r"\b(?:merge\s+into|copy)\s+(?:crm\s*\.\s*)?" + names + r"\b", re.I)
+    mapping = re.compile(r"@(?:[\w.]+\.)?(?:Table|SecondaryTable|CollectionTable|JoinTable)\s*\([^)]*\b" + names + r"\b", re.I | re.S)
+    quoted_insert = re.compile(r'\binsert\s+into\s+(?:"?crm"?\s*\.\s*)?"' + names + r'"', re.I)
+    unexpected = []
+    for path in sorted((ROOT / "src/main").rglob("*")):
+        if path.suffix not in {".java", ".sql", ".xml"} or not path.is_file():
+            continue
+        source = path.read_text(encoding="utf-8")
+        if alternate.search(source) or mapping.search(source) or quoted_insert.search(source) or (
+                path.suffix != ".java" and PATTERN.search(source)):
+            unexpected.append(path.relative_to(ROOT).as_posix())
+    if unexpected:
+        raise SystemExit("CANONICAL_ALTERNATE_PRODUCER_REVIEW_REQUIRED: " + ", ".join(unexpected))
     print("CANONICAL_LITERAL_PRODUCER_INVENTORY_PASS")
 
 
