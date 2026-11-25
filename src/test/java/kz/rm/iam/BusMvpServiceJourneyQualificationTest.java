@@ -63,6 +63,8 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired AuthenticatedSalesCommands sales;
     @Autowired AuthenticatedSalesQueries orderReads;
     @Autowired JdbcTemplate jdbc;
+    @Autowired kz.rm.intelligence.MetricQueryService intelligence;
+    @Autowired kz.rm.intelligence.CalendarPolicyService calendar;
 
     private UUID account(String prefix) {
         return users.saveAndFlush(new UserAccountEntity(
@@ -223,6 +225,19 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
                 2, "375", 2, 1, 1, "10", "3", "7");
+        calendar.append(owner,tenant,"Etc/UTC",0);
+        var period=new kz.rm.intelligence.MetricSelection.PeriodChoice(
+            kz.rm.intelligence.PeriodResolver.Code.Y,java.time.LocalDate.now(java.time.ZoneOffset.UTC),1);
+        IntelligenceMetricQualification.allEight(intelligence,staff,tenant,warehouse.id(),published.id(),period);
+        var live=new kz.rm.intelligence.MetricQuery(kz.rm.intelligence.MetricRegistry.Code.CURRENT_AVAILABLE,1,
+            new kz.rm.intelligence.MetricSelection.LivePosition(warehouse.id(),published.id()));
+        assertThatThrownBy(()->intelligence.calculate(foreign,tenant,live)).isInstanceOf(SecurityException.class);
+        warehouseScope.revoke(owner,tenant,warehouse.id(),staffId);
+        assertThatThrownBy(()->intelligence.calculate(staff,tenant,live)).isInstanceOf(SecurityException.class);
+        warehouseScope.assign(owner,tenant,warehouse.id(),staffId);
+        roles.revoke(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
+        assertThatThrownBy(()->intelligence.calculate(staff,tenant,IntelligenceMetricQualification.order(
+            kz.rm.intelligence.MetricRegistry.Code.PLACED_ORDERS,period))).isInstanceOf(SecurityException.class);
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
     }

@@ -48,7 +48,8 @@ public class MetricQueryService {
         DataQuality quality=cells.isEmpty()?DataQuality.MISSING:live?DataQuality.READY:DataQuality.PARTIAL;
         List<String> reasons=live?(cells.isEmpty()?List.of("POSITION_NOT_FOUND"):List.of()):List.of("HISTORICAL_COVERAGE_UNQUALIFIED");
         actor.userId();
-        return new MetricResult(query.code(),query.methodVersion(),def.basis(),clock.instant(),period,quality,cells,reasons);
+        return new MetricResult(query.code(),query.methodVersion(),def.basis(),clock.instant(),period,quality,cells,reasons,
+            new Coverage(period==null?null:period.startInclusive(),period==null?null:period.endExclusive(),live&&!cells.isEmpty(),reasons));
     }
     private PeriodResolver.Period resolve(UUID tenant,MetricSelection.PeriodChoice choice){
         var c=calendars.findByTenantIdAndVersion(tenant,choice.calendarVersion())
