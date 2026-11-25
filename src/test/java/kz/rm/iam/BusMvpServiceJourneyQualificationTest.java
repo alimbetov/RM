@@ -221,6 +221,8 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER' AND source_id=?",Integer.class,tenant,cancelOrder)).isZero();
         assertThat(orderReads.history(staff,tenant,cancelOrder,0,20)).hasSize(3);
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
+        IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
+                2, "375", 2, 1, 1, "10", "3", "7");
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
     }

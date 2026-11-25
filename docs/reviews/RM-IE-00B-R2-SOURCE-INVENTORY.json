@@ -763,5 +763,6 @@
   ],
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
-  "lastObservedChangeset": "0172-task-radar-active-due-index"
+  "lastObservedChangeset": "0172-task-radar-active-due-index",
+  "sourceInventoryRevision": "A1 producer oracle increment; baselineSha remains original comparison origin"
 }

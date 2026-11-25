@@ -333,12 +333,16 @@ class QrMvpServiceJourneyQualificationTest {
                 """,String.class,s.tenant(),order)).isEqualTo("PICKUP_PROOF_REQUIRED");
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "300", 0, 0, 0, "10", "0", "10");
         UUID line=handover(s,order,3,true);
         assertThat(sellable(s)).isEqualByComparingTo("7");
         returnAndInspect(s,order,line,2,SalesReturnPhysicalService.Disposition.RESTOCK);
         assertThat(sellable(s)).isEqualByComparingTo("9");
         returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.WRITE_OFF);
         assertThat(sellable(s)).isEqualByComparingTo("9");
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "300", 1, 1, 0, "12", "3", "9");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_return_posting p JOIN crm.sales_return_request r ON r.tenant_id=p.tenant_id AND r.id=p.return_id WHERE p.tenant_id=? AND r.order_id=? AND p.disposition='WRITE_OFF' AND p.movement_id IS NULL AND p.quarantine_movement_id IS NULL",Integer.class,s.tenant(),order)).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_return_posting p
@@ -368,6 +372,8 @@ class QrMvpServiceJourneyQualificationTest {
                 """,BigDecimal.class,s.tenant(),order)).isEqualByComparingTo("80.0000");
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "160", 0, 0, 0, "10", "0", "10");
         UUID line=handover(s,order,2,false);
         assertThat(sellable(s)).isEqualByComparingTo("8");
         returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.QUARANTINE);
@@ -377,6 +383,8 @@ class QrMvpServiceJourneyQualificationTest {
                 WHERE tenant_id=? AND warehouse_id=? AND item_id=?
                 """,BigDecimal.class,s.tenant(),s.warehouse(),s.sku()))
                 .isEqualByComparingTo("1");
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "160", 1, 1, 0, "10", "2", "8");
         assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
     }
 }
