@@ -13,7 +13,7 @@ import verify_ret04_evidence as d
 import verify_ret04_identity_e3a as a
 import verify_ret04_revocation_e3b as b
 
-SCHEMA="RET04-E6C/v1"
+SCHEMA="RET04-E6C/v2"
 SUITE=d.SUITE
 GROUPS=(("sql",d.METHODS),("identity-e3",a.METHODS),("revocation-e3b",b.METHODS))
 require=d.require
@@ -27,8 +27,14 @@ def canonical(value):
 def check_rows(rows,meta,returns,log):
     require(len(rows)==len(returns)>0,"checkout return count mismatch")
     require({x["return_id"] for x in rows}=={x["id"] for x in returns},"checkout return binding mismatch")
-    require(len({x["order_id"] for x in rows})==len(rows) and
-            len({x["receipt_sha"] for x in rows})==len(rows),"duplicate checkout receipt/order")
+    # request_sha256 fingerprints intent, not the receipt primary key.
+    # Two identical baskets with distinct idempotency keys are valid orders.
+    # All rows belong to meta["tenant"]; the hashed key represents the
+    # second component of PK (tenant_id,idempotency_key).
+    require(len({x["order_id"] for x in rows})==len(rows),"duplicate checkout order")
+    require(len({x["receipt_key_sha"] for x in rows})==len(rows),"duplicate checkout receipt key")
+    require(len({x["line_id"] for x in rows})==len(rows) and
+            len({x["handover_id"] for x in rows})==len(rows),"duplicate checkout line/handover")
     for x in rows:
         for field in ("return_id","order_id","identity_id","challenge_id","registration_event","line_id",
                       "offer_id","sku","storefront_id","qr_id","handover_id","warehouse_id"):
@@ -46,7 +52,8 @@ def check_rows(rows,meta,returns,log):
         require(x["quantity"]==5 and x["unit_price"]==x["offer_price"]==Decimal("100") and
                 x["total_amount"]==Decimal("500") and x["currency"]==x["order_currency"]==x["offer_currency"]=="KZT" and
                 x["fulfillment_mode"]=="PICKUP_PROOF_REQUIRED","checkout economics mismatch")
-        require(re.fullmatch(r"[0-9a-f]{64}",x["receipt_sha"]),"invalid receipt digest")
+        require(re.fullmatch(r"[0-9a-f]{64}",x["receipt_sha"]),"invalid request fingerprint")
+        require(re.fullmatch(r"[0-9a-f]{64}",x["receipt_key_sha"]),"invalid receipt key digest")
         registration=f"RET04E6A registration proof actor={meta['buyer']} identity={x['identity_id']} challenge={x['challenge_id']}"
         checkout=f"RET04E6B verified checkout tenant={meta['tenant']} buyer={meta['buyer']} order={x['order_id']} offer={x['offer_id']} sku={x['sku']}"
         require(registration in log.splitlines() and checkout in log.splitlines(),"missing service lineage marker")
@@ -86,7 +93,10 @@ def verify(xml,evidence,sha):
                 meta,_,projections=d.snapshot(snap,sha,method)
                 path=proofs/snap.name
                 rows=load(path,sha,method,meta["tenant"])
-                check_rows(rows,meta,projections["sales_return_request"],log)
+                try:
+                    check_rows(rows,meta,projections["sales_return_request"],log)
+                except (ValueError,KeyError,TypeError) as exc:
+                    raise ValueError(f"{method}/{snap.name}: {exc}") from exc
                 # Exact stable lineage across resolution, denied attempts, crash and replay.
                 key=meta["tenant"]
                 if key in by_tenant:

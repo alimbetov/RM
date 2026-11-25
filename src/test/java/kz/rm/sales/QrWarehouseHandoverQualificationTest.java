@@ -3613,6 +3613,7 @@ class QrWarehouseHandoverQualificationTest {
                             JOIN public.iam_email_identity ee ON ee.id=cc.email_identity_id
                             WHERE ee.user_id=o.buyer_user_id AND cc.purpose='CHECKOUT') AS checkout_challenges,
                          encode(cr.request_sha256,'hex') AS receipt_sha,
+                         encode(sha256(convert_to(cr.idempotency_key,'UTF8')),'hex') AS receipt_key_sha,
                          l.id AS line_id,l.offer_id,l.catalog_item_id_snapshot AS sku,
                          l.quantity,l.unit_price_snapshot AS unit_price,l.currency,
                          o.total_amount,o.currency AS order_currency,o.fulfillment_mode,

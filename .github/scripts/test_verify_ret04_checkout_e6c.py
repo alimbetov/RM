@@ -16,7 +16,7 @@ class CheckoutEvidenceTest(unittest.TestCase):
           storefront_state="PUBLISHED",offer_state="PUBLISHED",item_state="PUBLISHED",item_kind="PRODUCT",
           qr_state="ACTIVE",price_rows=1,quantity=5,unit_price=Decimal("100"),offer_price=Decimal("100"),
           total_amount=Decimal("500"),currency="KZT",order_currency="KZT",offer_currency="KZT",
-          fulfillment_mode="PICKUP_PROOF_REQUIRED",receipt_sha="a"*64)
+          fulfillment_mode="PICKUP_PROOF_REQUIRED",receipt_sha="a"*64,receipt_key_sha="b"*64)
         x=self.row;m=self.meta
         self.log=(f"RET04E6A registration proof actor={m['buyer']} identity={x['identity_id']} challenge={x['challenge_id']}\n"
                   f"RET04E6B verified checkout tenant={m['tenant']} buyer={m['buyer']} order={x['order_id']} offer={x['offer_id']} sku={x['sku']}")
@@ -45,9 +45,36 @@ class CheckoutEvidenceTest(unittest.TestCase):
     def test_wrong_return(self):
         with self.assertRaisesRegex(ValueError,"return binding"):
             self.check(return_id=str(uuid.uuid4()))
+    def two_orders(self):
+        # Same buyer, registration, SKU, offer, QR, quantity, price, fingerprint.
+        # Different orders and receipts, just like RET04 shared SKU scenarios.
+        other=dict(self.row,**{k:str(uuid.uuid4()) for k in
+                  ("return_id","order_id","line_id","handover_id")},receipt_key_sha="c"*64)
+        returns=self.returns+[{"id":other["return_id"]}]
+        m=self.meta
+        log=self.log+f"\nRET04E6B verified checkout tenant={m['tenant']} buyer={m['buyer']} order={other['order_id']} offer={other['offer_id']} sku={other['sku']}"
+        return other,returns,log
+    def test_same_fingerprint_distinct_receipts_valid(self):
+        other,returns,log=self.two_orders()
+        self.assertEqual(other["receipt_sha"],self.row["receipt_sha"])
+        check_rows([self.row,other],self.meta,returns,log)
     def test_duplicate_receipt(self):
-        other=dict(self.row,return_id=str(uuid.uuid4()),order_id=str(uuid.uuid4()))
-        with self.assertRaisesRegex(ValueError,"duplicate checkout"):
-            check_rows([self.row,other],self.meta,self.returns+[{"id":other["return_id"]}],self.log)
+        other,returns,log=self.two_orders()
+        other.update(receipt_key_sha=self.row["receipt_key_sha"],receipt_sha="d"*64)
+        with self.assertRaisesRegex(ValueError,"duplicate checkout receipt key"):
+            check_rows([self.row,other],self.meta,returns,log)
+    def test_duplicate_order(self):
+        other,returns,log=self.two_orders()
+        other["order_id"]=self.row["order_id"]
+        with self.assertRaisesRegex(ValueError,"duplicate checkout order"):
+            check_rows([self.row,other],self.meta,returns,log)
+    def test_duplicate_handover(self):
+        other,returns,log=self.two_orders()
+        other["handover_id"]=self.row["handover_id"]
+        with self.assertRaisesRegex(ValueError,"duplicate checkout line/handover"):
+            check_rows([self.row,other],self.meta,returns,log)
+    def test_invalid_key_digest(self):
+        with self.assertRaisesRegex(ValueError,"invalid receipt key digest"):
+            self.check(receipt_key_sha="invalid")
 if __name__=="__main__":
     unittest.main()
