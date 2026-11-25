@@ -234,6 +234,10 @@ RM-INSIGHT-R5: проверенные аналитические события 
 
 **TOP-1…4 выбраны для расширенного MVP:** RM Intelligence (IDEA-17/02), Customer 360 (01), Warehouse 360 + ABC/XYZ (03/04), Event & Notification Builder (07). [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md) — IE-00…09, 32 future qualification families, BUS-MVP-I1, explicit gates and non-goals. Сначала IE-00 source/contract admission и P0 corrections, затем INT foundation → Customer/Warehouse → ABC/XYZ; EVT contracts независимо, затем durable in-app + mock. Предыдущая post-MVP очередь §13 историческая для этих срезов. Реальные внешние sends, campaigns, R3.2B blanket, ML, Radar R1+, FX_AUTO, auctions, остальные идеи не открыты. Нет кода/тестового PASS от этого решения. Все mandatory G1/G2/G3/G4 сохранены, только base_dev, production HOLD.
 
+## 13D. Общее ТЗ Intelligence + EVT + Business Radar (2026-11-25)
+
+[RM-INTELLIGENT-COMMERCE-MASTER-R1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — единый документ с полным содержанием двух действующих ТЗ, общей архитектурой, roadmap M0–M9 / R-00…R-07, 32 IE-Q + 48 BV planned families и 8 proposed integration families. IDEA-18 включена в общий roadmap без снятия DEFERRED_ANALYTICS_FIRST; INT-01…03/EVT-01 остаются выбранным MVP scope. IE-00 first, отдельное возобновление Radar, existing gates preserved.
+
 ## 14. Связанные документы и история решений
 
 - [Активная стратегия RM Business + QR Commerce](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md)
@@ -259,5 +263,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | 2026-11-25 | R1.5 | IDEA-18: [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md), отдельное стратегическое ТЗ, DOC-ONLY / PARKED. Не расширяет CR-MVP-KF-RADAR-01/01A. |
 | 2026-11-25 | R1.6 | IDEA-18 Analytics First: плановые доработки Radar отложены до квалификации аналитических источников INSIGHT/IDEA-17; отдельный допуск возобновления, существующая R0.1 и gates сохранены. |
 | 2026-11-25 | R1.7 | TOP-1…4: [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md), scoped MVP admission INT-01…03 + EVT-01; остальной банк PARKED. |
+| 2026-11-25 | R1.8 | [RM-INTELLIGENT-COMMERCE-MASTER-R1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md): консолидация ТЗ INT/EVT и Radar Vision, scope и deferment неизменны. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.

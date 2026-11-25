@@ -28,6 +28,10 @@
 
 **[RM-INSIGHT-FIN-ADAPT-R1 — адаптация расчётных механизмов FIN для RM](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md)**. Отобраны 9 логических компонентов, расписаны границы доменных владельцев и 32 будущие PostgreSQL/functional acceptance проверки. Статус **SPEC_EXISTS / POST-MVP PARKED**, без кода.
 
+## Общее техническое задание Intelligent Commerce
+
+[RM-INTELLIGENT-COMMERCE-MASTER-R1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — основной объединённый документ: Intelligence, Customer 360, Warehouse 360/ABC/XYZ, EVT и полное расширение Business Radar. 80 исходных planned qualification families + 8 proposed cross-domain integration families, общий roadmap и acceptance gates. Radar остаётся DEFERRED_ANALYTICS_FIRST; no new code authorization beyond CR-MVP-INTELLIGENCE-EVT-01.
+
 ## Выбранные направления MVP (2026-11-25)
 
 [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md): RM Intelligence (IDEA-17/02), Customer 360 (01), Warehouse 360 + ABC/XYZ (03/04), Event & Notification Builder (07). IE-00…09, 32 будущие проверки, дополнительный BUS-MVP-I1. Только bounded scope после stage gates, внешние отправки mock, остальное PARKED.

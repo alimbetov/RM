@@ -6,6 +6,8 @@
 **Status:** OWNER SELECTED / SCOPED MVP DEVELOPMENT / STAGED ADMISSION / PRODUCTION HOLD.  
 Это письменное расширение MVP, а не доказательство реализации или release. Допускается разработка только описанных срезов после соответствующих входных gates. Остальные идеи остаются PARKED. Предложенные ниже числовые параметры и точные продуктовые метрики требуют утверждения в slice review, не являются production SLA.
 
+> **Общее ТЗ:** [RM-INTELLIGENT-COMMERCE-MASTER-R1](RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — полный объединённый план Intelligence/EVT + Radar Vision; текущий CR и staged MVP scope не изменены. Radar expansion сохраняет Analytics First и отдельный resumption gate.
+
 ## 1. Scope, priority and non-goals
 
 Сохраняются RM Business и RM QR Commerce; BUS-MVP-J1 и QR-MVP-J1 неизменны, не добавляется третий order/stock engine. Новый дополнительный пользовательский acceptance slice BUS-MVP-I1 (аналитика и события) — часть RM Business. Базовые J1 должны продолжать квалифицироваться независимо, но расширенный MVP не объявляется полностью принятым без I1. Если требуется выпустить базовый J1 раньше, отдельное owner decision о phased release, без ложного расширенного MVP PASS. Не задерживать завершение текущих P0/security fixes из-за будущих модулей. Уже квалифицируемый frozen candidate не менять незаметно; зафиксировать новый candidate после staged work.
