@@ -6044,3 +6044,123 @@ UPDATE public.ref_kato_territory SET parent_source_id=1111800000 WHERE code='111
 --rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1101010000,1101810000,1103620000,1104221000,1111010000,1111610000,1113220000,1113820100,1114020100,1114520000,1114620100,1114820100,1115420100,1117020000,1151010000,1151011100,1151013100,1153220000,1154820000,1154823000,1154825000,1155621000,1156020100,1156420000,1191010000,1191810000,1194020000,1195220000,1196220000,1231010000,1233620000,1271010000,1273620000,1311010000,1311011100,1311013100,1316020100,1316220100,1316621000,1331010000,1331810000,1333420000,1334420000,1334620000,1334820000,1351010000,1351011000,1351013000,1351610000,1352110000,1352210000,1352410000,1352810000,1353220000,1354820100,1391010000,1391610000,1392010000,1392410000,1394420100,1395420000,1434423000,1471010000,1471810000,1475220100,1551010000,1551610000,1552210000,1591010000,1593620000,1595220000,1595620000,1596020000,1611010000,1611610000,1612010000,1613820100,1615420100,1615820100,1616420100,1621010000,1621810000,1622010000,1631010000,1632410000,1634620000,1634820000,1634821100,1636820000);
 --rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1101000000,1101800000,1103200000,1103400000,1103600000,1103800000,1104000000,1104100000,1104200000,1104400000,1104500000,1104600000,1111000000,1111600000,1111800000,1113200000,1113400000,1113600000,1113800000,1114000000,1114400000,1114500000,1114600000,1114800000,1115200000,1115400000,1115600000,1116000000,1116400000,1116600000,1116800000,1117000000,1151000000,1153200000,1153400000,1153600000,1154000000,1154200000,1154600000,1154800000,1155200000,1155600000,1156000000,1156400000,1156800000,1191000000,1191800000,1193600000,1194000000,1194200000,1194400000,1195200000,1195800000,1196200000,1196600000,1196800000,1231000000,1233600000,1234000000,1234200000,1234600000,1234800000,1235200000,1235600000,1271000000,1273200000,1273600000,1274000000,1274200000,1274400000,1274800000,1275000000,1275400000,1275800000,1276000000,1276200000,1276600000,1311000000,1313600000,1314000000,1314200000,1314800000,1315000000,1315400000,1315600000,1316000000,1316200000,1316600000,1331000000,1331800000,1333200000,1333400000,1333600000,1334000000,1334200000,1334400000,1334600000,1334800000,1351000000,1351600000,1352100000,1352200000,1352400000,1352800000,1353200000,1353600000,1354000000,1354800000,1355200000,1355600000,1356400000,1391000000,1391600000,1392000000,1392400000,1393200000,1393400000,1393600000,1394000000,1394200000,1394400000,1394800000,1395000000,1395200000,1395400000,1395600000,1395800000,1396200000,1396400000,1396600000,1396800000,1433600000,1434000000,1434400000,1434600000,1434800000,1435200000,1471000000,1471800000,1473600000,1474200000,1474600000,1475000000,1475200000,1551000000,1551600000,1552200000,1553200000,1553600000,1554200000,1554600000,1554800000,1555200000,1555600000,1556000000,1556400000,1556800000,1591000000,1593200000,1593400000,1593600000,1594200000,1594600000,1595000000,1595200000,1595600000,1595800000,1596000000,1596200000,1596400000,1596600000,1611000000,1611600000,1612000000,1613600000,1613800000,1613900000,1614000000,1614400000,1614600000,1614800000,1615200000,1615400000,1615500000,1615600000,1615800000,1616000000,1616400000,1621000000,1621800000,1622000000,1623600000,1623800000,1631000000,1632400000,1634000000,1634600000,1634800000,1635200000,1635400000,1635500000,1635600000,1635800000,1636200000,1636300000,1636800000,1711110000,1711210000,1711310000,1711410000,1711510000,1711610000,1751110000,1751210000,1751310000,1751410000,1751510000,1751710000,1751810000,1751910000,1791110000,1791310000,1791510000,1791710000,1791910000);
 --rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1100000000,1150000000,1190000000,1230000000,1270000000,1310000000,1330000000,1350000000,1390000000,1470000000,1550000000,1590000000,1610000000,1620000000,1630000000,1710000000,1750000000,1790000000);
+
+
+--changeset rm:0199-int-coverage-revision-schema
+-- Revision zero is the migration baseline; earlier proofs have no fence and cannot route.
+CREATE TABLE crm.int_source_revision (
+ tenant_id UUID PRIMARY KEY REFERENCES public.iam_workspace(id),
+ revision BIGINT NOT NULL CHECK(revision>=0)
+);
+CREATE TABLE crm.int_projection_revision (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>=0),
+ PRIMARY KEY(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id)
+);
+CREATE TABLE crm.int_coverage_fence (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,proof_id UUID NOT NULL,
+ source_revision BIGINT NOT NULL CHECK(source_revision>=0),
+ projection_revision BIGINT NOT NULL CHECK(projection_revision>=0),
+ lifecycle_revision BIGINT NOT NULL CHECK(lifecycle_revision>=0),
+ PRIMARY KEY(tenant_id,generation_id,proof_id),
+ FOREIGN KEY(tenant_id,generation_id,proof_id)
+ REFERENCES crm.int_projection_coverage(tenant_id,generation_id,proof_id)
+);
+ALTER TABLE crm.int_projection_lifecycle ADD CONSTRAINT uq_int_lifecycle_state_identity
+ UNIQUE(tenant_id,generation_id,lifecycle_state);
+CREATE TABLE crm.int_active_generation (
+ tenant_id UUID NOT NULL,projection_code VARCHAR(24) NOT NULL CHECK(projection_code='L1'),
+ generation_id UUID NOT NULL,proof_id UUID NOT NULL,
+ lifecycle_state VARCHAR(16) NOT NULL CHECK(lifecycle_state='ACTIVE'),
+ PRIMARY KEY(tenant_id,projection_code),
+ FOREIGN KEY(tenant_id,generation_id,lifecycle_state)
+ REFERENCES crm.int_projection_lifecycle(tenant_id,generation_id,lifecycle_state),
+ FOREIGN KEY(tenant_id,generation_id,proof_id)
+ REFERENCES crm.int_coverage_fence(tenant_id,generation_id,proof_id)
+);
+--rollback DROP TABLE crm.int_active_generation;
+--rollback ALTER TABLE crm.int_projection_lifecycle DROP CONSTRAINT uq_int_lifecycle_state_identity;
+--rollback DROP TABLE crm.int_coverage_fence;
+--rollback DROP TABLE crm.int_projection_revision;
+--rollback DROP TABLE crm.int_source_revision;
+
+--changeset rm:0200-int-coverage-revision-triggers dbms:postgresql splitStatements:false
+-- Transactional counters, never a sequence/time watermark. Conservative tenant-wide
+-- source invalidation includes direct owner inserts before canonical delivery.
+CREATE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ INSERT INTO crm.int_source_revision(tenant_id,revision) VALUES(NEW.tenant_id,1)
+ ON CONFLICT(tenant_id) DO UPDATE SET revision=int_source_revision.revision+1;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_source_rev_0 AFTER INSERT ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_1 AFTER INSERT ON crm.sales_order_line
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_2 AFTER INSERT ON crm.inv_stock_movement
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_3 AFTER INSERT ON crm.int_canonical_fact
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_4 AFTER INSERT ON crm.int_sales_line_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_5 AFTER INSERT ON crm.int_movement_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE FUNCTION crm.int_bump_projection_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE t UUID; g UUID;
+BEGIN
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE
+   t:=NEW.tenant_id; g:=NEW.generation_id;
+   IF TG_OP='UPDATE' THEN
+     IF OLD.tenant_id<>t OR OLD.generation_id<>g THEN
+       RAISE EXCEPTION 'INT_PROJECTION_REVISION_IDENTITY' USING ERRCODE='23514';
+     END IF;
+   END IF;
+ END IF;
+ INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(t,g,1)
+ ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_proj_rev_0 AFTER INSERT OR UPDATE OR DELETE ON crm.int_daily_bucket
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_projection_revision();
+CREATE TRIGGER trg_int_proj_truncate_0 BEFORE TRUNCATE ON crm.int_daily_bucket
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_proj_rev_1 AFTER INSERT OR UPDATE OR DELETE ON crm.int_l1_sales_contribution
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_projection_revision();
+CREATE TRIGGER trg_int_proj_truncate_1 BEFORE TRUNCATE ON crm.int_l1_sales_contribution
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_bump_projection_receipt_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE g UUID;
+BEGIN
+ SELECT generation_id INTO g FROM crm.int_projection_generation
+ WHERE tenant_id=NEW.tenant_id AND consumer_code=NEW.consumer_code;
+ IF FOUND THEN
+   INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(NEW.tenant_id,g,1)
+   ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_proj_receipt_rev AFTER INSERT ON crm.int_fact_consumer_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_projection_receipt_revision();
+CREATE TRIGGER trg_int_coverage_fence_immutable BEFORE UPDATE OR DELETE ON crm.int_coverage_fence
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_coverage_fence_no_truncate BEFORE TRUNCATE ON crm.int_coverage_fence
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_coverage_fence_no_truncate ON crm.int_coverage_fence;
+--rollback DROP TRIGGER trg_int_coverage_fence_immutable ON crm.int_coverage_fence;
+--rollback DROP TRIGGER trg_int_proj_receipt_rev ON crm.int_fact_consumer_receipt;
+--rollback DROP FUNCTION crm.int_bump_projection_receipt_revision();
+--rollback DROP TRIGGER trg_int_proj_truncate_0 ON crm.int_daily_bucket;
+--rollback DROP TRIGGER trg_int_proj_rev_0 ON crm.int_daily_bucket;
+--rollback DROP TRIGGER trg_int_proj_truncate_1 ON crm.int_l1_sales_contribution;
+--rollback DROP TRIGGER trg_int_proj_rev_1 ON crm.int_l1_sales_contribution;
+--rollback DROP FUNCTION crm.int_bump_projection_revision();
+--rollback DROP TRIGGER trg_int_source_rev_0 ON crm.sales_order_status_event;
+--rollback DROP TRIGGER trg_int_source_rev_1 ON crm.sales_order_line;
+--rollback DROP TRIGGER trg_int_source_rev_2 ON crm.inv_stock_movement;
+--rollback DROP TRIGGER trg_int_source_rev_3 ON crm.int_canonical_fact;
+--rollback DROP TRIGGER trg_int_source_rev_4 ON crm.int_sales_line_dimension;
+--rollback DROP TRIGGER trg_int_source_rev_5 ON crm.int_movement_dimension;
+--rollback DROP FUNCTION crm.int_bump_source_revision();

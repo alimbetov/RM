@@ -38,7 +38,16 @@ final class L1ProjectionJourneyEvidence {
         assertThatThrownBy(()->l1.buckets(otherTenant,gen,from)).hasMessage("L1_GENERATION_NOT_FOUND");
         assertThatThrownBy(()->delivery.consumeBatch(tenant,g.consumerCode(),1,f->Effect.OUTSIDE_COVERAGE)).hasMessage("CANONICAL_RESERVED_CONSUMER");
         assertThatThrownBy(()->l1.advance(tenant,gen,501)).hasMessage("CANONICAL_BATCH_LIMIT");
-        assertThat(l1.prove(tenant,gen).parity()).isFalse();
+        var initialProof=l1.prove(tenant,gen);
+        assertThat(initialProof.parity()).isFalse();
+        assertThat(l1.fenceStatus(tenant,gen,initialProof.id())).isEqualTo(L1ProjectionService.FenceStatus.INCOMPLETE);
+        assertThat(l1.fenceStatus(tenant,gen,UUID.randomUUID())).isEqualTo(L1ProjectionService.FenceStatus.UNPROVEN);
+        assertThat(l1.route(tenant,calendarVersion,1,from,until).reason()).isEqualTo("NO_ACTIVE_GENERATION");
+        assertThat(l1.route(otherTenant,calendarVersion,1,from,until).materialized()).isFalse();
+        assertThatThrownBy(()->jdbc.update("""
+            INSERT INTO crm.int_active_generation(tenant_id,projection_code,generation_id,proof_id,lifecycle_state)
+            VALUES (?,'L1',?,?,'ACTIVE')
+            """,tenant,gen,initialProof.id())).isInstanceOf(org.springframework.dao.DataAccessException.class);
         var tx=new TransactionTemplate(manager);
         // Inject receipt failure after the handler. Both contributions/buckets and receipt must rollback.
         String function="l1_test_fault_"+UUID.randomUUID().toString().replace("-","");
@@ -51,6 +60,7 @@ final class L1ProjectionJourneyEvidence {
             for(LocalDate d=from;d.isBefore(until);d=d.plusDays(1))assertThat(l1.buckets(tenant,gen,d)).isEmpty();
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_l1_sales_contribution WHERE tenant_id=? AND generation_id=?",Long.class,tenant,gen)).isZero();
             assertThat(delivery.consumerCoverage(tenant,g.consumerCode()).pending()).isPositive();
+            assertThat(l1.fenceStatus(tenant,gen,initialProof.id())).isEqualTo(L1ProjectionService.FenceStatus.INCOMPLETE);
         }finally{
             jdbc.execute("DROP TRIGGER "+function+" ON crm.int_fact_consumer_receipt");
             jdbc.execute("DROP FUNCTION crm."+function+"()");
@@ -66,7 +76,16 @@ final class L1ProjectionJourneyEvidence {
         finally{pool.shutdownNow();}
         assertThat(l1.advance(tenant,gen,500)).isEmpty();
         expected(l1,tenant,gen,from,until,"2","375","10");
-        assertThat(l1.prove(tenant,gen).parity()).isTrue();
+        var beforeLate=l1.prove(tenant,gen);
+        assertThat(beforeLate.parity()).isTrue();
+        assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
+        assertThat(l1.fenceStatus(tenant,gen,initialProof.id())).isEqualTo(L1ProjectionService.FenceStatus.STALE);
+        assertThat(l1.route(tenant,calendarVersion,1,from,until).materialized()).isFalse();
+        tx.executeWithoutResult(status->{
+            assertThat(jdbc.update("UPDATE crm.int_daily_bucket SET amount=amount+1 WHERE tenant_id=? AND generation_id=? AND metric_code='PLACED_ORDERS'",tenant,gen)).isPositive();
+            status.setRollbackOnly();
+        });
+        assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
 
         // An out-of-window historical duplicate PLACED invalidates the in-window
         // contribution, even though the late duplicate is not in the L1 date range.
@@ -78,6 +97,7 @@ final class L1ProjectionJourneyEvidence {
             assertThat(appender.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,duplicate)))
                 .isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
         });
+        assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.STALE);
         var stale=l1.prove(tenant,gen);
         assertThat(stale.pendingFacts()).isEqualTo(1);
         assertThat(stale.bucketMismatches()).isPositive();
@@ -88,7 +108,9 @@ final class L1ProjectionJourneyEvidence {
             AND EXISTS(SELECT 1 FROM crm.sales_order_status_event e WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id AND e.event_type='PLACED')
             """,BigDecimal.class,tenant,order);
         expected(l1,tenant,gen,from,until,"1",remaining.toPlainString(),"10");
-        assertThat(l1.prove(tenant,gen).parity()).isTrue();
+        var beforeMissing=l1.prove(tenant,gen);
+        assertThat(beforeMissing.parity()).isTrue();
+        assertThat(l1.fenceStatus(tenant,gen,beforeMissing.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
 
         // Historical inventory occurs outside the range but is recorded inside.
         // Default P3 run must recover by recorded_at, not occurred_at.
@@ -103,6 +125,7 @@ final class L1ProjectionJourneyEvidence {
                 FROM crm.inv_stock_movement WHERE tenant_id=? AND reason_code='RECEIPT' ORDER BY id LIMIT 1
                 """,movement,"l1-legacy-"+movement,Timestamp.from(earlier),Timestamp.from(recorded),tenant)).isEqualTo(1);
         });
+        assertThat(l1.fenceStatus(tenant,gen,beforeMissing.id())).isEqualTo(L1ProjectionService.FenceStatus.STALE);
         assertThat(l1.prove(tenant,gen).missingFacts()).isEqualTo(1);
         delivery.openBackfill(new Slice(tenant,run,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,
             from.atStartOfDay(ZoneOffset.UTC).toInstant(),until.atStartOfDay(ZoneOffset.UTC).toInstant()));
@@ -121,9 +144,15 @@ final class L1ProjectionJourneyEvidence {
         });
 
         // Replay a new generation independently; old generation remains intact.
+        var beforeShadow=l1.prove(tenant,gen);
         l1.open(tenant,shadow,calendarVersion,from,until);
         l1.advance(tenant,shadow,500);
-        assertThat(l1.prove(tenant,shadow).parity()).isTrue();
+        var shadowProof=l1.prove(tenant,shadow);
+        assertThat(shadowProof.parity()).isTrue();
+        assertThat(l1.fenceStatus(tenant,gen,beforeShadow.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
+        assertThat(l1.fenceStatus(tenant,shadow,shadowProof.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
+        assertThat(l1.fenceStatus(tenant,gen,shadowProof.id())).isEqualTo(L1ProjectionService.FenceStatus.UNPROVEN);
+        assertThatThrownBy(()->l1.fenceStatus(otherTenant,gen,beforeShadow.id())).hasMessage("L1_GENERATION_NOT_FOUND");
         for(LocalDate day=from;day.isBefore(until);day=day.plusDays(1))
             assertThat(l1.buckets(tenant,shadow,day)).isEqualTo(l1.buckets(tenant,gen,day));
         assertThatThrownBy(()->jdbc.update("UPDATE crm.int_projection_generation SET from_day=from_day WHERE tenant_id=? AND generation_id=?",tenant,gen))
@@ -132,6 +161,8 @@ final class L1ProjectionJourneyEvidence {
         tx.executeWithoutResult(status->{
             assertThat(jdbc.update("UPDATE crm.int_daily_bucket SET amount=amount+1 WHERE tenant_id=? AND generation_id=? AND metric_code='PLACED_ORDERS'",tenant,shadow)).isPositive();
         });
+        assertThat(l1.fenceStatus(tenant,shadow,shadowProof.id())).isEqualTo(L1ProjectionService.FenceStatus.STALE);
+        assertThat(l1.fenceStatus(tenant,gen,beforeShadow.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
         assertThat(l1.prove(tenant,shadow).bucketMismatches()).isPositive();
         assertThat(l1.prove(tenant,gen).parity()).isTrue();
         assertThat(l1.lifecycle(tenant,gen)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
@@ -144,6 +175,7 @@ final class L1ProjectionJourneyEvidence {
         var receipts=delivery.consumerCoverage(tenant,"l1:"+shadow);
         assertThat(l1.abort(tenant,shadow,0)).isEqualTo(new L1ProjectionService.Lifecycle("ABORTED",1));
         assertThat(l1.abort(tenant,shadow,0)).isEqualTo(new L1ProjectionService.Lifecycle("ABORTED",1));
+        assertThat(l1.fenceStatus(tenant,shadow,shadowProof.id())).isEqualTo(L1ProjectionService.FenceStatus.ABORTED);
         assertThatThrownBy(()->l1.advance(tenant,shadow,1)).hasMessage("L1_GENERATION_NOT_BUILDING");
         assertThatThrownBy(()->l1.open(tenant,shadow,calendarVersion,from,until)).hasMessage("L1_GENERATION_NOT_BUILDING");
         assertThatThrownBy(()->jdbc.update("UPDATE crm.int_projection_lifecycle SET lifecycle_state='BUILDING',revision=0 WHERE tenant_id=? AND generation_id=?",tenant,shadow))

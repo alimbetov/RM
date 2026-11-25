@@ -34,6 +34,71 @@ public class L1ProjectionService {
         public boolean parity(){return missingFacts==0&&orphanFacts==0&&pendingFacts==0
             &&rejectedFacts==0&&receiptMismatches==0&&bucketMismatches==0;}
     }
+    public enum FenceStatus { UNPROVEN, INCOMPLETE, STALE, ABORTED, CURRENT }
+    public record Revisions(long source,long projection,long lifecycle){}
+    public record Route(boolean materialized,UUID generation,UUID proofId,String reason){}
+    private Revisions revisions(UUID tenant,UUID generation){
+        return jdbc.queryForObject("""
+            SELECT COALESCE(s.revision,0),COALESCE(p.revision,0),l.revision
+            FROM crm.int_projection_lifecycle l
+            LEFT JOIN crm.int_source_revision s ON s.tenant_id=l.tenant_id
+            LEFT JOIN crm.int_projection_revision p ON p.tenant_id=l.tenant_id AND p.generation_id=l.generation_id
+            WHERE l.tenant_id=? AND l.generation_id=?
+            """,(rs,n)->new Revisions(rs.getLong(1),rs.getLong(2),rs.getLong(3)),tenant,generation);
+    }
+    private FenceStatus fenceStatusInSnapshot(UUID tenant,UUID generation,UUID proof){
+        if("ABORTED".equals(readLifecycle(tenant,generation,"").state()))return FenceStatus.ABORTED;
+        return jdbc.query("""
+            SELECT CASE
+              WHEN f.proof_id IS NULL THEN 'UNPROVEN'
+              WHEN f.source_revision<>COALESCE(s.revision,0)
+                OR f.projection_revision<>COALESCE(p.revision,0)
+                OR f.lifecycle_revision<>l.revision THEN 'STALE'
+              WHEN c.missing_facts<>0 OR c.orphan_facts<>0 OR c.pending_facts<>0
+                OR c.rejected_facts<>0 OR c.receipt_mismatches<>0 OR c.bucket_mismatches<>0 THEN 'INCOMPLETE'
+              ELSE 'CURRENT' END
+            FROM crm.int_projection_lifecycle l
+            LEFT JOIN crm.int_source_revision s ON s.tenant_id=l.tenant_id
+            LEFT JOIN crm.int_projection_revision p ON p.tenant_id=l.tenant_id AND p.generation_id=l.generation_id
+            LEFT JOIN crm.int_coverage_fence f ON f.tenant_id=l.tenant_id AND f.generation_id=l.generation_id AND f.proof_id=?
+            LEFT JOIN crm.int_projection_coverage c ON c.tenant_id=f.tenant_id AND c.generation_id=f.generation_id AND c.proof_id=f.proof_id
+            WHERE l.tenant_id=? AND l.generation_id=?
+            """,rs->rs.next()?FenceStatus.valueOf(rs.getString(1)):FenceStatus.UNPROVEN,proof,tenant,generation);
+    }
+    /** Technical evidence only; CURRENT does not mean ACTIVE or geographically complete. */
+    public FenceStatus fenceStatus(UUID tenant,UUID generation,UUID proof){
+        Objects.requireNonNull(proof);
+        return tx(TransactionDefinition.ISOLATION_REPEATABLE_READ,()->{
+            require(tenant,generation);
+            return fenceStatusInSnapshot(tenant,generation,proof);
+        });
+    }
+    /** Internal routing descriptor only. No metric data, authorization or public routing.
+     * A later reader must repeat admission and read buckets in the same transaction.
+     * B4.2 cannot populate the pointer: ACTIVE is prohibited by the lifecycle schema.
+     */
+    public Route route(UUID tenant,long calendarVersion,int methodVersion,LocalDate from,LocalDate until){
+        Objects.requireNonNull(tenant);Objects.requireNonNull(from);Objects.requireNonNull(until);
+        if(calendarVersion<1||methodVersion!=1||!from.isBefore(until))
+            throw new IllegalArgumentException("L1_ROUTE_SCOPE");
+        return tx(TransactionDefinition.ISOLATION_REPEATABLE_READ,()->{
+            record Pointer(UUID generation,UUID proof){}
+            Pointer pointer=jdbc.query("""
+                SELECT generation_id,proof_id FROM crm.int_active_generation
+                WHERE tenant_id=? AND projection_code='L1'
+                """,rs->rs.next()?new Pointer(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class)):null,tenant);
+            if(pointer==null)return new Route(false,null,null,"NO_ACTIVE_GENERATION");
+            Generation g=require(tenant,pointer.generation());
+            if(g.calendarVersion()!=calendarVersion||g.methodVersion()!=methodVersion
+                ||from.isBefore(g.from())||until.isAfter(g.until()))
+                return new Route(false,null,null,"SCOPE_MISMATCH");
+            if(!"ACTIVE".equals(readLifecycle(tenant,g.id(),"").state()))
+                return new Route(false,null,null,"NOT_ACTIVE");
+            var status=fenceStatusInSnapshot(tenant,g.id(),pointer.proof());
+            if(status!=FenceStatus.CURRENT)return new Route(false,null,null,status.name());
+            return new Route(true,g.id(),pointer.proof(),"CURRENT");
+        });
+    }
     private record SalesContribution(LocalDate day,String currency,BigDecimal booked){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
@@ -236,6 +301,7 @@ public class L1ProjectionService {
     public Proof prove(UUID tenant,UUID generation){
         return tx(TransactionDefinition.ISOLATION_REPEATABLE_READ,()->{
             Generation g=require(tenant,generation);
+            Revisions stamp=revisions(tenant,generation);
             UUID proofId=UUID.randomUUID();
             Proof proof=jdbc.queryForObject("""
                 WITH p AS (SELECT CAST(? AS uuid) tenant,CAST(? AS uuid) gen,CAST(? AS varchar) consumer,
@@ -301,6 +367,10 @@ public class L1ProjectionService {
                   pending_facts,rejected_facts,receipt_mismatches,bucket_mismatches) VALUES (?,?,?,?,?,?,?,?,?,?)
                 """,tenant,generation,proof.id(),java.sql.Timestamp.from(proof.observedAt()),proof.missingFacts(),
                 proof.orphanFacts(),proof.pendingFacts(),proof.rejectedFacts(),proof.receiptMismatches(),proof.bucketMismatches());
+            jdbc.update("""
+                INSERT INTO crm.int_coverage_fence(tenant_id,generation_id,proof_id,
+                  source_revision,projection_revision,lifecycle_revision) VALUES (?,?,?,?,?,?)
+                """,tenant,generation,proof.id(),stamp.source(),stamp.projection(),stamp.lifecycle());
             return proof;
         });
     }
