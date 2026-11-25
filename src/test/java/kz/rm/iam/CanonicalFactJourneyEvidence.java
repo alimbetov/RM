@@ -377,6 +377,73 @@ final class CanonicalFactJourneyEvidence {
             """,String.class,tenant,event)).isEqualTo(original);
     }
 
+    /** Independent legacy digest oracle; rollback fixtures never rewrite existing immutable facts. */
+    static void digestReplayContract(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                     CanonicalFactAppender appender,UUID tenant,UUID cancelledOrder){
+        UUID event=statusEvent(jdbc,tenant,cancelledOrder,"CONFIRMED");
+        var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_CONFIRMED,event);
+        java.time.Instant occurred=jdbc.queryForObject(
+            "SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND id=?",
+            java.sql.Timestamp.class,tenant,event).toInstant();
+        String material=String.join("|","RM-FACT-V1",tenant.toString(),"SALES","ORDER_CONFIRMED",
+            event.toString(),cancelledOrder.toString(),occurred.toString(),"NULL","CONFIRMED");
+        String legacy;
+        try{
+            legacy=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(material.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }catch(java.security.NoSuchAlgorithmException e){throw new AssertionError(e);}
+        var tx=new TransactionTemplate(manager);
+        assertThat(count(jdbc,tenant,event)).isZero();
+        tx.executeWithoutResult(s->{
+            seedFact(jdbc,tenant,event,cancelledOrder,occurred,1,legacy,null);
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+            assertThat(count(jdbc,tenant,event)).isEqualTo(1);
+            s.setRollbackOnly();
+        });
+        assertThat(count(jdbc,tenant,event)).isZero();
+
+        for(String scenario:List.of("BAD_DIGEST","BAD_SUBJECT","BAD_OCCURRED","BAD_SOURCE_VERSION")){
+            assertThatThrownBy(()->tx.executeWithoutResult(s->{
+                seedFact(jdbc,tenant,event,scenario.equals("BAD_SUBJECT")?UUID.randomUUID():cancelledOrder,
+                    scenario.equals("BAD_OCCURRED")?occurred.plusSeconds(1):occurred,1,
+                    scenario.equals("BAD_DIGEST")?"0".repeat(64):legacy,
+                    scenario.equals("BAD_SOURCE_VERSION")?1L:null);
+                appender.append(key);
+            })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_FACT_CONFLICT");
+            assertThat(count(jdbc,tenant,event)).isZero();
+        }
+
+        // Capture a new V2 fact through the real appender, then independently corrupt the
+        // stored envelope in a fresh rollback-only fixture while preserving its valid digest.
+        var v2=new AtomicReference<String>();
+        tx.executeWithoutResult(s->{
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+            v2.set(jdbc.queryForObject("SELECT digest FROM crm.int_canonical_fact WHERE tenant_id=? AND source_id=?",
+                String.class,tenant,event));
+            assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+            s.setRollbackOnly();
+        });
+        assertThat(v2.get()).matches("[0-9a-f]{64}").isNotEqualTo(legacy);
+        for(String scenario:List.of("V2_BAD_SUBJECT","V2_BAD_VERSION","V2_BAD_DIGEST")){
+            assertThatThrownBy(()->tx.executeWithoutResult(s->{
+                seedFact(jdbc,tenant,event,scenario.equals("V2_BAD_SUBJECT")?UUID.randomUUID():cancelledOrder,
+                    occurred,2,scenario.equals("V2_BAD_DIGEST")?"0".repeat(64):v2.get(),
+                    scenario.equals("V2_BAD_VERSION")?1L:null);
+                appender.append(key);
+            })).isInstanceOf(IllegalStateException.class).hasMessage("CANONICAL_FACT_CONFLICT");
+            assertThat(count(jdbc,tenant,event)).isZero();
+        }
+    }
+
+    private static void seedFact(JdbcTemplate jdbc,UUID tenant,UUID event,UUID subject,
+                                 java.time.Instant occurred,int version,String digest,Long sourceVersion){
+        assertThat(jdbc.update("""
+            INSERT INTO crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id,subject_id,
+                occurred_at,source_version,schema_version,digest)
+            VALUES(?,'SALES','ORDER_CONFIRMED',?,?,?,?,?,?)
+            """,tenant,event,subject,java.sql.Timestamp.from(occurred),sourceVersion,version,digest)).isEqualTo(1);
+    }
+
     private record Race(UUID event,CanonicalFactKey.Kind kind,int calls){}
     private record Attempt(int backend,CanonicalFactAppender.Outcome outcome){}
     private static void race(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,

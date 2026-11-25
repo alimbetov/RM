@@ -3,19 +3,7 @@ name: RM MVP W2-W5 Service Journeys PostgreSQL Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java'
-      - 'src/main/java/kz/rm/sales/SalesInventoryCommandService.java'
-      - 'src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java'
-      - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
-      - 'src/test/java/kz/rm/iam/CanonicalFactJourneyEvidence.java'
-      - 'src/main/java/kz/rm/intelligence/CanonicalFactAppender.java'
-      - 'src/main/resources/db/changelog/db.changelog-master.sql'
-      - 'src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java'
-      - 'src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java'
-      - 'docs/operations/RM-MVP-SERVICE-CURRENCY-PREFLIGHT.sql'
-      - '.github/scripts/verify_rm_qa_01b.py'
-      - '.github/workflows/rm-mvp-w23-service-strict-pg.yml'
+    # Mandatory exact-SHA evidence: run for every base_dev candidate.
   workflow_dispatch:
 
 permissions:

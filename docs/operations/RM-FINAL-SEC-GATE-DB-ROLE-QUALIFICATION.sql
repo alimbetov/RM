@@ -14,10 +14,11 @@ GRANT UPDATE (booked_snapshot_sealed) ON crm.sales_order TO rm_runtime_gate;
 
 -- Prepare a real tenant-owned parent and merchandise snapshot as the fixture owner.
 -- The entire probe, including copied rows and grants, rolls back at the end.
-DO $
-DECLARE source_order crm.sales_order%ROWTYPE;
-DECLARE probe_order UUID := gen_random_uuid();
-DECLARE probe_event UUID := gen_random_uuid();
+DO $$
+DECLARE
+    source_order crm.sales_order%ROWTYPE;
+    probe_order UUID := gen_random_uuid();
+    probe_event UUID := gen_random_uuid();
 BEGIN
     SELECT o.* INTO STRICT source_order FROM crm.sales_order o
     WHERE EXISTS (SELECT 1 FROM crm.sales_order_line l
@@ -37,7 +38,7 @@ BEGIN
     PERFORM set_config('rm.gate_order',probe_order::text,true);
     PERFORM set_config('rm.gate_event',probe_event::text,true);
 END
-$;
+$$;
 
 SET LOCAL ROLE rm_runtime_gate;
 SELECT count(*) FROM public.iam_user_account;
@@ -58,10 +59,11 @@ BEGIN
     END IF;
 END
 $$;
-DO $
-DECLARE t UUID := current_setting('rm.gate_tenant')::uuid;
-DECLARE o UUID := current_setting('rm.gate_order')::uuid;
-DECLARE e UUID := current_setting('rm.gate_event')::uuid;
+DO $$
+DECLARE
+    t UUID := current_setting('rm.gate_tenant')::uuid;
+    o UUID := current_setting('rm.gate_order')::uuid;
+    e UUID := current_setting('rm.gate_event')::uuid;
 BEGIN
     IF has_table_privilege(current_user,'crm.int_canonical_fact','UPDATE')
        OR has_table_privilege(current_user,'crm.int_canonical_fact','DELETE')
@@ -95,6 +97,6 @@ BEGIN
     EXCEPTION WHEN insufficient_privilege THEN NULL;
     END;
 END
-$;
+$$;
 RESET ROLE;
 ROLLBACK;

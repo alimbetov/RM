@@ -21,7 +21,7 @@ public class CanonicalFactAppender {
     private final JdbcTemplate jdbc;
     public CanonicalFactAppender(JdbcTemplate jdbc){this.jdbc=jdbc;}
     private record Fact(UUID subject,Instant occurred,Instant recorded,String payload,Long sourceVersion,String extended){}
-    private record Stored(int version,String digest){}
+    private record Stored(int version,String digest,UUID subject,Instant occurred,Instant recorded,Long sourceVersion){}
     private record BookedHeader(BigDecimal amount,String currency,boolean sealed){}
     private record BookedLine(int quantity,BigDecimal price,String currency,String encoded){}
     @Transactional(propagation=Propagation.MANDATORY)
@@ -38,7 +38,7 @@ public class CanonicalFactAppender {
         // H2 is a test-only dialect; serialize via tenant row before check/insert.
         if(!pg)jdbc.queryForObject("SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE",UUID.class,key.tenantId());
         Stored prior=existing(key);
-        if(prior!=null)return verify(prior,legacy,digest);
+        if(prior!=null)return verify(prior,fact,legacy,digest);
         String sql="""
             INSERT INTO crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id,subject_id,
                 occurred_at,recorded_at,source_version,schema_version,digest)
@@ -47,16 +47,28 @@ public class CanonicalFactAppender {
         int changed=jdbc.update(sql+(pg?" ON CONFLICT (tenant_id,owner_module,source_kind,source_id) DO NOTHING":""),
             key.tenantId(),key.owner().name(),key.kind().name(),key.sourceId(),fact.subject(),
             Timestamp.from(fact.occurred()),fact.recorded()==null?null:Timestamp.from(fact.recorded()),fact.sourceVersion(),digest);
-        return changed==1?Outcome.INSERTED:verify(existing(key),legacy,digest);
+        return changed==1?Outcome.INSERTED:verify(existing(key),fact,legacy,digest);
     }
     private Stored existing(CanonicalFactKey k){
         return jdbc.query("""
-            SELECT schema_version,digest FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module=? AND source_kind=? AND source_id=?
-            """,rs->rs.next()?new Stored(rs.getInt(1),rs.getString(2)):null,k.tenantId(),k.owner().name(),k.kind().name(),k.sourceId());
+            SELECT schema_version,digest,subject_id,occurred_at,recorded_at,source_version
+            FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module=? AND source_kind=? AND source_id=?
+            """,rs->{
+                if(!rs.next())return null;
+                Timestamp recorded=rs.getTimestamp(5);
+                return new Stored(rs.getInt(1),rs.getString(2),rs.getObject(3,UUID.class),
+                    rs.getTimestamp(4).toInstant(),recorded==null?null:recorded.toInstant(),rs.getObject(6,Long.class));
+            },k.tenantId(),k.owner().name(),k.kind().name(),k.sourceId());
     }
-    private static Outcome verify(Stored prior,String legacy,String digest){
-        if(prior==null || !((prior.version()==1 && legacy.equals(prior.digest())) ||
-                (prior.version()==2 && digest.equals(prior.digest()))))throw new IllegalStateException("CANONICAL_FACT_CONFLICT");
+    private static Outcome verify(Stored prior,Fact fact,String legacy,String digest){
+        // V1 never populated source_version; its historical digest must remain unchanged.
+        boolean valid=prior!=null && Objects.equals(prior.subject(),fact.subject())
+            && Objects.equals(prior.occurred(),fact.occurred())
+            && Objects.equals(prior.recorded(),fact.recorded())
+            && ((prior.version()==1 && prior.sourceVersion()==null && legacy.equals(prior.digest()))
+                || (prior.version()==2 && Objects.equals(prior.sourceVersion(),fact.sourceVersion())
+                    && digest.equals(prior.digest())));
+        if(!valid)throw new IllegalStateException("CANONICAL_FACT_CONFLICT");
         return Outcome.ALREADY_PRESENT;
     }
     private Fact load(CanonicalFactKey k,boolean pg){
