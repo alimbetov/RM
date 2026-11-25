@@ -1,0 +1,71 @@
+{
+  "schema": "RM-B2.1R/producer-inventory/v1",
+  "scope": "literal production SQL INSERT into source journals, src/main/java; excluded test fixtures and migration SQL; review generated/ORM SQL separately",
+  "producers": [
+    {
+      "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "table": "sales_order_status_event",
+      "sites": 2,
+      "method": "checkoutInternal / negotiated checkout",
+      "canonical": "ORDER_PLACED, one per accepted order"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+      "table": "sales_order_status_event",
+      "sites": 1,
+      "method": "appendEvent",
+      "canonical": "ORDER_CONFIRMED, ORDER_COMPLETED, ORDER_CANCELLED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+      "table": "sales_order_status_event",
+      "sites": 1,
+      "method": "handover",
+      "canonical": "ORDER_COMPLETED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+      "table": "sales_order_status_event",
+      "sites": 1,
+      "method": "preparation transition",
+      "canonical": "EXCLUDED: PREPARING, READY_FOR_PICKUP (not current canonical kinds)"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "adjust",
+      "canonical": "STOCK_MOVEMENT, includes return restock via delegation"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "transition",
+      "canonical": "STOCK_MOVEMENT per fulfillment; release excluded"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "postLeg",
+      "canonical": "STOCK_MOVEMENT × 2 per transfer"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "post",
+      "canonical": "STOCK_MOVEMENT per nonzero stocktake adjustment"
+    }
+  ],
+  "delegates": [
+    "ReturnInventoryPostingPort.restock -> InventoryMovementService.adjust",
+    "SalesReturnPhysicalService and SalesReturnQuarantineResolutionService -> ReturnInventoryPostingPort"
+  ],
+  "limitations": [
+    "Not proof of generated SQL or database procedures",
+    "Manifest gate fails on new or missing literal insert sites",
+    "No producer wiring yet"
+  ]
+}

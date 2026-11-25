@@ -42,14 +42,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 .github/scripts/verify_rm_ie00b_a2_contracts.py
           python3 .github/scripts/verify_rm_ie00b_source_inventory.py
+          python3 .github/scripts/verify_rm_canonical_producer_inventory.py
       - name: Qualify migrated schema and pure B1 specifications
-        run: mvn -B -ntp clean test '-Dtest=IntelligenceSourceSchemaQualificationTest,IntelligenceB1ContractTest'
+        run: mvn -B -ntp clean test '-Dtest=IntelligenceSourceSchemaQualificationTest,IntelligenceB1ContractTest,CanonicalFactEncodingTest'
       - name: Require executed evidence
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          expected={'migratedSourceColumnsAndOrderedTenantPrimaryKeys','sourceNumericAndTimestampTypesArePreserved','dstDaysUseCalendarNotFixedSeconds','decadeLeapMonthAndIsoWeekBoundaries','allSevenPeriodsAndVersion','invalidCalendarRejected','registryRejectsWrongSelectionAndVersion','allEightMetricDefinitionsAreExplicit'}
+          expected={'migratedSourceColumnsAndOrderedTenantPrimaryKeys','sourceNumericAndTimestampTypesArePreserved','dstDaysUseCalendarNotFixedSeconds','decadeLeapMonthAndIsoWeekBoundaries','allSevenPeriodsAndVersion','invalidCalendarRejected','registryRejectsWrongSelectionAndVersion','allEightMetricDefinitionsAreExplicit','framingDistinguishesNullEmptyAndDelimiters','decimalScaleIsCanonical'}
           cases=[c for p in Path('target/surefire-reports').glob('TEST-*.xml') for c in ET.parse(p).getroot().iter('testcase')]
           assert expected <= {c.get('name') for c in cases}
           assert not any(c.find(t) is not None for c in cases for t in ('failure','error','skipped'))

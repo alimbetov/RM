@@ -227,7 +227,19 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
                 2, "375", 2, 1, 1, "10", "3", "7");
-        CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,UUID.randomUUID());
+        UUID otherOwnerId=account("bus-other-owner");
+        proveInitialOwnerEmail(otherOwnerId);
+        VerifiedActor otherOwner=actor(otherOwnerId);
+        UUID otherTenant=UUID.randomUUID();
+        assertThat(onboarding.createFirstTenant(otherOwner,otherTenant,
+                "RM Canonical Isolation LLP","RM Canonical Isolation","KZ").tenantId()).isEqualTo(otherTenant);
+        currencies.initialize(otherOwner,otherTenant);
+        CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
+        String rollbackKey="bus-rollback-"+UUID.randomUUID();
+        CanonicalFactJourneyEvidence.ownerRollback(jdbc,canonicalTransactions,canonicalFacts,tenant,rollbackKey,
+            ()->checkout.checkout(store.slug(),"bus-rollback-"+UUID.randomUUID()+"@example.kz",
+                rollbackKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+        CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
         calendar.append(owner,tenant,"Etc/UTC",0);
         var period=new kz.rm.intelligence.MetricSelection.PeriodChoice(
             kz.rm.intelligence.PeriodResolver.Code.Y,java.time.LocalDate.now(java.time.ZoneOffset.UTC),1);
