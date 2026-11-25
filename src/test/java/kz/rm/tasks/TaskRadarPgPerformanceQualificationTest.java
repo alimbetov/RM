@@ -30,6 +30,7 @@ class TaskRadarPgPerformanceQualificationTest {
     @Autowired DataSource dataSource;
     private static final Path REPORT=Path.of("target/radar-performance");
     private static final int WARMUP=10, SAMPLES=50;
+    private static final int COMMANDS_PER_BLOCK=1000, MIN_OVERLAPPING_READS=100;
     private SignedJwtTestAuthority authority;
 
     @BeforeEach void startAuthority() throws Exception { authority=SignedJwtTestAuthority.start(); }
@@ -213,7 +214,8 @@ class TaskRadarPgPerformanceQualificationTest {
         List<Long> values=new ArrayList<>();
         for(int i=0;i<SAMPLES;i++){
             long start=System.nanoTime();var page=radar.listMine(t.staff(),t.id(),limit,cursor);
-            values.add(System.nanoTime()-start);
+            long end=System.nanoTime();values.add(end-start);
+                    readSpans.add(new RadarCompetitionIntervals.Span(start,end));
             assertThat(ids(page)).containsExactlyElementsOf(ids(initial));
         }
         samples(label,values);plan(t,limit,initial.evaluatedAt(),cursor,label);
@@ -236,10 +238,12 @@ class TaskRadarPgPerformanceQualificationTest {
         assertThat(results).allSatisfy(ms->assertThat(ms).as("warm service read p95 ms").isLessThanOrEqualTo(200.0));
     }
 
-    private record Block(List<Long> commands,List<Long> reads,long lockSamples,long lockPositiveSamples){}
+    private record Block(List<Long> commands,List<Long> reads,long lockSamples,long lockPositiveSamples,
+                         List<RadarCompetitionIntervals.Span> commandSpans,List<RadarCompetitionIntervals.Span> readSpans){}
     private Block commandBlock(Tenant t,UUID task,Instant anchor,long[] version,int count,boolean mixed)throws Exception{
         var stop=new AtomicBoolean();var readerStarted=new CountDownLatch(1);
         List<Long> commands=new ArrayList<>();
+        List<RadarCompetitionIntervals.Span> commandSpans=new ArrayList<>(),readSpans=new ArrayList<>();
         try(var pool=Executors.newFixedThreadPool(2)){
             Future<List<Long>> reads=pool.submit(()->{
                 List<Long> values=new ArrayList<>();
@@ -276,7 +280,8 @@ class TaskRadarPgPerformanceQualificationTest {
                     String request="radar-c3-"+UUID.randomUUID();
                     long start=System.nanoTime();
                     var updated=tasks.reschedule(t.manager(),t.id(),task,due,v,request);
-                    commands.add(System.nanoTime()-start);
+                    long end=System.nanoTime();commands.add(end-start);
+                    commandSpans.add(new RadarCompetitionIntervals.Span(start,end));
                     assertThat(updated.version()).isEqualTo(v+1);
                     version[0]=updated.version();
                 }
@@ -285,7 +290,7 @@ class TaskRadarPgPerformanceQualificationTest {
             var readSamples=reads.get(20,TimeUnit.SECONDS);
             assertThat(observed[0]).isPositive();
             if(mixed)assertThat(readSamples).isNotEmpty();
-            return new Block(commands,readSamples,observed[0],observed[1]);
+            return new Block(commands,readSamples,observed[0],observed[1],commandSpans,readSpans);
         }
     }
     private void mixedWorkload(Population p)throws Exception{
@@ -294,12 +299,17 @@ class TaskRadarPgPerformanceQualificationTest {
         commandBlock(t,task.id(),p.anchor(),version,20,false); // warm commands
         commandBlock(t,task.id(),p.anchor(),version,20,true);  // warm mixed path
         List<Long> baseline=new ArrayList<>(),mixed=new ArrayList<>(),reader=new ArrayList<>();
-        // Counterbalance first/last order; 120 measured commands per arm.
+        // Fixed predeclared balanced blocks; 3000 measured commands per arm.
+        int overlapping=0;boolean allMixedOverlap=true;
+        Files.writeString(REPORT.resolve("competition-contract.txt"),"commandsPerBlock="+COMMANDS_PER_BLOCK+"\nminOverlappingReads="+MIN_OVERLAPPING_READS+"\n");
         boolean[] order={false,true,true,false,false,true};
         StringBuilder locks=new StringBuilder("block,mixed,lockSamples,positiveLockSamples,completedReads\n");
         for(int i=0;i<order.length;i++){
             boolean concurrent=order[i];
-            var block=commandBlock(t,task.id(),p.anchor(),version,40,concurrent);
+            var block=commandBlock(t,task.id(),p.anchor(),version,COMMANDS_PER_BLOCK,concurrent);
+            RadarCompetitionIntervals.write(REPORT,i+1,block.commandSpans(),block.readSpans());
+            int overlap=RadarCompetitionIntervals.overlapCount(block.commandSpans(),block.readSpans());
+            overlapping+=overlap;if(concurrent&&overlap==0)allMixedOverlap=false;
             String label="100000-command-block"+(i+1)+(concurrent?"-mixed":"-baseline");
             samples(label,block.commands());
             (concurrent?mixed:baseline).addAll(block.commands());reader.addAll(block.reads());
@@ -317,8 +327,12 @@ class TaskRadarPgPerformanceQualificationTest {
         assertThat(tasks.getMine(t.manager(),t.id(),task.id()).version()).isEqualTo(version[0]);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?",
             Long.class,t.id(),task.id())).isEqualTo(version[0]+1);
-        assertThat(percentile(reader,.95)).as("mixed read p95 ms").isLessThanOrEqualTo(200.0);
-        assertThat(delta).as("mixed command p95 degradation percent (CI environment)").isLessThanOrEqualTo(10.0);
+        final int measuredOverlap=overlapping;final boolean everyMixedBlock=allMixedOverlap;
+        org.junit.jupiter.api.Assertions.assertAll(
+            ()->assertThat(everyMixedBlock).as("actual overlap in every mixed block").isTrue(),
+            ()->assertThat(measuredOverlap).as("overlapping read samples").isGreaterThanOrEqualTo(MIN_OVERLAPPING_READS),
+            ()->assertThat(percentile(reader,.95)).as("mixed read p95 ms").isLessThanOrEqualTo(200.0),
+            ()->assertThat(delta).as("mixed command p95 degradation percent (CI environment)").isLessThanOrEqualTo(10.0));
     }
     @Test void c301OneThousandTaskReadPlans()throws Exception{readWorkload(populate(1000));}
     @Test void c302TenThousandTaskReadPlans()throws Exception{readWorkload(populate(10000));}

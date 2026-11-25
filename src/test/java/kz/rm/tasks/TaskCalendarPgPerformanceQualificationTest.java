@@ -22,6 +22,7 @@ class TaskCalendarPgPerformanceQualificationTest {
     private static final Instant BASE=Instant.parse("2026-11-01T00:00:00Z");
     private static final Instant CUT=BASE.plusSeconds(10*86400);
     private static final Path REPORT=Path.of("target/radar-calendar-performance");
+    private static final int COMMANDS_PER_BLOCK=3000, MIN_OVERLAPPING_READS=100;
     @Autowired TaskTimingCompletionQualificationTest.MutableClock clock;
     @Autowired TaskService tasks;
     @Autowired TaskCalendarQueryService calendar;
@@ -274,17 +275,20 @@ class TaskCalendarPgPerformanceQualificationTest {
         }
         assertThat(metrics).allSatisfy(ms->assertThat(ms).as("calendar warm p95 ms").isLessThanOrEqualTo(200.0));
     }
-    private record Block(List<Long> commands,List<Long> reads,long lockSamples,long lockPositive){}
+    private record Block(List<Long> commands,List<Long> reads,long lockSamples,long lockPositive,
+                         List<RadarCompetitionIntervals.Span> commandSpans,List<RadarCompetitionIntervals.Span> readSpans){}
     private Block commands(Tenant t,UUID task,long[] version,int count,boolean mixed)throws Exception{
         AtomicBoolean stop=new AtomicBoolean();CountDownLatch started=new CountDownLatch(1);
         List<Long> times=new ArrayList<>();
+        List<RadarCompetitionIntervals.Span> commandSpans=new ArrayList<>(),readSpans=new ArrayList<>();
         try(var pool=Executors.newFixedThreadPool(2)){
             var reader=pool.submit(()->{
                 List<Long> reads=new ArrayList<>();
                 if(!mixed){started.countDown();return reads;}
                 while(!stop.get()){
                     var actor=t.staff();var f=filter(true);
-                    long start=System.nanoTime();var p=calendar.listMine(actor,t.id(),f,100,null);reads.add(System.nanoTime()-start);
+                    long start=System.nanoTime();var p=calendar.listMine(actor,t.id(),f,100,null);
+                    long end=System.nanoTime();reads.add(end-start);readSpans.add(new RadarCompetitionIntervals.Span(start,end));
                     assertThat(p.items()).hasSize(100);started.countDown();
                 }
                 return reads;
@@ -304,22 +308,28 @@ class TaskCalendarPgPerformanceQualificationTest {
                     var actor=t.manager();
                     String request="f2-mix-"+UUID.randomUUID();
                     long start=System.nanoTime();var next=tasks.reschedule(actor,t.id(),task,due,v,request);
-                    times.add(System.nanoTime()-start);assertThat(next.version()).isEqualTo(v+1);version[0]=next.version();
+                    long end=System.nanoTime();times.add(end-start);commandSpans.add(new RadarCompetitionIntervals.Span(start,end));
+                    assertThat(next.version()).isEqualTo(v+1);version[0]=next.version();
                 }
             }finally{stop.set(true);}
             var locks=observer.get(30,TimeUnit.SECONDS);var reads=reader.get(30,TimeUnit.SECONDS);
             assertThat(locks[0]).isPositive();if(mixed)assertThat(reads).isNotEmpty();
-            return new Block(times,reads,locks[0],locks[1]);
+            return new Block(times,reads,locks[0],locks[1],commandSpans,readSpans);
         }
     }
     private void mixed(Population population)throws Exception{
         var t=population.dense();var task=create(t,BASE.plusSeconds(40*86400));long[] v={task.version()};
         commands(t,task.id(),v,20,false);commands(t,task.id(),v,20,true);
         List<Long> base=new ArrayList<>(),mixed=new ArrayList<>(),reads=new ArrayList<>();
+        int overlapping=0;boolean allMixedOverlap=true;
+        Files.writeString(REPORT.resolve("competition-contract.txt"),"commandsPerBlock="+COMMANDS_PER_BLOCK+"\nminOverlappingReads="+MIN_OVERLAPPING_READS+"\n");
         boolean[] order={false,true,true,false,false,true};
         StringBuilder locks=new StringBuilder("block,mixed,samples,positive,reads\n");
         for(int i=0;i<order.length;i++){
-            var b=commands(t,task.id(),v,40,order[i]);(order[i]?mixed:base).addAll(b.commands());reads.addAll(b.reads());
+            var b=commands(t,task.id(),v,COMMANDS_PER_BLOCK,order[i]);(order[i]?mixed:base).addAll(b.commands());reads.addAll(b.reads());
+            RadarCompetitionIntervals.write(REPORT,i+1,b.commandSpans(),b.readSpans());
+            int overlap=RadarCompetitionIntervals.overlapCount(b.commandSpans(),b.readSpans());
+            overlapping+=overlap;if(order[i]&&overlap==0)allMixedOverlap=false;
             save("100000-command-block"+(i+1),b.commands());
             locks.append(i+1).append(',').append(order[i]).append(',').append(b.lockSamples()).append(',').append(b.lockPositive()).append(',').append(b.reads().size()).append('\n');
         }
@@ -330,8 +340,11 @@ class TaskCalendarPgPerformanceQualificationTest {
         Files.writeString(REPORT.resolve("100000-lock-sampling.csv"),locks);
         assertThat(tasks.getMine(t.manager(),t.id(),task.id()).version()).isEqualTo(v[0]);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.task_event WHERE tenant_id=? AND task_id=?",Long.class,t.id(),task.id())).isEqualTo(v[0]+1);
-        // Report both independent failures even if the first SLA is missed.
+        // Report independent evidence failures even if the first SLA is missed.
+        final int measuredOverlap=overlapping;final boolean everyMixedBlock=allMixedOverlap;
         org.junit.jupiter.api.Assertions.assertAll(
+            ()->assertThat(everyMixedBlock).as("actual overlap in every mixed block").isTrue(),
+            ()->assertThat(measuredOverlap).as("overlapping read samples").isGreaterThanOrEqualTo(MIN_OVERLAPPING_READS),
             ()->assertThat(p(reads,.95)).as("calendar mixed p95").isLessThanOrEqualTo(200),
             ()->assertThat(delta).as("command degradation p95 percent").isLessThanOrEqualTo(10));
     }

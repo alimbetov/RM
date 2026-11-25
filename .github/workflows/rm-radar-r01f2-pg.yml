@@ -68,6 +68,10 @@ jobs:
                           stem=f'{size}-{density}-{basis}-limit{limit}-first'
                           assert (root/f'{stem}-plan.json').is_file()
                           assert (root/f'{stem}-samples.csv').is_file()
+          contract=dict(line.split('=',1) for line in (root/'competition-contract.txt').read_text().splitlines() if line)
+          assert contract=={'commandsPerBlock':'3000','minOverlappingReads':'100'}
+          for i in range(1,7):
+              assert (root/f'100000-block{i}-intervals.csv').is_file()
           for name in ('environment.txt','runner.txt','measurements.txt','100000-command-comparison.txt','100000-lock-sampling.csv','100000-command-baseline-samples.csv','100000-command-mixed-samples.csv'):
               assert (root/name).is_file(), name
           PY

@@ -68,10 +68,36 @@ def plan_summary(document):
             "nodes":nodes}
 
 
+def read_intervals(path, command_samples):
+    groups={"command":[], "read":[]}
+    with path.open(newline="",encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            spans=groups[row["kind"]]
+            start,end=int(row["startNanos"]),int(row["endNanos"])
+            if int(row["sample"])!=len(spans)+1 or end<=start or (spans and start<spans[-1][1]):
+                raise ValueError("invalid interval sequence")
+            spans.append((start,end))
+    commands,reads=groups["command"],groups["read"]
+    if [end-start for start,end in commands]!=command_samples:
+        raise ValueError("command interval/sample mismatch")
+    cursor=overlap=0
+    for start,end in reads:
+        while cursor<len(commands) and commands[cursor][1]<=start:
+            cursor+=1
+        if cursor<len(commands) and commands[cursor][0]<end:
+            overlap+=1
+    return overlap,[end-start for start,end in reads]
+
 def competition(root, samples):
     base=samples["100000-command-baseline"]
     mixed=samples["100000-command-mixed"]
     reader=samples["100000-mixed-reader"]
+    contract=dict(line.split("=",1) for line in (root/"competition-contract.txt").read_text().splitlines() if line)
+    count=int(contract["commandsPerBlock"])
+    minimum=int(contract["minOverlappingReads"])
+    if count not in (1000,3000) or minimum!=100:
+        raise ValueError("unexpected competition contract")
+    interval_reads=[]
     with (root/"100000-lock-sampling.csv").open(newline="",encoding="utf-8") as f:
         locks=list(csv.DictReader(f))
     if len(locks)!=6:
@@ -90,25 +116,34 @@ def competition(root, samples):
         if name.endswith("-mixed") and not is_mixed or name.endswith("-baseline") and is_mixed:
             raise ValueError("command block arm mismatch")
         values=samples[name]
-        if len(values)!=40:
+        if len(values)!=count:
             raise ValueError("unexpected command sample count")
         lock_samples=int(row.get("samples",row.get("lockSamples","-1")))
         positive=int(row.get("positive",row.get("positiveLockSamples","-1")))
         reads=int(row.get("reads",row.get("completedReads","-1")))
         if not 0<=positive<=lock_samples or lock_samples<=0 or reads<0 or (is_mixed!=(reads>0)):
             raise ValueError("invalid lock sampling evidence")
+        overlap,read_values=read_intervals(root/f"100000-block{i}-intervals.csv",values)
+        if len(read_values)!=reads:
+            raise ValueError("reader interval count mismatch")
+        interval_reads.extend(read_values)
         arm[is_mixed].extend(values)
         blocks.append({"block":i,"mixed":is_mixed,**stats(values),
                        "lockSamples":lock_samples,"positiveLockSamples":positive,
-                       "completedReads":reads})
+                       "completedReads":reads,"overlappingReads":overlap})
     if arm[False]!=base or arm[True]!=mixed or sum(x["completedReads"] for x in blocks)!=len(reader):
         raise ValueError("aggregated samples do not match raw blocks")
+    if interval_reads!=reader:
+        raise ValueError("reader interval/sample mismatch")
+    overlap=sum(x["overlappingReads"] for x in blocks)
     delta=(percentile(mixed)/percentile(base)-1)*100
     return {"baseline":stats(base),"mixed":stats(mixed),"reader":stats(reader),
             "commandDegradationPercent":delta,
             "commandWithinBudget":delta<=10,
             "mixedReadWithinBudget":percentile(reader)<=200,
-            "readerTailSampleWarning":len(reader)<100,
+            "readerTailSampleWarning":overlap<minimum,
+            "overlappingReads":overlap,
+            "overlapQualified":overlap>=minimum and all(x["overlappingReads"]>0 for x in blocks if x["mixed"]),
             "blocks":blocks,
             "lockInterpretation":"Database-wide sampled waits; zero observations do not establish absence of locks."}
 
@@ -178,7 +213,7 @@ def main():
         for block in c["blocks"]:
             lines.append(f"- Block {block['block']} mixed={block['mixed']} p95={block['p95Ms']:.3f} ms; "
                          f"lock samples={block['positiveLockSamples']}/{block['lockSamples']}; "
-                         f"completed reads={block['completedReads']}")
+                         f"completed reads={block['completedReads']}; overlapping reads={block['overlappingReads']}")
         if c["readerTailSampleWarning"]:
             lines.append("- Mixed reader tail estimate has fewer than 100 samples.")
     lines.append("This report does not replace or relax the Java qualification assertions.")

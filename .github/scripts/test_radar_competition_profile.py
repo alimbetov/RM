@@ -28,21 +28,31 @@ class ProfileTest(unittest.TestCase):
             root=Path(tmp)
             samples={}
             base=[];mixed=[]
+            (root/"competition-contract.txt").write_text("commandsPerBlock=1000\nminOverlappingReads=100\n")
             with (root/"100000-lock-sampling.csv").open("w",newline="") as f:
                 writer=csv.writer(f)
                 writer.writerow(["block","mixed","samples","positive","reads"])
                 for i,m in enumerate([False,True,True,False,False,True],1):
-                    values=[1200000 if m else 1000000]*40
+                    values=[1200000 if m else 1000000]*1000
                     samples[f"100000-command-block{i}"]=values
                     (mixed if m else base).extend(values)
                     writer.writerow([i,str(m).lower(),1,0,2 if m else 0])
+                    with (root/f"100000-block{i}-intervals.csv").open("w",newline="") as intervals:
+                        w=csv.writer(intervals);w.writerow(["kind","sample","startNanos","endNanos"])
+                        end=0
+                        for j,value in enumerate(values,1):
+                            w.writerow(["command",j,end,end+value]);end+=value
+                        if m:
+                            w.writerow(["read",1,0,10000000]);w.writerow(["read",2,10000000,20000000])
             samples.update({"100000-command-baseline":base,"100000-command-mixed":mixed,
                             "100000-mixed-reader":[10000000]*6})
             result=competition(root,samples)
             self.assertAlmostEqual(result["commandDegradationPercent"],20)
             self.assertFalse(result["commandWithinBudget"])
             self.assertTrue(result["readerTailSampleWarning"])
-            samples["100000-command-mixed"]=[1]*120
+            self.assertEqual(result["overlappingReads"],6)
+            self.assertFalse(result["overlapQualified"])
+            samples["100000-command-mixed"]=[1]*3000
             with self.assertRaisesRegex(ValueError,"raw blocks"):
                 competition(root,samples)
     def test_nonsequential_sample_rejected(self):
