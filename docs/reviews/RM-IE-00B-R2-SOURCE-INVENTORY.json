@@ -75,8 +75,9 @@
     {
       "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
       "designBlob": "a4366e97f9c4a9c2cdf3f6962a074a738ebed49f",
-      "baselineBlob": "a4366e97f9c4a9c2cdf3f6962a074a738ebed49f",
-      "status": "UNCHANGED"
+      "baselineBlob": "28e8c57a92e264c121fa67766a36ac4119489319",
+      "status": "DRIFT",
+      "previousBaselineBlob": "a4366e97f9c4a9c2cdf3f6962a074a738ebed49f"
     },
     {
       "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
@@ -101,8 +102,9 @@
     {
       "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
       "designBlob": "3b25e1bd965131d95ddab478492516b06e51c040",
-      "baselineBlob": "3b25e1bd965131d95ddab478492516b06e51c040",
-      "status": "UNCHANGED"
+      "baselineBlob": "17e89594332f6daacbd36aebca7000658649a231",
+      "status": "DRIFT",
+      "previousBaselineBlob": "3b25e1bd965131d95ddab478492516b06e51c040"
     },
     {
       "path": "src/main/java/kz/rm/inventory/StockBalanceRepository.java",
@@ -131,8 +133,9 @@
     {
       "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
       "designBlob": "2e651d2094574a43eb0effd395d6816a911427ed",
-      "baselineBlob": "2e651d2094574a43eb0effd395d6816a911427ed",
-      "status": "UNCHANGED"
+      "baselineBlob": "6abaec72cf1f07d8a8e139e859601571a8205a78",
+      "status": "DRIFT",
+      "previousBaselineBlob": "2e651d2094574a43eb0effd395d6816a911427ed"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesReturnQuarantineResolutionService.java",
@@ -143,8 +146,9 @@
     {
       "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
       "designBlob": "2d0eb7f5cc8d7b4d798f14f1db531ae103083fcc",
-      "baselineBlob": "2d0eb7f5cc8d7b4d798f14f1db531ae103083fcc",
-      "status": "UNCHANGED"
+      "baselineBlob": "b3f2c483e419bd668305df7c47d624047200486b",
+      "status": "DRIFT",
+      "previousBaselineBlob": "2d0eb7f5cc8d7b4d798f14f1db531ae103083fcc"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryPostingVersion.java",
@@ -191,8 +195,9 @@
     {
       "path": "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
       "designBlob": "6995fa323aba6dabba49bdf36a779854bfa11845",
-      "baselineBlob": "6995fa323aba6dabba49bdf36a779854bfa11845",
-      "status": "UNCHANGED"
+      "baselineBlob": "ec431a35f98c34b255537f50f1007f008c837eb8",
+      "status": "DRIFT",
+      "previousBaselineBlob": "6995fa323aba6dabba49bdf36a779854bfa11845"
     },
     {
       "path": "src/main/java/kz/rm/iam/OidcJwtConfiguration.java",
@@ -221,8 +226,9 @@
     {
       "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
       "designBlob": "d6edc12766f22e937bf101dfc0262d11eb56ee4e",
-      "baselineBlob": "d7dd0c75de77e66c7c65cd4666057fea51fe9237",
-      "status": "DRIFT"
+      "baselineBlob": "e0ae0757e99d78aca7a083970f1d38f93572968c",
+      "status": "DRIFT",
+      "previousBaselineBlob": "d7dd0c75de77e66c7c65cd4666057fea51fe9237"
     },
     {
       "path": "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",

@@ -2,6 +2,8 @@ package kz.rm.inventory;
 
 import kz.rm.inventory.dto.StockTransferDto;
 import org.springframework.jdbc.core.JdbcTemplate;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +24,10 @@ import java.util.UUID;
 @Service
 class InventoryTransferService {
     private final JdbcTemplate jdbc;
+    private final CanonicalFactAppender canonicalFacts;
     private final StockEligibility eligibility;
-    InventoryTransferService(JdbcTemplate jdbc,StockEligibility eligibility){
+    InventoryTransferService(JdbcTemplate jdbc,StockEligibility eligibility,CanonicalFactAppender canonicalFacts){
+        this.canonicalFacts=java.util.Objects.requireNonNull(canonicalFacts);
         this.jdbc=jdbc;this.eligibility=eligibility;
     }
     private record Position(BigDecimal onHand,BigDecimal reserved) {}
@@ -126,14 +130,18 @@ class InventoryTransferService {
     private void postLeg(UUID tenant,UUID location,UUID item,UUID receipt,UUID actor,
                          String reason,BigDecimal delta,BigDecimal before,BigDecimal after,
                          Timestamp at,String key) {
+        UUID movementId=UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO crm.inv_stock_movement
                   (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                    balance_before,balance_after,occurred_at,recorded_at,reason_code,
                    actor_user_id,source_type,source_id,posting_version)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,tenant,UUID.randomUUID(),location,item,key,delta,before,after,at,at,
+                """,tenant,movementId,location,item,key,delta,before,after,at,at,
                 reason,actor,"TRANSFER",receipt,
                 InventoryPostingVersion.afterBalanceUpdate(jdbc,tenant,location,item));
+        if(canonicalFacts.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
+                !=CanonicalFactAppender.Outcome.INSERTED)
+            throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
     }
 }

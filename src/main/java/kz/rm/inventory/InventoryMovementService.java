@@ -1,6 +1,8 @@
 package kz.rm.inventory;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,9 +25,11 @@ import java.util.UUID;
 @Service
 public class InventoryMovementService {
     private final JdbcTemplate jdbc;
+    private final CanonicalFactAppender canonicalFacts;
     private final StockEligibility stockEligibility;
 
-    public InventoryMovementService(JdbcTemplate jdbc,StockEligibility stockEligibility) {
+    public InventoryMovementService(JdbcTemplate jdbc,StockEligibility stockEligibility,CanonicalFactAppender canonicalFacts) {
+        this.canonicalFacts=java.util.Objects.requireNonNull(canonicalFacts);
         this.jdbc=jdbc;this.stockEligibility=stockEligibility;
     }
 
@@ -145,6 +149,9 @@ public class InventoryMovementService {
             """,tenantId,id,locationId,itemId,requestKey,delta,before,after,now,now,reason.name(),
                 actorId,actorId==null?null:"STAFF",null,cause==null?null:cause.name(),
                 InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,locationId,itemId));
+        if(canonicalFacts.append(new CanonicalFactKey(tenantId,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,id))
+                !=CanonicalFactAppender.Outcome.INSERTED)
+            throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
         return new Movement(id,tenantId,locationId,itemId,delta,before,after);
     }
 }

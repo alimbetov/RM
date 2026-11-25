@@ -26,6 +26,7 @@ class InventoryMovementQualificationTest {
     @Autowired InventoryMovementService movements;
     @Autowired DataSource dataSource;
     @Autowired JdbcTemplate jdbc;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired OrganizationRepository organizations;
     @Autowired WorkspaceRepository workspaces;
 
@@ -63,6 +64,25 @@ class InventoryMovementQualificationTest {
             """,BigDecimal.class,p.tenant(),p.location(),p.item());
     }
 
+    @Test void p1PostgresMovementAppendFailureRestoresBalanceAndRetry() throws Exception {
+        try(var con=dataSource.getConnection()){
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+        }
+        var p=position();
+        var before=jdbc.queryForList("SELECT on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",p.tenant(),p.location(),p.item());
+        assertThatThrownBy(()->new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status->{
+            jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_p1_movement_failure CHECK (false) NOT VALID");
+            movements.adjust(p.tenant(),p.location(),p.item(),"p1-movement-retry",BigDecimal.ONE);
+        })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("ck_p1_movement_failure");
+        assertThat(jdbc.queryForList("SELECT on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",p.tenant(),p.location(),p.item())).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?",Integer.class,p.tenant())).isZero();
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,p.tenant());
+        var recovered=movements.adjust(p.tenant(),p.location(),p.item(),"p1-movement-retry",BigDecimal.ONE);
+        assertThat(movements.adjust(p.tenant(),p.location(),p.item(),"p1-movement-retry",BigDecimal.ONE).id()).isEqualTo(recovered.id());
+        assertThat(onHand(p)).isEqualByComparingTo("11");
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,p.tenant());
+    }
+
     @Test void adjustmentIsAtomicAndIdempotent() {
         var p=position();
         var a=movements.adjust(p.tenant(),p.location(),p.item(),"stock-req-001",
@@ -73,6 +93,7 @@ class InventoryMovementQualificationTest {
         var retry=movements.adjust(p.tenant(),p.location(),p.item(),"stock-req-001",
                 new BigDecimal("-4"));
         assertThat(retry.id()).isEqualTo(a.id());
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,p.tenant());
         assertThat(onHand(p)).isEqualByComparingTo("6");
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=?
@@ -92,6 +113,7 @@ class InventoryMovementQualificationTest {
         var correction=movements.adjust(p.tenant(),p.location(),p.item(),
                 "stock-correct-001",new BigDecimal("-1"),InventoryMovementService.Reason.CORRECTION);
         assertThat(correction.after()).isEqualByComparingTo("11");
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,p.tenant());
         assertThat(jdbc.queryForObject("""
             SELECT reason_code FROM crm.inv_stock_movement WHERE tenant_id=? AND id=?
             """,String.class,p.tenant(),correction.id())).isEqualTo("CORRECTION");

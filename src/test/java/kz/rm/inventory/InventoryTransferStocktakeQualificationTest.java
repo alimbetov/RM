@@ -97,6 +97,61 @@ class InventoryTransferStocktakeQualificationTest {
                 key,BigDecimal.valueOf(qty));
     }
 
+    @Test void p1PostgresSecondTransferLegAndStocktakeAppendFailureAreAtomic() throws Exception {
+        try(var con=source.getConnection()){
+            Assumptions.assumeTrue(con.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+        }
+        var f=fixture();receive(f,f.source(),"p1-transfer-initial",10);
+        var who=actor(f.actor());
+        var before=inventorySnapshot(f);
+        // Trigger fails only TRANSFER_IN, after the outgoing movement and its fact.
+        assertThatThrownBy(()->new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status->{
+            jdbc.execute("""
+                CREATE FUNCTION crm.p1_test_second_leg() RETURNS trigger LANGUAGE plpgsql AS $p1$
+                BEGIN
+                  IF NEW.owner_module='INVENTORY' AND EXISTS(
+                    SELECT 1 FROM crm.inv_stock_movement m WHERE m.tenant_id=NEW.tenant_id
+                    AND m.id=NEW.source_id AND m.reason_code='TRANSFER_IN') THEN
+                    RAISE EXCEPTION 'P1_SECOND_LEG_FACT_FAILURE';
+                  END IF;
+                  RETURN NEW;
+                END;
+                $p1$
+                """);
+            jdbc.execute("CREATE TRIGGER p1_test_second_leg BEFORE INSERT ON crm.int_canonical_fact FOR EACH ROW EXECUTE FUNCTION crm.p1_test_second_leg()");
+            commands.transfer(who,f.tenant(),f.source(),f.destination(),f.item(),BigDecimal.valueOf(4),"p1-transfer-retry");
+        })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("P1_SECOND_LEG_FACT_FAILURE");
+        assertThat(inventorySnapshot(f)).isEqualTo(before);
+        var transferred=commands.transfer(who,f.tenant(),f.source(),f.destination(),f.item(),BigDecimal.valueOf(4),"p1-transfer-retry");
+        assertThat(commands.transfer(who,f.tenant(),f.source(),f.destination(),f.item(),BigDecimal.valueOf(4),"p1-transfer-retry").id()).isEqualTo(transferred.id());
+        assertThat(stock(f,f.source())).isEqualByComparingTo("6");
+        assertThat(stock(f,f.destination())).isEqualByComparingTo("4");
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,f.tenant());
+
+        var take=commands.startStocktake(who,f.tenant(),f.source(),List.of(f.item()),"p1-count-start");
+        commands.recordCount(who,f.tenant(),take.id(),f.item(),BigDecimal.valueOf(5),0);
+        var beforePost=inventorySnapshot(f);
+        assertThatThrownBy(()->new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status->{
+            jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_p1_stocktake_failure CHECK (false) NOT VALID");
+            commands.postStocktake(who,f.tenant(),take.id(),"p1-count-post");
+        })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("ck_p1_stocktake_failure");
+        assertThat(inventorySnapshot(f)).isEqualTo(beforePost);
+        assertThat(commands.postStocktake(who,f.tenant(),take.id(),"p1-count-post").status()).isEqualTo("POSTED");
+        assertThat(commands.postStocktake(who,f.tenant(),take.id(),"p1-count-post").status()).isEqualTo("POSTED");
+        assertThat(stock(f,f.source())).isEqualByComparingTo("5");
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,f.tenant());
+    }
+
+    private List<Object> inventorySnapshot(Fixture f){
+        UUID tenant=f.tenant();
+        return List.of(
+            jdbc.queryForList("SELECT location_id,item_id,on_hand,reserved,row_version FROM crm.inv_stock_balance WHERE tenant_id=? ORDER BY location_id,item_id",tenant),
+            jdbc.queryForList("SELECT id,request_key,delta_quantity,posting_version FROM crm.inv_stock_movement WHERE tenant_id=? ORDER BY id",tenant),
+            jdbc.queryForList("SELECT source_id,digest FROM crm.int_canonical_fact WHERE tenant_id=? ORDER BY source_id",tenant),
+            jdbc.queryForList("SELECT id,request_key FROM crm.inv_stock_transfer WHERE tenant_id=? ORDER BY id",tenant),
+            jdbc.queryForList("SELECT id,status,post_request_key,row_version FROM crm.inv_stocktake WHERE tenant_id=? ORDER BY id",tenant));
+    }
+
     @Test void transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances() {
         var f=fixture();receive(f,f.source(),"stockQ7R1001",10);
         assertThatThrownBy(()->commands.transfer(actor(f.actor()),f.tenant(),
@@ -120,6 +175,7 @@ class InventoryTransferStocktakeQualificationTest {
         var moves=queries.searchMovements(actor(f.actor()),f.tenant(),
                 new InventoryMovementSearch(null,f.item(),null,null,null),0,20).getContent();
         var legs=moves.stream().filter(m->receipt.id().equals(m.sourceId())).toList();
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,f.tenant());
         assertThat(legs).hasSize(2).extracting(m->m.reasonCode())
                 .containsExactlyInAnyOrder("TRANSFER_OUT","TRANSFER_IN");
         assertThat(moves.stream().filter(m->receipt.id().equals(m.sourceId()))
@@ -656,6 +712,7 @@ class InventoryTransferStocktakeQualificationTest {
         var posted=commands.postStocktake(employee,f.tenant(),opened.id(),"postCount001");
         assertThat(posted.status()).isEqualTo("POSTED");
         assertThat(stock(f,f.source())).isEqualByComparingTo("9");
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,f.tenant());
         assertThat(commands.postStocktake(employee,f.tenant(),opened.id(),
                 "postCount001").id()).isEqualTo(opened.id());
         assertThatThrownBy(()->commands.cancelStocktake(employee,f.tenant(),opened.id()))
@@ -743,6 +800,7 @@ class InventoryTransferStocktakeQualificationTest {
                 SELECT count(*) FROM crm.inv_stock_movement
                 WHERE tenant_id=? AND source_type='STOCKTAKE' AND source_id=?
                 """,Integer.class,f.tenant(),other.id())).isZero();
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,f.tenant());
         assertThat(stock(f,f.source())).isEqualByComparingTo("10");
     }
 

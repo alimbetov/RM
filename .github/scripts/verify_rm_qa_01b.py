@@ -87,6 +87,9 @@ REQUIRED_CASES = {
         ("IntelligenceSourceSchemaQualificationTest", "migratedSourceColumnsAndOrderedTenantPrimaryKeys"),
         ("IntelligenceSourceSchemaQualificationTest", "sourceNumericAndTimestampTypesArePreserved"),
     },
+    "qr07-full-pg-{sha}": {
+        ("QrWarehouseHandoverQualificationTest", "p1PostgresHandoverSalesAndInventoryAppendFailureRollsBackBothDomains"),
+    },
     "rm-mvp-w25-strict-pg-{sha}": {
         ("BusMvpServiceJourneyQualificationTest", "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"),
         ("BusMvpServiceJourneyQualificationTest", "canonicalSalesAndInventoryDigestOraclePg"),
@@ -101,6 +104,9 @@ REQUIRED_CASES = {
         ("MvpServiceCurrencyStartupQualificationTest", "mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled"),
     },
     "kms-postgres-surefire": {
+        ("InventoryMovementQualificationTest", "p1PostgresMovementAppendFailureRestoresBalanceAndRetry"),
+        ("InventoryTransferStocktakeQualificationTest", "p1PostgresSecondTransferLegAndStocktakeAppendFailureAreAtomic"),
+        ("QrWarehouseHandoverQualificationTest", "p1PostgresHandoverSalesAndInventoryAppendFailureRollsBackBothDomains"),
         # MVP six-pack gates: require named cases from real PostgreSQL XML.
         # SELLER-EDIT-R0 preparation: identity, tenant, revoke and catalog CAS.
         # Warehouse-scope denial and both commit-order races are P0 blockers

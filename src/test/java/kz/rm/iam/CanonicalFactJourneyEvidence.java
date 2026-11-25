@@ -131,10 +131,12 @@ final class CanonicalFactJourneyEvidence {
             race(jdbc,manager,appender,key,scenario.calls());
             assertThat(count(jdbc,tenant,scenario.event())).isEqualTo(1);
         }
-        UUID movement=jdbc.queryForObject("""
+        UUID realMovement=jdbc.queryForObject("""
             SELECT id FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER'
                 AND source_id=? AND movement_kind='FULFILLMENT'
             """,UUID.class,tenant,order);
+        CanonicalProducerEvidence.assertMovement(jdbc,tenant,realMovement);
+        UUID movement=historicalMovement(jdbc,manager,tenant);
         var key=new CanonicalFactKey(tenant,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movement);
         race(jdbc,manager,appender,key,2);
         assertThat(count(jdbc,tenant,movement)).isEqualTo(1);
@@ -539,13 +541,39 @@ final class CanonicalFactJourneyEvidence {
     }
 
     /** Read only owner rows; never call production framing/digest helpers. */
+    // Isolated legacy source after business metric assertions. Copy a receipt rather
+    // than a fulfillment, to avoid reusing a unique reservation or owner receipt.
+    private static UUID historicalMovement(JdbcTemplate jdbc,PlatformTransactionManager manager,UUID tenant){
+        UUID id=UUID.randomUUID();
+        new TransactionTemplate(manager).executeWithoutResult(status->{
+            assertThat(jdbc.update("""
+                INSERT INTO crm.inv_stock_movement
+                  (tenant_id,id,location_id,item_id,request_key,delta_quantity,balance_before,balance_after,
+                   occurred_at,recorded_at,reason_code,movement_kind,actor_user_id,source_type,source_id,
+                   business_reason_code,posting_version)
+                SELECT tenant_id,?,location_id,item_id,?,delta_quantity,balance_before,balance_after,
+                   occurred_at,recorded_at,reason_code,movement_kind,actor_user_id,source_type,source_id,
+                   business_reason_code,
+                   (SELECT COALESCE(MAX(x.posting_version),0)+1 FROM crm.inv_stock_movement x
+                    WHERE x.tenant_id=m.tenant_id AND x.location_id=m.location_id AND x.item_id=m.item_id)
+                FROM crm.inv_stock_movement m WHERE tenant_id=? AND reason_code='RECEIPT'
+                ORDER BY id LIMIT 1
+                """,id,"legacy-"+id,tenant)).isEqualTo(1);
+        });
+        return id;
+    }
     static void inventoryDigestOracle(JdbcTemplate jdbc,PlatformTransactionManager manager,
                                       CanonicalFactAppender appender,UUID tenant,UUID order){
+        UUID actual=jdbc.queryForObject("""
+            SELECT id FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER'
+                  AND source_id=? AND movement_kind='FULFILLMENT'
+            """,UUID.class,tenant,order);
+        CanonicalProducerEvidence.assertMovement(jdbc,tenant,actual);
+        UUID historical=historicalMovement(jdbc,manager,tenant);
         var f=jdbc.query("""
             SELECT id,item_id,occurred_at,recorded_at,location_id,delta_quantity,balance_before,balance_after,
                    posting_version,reason_code,movement_kind,source_type,source_id,reservation_id,actor_user_id,business_reason_code,request_key
-            FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER'
-                  AND source_id=? AND movement_kind='FULFILLMENT'
+            FROM crm.inv_stock_movement WHERE tenant_id=? AND id=?
             """,rs->{
                 if(!rs.next())throw new AssertionError("Missing fulfillment movement");
                 Object[] values=new Object[17];
@@ -554,7 +582,7 @@ final class CanonicalFactJourneyEvidence {
                 values[3]=rs.getTimestamp(4).toInstant();
                 if(rs.next())throw new AssertionError("Multiple fulfillment movements");
                 return values;
-            },tenant,order);
+            },tenant,historical);
         UUID event=(UUID)f[0],subject=(UUID)f[1];
         var occurred=(java.time.Instant)f[2];
         var recorded=(java.time.Instant)f[3];

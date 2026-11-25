@@ -246,6 +246,7 @@ class QrMvpServiceJourneyQualificationTest {
             .isEqualTo("PICKUP_PROOF_REQUIRED");
         assertGenericDeniedWithoutEffects(s,orderId);
         assertThat(committed.status()).isEqualTo("COMPLETED");
+        kz.rm.iam.CanonicalProducerEvidence.assertHandover(jdbc,s.tenant(),orderId,1);
         var beforeReplay=JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku());
         assertThat(pickup.complete(s.staff(),s.tenant(),s.warehouse(),
                 issued.rawProof(),true,before,handoverKey).handoverId())
@@ -356,6 +357,8 @@ class QrMvpServiceJourneyQualificationTest {
                 WHERE p.tenant_id=? AND r.order_id=?
                 """,Integer.class,s.tenant(),order)).isEqualTo(2);
         assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
+        kz.rm.iam.CanonicalProducerEvidence.assertSales(jdbc,s.tenant());
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,s.tenant());
     }
 
     @Test void qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg() throws Exception {
@@ -392,5 +395,7 @@ class QrMvpServiceJourneyQualificationTest {
         kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
                 1, "160", 1, 1, 0, "10", "2", "8");
         assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
+        kz.rm.iam.CanonicalProducerEvidence.assertSales(jdbc,s.tenant());
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,s.tenant());
     }
 }

@@ -23,42 +23,48 @@
       "table": "sales_order_status_event",
       "sites": 1,
       "method": "handover",
-      "canonical": "ORDER_COMPLETED"
+      "canonical": "ORDER_COMPLETED",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
     },
     {
       "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
       "table": "sales_order_status_event",
       "sites": 1,
       "method": "preparation transition",
-      "canonical": "EXCLUDED: PREPARING, READY_FOR_PICKUP (not current canonical kinds)"
+      "canonical": "EXCLUDED: PREPARING, READY_FOR_PICKUP (not current canonical kinds)",
+      "integration": "EXCLUDED by canonical kind contract"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
       "table": "inv_stock_movement",
       "sites": 1,
       "method": "adjust",
-      "canonical": "STOCK_MOVEMENT, includes return restock via delegation"
+      "canonical": "STOCK_MOVEMENT, includes return restock via delegation",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
       "table": "inv_stock_movement",
       "sites": 1,
       "method": "transition",
-      "canonical": "STOCK_MOVEMENT per fulfillment; release excluded"
+      "canonical": "STOCK_MOVEMENT per fulfillment; release excluded",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
       "table": "inv_stock_movement",
       "sites": 1,
       "method": "postLeg",
-      "canonical": "STOCK_MOVEMENT × 2 per transfer"
+      "canonical": "STOCK_MOVEMENT × 2 per transfer",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
     },
     {
       "path": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
       "table": "inv_stock_movement",
       "sites": 1,
       "method": "post",
-      "canonical": "STOCK_MOVEMENT per nonzero stocktake adjustment"
+      "canonical": "STOCK_MOVEMENT per nonzero stocktake adjustment",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
     }
   ],
   "delegates": [
@@ -68,6 +74,6 @@
   "limitations": [
     "Manifest gate fails on new or missing literal insert sites",
     "Additional static checks cover quoted SQL identifiers, adjacent Java literals, ORM mappings, MERGE/COPY and SQL/XML inserts; not a proof for arbitrary generated SQL, external writers or database procedures",
-    "AutoOrderService and SalesInventoryCommandService wired; secure pickup and INVENTORY producers pending B2.2A.3/B2.2B"
+    "All eight admitted physical INSERT sites wired; one preparation-transition site excluded. Historical sources are not repaired by replay. Quarantine is separate ledger."
   ]
 }

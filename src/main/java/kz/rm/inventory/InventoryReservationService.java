@@ -1,6 +1,8 @@
 package kz.rm.inventory;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,8 +28,10 @@ import java.util.UUID;
 @Service
 public class InventoryReservationService {
     private final JdbcTemplate jdbc;
+    private final CanonicalFactAppender canonicalFacts;
     private final StockEligibility stockEligibility;
-    public InventoryReservationService(JdbcTemplate jdbc,StockEligibility stockEligibility) {
+    public InventoryReservationService(JdbcTemplate jdbc,StockEligibility stockEligibility,CanonicalFactAppender canonicalFacts) {
+        this.canonicalFacts=java.util.Objects.requireNonNull(canonicalFacts);
         this.jdbc=jdbc;this.stockEligibility=stockEligibility;
     }
 
@@ -149,17 +153,21 @@ public class InventoryReservationService {
         if(count!=1)throw new IllegalStateException("Reservation transition conflicted");
         insertEvent(tenantId,reservationId,target==State.RELEASED?"RELEASED":"FULFILLED",now,actorId);
         if(target==State.FULFILLED) {
+            UUID movementId=UUID.randomUUID();
             jdbc.update("""
                 INSERT INTO crm.inv_stock_movement
                   (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                    balance_before,balance_after,occurred_at,recorded_at,
                    movement_kind,reason_code,reservation_id,actor_user_id,source_type,source_id,posting_version)
                 VALUES (?,?,?,?,?,?,?,?,?,?,'FULFILLMENT','ORDER_FULFILLMENT',?,?,?,?,?)
-                """,tenantId,UUID.randomUUID(),current.locationId(),current.itemId(),
+                """,tenantId,movementId,current.locationId(),current.itemId(),
                     "fulfill-"+reservationId,current.quantity().negate(),
                     stock.onHand(),afterOnHand,now,now,reservationId,
                     actorId,"SALES_ORDER",current.orderId(),
                     InventoryPostingVersion.afterBalanceUpdate(jdbc,tenantId,current.locationId(),current.itemId()));
+            if(canonicalFacts.append(new CanonicalFactKey(tenantId,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
+                    !=CanonicalFactAppender.Outcome.INSERTED)
+                throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
         }
         return new Reservation(current.id(),tenantId,current.orderId(),current.lineId(),
                 current.locationId(),current.itemId(),current.quantity(),target);

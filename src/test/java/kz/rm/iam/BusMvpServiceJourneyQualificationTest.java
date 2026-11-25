@@ -276,6 +276,9 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
                 2, "375", 2, 1, 1, "10", "3", "7");
+        // Fresh owner tenant, before synthetic historical fixtures.
+        CanonicalProducerEvidence.assertSales(jdbc,tenant);
+        CanonicalProducerEvidence.assertInventory(jdbc,tenant);
         if(scenario==CanonicalCase.DIGEST){
             CanonicalFactJourneyEvidence.digestReplayContract(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
             CanonicalFactJourneyEvidence.inventoryDigestOracle(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);

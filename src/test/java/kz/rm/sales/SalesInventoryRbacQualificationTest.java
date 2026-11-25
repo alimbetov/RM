@@ -764,7 +764,7 @@ class SalesInventoryRbacQualificationTest {
         var reservations=jdbc.queryForList("SELECT * FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? ORDER BY id",c.tenant(),order);
         var movements=jdbc.queryForList("SELECT * FROM crm.inv_stock_movement WHERE tenant_id=? AND item_id=? ORDER BY id",c.tenant(),c.item());
         assertThatThrownBy(()->new TransactionTemplate(transactionManager).executeWithoutResult(status->{
-            jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_test_sales_fact_failure CHECK (false) NOT VALID");
+            jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_test_sales_fact_failure CHECK (owner_module <> 'SALES') NOT VALID");
             command.run();
         })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("ck_test_sales_fact_failure");
         assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),order,c.location(),c.item())).isEqualTo(before);

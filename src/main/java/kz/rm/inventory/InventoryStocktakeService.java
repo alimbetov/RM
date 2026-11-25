@@ -2,6 +2,8 @@ package kz.rm.inventory;
 
 import kz.rm.inventory.dto.InventoryStocktakeDto;
 import org.springframework.jdbc.core.JdbcTemplate;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,8 +30,10 @@ import java.util.UUID;
 @Service
 class InventoryStocktakeService {
     private final JdbcTemplate jdbc;
+    private final CanonicalFactAppender canonicalFacts;
     private final StockEligibility eligibility;
-    InventoryStocktakeService(JdbcTemplate jdbc,StockEligibility eligibility){
+    InventoryStocktakeService(JdbcTemplate jdbc,StockEligibility eligibility,CanonicalFactAppender canonicalFacts){
+        this.canonicalFacts=java.util.Objects.requireNonNull(canonicalFacts);
         this.jdbc=jdbc;this.eligibility=eligibility;
     }
     private record Header(UUID id,UUID tenant,UUID location,String status,
@@ -153,16 +157,20 @@ class InventoryStocktakeService {
                     """,counted,tenant,header.location(),item,expected);
             if(affected!=1)throw new IllegalStateException("RECOUNT_REQUIRED: concurrent stock update");
             Timestamp now=Timestamp.from(Instant.now());
+            UUID movementId=UUID.randomUUID();
             jdbc.update("""
                     INSERT INTO crm.inv_stock_movement
                       (tenant_id,id,location_id,item_id,request_key,delta_quantity,
                        balance_before,balance_after,occurred_at,recorded_at,
                        reason_code,actor_user_id,source_type,source_id,posting_version)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """,tenant,UUID.randomUUID(),header.location(),item,
+                    """,tenant,movementId,header.location(),item,
                     "stocktake-"+id+"-"+item,delta,book,counted,now,now,
                     "STOCKTAKE_ADJUSTMENT",actor,"STOCKTAKE",id,
                     InventoryPostingVersion.afterBalanceUpdate(jdbc,tenant,header.location(),item));
+            if(canonicalFacts.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.INVENTORY,CanonicalFactKey.Kind.STOCK_MOVEMENT,movementId))
+                    !=CanonicalFactAppender.Outcome.INSERTED)
+                throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
         }
         int updated=jdbc.update("""
                 UPDATE crm.inv_stocktake
