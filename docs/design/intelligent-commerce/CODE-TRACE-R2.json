@@ -1,0 +1,662 @@
+{
+  "schema": "RM-IC-R2-CODE-TRACE/v1",
+  "design_status": "PROPOSED",
+  "date": "2026-11-25",
+  "source_sha": "f7910269df73564a6b1bf7d8f45bcc2766cc1b32",
+  "design_parent_sha": "61ff9569945751a2a03d070521f5c9f3b5412eae",
+  "runtime_evidence": [],
+  "baseline_trace": "TRACEABILITY-R2.json",
+  "execution_dag": "../../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json",
+  "stages": [
+    {
+      "id": "B1",
+      "design": "CODE-01",
+      "entrypoint": "MetricQueryService#calculate",
+      "contract": "PeriodResolver#resolve and source read ports",
+      "depends_on": [
+        "A3"
+      ]
+    },
+    {
+      "id": "B2",
+      "design": "CODE-02",
+      "entrypoint": "CanonicalFactAppender#append",
+      "contract": "Owner state transaction and CanonicalFeed",
+      "depends_on": [
+        "A3"
+      ]
+    },
+    {
+      "id": "B3",
+      "design": "CODE-02",
+      "entrypoint": "ProjectionApplier#apply",
+      "contract": "ProjectionReceipt and DailyBucket",
+      "depends_on": [
+        "B1",
+        "B2"
+      ]
+    },
+    {
+      "id": "B4",
+      "design": "CODE-02",
+      "entrypoint": "GenerationRebuildService#start",
+      "contract": "ActiveGeneration, RollupBucket and dirty revision",
+      "depends_on": [
+        "B3"
+      ]
+    },
+    {
+      "id": "C1",
+      "design": "CODE-01",
+      "entrypoint": "Customer360QueryService#timeline",
+      "contract": "CRM current-link and TASK visibility",
+      "depends_on": [
+        "B1",
+        "A3"
+      ]
+    },
+    {
+      "id": "C2",
+      "design": "CODE-01",
+      "entrypoint": "Customer360QueryService#summary",
+      "contract": "Buyer aggregates joined to current link",
+      "depends_on": [
+        "C1",
+        "B4"
+      ]
+    },
+    {
+      "id": "W1",
+      "design": "CODE-01",
+      "entrypoint": "Warehouse360QueryService#position",
+      "contract": "Live stock scoped by warehouse",
+      "depends_on": [
+        "B1",
+        "A3"
+      ]
+    },
+    {
+      "id": "W2",
+      "design": "CODE-01",
+      "entrypoint": "Warehouse360QueryService#reconcile",
+      "contract": "Opening/closing and lineage",
+      "depends_on": [
+        "W1",
+        "B4"
+      ]
+    },
+    {
+      "id": "W3",
+      "design": "CODE-01",
+      "entrypoint": "Warehouse360QueryService#classify",
+      "contract": "ABC/XYZ with qualified sources",
+      "depends_on": [
+        "W2",
+        "B4"
+      ]
+    },
+    {
+      "id": "E1",
+      "design": "CODE-02",
+      "entrypoint": "EventRuleService#saveDraft",
+      "contract": "EventPreviewService#preview and rule versions",
+      "depends_on": [
+        "A3"
+      ]
+    },
+    {
+      "id": "E2",
+      "design": "CODE-02",
+      "entrypoint": "DeliveryWorker#processOne",
+      "contract": "RuleOccurrence, DeliveryIntent and receipt",
+      "depends_on": [
+        "E1",
+        "B2"
+      ]
+    },
+    {
+      "id": "E3",
+      "design": "CODE-02",
+      "entrypoint": "DeadlineWorker",
+      "contract": "ScheduleOccurrence and source revision",
+      "depends_on": [
+        "E2"
+      ]
+    },
+    {
+      "id": "X1",
+      "design": "CODE-03",
+      "entrypoint": "IntelligenceCommercePgQualificationTest",
+      "contract": "Independent owner SQL oracle",
+      "depends_on": [
+        "C2",
+        "W3",
+        "E3",
+        "B4"
+      ]
+    }
+  ],
+  "existing_source_tests": [
+    "src/test/java/kz/rm/iam/SignedJwtTestAuthority.java",
+    "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+    "src/test/java/kz/rm/inventory/SellerWarehouseScopeR0QualificationTest.java",
+    "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+    "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+    "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+    "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+    "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+    "src/test/java/kz/rm/iam/IamOidcRevocationOutboxQualificationTest.java",
+    "src/test/java/kz/rm/tasks/TaskTimingCompletionQualificationTest.java"
+  ],
+  "planned_scenarios": [
+    {
+      "scenario": "R2-S01",
+      "stage": "X1",
+      "suite": "IntelligenceCommercePgQualificationTest",
+      "method": "reconcilesTradeCycleAgainstIndependentLedger",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q04",
+        "IE-Q06",
+        "IE-Q14",
+        "IE-Q15",
+        "MC-01",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S02",
+      "stage": "B1",
+      "suite": "MetricQueryPgQualificationTest",
+      "method": "keepsCurrencyAndDecimalPrecisionAcrossGroups",
+      "engine": "PG+H2",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q03",
+        "IE-Q06"
+      ]
+    },
+    {
+      "scenario": "R2-S03",
+      "stage": "B1",
+      "suite": "PeriodResolverTest",
+      "method": "resolvesCalendarAndDstBoundaries",
+      "engine": "UNIT",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q02",
+        "IE-Q07"
+      ]
+    },
+    {
+      "scenario": "R2-S04",
+      "stage": "B1",
+      "suite": "MetricQueryPgQualificationTest",
+      "method": "separatesTransitionCohortsAcrossPeriods",
+      "engine": "PG+H2",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q04",
+        "IE-Q06",
+        "MC-01"
+      ]
+    },
+    {
+      "scenario": "R2-S05",
+      "stage": "B2",
+      "suite": "CanonicalFactPgQualificationTest",
+      "method": "distinguishesReplayFromDuplicateAndMissingTransition",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q05",
+        "IE-Q06",
+        "IE-Q08"
+      ]
+    },
+    {
+      "scenario": "R2-S06",
+      "stage": "B1",
+      "suite": "MetricQueryPgQualificationTest",
+      "method": "computesRatioOfSumsAndPreservesEmptyCohort",
+      "engine": "PG+H2",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q04",
+        "IE-Q12"
+      ]
+    },
+    {
+      "scenario": "R2-S07",
+      "stage": "W1",
+      "suite": "Warehouse360PgQualificationTest",
+      "method": "matchesOwnerBalanceAcrossReservationFulfillAndPriceChange",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q06",
+        "IE-Q14",
+        "MC-01",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S08",
+      "stage": "W2",
+      "suite": "Warehouse360HistoryPgQualificationTest",
+      "method": "reconcilesBothTransferLegsAndTenantNet",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q14",
+        "IE-Q15",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S09",
+      "stage": "W2",
+      "suite": "Warehouse360HistoryPgQualificationTest",
+      "method": "countsOnlySellableMovementsFromReturnDispositions",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q15",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S10",
+      "stage": "W2",
+      "suite": "Warehouse360HistoryPgQualificationTest",
+      "method": "countsQuarantineRestockOnceAfterConcurrentResolution",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q15",
+        "IE-Q08",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S11",
+      "stage": "W2",
+      "suite": "Warehouse360HistoryPgQualificationTest",
+      "method": "acceptsPostingVersionGapsFromReservations",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q05",
+        "IE-Q14",
+        "IE-Q16"
+      ]
+    },
+    {
+      "scenario": "R2-S12",
+      "stage": "W2",
+      "suite": "Warehouse360HistoryPgQualificationTest",
+      "method": "marksUnreconstructibleLegacyOpeningBalance",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q05",
+        "IE-Q16"
+      ]
+    },
+    {
+      "scenario": "R2-S13",
+      "stage": "C2",
+      "suite": "Customer360ProjectionPgQualificationTest",
+      "method": "reevaluatesBuyerLinkForProjectionAndDetail",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q11",
+        "IE-Q13",
+        "MC-04"
+      ]
+    },
+    {
+      "scenario": "R2-S14",
+      "stage": "C1",
+      "suite": "Customer360PgQualificationTest",
+      "method": "qualifiesBothReadAndIamRevocationOrders",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q11",
+        "IE-Q13",
+        "MC-04"
+      ]
+    },
+    {
+      "scenario": "R2-S15",
+      "stage": "C1",
+      "suite": "Customer360PgQualificationTest",
+      "method": "excludesDeniedSalesAndTaskSections",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q13",
+        "IE-Q19"
+      ]
+    },
+    {
+      "scenario": "R2-S16",
+      "stage": "W1",
+      "suite": "Warehouse360PgQualificationTest",
+      "method": "enforcesWarehouseAssignmentAndAsymmetricTenantGrants",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q13",
+        "IE-Q19",
+        "MC-04"
+      ]
+    },
+    {
+      "scenario": "R2-S17",
+      "stage": "X1",
+      "suite": "IntelligenceCommercePgQualificationTest",
+      "method": "admitsOnlyVerifiedRmAccessTokens",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q13",
+        "MC-04"
+      ]
+    },
+    {
+      "scenario": "R2-S18",
+      "stage": "C1",
+      "suite": "Customer360PgQualificationTest",
+      "method": "bindsTimelineAndEvidenceCursorToCurrentScope",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q19"
+      ]
+    },
+    {
+      "scenario": "R2-S19",
+      "stage": "W3",
+      "suite": "AbcClassifierTest",
+      "method": "classifiesBoundariesTiesAndMissingLineage",
+      "engine": "UNIT",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q17",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S20",
+      "stage": "W3",
+      "suite": "XyzClassifierTest",
+      "method": "classifiesExactCvAndAbstainsOnMissingBuckets",
+      "engine": "UNIT",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q18",
+        "MC-02"
+      ]
+    },
+    {
+      "scenario": "R2-S21",
+      "stage": "E1",
+      "suite": "EventRulePreviewQualificationTest",
+      "method": "validatesTypedRuleAndLeavesDeliveryTablesEmpty",
+      "engine": "H2+PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q01",
+        "IE-Q21",
+        "IE-Q23"
+      ]
+    },
+    {
+      "scenario": "R2-S22",
+      "stage": "E2",
+      "suite": "EventDeliveryPgQualificationTest",
+      "method": "keepsOccurrenceBindingAfterRuleRevisionAndReplay",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q22",
+        "IE-Q24",
+        "IE-Q27"
+      ]
+    },
+    {
+      "scenario": "R2-S23",
+      "stage": "E2",
+      "suite": "EventDeliveryPgQualificationTest",
+      "method": "rechecksRecipientGrantAfterAudienceSnapshot",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q22",
+        "IE-Q27",
+        "MC-04"
+      ]
+    },
+    {
+      "scenario": "R2-S24",
+      "stage": "B2",
+      "suite": "CanonicalFactPgQualificationTest",
+      "method": "rollsBackOwnerFactsAndFeedInBothCheckoutPaths",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q20",
+        "MC-03"
+      ]
+    },
+    {
+      "scenario": "R2-S25",
+      "stage": "X1",
+      "suite": "IntelligenceCommercePgQualificationTest",
+      "method": "qualifiesIndependentConsumerFailureAndReplay",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q09",
+        "IE-Q24",
+        "MC-03"
+      ]
+    },
+    {
+      "scenario": "R2-S26",
+      "stage": "E2",
+      "suite": "EventDeliveryPgQualificationTest",
+      "method": "fencesExpiredLeaseAndLateWorkerAck",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q25"
+      ]
+    },
+    {
+      "scenario": "R2-S27",
+      "stage": "E2",
+      "suite": "EventDeliveryCrashPgQualificationTest",
+      "method": "restartsAroundAtomicInAppCommit",
+      "engine": "PG_PROCESS",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q26",
+        "IE-Q24"
+      ]
+    },
+    {
+      "scenario": "R2-S28",
+      "stage": "E2",
+      "suite": "EventDeliveryPgQualificationTest",
+      "method": "qualifiesBothPauseAndRevokeCommitOrders",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q27",
+        "MC-04"
+      ]
+    },
+    {
+      "scenario": "R2-S29",
+      "stage": "E2",
+      "suite": "EventDeliveryPgQualificationTest",
+      "method": "sweepsExpiredOrExhaustedIntentAndRetriesSameIdentity",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q25",
+        "IE-Q24"
+      ]
+    },
+    {
+      "scenario": "R2-S30",
+      "stage": "E3",
+      "suite": "EventDeadlinePgQualificationTest",
+      "method": "invalidatesOccurrencesOnOwnerRevisionAndClockChanges",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q20",
+        "IE-Q27"
+      ]
+    },
+    {
+      "scenario": "R2-S31",
+      "stage": "B3",
+      "suite": "IntelligenceProjectionPgQualificationTest",
+      "method": "appliesLateCommitAndBackfillOverlapExactlyOnce",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q08",
+        "IE-Q09",
+        "MC-05"
+      ]
+    },
+    {
+      "scenario": "R2-S32",
+      "stage": "B4",
+      "suite": "IntelligenceRebuildPgQualificationTest",
+      "method": "switchesOnlyReconciledGenerationAcrossLiveWrites",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q07",
+        "IE-Q10",
+        "MC-05"
+      ]
+    },
+    {
+      "scenario": "R2-S33",
+      "stage": "X1",
+      "suite": "IntelligenceCommercePgQualificationTest",
+      "method": "distinguishesTimeoutStaleMissingAndCompleteEmpty",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q05",
+        "IE-Q09"
+      ]
+    },
+    {
+      "scenario": "R2-S34",
+      "stage": "A1",
+      "suite": "IntelligenceSchemaPgQualificationTest",
+      "method": "capturesCleanAndPopulatedOwnerSchemaContract",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q29"
+      ]
+    },
+    {
+      "scenario": "R2-S35",
+      "stage": "X1",
+      "suite": "IntelligenceMixedLoadPgQualificationTest",
+      "method": "measuresActualOverlapWithOwnerCommands",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q30",
+        "MC-05"
+      ]
+    },
+    {
+      "scenario": "R2-S36",
+      "stage": "X1",
+      "suite": "IntelligenceCommercePgQualificationTest",
+      "method": "preservesOwnerLedgersAcrossReadsPreviewAndReplay",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q21",
+        "IE-Q28",
+        "MC-03"
+      ]
+    },
+    {
+      "scenario": "R2-S37",
+      "stage": "G1",
+      "suite": "Existing admission workflow",
+      "method": "bindsApplicableOwnerAndNewReportsToExactSha",
+      "engine": "CI",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q32",
+        "MC-01",
+        "MC-02",
+        "MC-04",
+        "MC-05"
+      ]
+    },
+    {
+      "scenario": "R2-S38",
+      "stage": "G2",
+      "suite": "Future G2 journey suite",
+      "method": "qualifiesIntegratedRoleScopedUserJourney",
+      "engine": "OIDC_BROWSER",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q31",
+        "MC-08"
+      ]
+    },
+    {
+      "scenario": "R2-S39",
+      "stage": "G3/G4",
+      "suite": "Future UAT and release evidence",
+      "method": "recordsUatRestoreAndIndependentReleaseReview",
+      "engine": "UAT",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "IE-Q32",
+        "MC-08"
+      ]
+    },
+    {
+      "scenario": "R2-S40",
+      "stage": "R2–R4",
+      "suite": "BusinessRadarPgQualificationTest",
+      "method": "handlesPartialProviderAndReauthorizesDetail",
+      "engine": "PG",
+      "status": "PROPOSED_NOT_EXECUTED",
+      "families": [
+        "MC-06",
+        "MC-07"
+      ]
+    }
+  ],
+  "source_drift": {
+    "initial_review_sha": "6df484b177e6e6604eaf7ce1a2ead46e9b977f1b",
+    "changed_paths": [
+      ".github/scripts/test_verify_rm_qa_01b.py",
+      ".github/scripts/verify_rm_qa_01b.py"
+    ],
+    "source_and_dag_unchanged": true
+  }
+}

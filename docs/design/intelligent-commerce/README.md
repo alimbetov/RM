@@ -83,3 +83,16 @@ The original 88 acceptance families remain 32 IE-Q + 48 BV + 8 MC. The 40 detail
 Documentation validation: counts/IDs, links and source symbols, DAG 32/48 and acyclicity, hand arithmetic and docs-only diff. Runtime tests/migrations/load not executed for this design pass. No code, schema, CI, dependency or test changes.
 
 Pre-save drift checked through base_dev `d1019e6acdb04a5c9a03da79d0f9232649723ead`: RET04 proof/test changes only, no production service/schema delta; source analysis remains pinned as above. Details and limitations: D00 §6.
+
+## 9. R2.1 · Спецификация на уровне кода
+
+Исходный код сверен на [base_dev f791026](https://github.com/alimbetov/RM/tree/f7910269df73564a6b1bf7d8f45bcc2766cc1b32). Приложения раскрывают D01–D08 до реализации и сохраняют действующий execution DAG.
+
+| Документ | Что определено |
+|---|---|
+| [CODE-01 · Java и SQL](CODE-01-JAVA-AND-READ-CONTRACTS-R2.md) | Пакеты, Java 21 records и сервисные интерфейсы, SQL формы, authorization и scope для всех read-контуров |
+| [CODE-02 · PostgreSQL и обработчики](CODE-02-POSTGRESQL-EVENTS-AND-WORKERS-R2.md) | Producer points, логические таблицы и ключи, L1/L2, rebuild, lifecycle доставки и SQL claim |
+| [CODE-03 · Изменения и квалификация](CODE-03-IMPLEMENTATION-AND-QUALIFICATION-R2.md) | Последовательность diff, существующие fixtures и независимые оракулы |
+| [CODE-TRACE-R2.json](CODE-TRACE-R2.json) | Привязка 40 сценарных записей к этапам, будущим методам и действующим семействам |
+
+Статус R2.1 — проект для согласования. Предлагаемые имена классов, права, префиксы и параметры проходят review на соответствующем этапе. Кодовые фрагменты являются частью ТЗ. Первым аналитическим срезом после A3 остаётся B1 с прямыми запросами и независимой сверкой восьми метрик.
