@@ -369,6 +369,48 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                                 result["evidenceErrors"])
         self.artifact_bytes[artifact_id] = original
 
+    def test_skip_audit_uses_full_identity_and_separates_environments(self):
+        group = self.manifest["required"][0]
+        h2 = next(a["id"] for a in group["artifacts"] if a["name"] == "kms-h2-surefire")
+        pg = next(a["id"] for a in group["artifacts"] if a["name"] == "kms-postgres-surefire")
+        self.artifact_bytes[h2] = self.make_zip({"AuditProbeTest": ["probe"]},
+                                               {("AuditProbeTest", "probe")})
+        original = self.artifact_bytes[pg]
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(output, "w") as target:
+            for member in source.namelist():
+                target.writestr(member, source.read(member))
+            root = ET.Element("testsuite", {"name": "kz.rm.AuditProbeTest", "tests": "1",
+                                            "failures": "0", "errors": "0", "skipped": "0"})
+            ET.SubElement(root, "testcase", {"name": "probe"})
+            target.writestr("TEST-AuditProbeTest.xml", ET.tostring(root))
+        self.artifact_bytes[pg] = output.getvalue()
+        self.assertEqual(gate.verify(), 1)  # semantic HOLD remains
+        audit = json.loads(self.manifest_path.read_text())["skipAudit"]
+        row = next(x for x in audit["executions"] if x["class"] == "kz.rm.AuditProbeTest")
+        self.assertEqual(row["status"], "PASS_ELSEWHERE_OTHER_ENV")
+        self.assertEqual(row["alternativePasses"], ["kms-postgres-surefire"])
+        self.assertEqual(row["policyVerdict"], "REVIEW_REQUIRED")
+        self.assertTrue(audit["inventoryComplete"])
+
+    def test_short_suite_collision_blocks_admission(self):
+        artifact_id = next(a["id"] for a in self.manifest["required"][0]["artifacts"]
+                           if a["name"] == "kms-postgres-surefire")
+        original = self.artifact_bytes[artifact_id]
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(output, "w") as target:
+            for member in source.namelist():
+                target.writestr(member, source.read(member))
+            root = ET.Element("testsuite", {"name": "other.CommercialCoreE2EQualificationTest",
+                                            "tests": "1", "failures": "0", "errors": "0", "skipped": "0"})
+            ET.SubElement(root, "testcase", {"name": "collisionProbe"})
+            target.writestr("TEST-other.CommercialCoreE2EQualificationTest.xml", ET.tostring(root))
+        self.artifact_bytes[artifact_id] = output.getvalue()
+        self.assertEqual(gate.verify(), 1)
+        result = json.loads(self.manifest_path.read_text())
+        self.assertTrue(any("Ambiguous short suite identifiers" in e for e in result["evidenceErrors"]))
+        self.assertIn("CommercialCoreE2EQualificationTest", result["skipAudit"]["classIdentityCollisions"])
+
     def test_wrong_commit_sha_fails_closed(self):
         self.manifest["sha"] = "bad"
         self.save()
