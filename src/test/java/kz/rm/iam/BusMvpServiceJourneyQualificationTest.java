@@ -65,6 +65,7 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired kz.rm.intelligence.CanonicalFactAppender canonicalFacts;
     @Autowired kz.rm.intelligence.CanonicalFactDeliveryService canonicalDelivery;
+    @Autowired kz.rm.intelligence.L1ProjectionService l1;
     @Autowired org.springframework.transaction.PlatformTransactionManager canonicalTransactions;
     @Autowired kz.rm.intelligence.MetricQueryService intelligence;
     @Autowired kz.rm.intelligence.CalendarPolicyService calendar;
@@ -96,7 +97,7 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
-    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY }
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1 }
 
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
         runBusJourney(CanonicalCase.FULL);
@@ -124,6 +125,10 @@ class BusMvpServiceJourneyQualificationTest {
 
     @Test void p2CanonicalDurableDiscoveryReplayAndBackfillPg() {
         runNamedPostgresCase(CanonicalCase.DELIVERY);
+    }
+
+    @Test void p3L1ProjectionParityAndLateDuplicatePg() {
+        runNamedPostgresCase(CanonicalCase.L1);
     }
 
     private void runNamedPostgresCase(CanonicalCase scenario){
@@ -306,6 +311,12 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(onboarding.createFirstTenant(otherOwner,otherTenant,
                 "RM Canonical Isolation LLP","RM Canonical Isolation","KZ").tenantId()).isEqualTo(otherTenant);
         currencies.initialize(otherOwner,otherTenant);
+        if(scenario==CanonicalCase.L1){
+            long calendarVersion=calendar.append(owner,tenant,"Etc/UTC",0).version();
+            L1ProjectionJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
+                l1,tenant,otherTenant,orderId,warehouse.id(),published.id(),calendarVersion);
+            return;
+        }
         if(scenario==CanonicalCase.DELIVERY){
             CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
                 tenant,otherTenant,orderId);

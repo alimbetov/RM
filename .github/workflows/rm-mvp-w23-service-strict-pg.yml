@@ -65,6 +65,7 @@ jobs:
                     'canonicalSourceSealingLockOrdersPg',
                     'canonicalTenantSourceCollisionPg',
                     'p2CanonicalDurableDiscoveryReplayAndBackfillPg',
+                    'p3L1ProjectionParityAndLateDuplicatePg',
                     'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
                     'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
           got={c.get('name') for c in cases}

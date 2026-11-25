@@ -23,7 +23,11 @@ class IntelligenceSourceSchemaQualificationTest {
         new Source("crm","customer_buyer_link",List.of("tenant_id","id"),List.of("customer_id","buyer_user_id","status","confirmed_at")),
         new Source("crm","int_fact_consumer",List.of("tenant_id","consumer_code"),List.of("created_at")),
         new Source("crm","int_fact_consumer_receipt",List.of("tenant_id","consumer_code","owner_module","source_kind","source_id"),List.of("digest","schema_version","disposition","error_code","processed_at")),
-        new Source("crm","int_fact_backfill_run",List.of("tenant_id","run_id"),List.of("owner_module","source_kind","range_start","range_end","created_at")),
+        new Source("crm","int_fact_backfill_run",List.of("tenant_id","run_id"),List.of("owner_module","source_kind","range_start","range_end","created_at","time_basis")),
+        new Source("crm","int_projection_generation",List.of("tenant_id","generation_id"),List.of("state","projection_code","consumer_code","method_version","calendar_version","from_day","until_day")),
+        new Source("crm","int_daily_bucket",List.of("tenant_id","generation_id","metric_code","local_day","currency_key","warehouse_key","sku_key"),List.of("amount","observations")),
+        new Source("crm","int_l1_sales_contribution",List.of("tenant_id","generation_id","event_kind","order_id"),List.of("local_day","currency","booked_amount")),
+        new Source("crm","int_projection_coverage",List.of("tenant_id","generation_id","proof_id"),List.of("observed_at","missing_facts","orphan_facts","pending_facts","rejected_facts","receipt_mismatches","bucket_mismatches")),
         new Source("crm","int_fact_backfill_receipt",List.of("tenant_id","run_id","owner_module","source_kind","source_id"),List.of("digest","schema_version","disposition","error_code","processed_at")),
         new Source("public","iam_warehouse_staff_scope",List.of("tenant_id","warehouse_id","actor_user_id"),List.of("state","row_version"))
     );

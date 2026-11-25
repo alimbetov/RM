@@ -45,11 +45,18 @@ public class CanonicalFactDeliveryService {
     }
     public enum Disposition { APPLIED, OUTSIDE_COVERAGE, REJECTED, INSERTED, VERIFIED, CONFLICT, INVALID, ALREADY_PROCESSED }
     public record Step(CanonicalFactKey key,Disposition disposition,String errorCode){}
+    public enum TimeBasis { OCCURRED, RECORDED }
     public record Slice(UUID tenant,UUID runId,CanonicalFactKey.Owner owner,CanonicalFactKey.Kind kind,
-                        Instant from,Instant until){
+                        Instant from,Instant until,TimeBasis basis){
+        public Slice(UUID tenant,UUID runId,CanonicalFactKey.Owner owner,CanonicalFactKey.Kind kind,Instant from,Instant until){
+            this(tenant,runId,owner,kind,from,until,owner==CanonicalFactKey.Owner.INVENTORY?TimeBasis.RECORDED:TimeBasis.OCCURRED);
+        }
         public Slice {
             Objects.requireNonNull(runId);
             new CanonicalFactKey(tenant,owner,kind,runId);
+            Objects.requireNonNull(basis);
+            if(owner==CanonicalFactKey.Owner.SALES && basis!=TimeBasis.OCCURRED)
+                throw new IllegalArgumentException("BACKFILL_TIME_BASIS");
             from=Objects.requireNonNull(from).truncatedTo(ChronoUnit.MICROS);
             until=Objects.requireNonNull(until).truncatedTo(ChronoUnit.MICROS);
             if(!from.isBefore(until)||Duration.between(from,until).compareTo(MAX_SLICE)>0)
@@ -98,8 +105,12 @@ public class CanonicalFactDeliveryService {
     private static void batch(int limit){
         if(limit<1||limit>MAX_BATCH)throw new IllegalArgumentException("CANONICAL_BATCH_LIMIT");
     }
+    private static void requireGenericConsumer(String code){
+        consumerCode(code);
+        if(code.startsWith("l1:"))throw new IllegalArgumentException("CANONICAL_RESERVED_CONSUMER");
+    }
     public void openConsumer(UUID tenant,String code){
-        Objects.requireNonNull(tenant);consumerCode(code);
+        Objects.requireNonNull(tenant);requireGenericConsumer(code);
         tx(()->jdbc.update("""
             INSERT INTO crm.int_fact_consumer(tenant_id,consumer_code) VALUES (?,?)
             ON CONFLICT (tenant_id,consumer_code) DO NOTHING
@@ -161,6 +172,10 @@ public class CanonicalFactDeliveryService {
             """,Boolean.class,k.tenantId(),code,k.owner().name(),k.kind().name(),k.sourceId()));
     }
     public Optional<Step> consumeNext(UUID tenant,String code,DatabaseHandler handler){
+        requireGenericConsumer(code);
+        return consumeInternal(tenant,code,handler);
+    }
+    private Optional<Step> consumeInternal(UUID tenant,String code,DatabaseHandler handler){
         Objects.requireNonNull(tenant);consumerCode(code);Objects.requireNonNull(handler);
         try{
             return tx(()->{
@@ -188,9 +203,18 @@ public class CanonicalFactDeliveryService {
         }
     }
     public List<Step> consumeBatch(UUID tenant,String code,int limit,DatabaseHandler handler){
+        requireGenericConsumer(code);
+        return consumeInternalBatch(tenant,code,limit,handler);
+    }
+    // Package-internal reserved route, used only by the typed L1 service.
+    List<Step> consumeProjectionBatch(UUID tenant,UUID generation,int limit,DatabaseHandler handler){
+        Objects.requireNonNull(generation);
+        return consumeInternalBatch(tenant,"l1:"+generation,limit,handler);
+    }
+    private List<Step> consumeInternalBatch(UUID tenant,String code,int limit,DatabaseHandler handler){
         batch(limit);var results=new ArrayList<Step>(limit);
         for(int i=0;i<limit;i++){
-            var step=consumeNext(tenant,code,handler);
+            var step=consumeInternal(tenant,code,handler);
             if(step.isEmpty())break;
             results.add(step.orElseThrow());
         }
@@ -217,10 +241,10 @@ public class CanonicalFactDeliveryService {
         Objects.requireNonNull(slice);
         tx(()->{
             jdbc.update("""
-                INSERT INTO crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind,range_start,range_end)
-                VALUES (?,?,?,?,?,?) ON CONFLICT (tenant_id,run_id) DO NOTHING
+                INSERT INTO crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind,range_start,range_end,time_basis)
+                VALUES (?,?,?,?,?,?,?) ON CONFLICT (tenant_id,run_id) DO NOTHING
                 """,slice.tenant(),slice.runId(),slice.owner().name(),slice.kind().name(),
-                Timestamp.from(slice.from()),Timestamp.from(slice.until()));
+                Timestamp.from(slice.from()),Timestamp.from(slice.until()),slice.basis().name());
             Slice stored=lockRun(slice.tenant(),slice.runId());
             if(!stored.equals(slice))throw new IllegalArgumentException("BACKFILL_RUN_SCOPE_CONFLICT");
             return null;
@@ -228,14 +252,15 @@ public class CanonicalFactDeliveryService {
     }
     private Slice lockRun(UUID tenant,UUID runId){
         Slice s=jdbc.query("""
-            SELECT owner_module,source_kind,range_start,range_end FROM crm.int_fact_backfill_run
+            SELECT owner_module,source_kind,range_start,range_end,time_basis FROM crm.int_fact_backfill_run
             WHERE tenant_id=? AND run_id=? FOR UPDATE
             """,rs->rs.next()?new Slice(tenant,runId,CanonicalFactKey.Owner.valueOf(rs.getString(1)),
-            CanonicalFactKey.Kind.valueOf(rs.getString(2)),rs.getTimestamp(3).toInstant(),rs.getTimestamp(4).toInstant()):null,
+            CanonicalFactKey.Kind.valueOf(rs.getString(2)),rs.getTimestamp(3).toInstant(),rs.getTimestamp(4).toInstant(),TimeBasis.valueOf(rs.getString(5))):null,
             tenant,runId);
         if(s==null)throw new IllegalArgumentException("BACKFILL_RUN_NOT_FOUND");
         return s;
     }
+    private static String timeColumn(Slice s){return s.basis()==TimeBasis.RECORDED?"recorded_at":"occurred_at";}
     private static Selection sources(Slice s){
         var args=new ArrayList<Object>();
         args.add(s.tenant());
@@ -243,9 +268,9 @@ public class CanonicalFactDeliveryService {
         if(s.owner()==CanonicalFactKey.Owner.SALES){
             query="SELECT id AS source_id,occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND event_type=?";
             args.add(s.kind().name().substring("ORDER_".length()));
-        }else query="SELECT id AS source_id,occurred_at FROM crm.inv_stock_movement WHERE tenant_id=?";
+        }else query="SELECT id AS source_id,"+timeColumn(s)+" AS occurred_at FROM crm.inv_stock_movement WHERE tenant_id=?";
         args.add(Timestamp.from(s.from()));args.add(Timestamp.from(s.until()));
-        return new Selection(query+" AND occurred_at>=? AND occurred_at<?",args);
+        return new Selection(query+" AND "+timeColumn(s)+">=? AND "+timeColumn(s)+"<?",args);
     }
     private CanonicalFactKey nextSource(Slice s){
         Selection source=sources(s);
@@ -312,9 +337,10 @@ public class CanonicalFactDeliveryService {
             var args=new ArrayList<>(source.args());
             args.addAll(List.of(tenant,s.owner().name(),s.kind().name(),Timestamp.from(s.from()),Timestamp.from(s.until()),
                 tenant,runId,s.owner().name(),s.kind().name()));
-            String sql="WITH o AS ("+source.sql()+"""
-                ), f AS (SELECT source_id,occurred_at,digest,schema_version FROM crm.int_canonical_fact
-                  WHERE tenant_id=? AND owner_module=? AND source_kind=? AND occurred_at>=? AND occurred_at<?),
+            String col=timeColumn(s);
+            String sql="WITH o AS ("+source.sql()+"), f AS (SELECT source_id,"+col+" AS occurred_at,digest,schema_version FROM crm.int_canonical_fact"
+                +" WHERE tenant_id=? AND owner_module=? AND source_kind=? AND "+col+">=? AND "+col+"<?),"+"""
+
                 r AS (SELECT source_id,disposition,digest,schema_version FROM crm.int_fact_backfill_receipt
                   WHERE tenant_id=? AND run_id=? AND owner_module=? AND source_kind=?)
                 SELECT statement_timestamp(),

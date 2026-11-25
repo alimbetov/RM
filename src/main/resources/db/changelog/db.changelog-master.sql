@@ -5328,3 +5328,101 @@ CREATE TRIGGER trg_int_backfill_receipt_no_truncate BEFORE TRUNCATE ON crm.int_f
 --rollback DROP TRIGGER trg_int_consumer_receipt_immutable ON crm.int_fact_consumer_receipt;
 --rollback DROP TRIGGER trg_int_consumer_no_truncate ON crm.int_fact_consumer;
 --rollback DROP TRIGGER trg_int_consumer_immutable ON crm.int_fact_consumer;
+
+
+--changeset rm:0187-int-backfill-time-basis
+-- Existing runs retain occurred_at semantics. New inventory runs use recorded_at.
+ALTER TABLE crm.int_fact_backfill_run ADD COLUMN time_basis VARCHAR(16) DEFAULT 'OCCURRED' NOT NULL;
+ALTER TABLE crm.int_fact_backfill_run ADD CONSTRAINT ck_int_backfill_basis
+ CHECK(time_basis='OCCURRED' OR (owner_module='INVENTORY' AND time_basis='RECORDED'));
+CREATE INDEX idx_int_backfill_inventory_recorded ON crm.inv_stock_movement(tenant_id,recorded_at,id);
+CREATE INDEX idx_int_fact_recorded ON crm.int_canonical_fact(tenant_id,owner_module,source_kind,recorded_at,source_id);
+--rollback DROP INDEX crm.idx_int_fact_recorded;
+--rollback DROP INDEX crm.idx_int_backfill_inventory_recorded;
+--rollback ALTER TABLE crm.int_fact_backfill_run DROP CONSTRAINT ck_int_backfill_basis;
+--rollback ALTER TABLE crm.int_fact_backfill_run DROP COLUMN time_basis;
+
+--changeset rm:0188-int-l1-generation
+CREATE TABLE crm.int_projection_generation (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ projection_code VARCHAR(24) NOT NULL CHECK(projection_code='L1'),
+ state VARCHAR(16) NOT NULL DEFAULT 'BUILDING' CHECK(state='BUILDING'),
+ consumer_code VARCHAR(96) NOT NULL,
+ method_version INTEGER NOT NULL CHECK(method_version=1),
+ calendar_version BIGINT NOT NULL,
+ from_day DATE NOT NULL,
+ until_day DATE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,generation_id),
+ UNIQUE(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,consumer_code) REFERENCES crm.int_fact_consumer(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,calendar_version) REFERENCES crm.int_calendar_policy(tenant_id,version),
+ CHECK(from_day<until_day)
+);
+-- P2 receipt is the single effect receipt; generation -> consumer is one-to-one.
+-- No active reader route is enabled in this slice.
+CREATE TABLE crm.int_daily_bucket (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ metric_code VARCHAR(32) NOT NULL,
+ local_day DATE NOT NULL,
+ currency_key VARCHAR(3) NOT NULL,
+ warehouse_key UUID NOT NULL,
+ sku_key UUID NOT NULL,
+ amount NUMERIC NOT NULL CHECK(amount>=0),
+ observations BIGINT NOT NULL CHECK(observations>=0),
+ PRIMARY KEY(tenant_id,generation_id,metric_code,local_day,currency_key,warehouse_key,sku_key),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ CHECK((metric_code IN ('PLACED_ORDERS','CONFIRMED_ORDERS','FULFILLED_ORDERS','CANCELLED_ORDERS') AND currency_key='~')
+    OR (metric_code='BOOKED_ORDER_AMOUNT' AND currency_key<>'~')
+    OR (metric_code IN ('STOCK_IN_QTY','STOCK_OUT_QTY') AND currency_key='~')),
+ CHECK(metric_code IN ('STOCK_IN_QTY','STOCK_OUT_QTY') OR
+   (warehouse_key=CAST('00000000-0000-0000-0000-000000000000' AS UUID)
+    AND sku_key=CAST('00000000-0000-0000-0000-000000000000' AS UUID)))
+);
+CREATE TABLE crm.int_l1_sales_contribution (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ event_kind VARCHAR(32) NOT NULL,
+ order_id UUID NOT NULL,
+ local_day DATE NOT NULL,
+ currency VARCHAR(3) NOT NULL,
+ booked_amount NUMERIC NOT NULL CHECK(booked_amount>=0),
+ PRIMARY KEY(tenant_id,generation_id,event_kind,order_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id),
+ CHECK(event_kind IN ('ORDER_PLACED','ORDER_CONFIRMED','ORDER_COMPLETED','ORDER_CANCELLED'))
+);
+CREATE TABLE crm.int_projection_coverage (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ proof_id UUID NOT NULL,
+ observed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ missing_facts BIGINT NOT NULL,
+ orphan_facts BIGINT NOT NULL,
+ pending_facts BIGINT NOT NULL,
+ rejected_facts BIGINT NOT NULL,
+ receipt_mismatches BIGINT NOT NULL,
+ bucket_mismatches BIGINT NOT NULL,
+ PRIMARY KEY(tenant_id,generation_id,proof_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id)
+);
+--rollback DROP TABLE crm.int_projection_coverage;
+--rollback DROP TABLE crm.int_l1_sales_contribution;
+--rollback DROP TABLE crm.int_daily_bucket;
+--rollback DROP TABLE crm.int_projection_generation;
+
+--changeset rm:0189-int-l1-immutable-evidence dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_int_l1_generation_immutable BEFORE UPDATE OR DELETE ON crm.int_projection_generation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l1_generation_no_truncate BEFORE TRUNCATE ON crm.int_projection_generation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l1_coverage_immutable BEFORE UPDATE OR DELETE ON crm.int_projection_coverage
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l1_coverage_no_truncate BEFORE TRUNCATE ON crm.int_projection_coverage
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_l1_coverage_no_truncate ON crm.int_projection_coverage;
+--rollback DROP TRIGGER trg_int_l1_coverage_immutable ON crm.int_projection_coverage;
+--rollback DROP TRIGGER trg_int_l1_generation_no_truncate ON crm.int_projection_generation;
+--rollback DROP TRIGGER trg_int_l1_generation_immutable ON crm.int_projection_generation;
