@@ -88,6 +88,10 @@ REQUIRED_CASES = {
     "rm-mvp-w25-strict-pg-{sha}": {
         ("BusMvpServiceJourneyQualificationTest", "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"),
         ("BusMvpServiceJourneyQualificationTest", "canonicalSalesAndInventoryDigestOraclePg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalSourceAdmissionAndOwnerRollbackPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalConcurrentReplayAndRollbackPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalSourceSealingLockOrdersPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalTenantSourceCollisionPg"),
         ("QrMvpServiceJourneyQualificationTest", "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"),
         ("QrMvpServiceJourneyQualificationTest", "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"),
         ("MvpServiceWarehouseAdmissionQualificationTest", "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"),

@@ -60,6 +60,10 @@ jobs:
                     'mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled',
                     'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg',
                     'canonicalSalesAndInventoryDigestOraclePg',
+                    'canonicalSourceAdmissionAndOwnerRollbackPg',
+                    'canonicalConcurrentReplayAndRollbackPg',
+                    'canonicalSourceSealingLockOrdersPg',
+                    'canonicalTenantSourceCollisionPg',
                     'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
                     'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
           got={c.get('name') for c in cases}

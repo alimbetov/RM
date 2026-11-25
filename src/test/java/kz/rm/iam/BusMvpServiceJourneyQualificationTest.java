@@ -95,15 +95,42 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT }
+
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
-        runBusJourney(false);
+        runBusJourney(CanonicalCase.FULL);
     }
 
     @Test void canonicalSalesAndInventoryDigestOraclePg() {
-        runBusJourney(true);
+        runBusJourney(CanonicalCase.DIGEST);
     }
 
-    private void runBusJourney(boolean digestOnly) {
+    @Test void canonicalSourceAdmissionAndOwnerRollbackPg() {
+        runNamedPostgresCase(CanonicalCase.ADMISSION_ROLLBACK);
+    }
+
+    @Test void canonicalConcurrentReplayAndRollbackPg() {
+        runNamedPostgresCase(CanonicalCase.CONCURRENCY);
+    }
+
+    @Test void canonicalSourceSealingLockOrdersPg() {
+        runNamedPostgresCase(CanonicalCase.SEALING);
+    }
+
+    @Test void canonicalTenantSourceCollisionPg() {
+        runNamedPostgresCase(CanonicalCase.TENANT);
+    }
+
+    private void runNamedPostgresCase(CanonicalCase scenario){
+        boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
+        // The strict PostgreSQL workflow and central verifier require these named cases
+        // without skips. H2 must never present a successful PostgreSQL locking test.
+        org.junit.jupiter.api.Assumptions.assumeTrue(pg,"CANONICAL_POSTGRESQL_REQUIRED");
+        runBusJourney(scenario);
+    }
+
+    private void runBusJourney(CanonicalCase scenario) {
         UUID ownerId=account("bus-owner"),staffId=account("bus-staff");
         proveInitialOwnerEmail(ownerId);
         VerifiedActor owner=actor(ownerId),staff=actor(staffId);
@@ -235,9 +262,19 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
         IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
                 2, "375", 2, 1, 1, "10", "3", "7");
-        if(digestOnly){
+        if(scenario==CanonicalCase.DIGEST){
             CanonicalFactJourneyEvidence.digestReplayContract(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
             CanonicalFactJourneyEvidence.inventoryDigestOracle(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            return;
+        }
+        if(scenario==CanonicalCase.CONCURRENCY){
+            CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
+            CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
+            return;
+        }
+        if(scenario==CanonicalCase.SEALING){
+            CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
+            CanonicalFactJourneyEvidence.sealingPermutations(jdbc,canonicalTransactions,tenant,orderId);
             return;
         }
         UUID otherOwnerId=account("bus-other-owner");
@@ -248,10 +285,18 @@ class BusMvpServiceJourneyQualificationTest {
                 "RM Canonical Isolation LLP","RM Canonical Isolation","KZ").tenantId()).isEqualTo(otherTenant);
         currencies.initialize(otherOwner,otherTenant);
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
+        if(scenario==CanonicalCase.TENANT){
+            CanonicalFactJourneyEvidence.tenantCollision(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
+            return;
+        }
         String rollbackKey="bus-rollback-"+UUID.randomUUID();
         CanonicalFactJourneyEvidence.ownerRollback(jdbc,canonicalTransactions,canonicalFacts,tenant,rollbackKey,
             ()->checkout.checkout(store.slug(),"bus-rollback-"+UUID.randomUUID()+"@example.kz",
                 rollbackKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+        if(scenario==CanonicalCase.ADMISSION_ROLLBACK){
+            CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            return;
+        }
         CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
         CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
         calendar.append(owner,tenant,"Etc/UTC",0);
