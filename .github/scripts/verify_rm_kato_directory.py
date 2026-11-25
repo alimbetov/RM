@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Audit existing JSON without attesting official provenance."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+EXPECTED_REGIONS = 20
+
+def audit(raw):
+    rows = json.loads(raw)
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("KATO_EMPTY_OR_INVALID")
+    ids, codes = {}, set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("KATO_ROW")
+        i, code, level, parent = (row.get(k) for k in ("Id", "Code", "Level", "Parent"))
+        if type(i) is not int or i <= 0 or type(code) is not int or not 100000000 <= code <= 999999999:
+            raise ValueError("KATO_ID_OR_CODE")
+        if type(level) is not int or not 2 <= level <= 32:
+            raise ValueError("KATO_LEVEL")
+        if parent not in ("", None) and (type(parent) is not int or parent <= 0):
+            raise ValueError("KATO_PARENT")
+        if type(row.get("IsMarkedToDelete")) is not bool or type(row.get("AreaType")) is not int:
+            raise ValueError("KATO_TYPE")
+        if any(not isinstance(row.get(k), str) or not row[k].strip() for k in ("NameKaz", "NameRus")):
+            raise ValueError("KATO_LABEL")
+        if i in ids or code in codes:
+            raise ValueError("KATO_DUPLICATE")
+        ids[i] = row
+        codes.add(code)
+    active = [r for r in rows if not r["IsMarkedToDelete"]]
+    regions = sorted(r["Code"] for r in active if r["Level"] == 2)
+    missing = sum(r["Parent"] not in ("", None) and r["Parent"] not in ids for r in rows)
+    unresolved = []
+    for r in active:
+        n, seen = r, set()
+        while n is not None:
+            i = n["Id"]
+            if i in seen or n["IsMarkedToDelete"]:
+                break
+            seen.add(i)
+            if n["Level"] == 2:
+                if n["Parent"] in ("", None):
+                    n = None
+                break
+            parent = ids.get(n["Parent"])
+            if parent is None or parent["Level"] >= n["Level"]:
+                break
+            n = parent
+        if n is not None:
+            unresolved.append(r["Code"])
+    canonical = json.dumps(sorted(rows, key=lambda r: r["Code"]), ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":")).encode("utf-8")
+    complete = len(regions) == EXPECTED_REGIONS and not unresolved
+    return {"rows": len(rows), "activeRows": len(active), "deletedRows": len(rows)-len(active),
+            "activeLevel2": regions, "expectedLevel2Count": EXPECTED_REGIONS,
+            "missingParentLinksAllRows": missing, "unresolvedActiveCodes": sorted(unresolved),
+            "rawSha256": hashlib.sha256(raw).hexdigest(),
+            "normalizedSha256": hashlib.sha256(canonical).hexdigest(),
+            "directoryCoverage": "STRUCTURALLY_COMPLETE" if complete else "HOLD",
+            "officialProvenance": "NOT_ATTESTED", "activationAdmission": "HOLD"}
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file", type=Path, default=ROOT / "src/main/resources/kato-data.json")
+    parser.add_argument("--expected-sha256")
+    parser.add_argument("--require-complete", action="store_true")
+    args = parser.parse_args()
+    try:
+        result = audit(args.file.read_bytes())
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(json.dumps({"directoryCoverage":"INVALID","activationAdmission":"HOLD","error":str(error)}))
+        return 1
+    print(json.dumps(result, indent=2))
+    if args.expected_sha256 is not None and result["rawSha256"] != args.expected_sha256:
+        return 1
+    if args.require_complete and (args.expected_sha256 is None or result["directoryCoverage"] != "STRUCTURALLY_COMPLETE"):
+        return 1
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

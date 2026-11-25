@@ -134,6 +134,23 @@ final class L1ProjectionJourneyEvidence {
         });
         assertThat(l1.prove(tenant,shadow).bucketMismatches()).isPositive();
         assertThat(l1.prove(tenant,gen).parity()).isTrue();
+        assertThat(l1.lifecycle(tenant,gen)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+        assertThat(l1.lifecycle(tenant,shadow)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+        assertThatThrownBy(()->l1.abort(otherTenant,shadow,0)).hasMessage("L1_GENERATION_NOT_FOUND");
+        assertThatThrownBy(()->l1.abort(tenant,shadow,1)).hasMessage("L1_LIFECYCLE_REVISION_CONFLICT");
+        assertThatThrownBy(()->jdbc.update("UPDATE crm.int_projection_lifecycle SET lifecycle_state='READY' WHERE tenant_id=? AND generation_id=?",tenant,shadow))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        var saved=l1.buckets(tenant,shadow,from);
+        var receipts=delivery.consumerCoverage(tenant,"l1:"+shadow);
+        assertThat(l1.abort(tenant,shadow,0)).isEqualTo(new L1ProjectionService.Lifecycle("ABORTED",1));
+        assertThat(l1.abort(tenant,shadow,0)).isEqualTo(new L1ProjectionService.Lifecycle("ABORTED",1));
+        assertThatThrownBy(()->l1.advance(tenant,shadow,1)).hasMessage("L1_GENERATION_NOT_BUILDING");
+        assertThatThrownBy(()->l1.open(tenant,shadow,calendarVersion,from,until)).hasMessage("L1_GENERATION_NOT_BUILDING");
+        assertThatThrownBy(()->jdbc.update("UPDATE crm.int_projection_lifecycle SET lifecycle_state='BUILDING',revision=0 WHERE tenant_id=? AND generation_id=?",tenant,shadow))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(l1.buckets(tenant,shadow,from)).isEqualTo(saved);
+        assertThat(delivery.consumerCoverage(tenant,"l1:"+shadow)).isEqualTo(receipts);
+        assertThat(l1.lifecycle(tenant,gen)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
         selectorPlans(jdbc,manager,tenant);
     }
     /** Bounded selector-only experiment, not end-to-end apply throughput. */

@@ -122,6 +122,16 @@ public class CanonicalFactDeliveryService {
             """,rs->rs.next()?rs.getString(1):null,tenant,code);
         if(found==null)throw new IllegalArgumentException("CANONICAL_CONSUMER_NOT_FOUND");
     }
+    /** Under the consumer lock, in the same transaction as each effect/receipt. */
+    private void requireProjectionBuilding(UUID tenant,String code){
+        if(!code.startsWith("l1:"))return;
+        String state=jdbc.query("""
+            SELECT l.lifecycle_state FROM crm.int_projection_lifecycle l
+            JOIN crm.int_projection_generation g ON g.tenant_id=l.tenant_id AND g.generation_id=l.generation_id
+            WHERE l.tenant_id=? AND g.consumer_code=? FOR SHARE OF l
+            """,rs->rs.next()?rs.getString(1):null,tenant,code);
+        if(!"BUILDING".equals(state))throw new IllegalStateException("L1_GENERATION_NOT_BUILDING");
+    }
     private static Envelope envelope(ResultSet rs) throws SQLException {
         Timestamp recorded=rs.getTimestamp("recorded_at");
         return new Envelope(new CanonicalFactKey(rs.getObject("tenant_id",UUID.class),
@@ -180,6 +190,7 @@ public class CanonicalFactDeliveryService {
         try{
             return tx(()->{
                 lockConsumer(tenant,code);
+                requireProjectionBuilding(tenant,code);
                 Envelope f=nextFact(tenant,code);
                 if(f==null)return Optional.empty();
                 if(append(f.key())!=CanonicalFactAppender.Outcome.ALREADY_PRESENT)
@@ -194,6 +205,7 @@ public class CanonicalFactDeliveryService {
             // any write. Record only an immutable-source rejection in a new unit.
             return tx(()->{
                 lockConsumer(tenant,code);
+                requireProjectionBuilding(tenant,code);
                 if(hasConsumerReceipt(code,rejected.key))
                     return Optional.of(new Step(rejected.key,Disposition.ALREADY_PROCESSED,null));
                 Envelope f=Objects.requireNonNull(find(rejected.key),"Missing rejected fact");

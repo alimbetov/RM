@@ -457,6 +457,14 @@ class BusMvpServiceJourneyQualificationTest {
                 .hasMessageContaining("INT_SALES_DIM_SOURCE_ITEM_MISMATCH");
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_movement_dimension WHERE tenant_id=? AND movement_id=?",
                 Long.class,tenant,legacy)).isZero();
+            var geoCoverage=dimensions.stockCoverage(staff,tenant,List.of(warehouse.id()),from,until);
+            assertThat(geoCoverage.sourceMovements()).isEqualTo(3);
+            assertThat(geoCoverage.missingSnapshots()).isEqualTo(1);
+            assertThat(geoCoverage.unknownRegion()).isZero();
+            assertThat(geoCoverage.resolvedRegion()).isEqualTo(2);
+            assertThat(geoCoverage.allClassified()).isFalse();
+            assertThatThrownBy(()->dimensions.stockCoverage(otherStaff,otherTenant,List.of(warehouse.id()),from,until))
+                .isInstanceOf(SecurityException.class);
             assertThat(dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31)).anySatisfy(row->{
                 assertThat(row.region()).isNull();assertThat(row.group().id()).isNull();assertThat(row.in()).isEqualByComparingTo("10");
             });

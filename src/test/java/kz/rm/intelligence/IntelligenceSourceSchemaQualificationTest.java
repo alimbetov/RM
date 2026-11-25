@@ -29,6 +29,7 @@ class IntelligenceSourceSchemaQualificationTest {
         new Source("crm","int_sales_line_dimension",List.of("tenant_id","line_id"),List.of("item_id","item_kind","group_id","assignment_revision","captured_at")),
         new Source("crm","int_movement_dimension",List.of("tenant_id","movement_id"),List.of("item_id","item_kind","group_id","assignment_revision","location_id","kato_code","region_code","geo_quality","captured_at")),
         new Source("crm","int_projection_generation",List.of("tenant_id","generation_id"),List.of("state","projection_code","consumer_code","method_version","calendar_version","from_day","until_day")),
+        new Source("crm","int_projection_lifecycle",List.of("tenant_id","generation_id"),List.of("lifecycle_state","revision","changed_at")),
         new Source("crm","int_daily_bucket",List.of("tenant_id","generation_id","metric_code","local_day","currency_key","warehouse_key","sku_key"),List.of("amount","observations")),
         new Source("crm","int_l1_sales_contribution",List.of("tenant_id","generation_id","event_kind","order_id"),List.of("local_day","currency","booked_amount")),
         new Source("crm","int_projection_coverage",List.of("tenant_id","generation_id","proof_id"),List.of("observed_at","missing_facts","orphan_facts","pending_facts","rejected_facts","receipt_mismatches","bucket_mismatches")),

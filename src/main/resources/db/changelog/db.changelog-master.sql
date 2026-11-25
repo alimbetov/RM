@@ -5609,3 +5609,52 @@ CREATE TRIGGER trg_int_movement_dim_geo BEFORE INSERT ON crm.int_movement_dimens
  FOR EACH ROW EXECUTE FUNCTION crm.int_check_movement_dimension_geo();
 --rollback DROP TRIGGER trg_int_movement_dim_geo ON crm.int_movement_dimension;
 --rollback DROP FUNCTION crm.int_check_movement_dimension_geo();
+
+
+--changeset rm:0196-int-generation-runtime-lifecycle
+-- Existing immutable generation configuration and evidence are not rewritten.
+CREATE TABLE crm.int_projection_lifecycle (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ lifecycle_state VARCHAR(16) NOT NULL DEFAULT 'BUILDING',
+ revision BIGINT NOT NULL DEFAULT 0,
+ changed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ CHECK((lifecycle_state='BUILDING' AND revision=0) OR
+       (lifecycle_state='ABORTED' AND revision=1))
+);
+INSERT INTO crm.int_projection_lifecycle(tenant_id,generation_id,changed_at)
+ SELECT tenant_id,generation_id,created_at FROM crm.int_projection_generation;
+--rollback DROP TABLE crm.int_projection_lifecycle;
+
+--changeset rm:0197-int-generation-runtime-guard dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_init_generation_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ INSERT INTO crm.int_projection_lifecycle(tenant_id,generation_id,changed_at)
+ VALUES (NEW.tenant_id,NEW.generation_id,NEW.created_at);
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_generation_lifecycle_init AFTER INSERT ON crm.int_projection_generation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_init_generation_lifecycle();
+CREATE FUNCTION crm.int_guard_generation_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.lifecycle_state='BUILDING' AND NEW.revision=0 THEN RETURN NEW; END IF;
+ ELSIF TG_OP='UPDATE' THEN
+   IF OLD.tenant_id=NEW.tenant_id AND OLD.generation_id=NEW.generation_id
+      AND OLD.lifecycle_state='BUILDING' AND OLD.revision=0
+      AND NEW.lifecycle_state='ABORTED' AND NEW.revision=1
+      AND NEW.changed_at>=OLD.changed_at THEN RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'INT_GENERATION_LIFECYCLE_TRANSITION' USING ERRCODE='23514';
+END; $$;
+CREATE TRIGGER trg_int_generation_lifecycle_guard BEFORE INSERT OR UPDATE OR DELETE
+ ON crm.int_projection_lifecycle FOR EACH ROW EXECUTE FUNCTION crm.int_guard_generation_lifecycle();
+CREATE TRIGGER trg_int_generation_lifecycle_no_truncate BEFORE TRUNCATE ON crm.int_projection_lifecycle
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_generation_lifecycle_no_truncate ON crm.int_projection_lifecycle;
+--rollback DROP TRIGGER trg_int_generation_lifecycle_guard ON crm.int_projection_lifecycle;
+--rollback DROP FUNCTION crm.int_guard_generation_lifecycle();
+--rollback DROP TRIGGER trg_int_generation_lifecycle_init ON crm.int_projection_generation;
+--rollback DROP FUNCTION crm.int_init_generation_lifecycle();

@@ -25,6 +25,7 @@ public class L1ProjectionService {
                              ZoneId zone,LocalDate from,LocalDate until){
         boolean covers(LocalDate day){return !day.isBefore(from)&&day.isBefore(until);}
     }
+    public record Lifecycle(String state,long revision){}
     public record Bucket(MetricRegistry.Code metric,LocalDate day,String currency,UUID warehouse,UUID sku,
                          BigDecimal amount,long observations){}
     public record Proof(UUID id,Instant observedAt,long missingFacts,long orphanFacts,long pendingFacts,
@@ -72,7 +73,46 @@ public class L1ProjectionService {
             Generation g=require(tenant,generation);
             if(g.calendarVersion()!=calendarVersion||!g.from().equals(from)||!g.until().equals(until))
                 throw new IllegalArgumentException("L1_GENERATION_SCOPE_CONFLICT");
+            requireBuilding(tenant,generation);
             return g;
+        });
+    }
+    private Lifecycle readLifecycle(UUID tenant,UUID generation,String lock){
+        Lifecycle l=jdbc.query("""
+            SELECT lifecycle_state,revision FROM crm.int_projection_lifecycle
+            WHERE tenant_id=? AND generation_id=?
+            """+lock,rs->rs.next()?new Lifecycle(rs.getString(1),rs.getLong(2)):null,tenant,generation);
+        if(l==null)throw new IllegalStateException("L1_LIFECYCLE_MISSING");
+        return l;
+    }
+    private void requireBuilding(UUID tenant,UUID generation){
+        if(!"BUILDING".equals(readLifecycle(tenant,generation," FOR SHARE").state()))
+            throw new IllegalStateException("L1_GENERATION_NOT_BUILDING");
+    }
+    public Lifecycle lifecycle(UUID tenant,UUID generation){
+        return tx(TransactionDefinition.ISOLATION_READ_COMMITTED,()->{
+            require(tenant,generation);
+            return readLifecycle(tenant,generation,"");
+        });
+    }
+    /** Internal terminal abort; same consumer lock as P2 before lifecycle lock. */
+    public Lifecycle abort(UUID tenant,UUID generation,long expectedRevision){
+        if(expectedRevision!=0)throw new IllegalArgumentException("L1_LIFECYCLE_REVISION_CONFLICT");
+        return tx(TransactionDefinition.ISOLATION_READ_COMMITTED,()->{
+            Generation g=require(tenant,generation);
+            jdbc.queryForObject("SELECT consumer_code FROM crm.int_fact_consumer WHERE tenant_id=? AND consumer_code=? FOR UPDATE",
+                String.class,tenant,g.consumerCode());
+            Lifecycle before=readLifecycle(tenant,generation," FOR UPDATE");
+            if("ABORTED".equals(before.state())&&before.revision()==1)return before;
+            if(!"BUILDING".equals(before.state())||before.revision()!=expectedRevision)
+                throw new IllegalStateException("L1_LIFECYCLE_REVISION_CONFLICT");
+            if(jdbc.update("""
+                UPDATE crm.int_projection_lifecycle SET lifecycle_state='ABORTED',revision=1,
+                  changed_at=GREATEST(changed_at,CURRENT_TIMESTAMP)
+                WHERE tenant_id=? AND generation_id=? AND lifecycle_state='BUILDING' AND revision=?
+                """,tenant,generation,expectedRevision)!=1)
+                throw new IllegalStateException("L1_LIFECYCLE_REVISION_CONFLICT");
+            return readLifecycle(tenant,generation,"");
         });
     }
     private Generation require(UUID tenant,UUID id){

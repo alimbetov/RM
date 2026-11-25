@@ -23,6 +23,26 @@ public class MultidimensionalReadService {
     public record Booked(Group group,String currency,BigDecimal amount,long distinctOrders){}
     public record Fulfilled(String region,Group group,String currency,BigDecimal amount,long distinctOrders){}
     public record Stock(String region,Group group,UUID sku,BigDecimal in,BigDecimal out){}
+    public record StockCoverage(long sourceMovements,long missingSnapshots,long unknownRegion,long resolvedRegion){
+        public boolean allClassified(){return missingSnapshots==0&&unknownRegion==0;}
+    }
+    /** Source classification coverage is not a national directory certificate. */
+    @Transactional
+    public StockCoverage stockCoverage(VerifiedActor actor,UUID tenant,List<UUID> warehouseIds,Instant from,Instant until){
+        admit(actor,tenant,DomainPermission.INVENTORY_STOCK_READ,from,until,0);
+        var allowed=warehouses(actor,tenant,warehouseIds);
+        var args=new java.util.ArrayList<Object>(List.of(tenant,Timestamp.from(from),Timestamp.from(until)));
+        args.addAll(allowed);
+        return jdbc.queryForObject("""
+            SELECT COUNT(*),
+              COUNT(CASE WHEN d.movement_id IS NULL THEN 1 END),
+              COUNT(CASE WHEN d.movement_id IS NOT NULL AND d.geo_quality='UNKNOWN' THEN 1 END),
+              COUNT(CASE WHEN d.geo_quality='RESOLVED' THEN 1 END)
+            FROM crm.inv_stock_movement m LEFT JOIN crm.int_movement_dimension d
+              ON d.tenant_id=m.tenant_id AND d.movement_id=m.id
+            WHERE m.tenant_id=? AND m.recorded_at>=? AND m.recorded_at<? AND m.location_id IN ("""+placeholders(allowed.size())+")",
+            (rs,n)->new StockCoverage(rs.getLong(1),rs.getLong(2),rs.getLong(3),rs.getLong(4)),args.toArray());
+    }
     private final JdbcTemplate jdbc;
     private final TenantAuthorization auth;
     private final WarehouseStaffScopeService scope;
