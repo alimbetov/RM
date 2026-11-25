@@ -152,6 +152,95 @@ final class CanonicalFactJourneyEvidence {
         finally{finish.countDown();workers.shutdownNow();}
     }
 
+    /** Complements seal-commit/late-insert denial with the other lock orders and outcomes. */
+    static void sealingPermutations(JdbcTemplate jdbc,PlatformTransactionManager manager,UUID tenant,UUID templateOrder){
+        boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
+        if(!pg)return;
+        for(var scenario:SealPermutation.values())sealPermutation(jdbc,manager,tenant,templateOrder,scenario);
+    }
+
+    private enum SealPermutation {
+        LINE_COMMIT_THEN_SEAL(true,false,false,2,1,true),
+        LINE_ROLLBACK_THEN_SEAL(true,true,false,1,1,true),
+        SEAL_ROLLBACK_THEN_LINE(false,true,true,2,0,false),
+        TWO_STATUS_EVENTS(false,false,false,1,2,true);
+        final boolean firstLine,firstRollback,secondLine,expectedSeal;
+        final int expectedLines,expectedEvents;
+        SealPermutation(boolean firstLine,boolean firstRollback,boolean secondLine,
+                        int expectedLines,int expectedEvents,boolean expectedSeal){
+            this.firstLine=firstLine;this.firstRollback=firstRollback;this.secondLine=secondLine;
+            this.expectedLines=expectedLines;this.expectedEvents=expectedEvents;this.expectedSeal=expectedSeal;
+        }
+    }
+
+    private static void sealPermutation(JdbcTemplate jdbc,PlatformTransactionManager manager,
+                                        UUID tenant,UUID templateOrder,SealPermutation scenario){
+        var tx=new TransactionTemplate(manager);
+        tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        UUID order=UUID.randomUUID(),firstEvent=UUID.randomUUID(),secondEvent=UUID.randomUUID();
+        tx.executeWithoutResult(s->{
+            assertThat(jdbc.update("""
+                INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
+                SELECT tenant_id,?,pending_email_identity_id,buyer_user_id,'PLACED',total_amount*?,currency,created_at,fulfillment_mode
+                FROM crm.sales_order WHERE tenant_id=? AND id=?
+                """,order,scenario.expectedLines,tenant,templateOrder)).isEqualTo(1);
+            copyLine(jdbc,tenant,templateOrder,order);
+        });
+        assertThat(jdbc.queryForObject("SELECT booked_snapshot_sealed FROM crm.sales_order WHERE tenant_id=? AND id=?",
+            Boolean.class,tenant,order)).isFalse();
+        var workers=Executors.newFixedThreadPool(2);
+        var firstReady=new CountDownLatch(1);
+        var finish=new CountDownLatch(1);
+        var holder=new AtomicReference<Integer>();
+        var contender=new AtomicReference<Integer>();
+        try{
+            Future<?> first=workers.submit(()->tx.executeWithoutResult(s->{
+                holder.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                if(scenario.firstLine)copyLine(jdbc,tenant,templateOrder,order);
+                else insertSealEvent(jdbc,tenant,order,firstEvent,"PLACED");
+                firstReady.countDown();
+                await(finish);
+                if(scenario.firstRollback)s.setRollbackOnly();
+            }));
+            await(firstReady);
+            Future<?> second=workers.submit(()->tx.executeWithoutResult(s->{
+                contender.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                if(scenario.secondLine)copyLine(jdbc,tenant,templateOrder,order);
+                else{
+                    String kind=scenario==SealPermutation.TWO_STATUS_EVENTS?"CONFIRMED":"PLACED";
+                    insertSealEvent(jdbc,tenant,order,secondEvent,kind);
+                    if(scenario==SealPermutation.TWO_STATUS_EVENTS)
+                        assertThat(jdbc.update("UPDATE crm.sales_order SET status='CONFIRMED',row_version=row_version+1 WHERE tenant_id=? AND id=?",tenant,order)).isEqualTo(1);
+                }
+            }));
+            awaitBlocked(jdbc,contender,holder);
+            finish.countDown();
+            first.get(30,TimeUnit.SECONDS);
+            second.get(30,TimeUnit.SECONDS);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",
+                Integer.class,tenant,order)).as(scenario.name()).isEqualTo(scenario.expectedLines);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=?",
+                Integer.class,tenant,order)).as(scenario.name()).isEqualTo(scenario.expectedEvents);
+            assertThat(jdbc.queryForObject("SELECT booked_snapshot_sealed FROM crm.sales_order WHERE tenant_id=? AND id=?",
+                Boolean.class,tenant,order)).as(scenario.name()).isEqualTo(scenario.expectedSeal);
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.sales_order o WHERE o.tenant_id=? AND o.id=? AND o.total_amount=
+                    (SELECT SUM(l.quantity*l.unit_price_snapshot) FROM crm.sales_order_line l
+                     WHERE l.tenant_id=o.tenant_id AND l.order_id=o.id)
+                """,Integer.class,tenant,order)).isEqualTo(1);
+            // Complete the isolated synthetic snapshot only after proving the rollback state.
+            if(!scenario.expectedSeal)tx.executeWithoutResult(s->insertSealEvent(jdbc,tenant,order,UUID.randomUUID(),"PLACED"));
+        }catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(scenario.name(),e);}
+         catch(ExecutionException|TimeoutException e){throw new AssertionError("Source sealing permutation failed: "+scenario.name(),e);}
+        finally{finish.countDown();workers.shutdownNow();}
+    }
+
+    private static void insertSealEvent(JdbcTemplate jdbc,UUID tenant,UUID order,UUID event,String kind){
+        assertThat(jdbc.update("INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)",
+            tenant,event,order,kind)).isEqualTo(1);
+    }
+
     static void concurrentRollbackOnPostgres(JdbcTemplate jdbc,PlatformTransactionManager manager,
                                              CanonicalFactAppender appender,UUID tenant,UUID order){
         boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
