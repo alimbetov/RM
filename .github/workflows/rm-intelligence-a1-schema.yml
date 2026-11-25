@@ -42,6 +42,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 .github/scripts/verify_rm_ie00b_a2_contracts.py
           python3 .github/scripts/verify_rm_ie00b_source_inventory.py
+          python3 .github/scripts/test_verify_rm_canonical_producer_inventory.py
           python3 .github/scripts/verify_rm_canonical_producer_inventory.py
       - name: Qualify migrated schema and pure B1 specifications
         run: mvn -B -ntp clean test '-Dtest=IntelligenceSourceSchemaQualificationTest,IntelligenceB1ContractTest,CanonicalFactEncodingTest'

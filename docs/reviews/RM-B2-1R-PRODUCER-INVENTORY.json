@@ -1,6 +1,6 @@
 {
   "schema": "RM-B2.1R/producer-inventory/v1",
-  "scope": "literal production SQL INSERT into source journals, src/main/java; excluded test fixtures and migration SQL; review generated/ORM SQL separately",
+  "scope": "Nine admitted literal INSERT sites in eight owner Java classes; conservative alternate producer detection across src/main Java, SQL and XML; test fixtures excluded",
   "producers": [
     {
       "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
@@ -64,8 +64,8 @@
     "SalesReturnPhysicalService and SalesReturnQuarantineResolutionService -> ReturnInventoryPostingPort"
   ],
   "limitations": [
-    "Not proof of generated SQL or database procedures",
     "Manifest gate fails on new or missing literal insert sites",
+    "Additional static checks cover quoted SQL identifiers, adjacent Java literals, ORM mappings, MERGE/COPY and SQL/XML inserts; not a proof for arbitrary generated SQL, external writers or database procedures",
     "No producer wiring yet"
   ]
 }

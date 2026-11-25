@@ -10,6 +10,29 @@ MANIFEST = ROOT / "docs/reviews/RM-B2-1R-PRODUCER-INVENTORY.json"
 PATTERN = re.compile(r"\binsert\s+into\s+(?:crm\s*\.\s*)?(sales_order_status_event|inv_stock_movement)\b", re.I)
 
 
+# Conservative checks for additional producer syntax; arbitrary dynamic SQL
+# and out-of-repository database writers are outside this static proof.
+IDENTIFIER = r'(?:sales_order_status_event|inv_stock_movement)'
+SQL_NAME = r'(?:"' + IDENTIFIER + r'"|' + IDENTIFIER + r'\b)'
+SCHEMA = r'(?:(?:"crm"|crm)\s*\.\s*)?'
+ALTERNATE = re.compile(r'\b(?:merge\s+into|copy)\s+' + SCHEMA + SQL_NAME, re.I)
+MAPPING = re.compile(r'@(?:[\w.]+\.)?(?:Table|SecondaryTable|CollectionTable|JoinTable)\s*\([^)]*\b' + IDENTIFIER + r'\b', re.I | re.S)
+QUOTED_INSERT = re.compile(r'\binsert\s+into\s+(?:"crm"\s*\.\s*' + SQL_NAME + r'|(?:crm\s*\.\s*)?"' + IDENTIFIER + r'")', re.I)
+ADJACENT = re.compile(r'"\s*\+\s*"')
+
+
+def alternate_producer(source, suffix):
+    # Recognize adjacent Java string literals and escaped SQL identifier quotes.
+    # Do not count those as admitted literal sites: require explicit review.
+    normalized = ADJACENT.sub("", source).replace(r'\"', '"') if suffix == ".java" else source
+    if ALTERNATE.search(normalized) or MAPPING.search(normalized) or QUOTED_INSERT.search(normalized):
+        return True
+    if suffix != ".java":
+        return bool(PATTERN.search(normalized))
+    return collections.Counter(x.lower() for x in PATTERN.findall(normalized)) != collections.Counter(
+        x.lower() for x in PATTERN.findall(source))
+
+
 def main():
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     expected = {(r["path"], r["table"]): r["sites"] for r in data["producers"]}
@@ -24,20 +47,12 @@ def main():
         print(f"{key[0]} :: {key[1]} expected={expected.get(key, 0)} actual={actual.get(key, 0)}")
     if actual != expected:
         raise SystemExit("CANONICAL_PRODUCER_INVENTORY_DRIFT")
-    # Conservative secondary inventory: ORM table mappings and SQL resource
-    # writes may bypass the literal Java INSERT contract. No approved alternate
-    # producers currently exist. Flag them for explicit owner review.
-    names = r"(?:sales_order_status_event|inv_stock_movement)"
-    alternate = re.compile(r"\b(?:merge\s+into|copy)\s+(?:crm\s*\.\s*)?" + names + r"\b", re.I)
-    mapping = re.compile(r"@(?:[\w.]+\.)?(?:Table|SecondaryTable|CollectionTable|JoinTable)\s*\([^)]*\b" + names + r"\b", re.I | re.S)
-    quoted_insert = re.compile(r'\binsert\s+into\s+(?:"?crm"?\s*\.\s*)?"' + names + r'"', re.I)
     unexpected = []
     for path in sorted((ROOT / "src/main").rglob("*")):
         if path.suffix not in {".java", ".sql", ".xml"} or not path.is_file():
             continue
         source = path.read_text(encoding="utf-8")
-        if alternate.search(source) or mapping.search(source) or quoted_insert.search(source) or (
-                path.suffix != ".java" and PATTERN.search(source)):
+        if alternate_producer(source, path.suffix):
             unexpected.append(path.relative_to(ROOT).as_posix())
     if unexpected:
         raise SystemExit("CANONICAL_ALTERNATE_PRODUCER_REVIEW_REQUIRED: " + ", ".join(unexpected))

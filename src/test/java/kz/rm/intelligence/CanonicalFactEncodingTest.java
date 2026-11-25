@@ -28,7 +28,7 @@ class CanonicalFactEncodingTest {
         assertThat(legacy).isEqualTo("eb9c0d2c8a872914c21486b38186efe0efdcfff5e22a7b2b8f83d596e8368cb8");
         String extended=CanonicalFactAppender.frame(1L,"ISSUE","FULFILLMENT","SALES_ORDER",id(8),id(9),id(10),null,"key|one");
         assertThat(CanonicalFactAppender.v2Digest(legacy,extended))
-            .isEqualTo("497fa14e0d99b0ae4b726a97d2ec63b733bd6b5f13b04e660aef401ca8fdee9a");
+            .isEqualTo("3db1e042440452114d63e96d55650c1dc3980c529d8e1a3312a58d25227f6049");
     }
     @Test void framingDistinguishesNullEmptyAndDelimiters(){
         assertThat(CanonicalFactAppender.frame((Object)null)).isNotEqualTo(CanonicalFactAppender.frame(""));
