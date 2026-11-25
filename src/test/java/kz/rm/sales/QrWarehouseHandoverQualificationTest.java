@@ -139,7 +139,11 @@ class QrWarehouseHandoverQualificationTest {
         Timestamp now=Timestamp.from(Instant.now());
         VerifiedActor buyerActor=verified(buyer);
         if(strictEmail){
-            var proof=VerifiedBuyerEmailFixture.registerAndVerify(emailIdentities,crypto,jdbc,buyerActor,buyerEmail);
+            String directory=System.getenv("RM_RET04_EVIDENCE_DIR");
+            var transitions=new ArrayList<String>();
+            var proof=VerifiedBuyerEmailFixture.registerAndVerify(emailIdentities,crypto,jdbc,buyerActor,buyerEmail,
+                    directory==null||directory.isBlank()?null:(phase,row)->transitions.add(phase+"\t"+row));
+            if(directory!=null&&!directory.isBlank())ret04RecordRegistration(tenant,buyer,transitions,directory);
             System.out.println("RET04E6A registration proof actor="+buyer+" identity="+proof.identityId()+
                     " challenge="+proof.challengeId());
         }else{
@@ -3588,6 +3592,28 @@ class QrWarehouseHandoverQualificationTest {
             ret04RecordCheckoutProvenance(c,method,name,sha,directory,snapshot.get("sales_return_request").size());
         }catch(java.io.IOException|java.security.NoSuchAlgorithmException e){
             throw new AssertionError("RET04D evidence write failed",e);
+        }
+    }
+
+    private void ret04RecordRegistration(UUID tenant,UUID buyer,List<String> transitions,String directory){
+        String method=StackWalker.getInstance().walk(frames->frames
+                .map(StackWalker.StackFrame::getMethodName)
+                .filter(name->name.startsWith("qr07R25CoreRet04")||name.startsWith("qr07R25StrictRet04E")||
+                        name.startsWith("qr07R25ConcurrentRet04E")).findFirst().orElseThrow());
+        String sha=System.getenv("GITHUB_SHA");
+        if(sha==null||!sha.matches("[0-9a-f]{40}"))throw new AssertionError("RET04 registration SHA missing");
+        assertThat(transitions).hasSize(5);
+        var lines=new ArrayList<String>();
+        lines.add("sha\t"+sha);lines.add("method\t"+method);
+        lines.add("tenant\t"+tenant);lines.add("buyer\t"+buyer);
+        lines.addAll(transitions);
+        try{
+            var dir=java.nio.file.Path.of(directory).resolveSibling("registration-e6c").resolve(method);
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.write(dir.resolve(tenant+".tsv"),lines,java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE_NEW);
+        }catch(java.io.IOException failure){
+            throw new AssertionError("RET04 registration evidence write failed",failure);
         }
     }
 

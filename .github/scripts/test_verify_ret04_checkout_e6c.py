@@ -2,7 +2,7 @@ import unittest
 import uuid
 from copy import deepcopy
 from decimal import Decimal
-from verify_ret04_checkout_e6c import check_rows
+from verify_ret04_checkout_e6c import check_rows,check_registration,FIELDS,PHASES
 
 class CheckoutEvidenceTest(unittest.TestCase):
     def setUp(self):
@@ -76,5 +76,62 @@ class CheckoutEvidenceTest(unittest.TestCase):
     def test_invalid_key_digest(self):
         with self.assertRaisesRegex(ValueError,"invalid receipt key digest"):
             self.check(receipt_key_sha="invalid")
+class RegistrationTransitionTest(unittest.TestCase):
+    def setUp(self):
+        buyer,identity,challenge,event,delivery=[str(uuid.uuid4()) for _ in range(5)]
+        self.meta={"buyer":buyer,"tenant":str(uuid.uuid4())}
+        before=dict.fromkeys(FIELDS)
+        before.update(buyer=buyer,account_status="ACTIVE",identities=0,challenges=0,events=0,deliveries=0)
+        pending=dict(before,identities=1,challenges=1,deliveries=1,
+                     identity_id=identity,identity_buyer=buyer,identity_state="PENDING",
+                     pending_reason="REGISTRATION",pending_owner=buyer,
+                     identity_created_at="2026-01-01T00:00:00+00:00",
+                     challenge_id=challenge,challenge_identity=identity,challenge_purpose="REGISTRATION",
+                     challenge_created_at="2026-01-01T00:00:01+00:00",expires_at="2026-01-01T00:15:01+00:00",
+                     delivery_id=delivery,delivery_identity=identity,delivery_challenge=challenge)
+        when="2026-01-01T00:00:02+00:00"
+        current=dict(pending,events=1,identity_state="CURRENT",pending_reason=None,pending_owner=None,
+                     current_owner=buyer,verified_at=when,consumed_at=when,event_at=when,
+                     registration_event=event,registration_buyer=buyer,event_identity=identity,
+                     event_challenge=challenge,registration_purpose="REGISTRATION")
+        self.states=dict(zip(PHASES,(before,pending,deepcopy(pending),current,deepcopy(current))))
+        self.lineage=[dict(buyer=buyer,identity_id=identity,challenge_id=challenge,registration_event=event)]
+    def check(self):
+        check_registration(self.states,self.meta,self.lineage)
+    def test_registration_valid(self):
+        self.check()
+    def test_preexisting(self):
+        self.states["BEFORE"]["identities"]=1
+        with self.assertRaisesRegex(ValueError,"preexisting"):
+            self.check()
+    def test_wrong_purpose_mutation(self):
+        self.states["WRONG_PURPOSE_DENIED"]["consumed_at"]="2026-01-01T00:00:02+00:00"
+        with self.assertRaisesRegex(ValueError,"wrong purpose"):
+            self.check()
+    def test_replay_extra_event(self):
+        self.states["REPLAY_DENIED"]["events"]=2
+        with self.assertRaisesRegex(ValueError,"replay changed"):
+            self.check()
+    def test_current_wrong_owner(self):
+        self.states["CURRENT"]["current_owner"]=str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError,"current invariant"):
+            self.check()
+    def test_expired_proof(self):
+        for k in ("verified_at","consumed_at","event_at"):
+            self.states["CURRENT"][k]="2026-01-01T00:16:01+00:00"
+        with self.assertRaisesRegex(ValueError,"commit chronology"):
+            self.check()
+    def test_wrong_event(self):
+        self.states["CURRENT"]["event_challenge"]=str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError,"event binding"):
+            self.check()
+    def test_foreign_checkout(self):
+        self.lineage[0]["identity_id"]=str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError,"checkout binding"):
+            self.check()
+    def test_missing_phase(self):
+        del self.states["WRONG_PURPOSE_DENIED"]
+        with self.assertRaisesRegex(ValueError,"phase order"):
+            self.check()
 if __name__=="__main__":
     unittest.main()

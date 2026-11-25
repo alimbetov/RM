@@ -1025,7 +1025,7 @@
         }
       ],
       "mappingVerdict": "SUPPORTING_PARTIAL",
-      "openRequirement": "56/56 dedicated PostgreSQL scenarios, three manifests and strict published QR fixture qualified on prior SHA. E.6C committed registration/checkout lineage captured at every return snapshot and independently reverified by target/global gates; new exact-SHA execution pending. Registration transition snapshots and normative variant review remain open; partial verdict is intentional.",
+      "openRequirement": "E.6C/v2: 56/56 committed registration/checkout lineage and target/full PostgreSQL qualification passed on d9242e539a07ef1843c0e72aba9c651204bf42ae, globally reverified. E.6C/v3 adds five persisted registration transition snapshots per fixture tenant, verifies denial/replay invariants and binds registration event to checkout/return lineage. New exact-SHA qualification and normative variant review remain open; partial verdict is intentional.",
       "candidateProofs": [
         {
           "suite": "QrWarehouseHandoverQualificationTest",

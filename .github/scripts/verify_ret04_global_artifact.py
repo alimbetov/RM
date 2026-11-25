@@ -90,7 +90,7 @@ def verify_target_archive(archive, sha):
         evidence=root/"evidence"
         evidence.mkdir()
         allowed={"exact-sha.txt","console.log","ret04-e6c-manifest.json",*(x[0] for x in MANIFESTS)}
-        folders={"sql","identity-e3","revocation-e3b","revocation-iam","checkout-e6c"}
+        folders={"sql","identity-e3","revocation-e3b","revocation-iam","checkout-e6c","registration-e6c"}
         for path in sorted(files):
             if not path.startswith(TARGET):
                 continue
