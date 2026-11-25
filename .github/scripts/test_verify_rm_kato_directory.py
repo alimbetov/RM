@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import json
 import unittest
-from verify_rm_kato_directory import audit
+from verify_rm_kato_directory import audit, audit_admin
+from pathlib import Path
 
 def row(i, code, level=2, parent="", deleted=False):
     return dict(Id=i, Code=code, Level=level, Parent=parent, IsMarkedToDelete=deleted,
@@ -31,6 +32,21 @@ class KatoAuditTest(unittest.TestCase):
     def test_normalized_hash_order_independent(self):
         rows=[row(1,110000000),row(2,430000000)]
         self.assertEqual(run(rows)["normalizedSha256"],run(rows[::-1])["normalizedSha256"])
+
+    def test_actual_admin_release_and_legacy_gaps_are_separate(self):
+        root = Path(__file__).resolve().parents[2]
+        raw = (root / "src/main/resources/kato-data.json").read_bytes()
+        manifest = json.loads((root / "src/main/resources/kato-admin-release.json").read_text(encoding="utf-8"))
+        result = audit_admin(raw, manifest)
+        self.assertEqual(result["administrativeRows"], 375)
+        self.assertEqual(result["administrativeCoverage"], "STRUCTURALLY_COMPLETE")
+        self.assertEqual(result["directoryCoverage"], "HOLD")
+        self.assertEqual(result["activationAdmission"], "HOLD")
+        self.assertEqual(result["rows"], 465)
+        self.assertEqual(result["missingParentLinksAllRows"], 10)
+        broken = [r for r in json.loads(raw) if r["Code"] != 190000000]
+        with self.assertRaises(ValueError):
+            audit_admin(json.dumps(broken).encode(), manifest)
 
 if __name__ == "__main__":
     unittest.main()

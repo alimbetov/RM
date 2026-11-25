@@ -37,14 +37,43 @@ class KatoTerritoryQualificationTest {
     }
 
     @Test void sourceSnapshotPreservesActiveAndDeletedRows() {
-        assertThat(kato.count()).isEqualTo(100);
+        assertThat(kato.count()).isEqualTo(465);
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM ref_kato_territory WHERE is_deleted=TRUE",Integer.class))
                 .isEqualTo(13);
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM ref_kato_territory WHERE parent_source_id IS NOT NULL " +
                 "AND parent_source_id NOT IN (SELECT source_id FROM ref_kato_territory)",Integer.class))
-                .isEqualTo(11);
+                .isEqualTo(10);
+    }
+
+    @Test void administrativeReleaseHasTwentyRegionsAndClosedParentChains() {
+        var rows = kato.findAll();
+        var byId = new java.util.HashMap<Long,KatoTerritoryEntity>();
+        rows.forEach(r -> byId.put(r.getSourceId(),r));
+        var retained = java.util.Set.of("110000000","111810000","430000000","431000000","431010000",
+                "431900000","431910000","433200000","433220000","433220100");
+        var admin = rows.stream().filter(r -> r.getSourceId() >= 1_000_000_000L || retained.contains(r.getCode())).toList();
+        assertThat(admin).hasSize(375).allMatch(r -> !r.isDeleted());
+        var adminIds = admin.stream().map(KatoTerritoryEntity::getSourceId).collect(java.util.stream.Collectors.toSet());
+        assertThat(admin.stream().filter(r -> r.getLevel()==2).map(KatoTerritoryEntity::getCode).toList())
+                .containsExactlyInAnyOrder("100000000","110000000","150000000","190000000","230000000","270000000","310000000","330000000","350000000","390000000","430000000","470000000","550000000","590000000","610000000","620000000","630000000","710000000","750000000","790000000");
+        for (var r : admin) {
+            var node = r;
+            var seen = new java.util.HashSet<Long>();
+            while (node.getLevel() > 2) {
+                assertThat(seen.add(node.getSourceId())).isTrue();
+                var parent = byId.get(node.getParentSourceId());
+                assertThat(parent).as("parent for %s",node.getCode()).isNotNull();
+                assertThat(adminIds).contains(parent.getSourceId());
+                assertThat(parent.getLevel()).isLessThan(node.getLevel());
+                node = parent;
+            }
+            assertThat(node.getLevel()).isEqualTo(2);
+            assertThat(node.getParentSourceId()).isNull();
+        }
+        assertThat(kato.findById("111810000").orElseThrow().getSourceId()).isEqualTo(10L);
+        assertThat(kato.findById("111810000").orElseThrow().getParentSourceId()).isEqualTo(1111800000L);
     }
 
     @Test void romanizedNamesAreLoadedAndCodeIsOnlyTechnicalReference() {
@@ -55,7 +84,7 @@ class KatoTerritoryQualificationTest {
         assertThat(directory.eligibleForOrganizationLocation())
                 .allMatch(x -> x.level() <= 3 && !x.deleted()
                         && !x.nameEng().isBlank() && !x.code().isBlank());
-        assertThat(directory.eligibleForOrganizationLocation()).hasSize(5);
+        assertThat(directory.eligibleForOrganizationLocation()).hasSize(248);
     }
 
     @Test void branchesAndWarehousesBelongOnlyToOrganizationWorkspace() {

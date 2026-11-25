@@ -63,14 +63,46 @@ def audit(raw):
             "directoryCoverage": "STRUCTURALLY_COMPLETE" if complete else "HOLD",
             "officialProvenance": "NOT_ATTESTED", "activationAdmission": "HOLD"}
 
+def audit_admin(raw, manifest):
+    report = audit(raw)
+    rows = json.loads(raw)
+    by_code = {r["Code"]: r for r in rows}
+    by_id = {r["Id"]: r for r in rows}
+    codes = manifest["selectedCodes"]
+    regions = manifest["regionCodes"]
+    if (manifest["schema"] != "RM-KATO-ADMIN-RELEASE/v1"
+            or manifest["selectedCount"] != 375 or len(codes) != 375
+            or len(set(codes)) != 375 or len(set(regions)) != EXPECTED_REGIONS
+            or sorted(regions) != report["activeLevel2"]):
+        raise ValueError("KATO_ADMIN_SCOPE")
+    scope = set(codes)
+    for code in codes:
+        row = by_code.get(code)
+        if row is None or row["IsMarkedToDelete"] or code in report["unresolvedActiveCodes"]:
+            raise ValueError("KATO_ADMIN_MISSING_OR_UNRESOLVED")
+        if row["Level"] > 2 and by_id[row["Parent"]]["Code"] not in scope:
+            raise ValueError("KATO_ADMIN_PARENT_OUTSIDE_SCOPE")
+    if {r["Code"] for r in rows if r["Id"] >= 1_000_000_000} != scope - set(manifest["legacySelectedCodes"]):
+        raise ValueError("KATO_ADMIN_NEW_SCOPE_DRIFT")
+    report["administrativeCoverage"] = "STRUCTURALLY_COMPLETE"
+    report["administrativeRows"] = len(codes)
+    report["releaseDate"] = manifest["releaseDate"]
+    report["sourceFileSha256"] = manifest["sourceSha256"]
+    return report
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--file", type=Path, default=ROOT / "src/main/resources/kato-data.json")
     parser.add_argument("--expected-sha256")
+    parser.add_argument("--admin-manifest", type=Path)
+    parser.add_argument("--require-admin-complete", action="store_true")
     parser.add_argument("--require-complete", action="store_true")
     args = parser.parse_args()
     try:
-        result = audit(args.file.read_bytes())
+        raw = args.file.read_bytes()
+        result = audit_admin(raw, json.loads(args.admin_manifest.read_text(encoding="utf-8"))) if args.admin_manifest else audit(raw)
+        if args.require_admin_complete and result.get("administrativeCoverage") != "STRUCTURALLY_COMPLETE":
+            raise ValueError("KATO_ADMIN_REQUIRED")
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({"directoryCoverage":"INVALID","activationAdmission":"HOLD","error":str(error)}))
         return 1
