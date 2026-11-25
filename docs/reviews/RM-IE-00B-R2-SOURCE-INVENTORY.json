@@ -215,8 +215,9 @@
     {
       "path": "src/test/java/kz/rm/inventory/InventoryReservationQualificationTest.java",
       "designBlob": "47694577180d7a019f771b6bb3b2aa9bd24afd51",
-      "baselineBlob": "47694577180d7a019f771b6bb3b2aa9bd24afd51",
-      "status": "UNCHANGED"
+      "baselineBlob": "0d2b8ff0d0d36fc2698581138ea414d51e5b8f9e",
+      "status": "DRIFT",
+      "previousBaselineBlob": "47694577180d7a019f771b6bb3b2aa9bd24afd51"
     },
     {
       "path": "src/main/java/kz/rm/sales/OrderPackagingService.java",
@@ -775,5 +776,5 @@
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
   "lastObservedChangeset": "0182-canonical-source-no-truncate",
-  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded"
+  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded; B4.0 inventory qualification fixture repair at 7d818c62: reject booked PRODUCT retyping and separately exercise genuine SERVICE reservation admission; prior blob preserved"
 }
