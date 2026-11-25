@@ -330,6 +330,45 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         self.assertEqual(result["ret04DurableQualification"]["mappingVerdict"],"SUPPORTING_PARTIAL")
         self.assertEqual(result["admission"],"HOLD")
 
+    def test_surefire_malformed_case_evidence_fails_closed(self):
+        artifact_id = next(a["id"] for a in self.manifest["required"][0]["artifacts"]
+                           if a["name"] == "kms-postgres-surefire")
+        original = self.artifact_bytes[artifact_id]
+        for mutation, expected in (
+                ("counter", "Surefire testcase counters mismatch"),
+                ("hidden_failure", "Surefire testcase counters mismatch"),
+                ("hidden_error", "Surefire testcase counters mismatch"),
+                ("duplicate", "Unnamed or duplicate testcase"),
+                ("unnamed", "Unnamed or duplicate testcase"),
+                ("conflicting", "Conflicting testcase outcomes")):
+            with self.subTest(mutation=mutation):
+                output = io.BytesIO()
+                with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(output, "w") as target:
+                    for index, member in enumerate(source.namelist()):
+                        data = source.read(member)
+                        if index == 0:
+                            root = ET.fromstring(data)
+                            case = root.find("testcase")
+                            if mutation == "counter":
+                                root.set("tests", str(int(root.get("tests")) + 1))
+                            elif mutation in ("hidden_failure", "hidden_error"):
+                                ET.SubElement(case, mutation.removeprefix("hidden_"))
+                            elif mutation == "duplicate":
+                                root.append(ET.fromstring(ET.tostring(case)))
+                            elif mutation == "unnamed":
+                                case.attrib.pop("name")
+                            else:
+                                ET.SubElement(case, "failure")
+                                ET.SubElement(case, "skipped")
+                            data = ET.tostring(root)
+                        target.writestr(member, data)
+                self.artifact_bytes[artifact_id] = output.getvalue()
+                self.assertEqual(gate.verify(), 1)
+                result = json.loads(self.manifest_path.read_text())
+                self.assertTrue(any(expected in error for error in result["evidenceErrors"]),
+                                result["evidenceErrors"])
+        self.artifact_bytes[artifact_id] = original
+
     def test_wrong_commit_sha_fails_closed(self):
         self.manifest["sha"] = "bad"
         self.save()
