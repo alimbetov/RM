@@ -242,6 +242,20 @@ class TaskCalendarQualificationTest {
         assertThat(broken.originalEvidenceCode()).isEqualTo(TaskTimingSnapshot.OriginalEvidence.UNKNOWN);
         assertThat(broken.originalDueAt()).isNull();
         assertThat(broken.timeliness()).isEqualTo(EARLY_50);
+        // Equal completion timestamps cross a keyset boundary. Require the
+        // materialized history result to equal both full reference and point
+        // reads, including malformed evidence, on every page.
+        List<Item> traversed=new ArrayList<>();
+        Cursor cursor=null;
+        for(int i=0;i<=p.items().size();i++){
+            var chunk=page(t,early,1,cursor);
+            assertSameAsFullPg(t,chunk,1,cursor);
+            traversed.addAll(chunk.items());
+            if(!chunk.hasMore())break;
+            assertThat(chunk.nextCursor()).isNotNull().isNotEqualTo(cursor);
+            cursor=chunk.nextCursor();
+        }
+        assertThat(traversed).containsExactlyElementsOf(p.items());
     }
     @Test void f04HalfOpenLeapYearAndMonthBoundaries()throws Exception{
         var t=tenant();Instant start=Instant.parse("2028-02-29T00:00:00Z"),end=Instant.parse("2028-03-01T00:00:00Z");

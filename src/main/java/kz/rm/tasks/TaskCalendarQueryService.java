@@ -165,10 +165,13 @@ public class TaskCalendarQueryService {
             sql.append(" ORDER BY "+date+" ASC,id ASC");
         }
         sql.append(" LIMIT ?");
-        // Materialize fully filtered keys; reconstruct full history for
-        // those keys in the same PostgreSQL statement and MVCC snapshot.
+        // Materialize fully filtered keys, then summarize their immutable
+        // event history once. A separate optimization fence prevents a
+        // parameterized nested loop from re-executing the aggregate for each
+        // task. All CTEs share the same PostgreSQL statement/MVCC snapshot.
         String statement=optimize?
-            "SELECT result.* FROM (WITH page_keys AS MATERIALIZED ("+sql+"), enriched AS MATERIALIZED ("+
+            "SELECT result.* FROM (WITH page_keys AS MATERIALIZED ("+sql+"), page_history AS MATERIALIZED ("+
+                TaskTimingEngine.pageEventSummary()+"), enriched AS MATERIALIZED ("+
                 TaskTimingEngine.fullRelation(true,false,true)+") "+
                 "SELECT enriched.*,k.selected_date FROM page_keys k JOIN enriched ON enriched.id=k.id) result "+
                 (f.undated()?"ORDER BY id ASC":"ORDER BY selected_date ASC,id ASC"):
@@ -190,8 +193,11 @@ public class TaskCalendarQueryService {
                 }
             }
             ps.setInt(i++,limit+1);
-            if(optimize){timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);ps.setObject(i++,tenant);
-                ps.setObject(i++,user);ps.setObject(i,user);}
+            if(optimize){
+                ps.setObject(i++,tenant); // page_history event tenant
+                timestamp(ps,i++,cutoff);ps.setObject(i++,tenant); // enriched task tenant
+                ps.setObject(i++,user);ps.setObject(i,user);
+            }
         });
     }
 }

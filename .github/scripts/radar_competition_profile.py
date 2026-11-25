@@ -63,6 +63,7 @@ def plan_summary(document):
     # Parent/child time and buffers overlap. Never add them to estimate total.
     return {"executionMs":top["Execution Time"],
             "planningMs":top.get("Planning Time"),
+            "jit":top.get("JIT"),
             "root":nodes[0],
             "topInclusiveNodes":sorted(nodes,key=lambda n:n["inclusiveMsAcrossLoops"],reverse=True)[:12],
             "nodes":nodes}
@@ -197,6 +198,8 @@ def main():
     for label,plan in sorted(result["readPlans"].items(),
             key=lambda item:item[1]["service"]["p95Ms"],reverse=True)[:5]:
         lines.append(f"- {label}: service p95 {plan['service']['p95Ms']:.3f} ms; EXPLAIN {plan['executionMs']:.3f} ms")
+        if plan.get("jit") is not None:
+            lines.append("  - JIT: "+json.dumps(plan["jit"],sort_keys=True))
         # Print concrete plan operators to the job log as well as the full
         # artifact, so diagnosis is possible without downloading a ZIP.
         for node in plan["topInclusiveNodes"][:5]:

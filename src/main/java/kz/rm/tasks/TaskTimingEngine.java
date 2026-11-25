@@ -258,7 +258,16 @@ final class TaskTimingEngine {
             """;
     }
 
-    // Bind order: cutoff, event tenant[,event task], task tenant, actor, actor[,task].
+    // PostgreSQL page history is evaluated once, after page_keys and before
+    // enrichment. Its only bind is the event tenant. The reference and point
+    // relations retain the original inline event summary.
+    static String pageEventSummary() {
+        return eventSummary(false,true);
+    }
+
+    // Full/point bind order: cutoff, event tenant[,event task], task tenant, actor, actor[,task].
+    // Page enrichment bind order: cutoff, task tenant, actor, actor.
+    // The caller binds the separate pageEventSummary tenant first.
     // Future calendar predicates operate on this classified relation, before LIMIT.
     static String fullRelation(boolean pg, boolean point) {
         return fullRelation(pg,point,false);
@@ -276,9 +285,10 @@ final class TaskTimingEngine {
                              AND (ev.change_count=0 OR ev.last_due IS NOT DISTINCT FROM t.due_at)
                         THEN TRUE ELSE FALSE END AS original_valid
             FROM crm.task_item t CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
-            LEFT JOIN (%s) ev ON ev.tenant_id=t.tenant_id AND ev.task_id=t.id
+            LEFT JOIN %s ev ON ev.tenant_id=t.tenant_id AND ev.task_id=t.id
             WHERE t.tenant_id=? AND (t.assignee_user_id=? OR t.created_by=?) %s
-            """.formatted(completionEvidence(),eventSummary(point,pageOnly),point?"AND t.id=?":pageOnly?"AND t.id IN (SELECT id FROM page_keys)":"");
+            """.formatted(completionEvidence(),pageOnly?"page_history":"("+eventSummary(point,false)+")",
+                point?"AND t.id=?":pageOnly?"AND t.id IN (SELECT id FROM page_keys)":"");
         String dates="""
             SELECT s.*,
                    CASE WHEN completion_evidence='VALID' THEN completion_time ELSE NULL END AS completed_at,
