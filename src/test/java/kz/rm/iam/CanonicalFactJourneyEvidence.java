@@ -21,8 +21,10 @@ final class CanonicalFactJourneyEvidence {
         assertThatThrownBy(()->appender.append(key)).isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
         tx.executeWithoutResult(s->{assertThat(appender.append(key)).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);s.setRollbackOnly();});
         assertThat(count(jdbc,tenant,event)).isZero();
-        assertThat(tx.execute(s->appender.append(key))).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
-        assertThat(tx.execute(s->appender.append(key))).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
+        CanonicalFactAppender.Outcome inserted=tx.execute(s->appender.append(key));
+        assertThat(inserted).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+        CanonicalFactAppender.Outcome replay=tx.execute(s->appender.append(key));
+        assertThat(replay).isEqualTo(CanonicalFactAppender.Outcome.ALREADY_PRESENT);
         assertThat(count(jdbc,tenant,event)).isEqualTo(1);
         var wrong=new CanonicalFactKey(foreignTenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event);
         assertThatThrownBy(()->tx.execute(s->appender.append(wrong))).hasMessage("CANONICAL_SOURCE_NOT_FOUND");
