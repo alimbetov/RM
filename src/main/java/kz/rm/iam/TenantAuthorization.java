@@ -27,6 +27,7 @@ public class TenantAuthorization {
     private final JdbcTemplate jdbc;
     private String commandTenantLockSql;
     private String commandActorLockSql;
+    private boolean postgres;
     private record FreshMember(UUID organizationId, OrganizationMembershipEntity.Role role) {}
 
     @PostConstruct
@@ -35,8 +36,8 @@ public class TenantAuthorization {
                 connection.getMetaData().getDatabaseProductName());
         // PostgreSQL shared row locks let different employee commands run in parallel;
         // H2 uses its supported exclusive row lock for the test-only compatibility path.
-        String lockMode=database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")
-                ? "FOR SHARE" : "FOR UPDATE";
+        postgres=database!=null && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql");
+        String lockMode=postgres ? "FOR SHARE" : "FOR UPDATE";
         commandActorLockSql="SELECT status FROM public.iam_user_account WHERE id=? " + lockMode;
         commandTenantLockSql="SELECT id FROM public.iam_workspace WHERE id=? " + lockMode;
     }
@@ -139,7 +140,30 @@ public class TenantAuthorization {
         if(!TransactionSynchronizationManager.isActualTransactionActive()
                 || !TransactionSynchronizationManager.isSynchronizationActive())
             throw new IllegalStateException("Transactional synchronization required");
-        lockActorAndTenant(actorId,tenantId);
+        if(postgres) {
+            // A materialized actor CTE supplies an ACTIVE row before the
+            // outer LockRows node locks a workspace. Both FOR SHARE locks
+            // remain through COMMIT. Preserve actor-before-tenant order.
+            // Do NOT include RBAC or membership here: if the workspace
+            // lock waits for a revocation, the initial statement snapshot
+            // can predate it. The next statement is fresh at READ COMMITTED.
+            UUID locked=jdbc.query("""
+                    SELECT w.id
+                    FROM (WITH actor_fence AS MATERIALIZED (
+                        SELECT id,status FROM public.iam_user_account
+                        WHERE id=? FOR SHARE
+                    )
+                    SELECT workspace.id
+                    FROM actor_fence a
+                    JOIN public.iam_workspace workspace ON workspace.id=?
+                    WHERE a.status='ACTIVE'
+                    FOR SHARE OF workspace) w
+                    """,rs->rs.next()?rs.getObject(1,UUID.class):null,actorId,tenantId);
+            if(!tenantId.equals(locked))
+                throw new SecurityException("Actor or tenant unavailable");
+        } else {
+            lockActorAndTenant(actorId,tenantId);
+        }
         record ReadAdmission(OrganizationMembershipEntity.Role role,boolean enforced,boolean granted) {}
         ReadAdmission admission=jdbc.query("""
                 SELECT m.role,

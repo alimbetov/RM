@@ -177,11 +177,12 @@ class TaskRadarSqlFailureQualificationTest {
     }
     @Test void c214ExactlyOneBusinessSelectWithIamAdmission()throws Exception{
         var t=tenant();create(t,past());
+        int expectedIam=pg()?2:3;
         try(var trace=RadarSqlProbe.capture(false)){
             assertThat(radar.listMine(t.staff(),t.id(),10,null).items()).hasSize(1);
             readOnly(trace,1);
             assertThat(trace.entries().stream().filter(e->!e.business()).count())
-                .as("actor fence, tenant fence, fresh membership/RBAC query").isEqualTo(3);
+                .as("ordered actor/workspace fences and separate fresh RBAC query").isEqualTo(expectedIam);
         }
     }
     @Test void c215ZeroBusinessDmlAndLedgerUnchanged()throws Exception{

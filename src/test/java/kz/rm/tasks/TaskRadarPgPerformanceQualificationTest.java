@@ -304,6 +304,25 @@ class TaskRadarPgPerformanceQualificationTest {
             return new Block(commands,readSamples,observed[0],observed[1],commandSpans,readSpans);
         }
     }
+    // Cumulative database counters are diagnostic only. Collect outside
+    // measured intervals, identically for baseline/mixed; PG may flush
+    // statistics asynchronously. No statistics reset or workload changes.
+    private void resourceSnapshot(int block,String phase)throws Exception{
+        String snapshot=jdbc.queryForObject("""
+            SELECT json_build_object(
+                'captured_at',clock_timestamp(),
+                'database',(SELECT row_to_json(d) FROM pg_stat_database d
+                            WHERE d.datname=current_database()),
+                'wal',(SELECT row_to_json(w) FROM pg_stat_wal w),
+                'slru',(SELECT json_agg(row_to_json(s)) FROM pg_stat_slru s),
+                'io',(SELECT json_agg(row_to_json(i)) FROM pg_stat_io i)
+            )::text
+            """,String.class);
+        assertThat(snapshot).isNotBlank();
+        // PostgreSQL JSON is emitted on one line; no bind values or user data.
+        Files.writeString(REPORT.resolve("100000-block"+block+"-resources-"+phase+".json"),snapshot);
+    }
+
     private void mixedWorkload(Population p)throws Exception{
         var t=p.dense();var task=create(t,p.anchor().plusSeconds(86400));
         long[] version={task.version()};
@@ -317,7 +336,9 @@ class TaskRadarPgPerformanceQualificationTest {
         StringBuilder locks=new StringBuilder("block,mixed,lockSamples,positiveLockSamples,completedReads\n");
         for(int i=0;i<order.length;i++){
             boolean concurrent=order[i];
+            resourceSnapshot(i+1,"before");
             var block=commandBlock(t,task.id(),p.anchor(),version,COMMANDS_PER_BLOCK,concurrent);
+            resourceSnapshot(i+1,"after");
             RadarCompetitionIntervals.write(REPORT,i+1,block.commandSpans(),block.readSpans());
             int overlap=RadarCompetitionIntervals.overlapCount(block.commandSpans(),block.readSpans());
             overlapping+=overlap;if(concurrent&&overlap==0)allMixedOverlap=false;
