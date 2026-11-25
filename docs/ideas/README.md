@@ -3,6 +3,15 @@
 **Дата открытия:** 2026-11-24 · **Git-ветка:** `base_dev` · **Каталог:** `docs/ideas/`  
 **Статус:** SCOPED MVP SELECTION (CR-MVP-INTELLIGENCE-EVT-01) / OTHER IDEAS PARKED / PRODUCTION HOLD. Только явные scope decisions разрешают staged разработку; документы сами по себе не доказывают release.
 
+## Текущая очередь (R1.9)
+
+**Stabilization First / MERGE HOLD.** Reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`: C3 +12.900% >10%, C2 c202 denial-message regression, F2 8/8 PASS. [PR #9](https://github.com/alimbetov/RM/pull/9) — merge только после всех обязательных exact-SHA проверок. IE-00A source inventory выполнена, IE-00B открыта и приостановлена до проверенного core merge. Затем A1/A2 → A3 → B1/B2/E1 parallel. Выбранные четыре направления MVP не отменены; расширение Radar после квалифицированной аналитики и отдельного допуска. Merge не означает production release.
+
+- [Master R1.1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md)
+- [Inventory IE-00A R1.1](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md)
+- [Execution DAG R1.1](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) · [JSON](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json)
+- [PostgreSQL Outbox First / Redis Deferred](../spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md)
+
 ## Центральный реестр
 
 **[RM-IDEA-BANK-R1 — Единый банк продуктовых идей](RM-IDEA-BANK-R1.md)**
@@ -26,7 +35,7 @@
 
 ## Отобранная архитектура из FIN Analyzer
 
-**[RM-INSIGHT-FIN-ADAPT-R1 — адаптация расчётных механизмов FIN для RM](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md)**. Отобраны 9 логических компонентов, расписаны границы доменных владельцев и 32 будущие PostgreSQL/functional acceptance проверки. Статус **SPEC_EXISTS / POST-MVP PARKED**, без кода.
+**[RM-INSIGHT-FIN-ADAPT-R1 — адаптация расчётных механизмов FIN для RM](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md)**. Отобраны 9 логических компонентов, расписаны границы доменных владельцев и 32 будущие PostgreSQL/functional acceptance проверки. Статус **SPEC_EXISTS / SCOPED MVP SELECTED / PAUSED UNTIL CORE MERGE**, без квалифицированной реализации выбранных INT-срезов; расширенные FIN patterns остаются PARKED.
 
 ## Общее техническое задание Intelligent Commerce
 
@@ -38,7 +47,7 @@
 
 ## Стратегическое развитие Radar
 
-[RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) — отдельное ТЗ R1.1, 48 будущих семейств приёмки. **DEFERRED / ANALYTICS FIRST:** плановые доработки отложены до квалификации соответствующих источников INSIGHT/IDEA-17 и отдельного возобновления. R0.1 код и обязательные gates сохранены; R0.1D не считается закрытым. R0.2, новые Radar features, UI, ML, автоматизация и реализация аналитики не разрешены этим документом.
+[RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) — отдельное ТЗ R1.2, 48 будущих семейств приёмки. **DEFERRED / ANALYTICS FIRST:** плановые доработки отложены до квалификации соответствующих источников INSIGHT/IDEA-17 и отдельного возобновления. R0.1 код и обязательные gates сохранены; R0.1D не считается закрытым. R0.2, новые Radar features, UI, ML, автоматизация и реализация аналитики не разрешены этим документом.
 
 ## Канонические документы
 
@@ -53,4 +62,4 @@
 
 Идею записываем с уникальным ID, проверяемым пользовательским сценарием, ссылкой на домен/источник фактов, зависимостями, приоритетом и состоянием `IDEA`/`PARKED`/`SPEC_EXISTS`. Никакой идеи нельзя присваивать статус реализованной только по ТЗ.
 
-**Приоритет проекта неизменен:** завершить MVP Business + QR Commerce, доказать real OIDC / Web UI / UAT и exact-SHA GREEN. Раздел `docs/ideas/` — структурная «ветка идей» внутри **существующей** `base_dev`, не новая Git-ветка и не альтернативный backlog разработки.
+**Приоритет проекта:** сначала стабилизировать существующее ядро и выполнить проверенный merge в main; затем реализовать выбранное расширение MVP, доказать real OIDC / Web UI / UAT и exact-SHA GREEN. Production HOLD до отдельного G4. Раздел `docs/ideas/` — структурная «ветка идей» внутри **существующей** `base_dev`, не новая Git-ветка и не альтернативный backlog разработки.

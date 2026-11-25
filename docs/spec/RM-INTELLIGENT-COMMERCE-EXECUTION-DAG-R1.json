@@ -1,16 +1,36 @@
 {
-  "revision": "R1.0",
-  "source_sha": "cf09e317f04c79b88c0f64276bc4985ccfa4b3aa",
-  "status": "PLAN_NOT_IMPLEMENTATION",
-  "admission": "CR-MVP-INTELLIGENCE-EVT-01; IE-00A source review only; IE-00B gate open; Radar expansion deferred; production HOLD",
+  "revision": "R1.1",
+  "source_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a",
+  "status": "STABILIZATION_FIRST_MERGE_HOLD",
+  "admission": "CR-MVP-INTELLIGENCE-EVT-01 selected; IE-00A source review complete; IE-00B and new feature execution paused until verified core merge; Radar expansion deferred; production HOLD",
   "nodes": [
     {
       "id": "P0",
       "title": "Core mandatory CI and verified P0 corrections",
       "lane": "core",
       "depends_on": [],
-      "exit": "existing gates; continuous, release blocker if fail",
-      "status": "CONTINUING_MANDATORY"
+      "exit": "fix mandatory defects including C2/C3, retain 200ms/10%, full required regression",
+      "status": "ACTIVE_STABILIZATION"
+    },
+    {
+      "id": "Q0",
+      "title": "Current core exact-SHA qualification",
+      "lane": "core_gate",
+      "depends_on": [
+        "P0"
+      ],
+      "exit": "all applicable mandatory CI/PG/security/migration/manifest checks GREEN on latest candidate; only approved skips; verify PR status and head; no expanded I1 requirement for code merge",
+      "status": "HOLD_REQUIRED_CHECKS"
+    },
+    {
+      "id": "Q1",
+      "title": "Verified core merge base_dev → main and reconcile baseline",
+      "lane": "core_gate",
+      "depends_on": [
+        "Q0"
+      ],
+      "exit": "PR #9 merge expected head SHA; verify main tree/merge commit and applicable post-merge checks, reconcile base_dev without force; record baseline; not production admission",
+      "status": "BLOCKED_BY_Q0"
     },
     {
       "id": "A0",
@@ -25,20 +45,22 @@
       "title": "IE-00B migrated schema and source producer/fixture proof",
       "lane": "foundation",
       "depends_on": [
-        "A0"
+        "A0",
+        "Q1"
       ],
       "exit": "actual schema, coverage, owner event proof, baseline",
-      "status": "NEXT_SOURCE_ADMISSION"
+      "status": "PAUSED_UNTIL_VERIFIED_CORE_MERGE"
     },
     {
       "id": "A2",
       "title": "IE-00B common ADR + metric and IAM/event admission",
       "lane": "foundation",
       "depends_on": [
-        "A0"
+        "A0",
+        "Q1"
       ],
       "exit": "reviewed definitions and typed scope; no invented grants",
-      "status": "NEXT_SOURCE_ADMISSION"
+      "status": "PAUSED_UNTIL_VERIFIED_CORE_MERGE"
     },
     {
       "id": "A3",
@@ -239,8 +261,8 @@
       "depends_on": [
         "A0"
       ],
-      "exit": "mandatory existing P0/CI remain now, planned work paused; 137 baseline and 60 families, thresholds",
-      "status": "DEFERRED_ANALYTICS_FIRST"
+      "exit": "existing mandatory regression/P0 now; full R0.1D family audit remains before expansion; no waiver; 200ms/10%",
+      "status": "EXISTING_GATE_HOLD_EXPANSION_DEFERRED"
     },
     {
       "id": "R1",
@@ -329,5 +351,47 @@
       "X1"
     ],
     "redis_mvp_dependency": false
+  },
+  "original_source_sha": "cf09e317f04c79b88c0f64276bc4985ccfa4b3aa",
+  "evidence": {
+    "reviewed_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a",
+    "check_snapshot": {
+      "in_progress": 12,
+      "success": 35,
+      "skipped": 2,
+      "failure": 2
+    },
+    "failed_checks": [
+      {
+        "name": "radar-c3-postgresql",
+        "url": "https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506"
+      },
+      {
+        "name": "radar-c2-postgresql",
+        "url": "https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704"
+      }
+    ],
+    "pr": 9,
+    "merged": false,
+    "c3": {
+      "status": "FAIL",
+      "degradation_pct": 12.9,
+      "budget_pct": 10,
+      "overlap_reads": 4963,
+      "job": 138964527506
+    },
+    "c2": {
+      "status": "FAIL",
+      "case": "c202AccountSuspensionBothCommitOrders",
+      "finding": "denial message regression, not evidence of unauthorized admission",
+      "job": 138964525704
+    },
+    "f2": {
+      "status": "PASS",
+      "tests": 8,
+      "degradation_pct": -3.277,
+      "job": 138964526239
+    },
+    "exact_sha_admission": "NOT_CONFIRMED"
   }
 }

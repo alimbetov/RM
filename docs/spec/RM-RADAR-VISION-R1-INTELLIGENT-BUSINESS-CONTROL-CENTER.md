@@ -1,5 +1,5 @@
 # RM-RADAR-VISION-R1 — Intelligent Business Control Center
-## Стратегическое техническое задание R1.1 — Analytics First
+## Стратегическое техническое задание R1.2 — Analytics First / Stabilization First
 
 **Дата:** 2026-11-25. **Репозиторий:** alimbetov/RM. **Ветка:** base_dev. **Source review:** 4e55c82c653efc761bb7f381cb87d5a7ff9f7058.  
 **Идентификатор:** IDEA-18, связь с IDEA-16/KF-03.  
@@ -8,9 +8,17 @@
 
 > **Общее ТЗ:** [RM-INTELLIGENT-COMMERCE-MASTER-R1](RM-INTELLIGENT-COMMERCE-MASTER-R1.md) включает полную данную спецификацию и общие зависимости от INT/EVT. Наличие master не снимает Analytics First deferment и не расширяет MVP scope.
 
+## 0A. Current R0.1 evidence and stabilization checkpoint (2026-11-25)
+
+**Operational priority (2026-11-25, owner): STABILIZATION FIRST.** [PR #9](https://github.com/alimbetov/RM/pull/9) base_dev → main remains open on reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. First close required exact-SHA service/PG/security/migration/CI gates, then merge current core via PR #9 (expected head SHA, no force; verify main and post-merge checks). This is a code integration baseline, NOT expanded MVP acceptance, G2/G3/G4 or production release. Existing CR-MVP-INTELLIGENCE-EVT-01 remains selected but new implementation and IE-00B execution are paused until core merge is verified and base_dev reconciled with main; documentation-only planning may continue. No Radar expansion, no new features during stabilization. After merge revalidate source drift, then A1/A2 in parallel → A3 → B1/B2/E1; current 200ms/10% and all mandatory tests unchanged. If new mandatory failure appears, HOLD remains. [DAG R1.1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) is the operative execution queue; no new scope. PostgreSQL Outbox first, [Redis deferred](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md), no dependency or partition migration without measured proof.
+
+[C3 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506): p95 TASK 4.599→5.193 ms, +12.900% >10%; mixed read p95 2.515 ms, 4966 reads, 4963 overlaps; 2/3 tests. [C2 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704): c202 account suspension denial occurred but message "Actor or tenant unavailable" differs from contract "Actor inactive or unknown"; 10/11 tests. Do not weaken assertion or infer entire IAM race suite green; preserve denial classification and re-run both commit orders. [F2 PASS](https://github.com/alimbetov/RM/actions/runs/45542620051/job/138964526239): 8/8, mixed read p95 133.275 ms, commands -3.277%, 250 overlapping reads. Separate CI runs not causal proof.
+
+Current R0.1 mandatory qualification remains HOLD; F2 PASS is not whole R0.1D PASS. Keep original 137 baseline target and 60 RAD/CAL families; R0.2/R1+ still DEFERRED_ANALYTICS_FIRST, explicit separate owner resumption and A1–A6 per provider after qualified data. C3 resource counters and partial index 0172 exist, effectiveness not proven; no automatic partitioning or Redis runtime admission. Do not wait for analytics to fix existing mandatory P0/security failures. No permission changes, tests, or code by this document.
+
 ## 0. Owner roadmap decision — Analytics First (2026-11-25)
 
-Владелец предложил отложить доработку Radar до развития аналитической базы: Radar должен получать достоверные показатели и исторические факты, а не создавать конкурирующий расчётный контур. **IDEA-18: DEFERRED / ANALYTICS_FIRST / POST-MVP PARKED.** Пауза плановых расширений и самостоятельной оптимизации Radar; существующий R0.1 сохраняется в коде, обязательные regression/security gates, минимальные исправления реальных блокеров и R0.1D acceptance requirements не отменяются. Незакрытую квалификацию не считать PASS; до отдельного возобновления не назначать Radar новым продуктовым приоритетом. R0.2 и все R1+ этапы остаются PARKED. Это решение не разрешает реализацию аналитики вопреки MVP freeze.
+Владелец предложил отложить доработку Radar до развития аналитической базы: Radar должен получать достоверные показатели и исторические факты, а не создавать конкурирующий расчётный контур. **IDEA-18: DEFERRED / ANALYTICS_FIRST / POST-MVP PARKED.** Пауза плановых расширений и самостоятельной оптимизации Radar, кроме необходимых исправлений текущих обязательных gate для стабилизации и merge; существующий R0.1 сохраняется в коде, обязательные regression/security gates, минимальные исправления реальных блокеров и R0.1D acceptance requirements не отменяются. Незакрытую квалификацию не считать PASS; до отдельного возобновления не назначать Radar новым продуктовым приоритетом. R0.2 и все R1+ этапы остаются PARKED. Это решение не разрешает реализацию аналитики вопреки MVP freeze.
 
 Порядок после соответствующего scope admission:
 1. RM-INSIGHT-R1: owner-owned достоверные SALES/INVENTORY facts, immutable history, source admission, reconciliation, replay/rebuild, tenant-safe read contracts, фактическая нагрузочная квалификация.
@@ -42,7 +50,7 @@ Source inventory подтверждает наличие классов, но н
 
 | Этап | Результат | Приоритет | Ценность / сложность (1–10, гипотеза) | Входной gate |
 |---|---|---|---|---|
-| R0.1 | Сохранить Task Radar; незакрытая квалификация при возобновлении, 60 RAD/CAL семейств | HOLD / обязательная регрессия | существующий scope | R0.1D, текущие CI, 200ms/10%; без waiver |
+| R0.1 | Сохранить Task Radar; текущие mandatory defects сейчас, полный R0.1D до расширения, 60 RAD/CAL семейств | HOLD / обязательная регрессия | существующий scope | R0.1D, текущие CI, 200ms/10%; без waiver |
 | R0.2 | Smart Deadline Text, локали, countdown без новых business writes | P1 | 8/2 | отдельный scope, R0.1D; G2 для UI |
 | R1.0 | Universal Business Signal Engine (минимальный контракт + композиция) | после INSIGHT | 9/4 | Analytics First A1–A6 для первого provider; R0.1D; post-MVP scope decision; G1/domain review |
 | R1.1 | Sales Radar | P1 | 10/4 | qualified SALES/QR + signal foundation |
@@ -210,3 +218,5 @@ D-V01: exact active status/age fields, permissions and source sufficiency for fi
 R1.0 — 2026-11-25: strategic vision and future signal catalogue, service boundaries, staged roadmap, acceptance matrix; IDEA-18 registered. No code, SQL, migrations, scheduler, API, UI, ML or production change.
 
 R1.1 — 2026-11-25: Owner Analytics First decision; defer Radar development pending qualified INSIGHT facts/metrics by vertical and explicit resumption. Existing R0.1 code and gates preserved, no scope extension or production admission.
+
+R1.2 — 2026-11-25: stabilization checkpoint, C2/C3 HOLD and F2 8/8 evidence on e1bced6cf1538bdb9fb7ec22a354255456964e7a; separate core merge from future Radar admission; preserve 48 BV families and all existing thresholds.

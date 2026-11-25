@@ -1,5 +1,5 @@
 # RM-MVP-INTELLIGENCE-EVT-SCOPE-R1 — Intelligent Commerce MVP
-## R1.0 — Analytics First + Event Foundation
+## R1.1 — Analytics First + Event Foundation · stabilization checkpoint
 
 **Дата:** 2026-11-25. **Source inventory SHA:** e3b2b999991711f0ae3c582488f419210291e9ce. **Repository:** alimbetov/RM, base_dev only.  
 **Decision:** CR-MVP-INTELLIGENCE-EVT-01 — владелец выбрал TOP-1…4 из рейтинга банка идей для MVP.  
@@ -7,6 +7,8 @@
 Это письменное расширение MVP, а не доказательство реализации или release. Допускается разработка только описанных срезов после соответствующих входных gates. Остальные идеи остаются PARKED. Предложенные ниже числовые параметры и точные продуктовые метрики требуют утверждения в slice review, не являются production SLA.
 
 > **Общее ТЗ:** [RM-INTELLIGENT-COMMERCE-MASTER-R1](RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — полный объединённый план Intelligence/EVT + Radar Vision; текущий CR и staged MVP scope не изменены. Radar expansion сохраняет Analytics First и отдельный resumption gate.
+
+**Operational priority (2026-11-25, owner): STABILIZATION FIRST.** [PR #9](https://github.com/alimbetov/RM/pull/9) base_dev → main remains open on reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. First close required exact-SHA service/PG/security/migration/CI gates, then merge current core via PR #9 (expected head SHA, no force; verify main and post-merge checks). This is a code integration baseline, NOT expanded MVP acceptance, G2/G3/G4 or production release. Existing CR-MVP-INTELLIGENCE-EVT-01 remains selected but new implementation and IE-00B execution are paused until core merge is verified and base_dev reconciled with main; documentation-only planning may continue. No Radar expansion, no new features during stabilization. After merge revalidate source drift, then A1/A2 in parallel → A3 → B1/B2/E1; current 200ms/10% and all mandatory tests unchanged. If new mandatory failure appears, HOLD remains. [DAG R1.1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) is the operative execution queue; no new scope. PostgreSQL Outbox first, [Redis deferred](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md), no dependency or partition migration without measured proof.
 
 ## 1. Scope, priority and non-goals
 
@@ -75,7 +77,7 @@ Versioned policy + template, identity (tenant, trigger occurrence/source event, 
 | IE-08 Integrated G1 | exact-SHA all mandatory domain and IE tests; immutable RC | zero mandatory failures, no unexpected skips, no security/stock/price regression |
 | IE-09 G2/G3/G4 | approved narrow REST/UI, OIDC, I1 real UAT alongside J1, pilot/release | separate G2/G3/G4 evidence; no automatic production admission |
 
-IE-06 contract design may parallel IE-01…05; EVT core event delivery does not depend on analytical availability, new analytics-triggered events require separate scope. No active worker until stage proof. No REST/UI before integrated G1 and existing stage permissions. No broad FIN copy. Implementation selection is explicit, not permission to bypass prerequisite. Current next execution priority IE-00; core release blockers retain P0.
+IE-06 contract design may parallel IE-01…05; EVT core event delivery does not depend on analytical availability, new analytics-triggered events require separate scope. No active worker until stage proof. No REST/UI before integrated G1 and existing stage permissions. No broad FIN copy. Implementation selection is explicit, not permission to bypass prerequisite. Current next execution priority P0/Q0/Q1; IE-00B resumes after verified merge, then IE-01/06 under A3 admission.
 
 ## 8. BUS-MVP-I1 — additional acceptance journey
 
@@ -122,4 +124,4 @@ Map existing F2R/INSIGHT/TASK tests to appropriate subcases, avoid duplicating c
 
 ## 10. User acceptance and open decisions
 
-Proposed measurable outcomes: correctly answer selected customer and stock questions without manual spreadsheet; same result vs independent SQL, correct UNKNOWN when facts insufficient; notification exactly once visible per eligible recipient on tested canonical event, no unauthorized or real external delivery; existing J1 unchanged. Before IE-01/IE-06 respectively agree exact selected metrics/dimensions and business thresholds, approved event type list, recipient roles and schedule/limits. IE-00 to inventory actual source, select methods/test cases and define workload and reference fixtures. Owner confirms any broader campaign/SMTP/SMS/push, financial/ML, code import/licensing, advanced reports, additional providers separately. No new automatic actions. R1.0 documented and chosen for MVP; no code, no execution results, no production admission in this commit.
+Proposed measurable outcomes: correctly answer selected customer and stock questions without manual spreadsheet; same result vs independent SQL, correct UNKNOWN when facts insufficient; notification exactly once visible per eligible recipient on tested canonical event, no unauthorized or real external delivery; existing J1 unchanged. Before IE-01/IE-06 respectively agree exact selected metrics/dimensions and business thresholds, approved event type list, recipient roles and schedule/limits. IE-00 to inventory actual source, select methods/test cases and define workload and reference fixtures. Owner confirms any broader campaign/SMTP/SMS/push, financial/ML, code import/licensing, advanced reports, additional providers separately. No new automatic actions. R1.0 scope selected; R1.1 updates sequencing and stabilization, not feature authorization or test execution. No new code or production admission.

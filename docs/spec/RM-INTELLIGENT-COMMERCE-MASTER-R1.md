@@ -1,12 +1,20 @@
 # RM-INTELLIGENT-COMMERCE-MASTER-R1 — Unified Technical Specification
-## Редакция R1.0 — Analytics First · Customer 360 · Warehouse 360 · EVT · Business Radar
+## Редакция R1.1 — Analytics First · Customer 360 · Warehouse 360 · EVT · Business Radar
 
 **Дата:** 2026-11-25. **Репозиторий:** alimbetov/RM, **ветка:** base_dev.  
-**Source snapshot SHA:** b06f3680a93863b8c6c2c1824d053717a6d30798.  
+**Original consolidation snapshot SHA:** b06f3680a93863b8c6c2c1824d053717a6d30798. **R1.1 reviewed source SHA:** e1bced6cf1538bdb9fb7ec22a354255456964e7a.  
 **Статус:** MASTER SPEC / SCOPED MVP INT-01…03 + EVT-01 SELECTED / RADAR EXPANSION DEFERRED ANALYTICS FIRST / PRODUCTION HOLD.  
 **Решение владельца:** объединить в общее ТЗ четыре ранее выбранных направления MVP и полное ТЗ расширения Radar. Это не самостоятельное разрешение новых Radar-функций, ML, внешних рассылок или production. Действующее CR-MVP-INTELLIGENCE-EVT-01 сохраняется; дальнейшее включение Radar R0.2/R1+ в фактический MVP требует отдельного явного решения о возобновлении и scope.
 
-> **IE-00A (2026-11-25):** [Source & Contract Inventory](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md) и [Execution DAG R1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) уточняют общую последовательность §C: independent A1/A2 → A3 admission → parallel B1/B2/E1 → bounded Customer/Warehouse/EVT convergence. Source inventory complete for MVP candidates; IE-00 admission OPEN, no code/DDL until gate. Radar deferred, mandatory P0/regression preserved. DAG refines original milestones, does not expand scope.
+> **IE-00A (2026-11-25):** [Source & Contract Inventory](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md) и [Execution DAG R1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) уточняют общую последовательность §C: after Q0/Q1 verified core merge, independent A1/A2 → A3 admission → parallel B1/B2/E1 → bounded Customer/Warehouse/EVT convergence. Source inventory complete for MVP candidates; IE-00 admission OPEN, no code/DDL until gate. Radar deferred, mandatory P0/regression preserved. DAG refines original milestones, does not expand scope.
+
+## A0. Current operational baseline — stabilization first
+
+**Operational priority (2026-11-25, owner): STABILIZATION FIRST.** [PR #9](https://github.com/alimbetov/RM/pull/9) base_dev → main remains open on reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. First close required exact-SHA service/PG/security/migration/CI gates, then merge current core via PR #9 (expected head SHA, no force; verify main and post-merge checks). This is a code integration baseline, NOT expanded MVP acceptance, G2/G3/G4 or production release. Existing CR-MVP-INTELLIGENCE-EVT-01 remains selected but new implementation and IE-00B execution are paused until core merge is verified and base_dev reconciled with main; documentation-only planning may continue. No Radar expansion, no new features during stabilization. After merge revalidate source drift, then A1/A2 in parallel → A3 → B1/B2/E1; current 200ms/10% and all mandatory tests unchanged. If new mandatory failure appears, HOLD remains. [DAG R1.1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) is the operative execution queue; no new scope. PostgreSQL Outbox first, [Redis deferred](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md), no dependency or partition migration without measured proof.
+
+[C3 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506): p95 TASK 4.599→5.193 ms, +12.900% >10%; mixed read p95 2.515 ms, 4966 reads, 4963 overlaps; 2/3 tests. [C2 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704): c202 account suspension denial occurred but message "Actor or tenant unavailable" differs from contract "Actor inactive or unknown"; 10/11 tests. Do not weaken assertion or infer entire IAM race suite green; preserve denial classification and re-run both commit orders. [F2 PASS](https://github.com/alimbetov/RM/actions/runs/45542620051/job/138964526239): 8/8, mixed read p95 133.275 ms, commands -3.277%, 250 overlapping reads. Separate CI runs not causal proof.
+
+IE-00A [R1.1 inventory](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md) retains 22 source groups and eight candidates; actual migrated-schema/source proof not completed. Execution DAG R1.1 introduces Q0/Q1 (32 nodes / 48 edges) before IE-00B; after verified main merge preserve parallel B1/B2/E1 and all existing integration gates. Documentation update is not qualified code; production HOLD.
 
 ## A. Назначение, границы и нормативность
 
@@ -22,11 +30,11 @@ RM становится единой платформой интеллектуа
 | RAD-EXT Business Radar R0.2/R1+ | INCLUDED IN MASTER PLAN / DEFERRED_ANALYTICS_FIRST | Read-only signals after data qualification and owner resumption |
 | PRED/ADVISOR Radar R2/R3 | POST-MVP / gated future | Tribuo candidate, validated prediction, explicit human-approved actions |
 
-**Нормативная иерархия:** [Platform Standard](../architecture/RM-PLATFORM-STANDARD-R2.md), [MVP Freeze](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md), [Product Strategy](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md), утверждённые IAM/SALES/INVENTORY/QR/FX state and consistency contracts; CR-MVP-INTELLIGENCE-EVT-01 и CR-MVP-KF-RADAR-01/01A. Этот master управляет последовательностью и интеграционными границами, не заменяет и не ослабляет канонические domain contracts. Часть I и II ниже содержат полный текст исходных ТЗ в редакциях на source SHA (только заголовки адаптированы для объединения). Исторические формулировки внутри частей не изменяют статус master §A. При обновлении дочернего ТЗ фиксировать новый snapshot SHA и синхронизировать соответствующую часть и матрицу; не поддерживать противоречивые копии. При конфликте — более строгий норматив и отдельный decision record, до решения HOLD.
+**Нормативная иерархия:** [Platform Standard](../architecture/RM-PLATFORM-STANDARD-R2.md), [MVP Freeze](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md), [Product Strategy](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md), утверждённые IAM/SALES/INVENTORY/QR/FX state and consistency contracts; CR-MVP-INTELLIGENCE-EVT-01 и CR-MVP-KF-RADAR-01/01A. Этот master управляет последовательностью и интеграционными границами, не заменяет и не ослабляет канонические domain contracts. Часть I и II ниже содержат полный текст актуализированных в этом же commit дочерних ТЗ (только заголовки адаптированы для объединения). Исторические source snapshot ссылки ниже сохраняют оригинальные редакции. Исторические формулировки внутри частей не изменяют статус master §A. При обновлении дочернего ТЗ фиксировать новый snapshot SHA и синхронизировать соответствующую часть и матрицу; не поддерживать противоречивые копии. При конфликте — более строгий норматив и отдельный decision record, до решения HOLD.
 
 Исходные нормативные документы:
-- [Intelligence + EVT scope R1.0](RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md), [snapshot](https://github.com/alimbetov/RM/blob/b06f3680a93863b8c6c2c1824d053717a6d30798/docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md).
-- [Radar Vision R1.1](RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md), [snapshot](https://github.com/alimbetov/RM/blob/b06f3680a93863b8c6c2c1824d053717a6d30798/docs/spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md).
+- [Intelligence + EVT scope R1.1](RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md), [snapshot](https://github.com/alimbetov/RM/blob/b06f3680a93863b8c6c2c1824d053717a6d30798/docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md).
+- [Radar Vision R1.2](RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md), [snapshot](https://github.com/alimbetov/RM/blob/b06f3680a93863b8c6c2c1824d053717a6d30798/docs/spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md).
 - [INSIGHT-R1](RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md), [FIN Adaptation](RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md), [Task Radar R0.1](RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md), [Timing Contract](RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md), [Smart Deadline R0.2](RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md), [Smart FX Shield](RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md), [TASK durable outbox](RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md).
 - [Банк идей](../ideas/RM-IDEA-BANK-R1.md). Весь остальной банк PARKED, ранее выданные узкие исключения сохраняются.
 
@@ -60,7 +68,8 @@ Logical data flow (not new schema authorization): OwnerFactRef(tenant,owner,kind
 
 | Stage | Deliverable | Entry / exit |
 |---|---|---|
-| M0 / IE-00 | Source & Contract Admission | First active task: exact HEAD owner/schema/event/permission inventory, 6–8 metrics, ABC/XYZ rules, EVT source matrix, workload and independent oracle |
+| Q0/Q1 | Stabilize current core / verified merge | Immediate: exact SHA required checks and PR #9; no production admission |
+| M0 / IE-00 | Source & Contract Admission | After Q1: exact HEAD owner/schema/event/permission inventory, 6–8 metrics, ABC/XYZ rules, EVT source matrix, workload and independent oracle |
 | M1 / IE-01 | Metric Registry, Period Resolver, Native SQL | IE-00 admitted; PG/H2 exact period/units/scope |
 | M2 / IE-02 | L1/L2, idempotent facts, backfill/rebuild | M1 reference oracle; populated upgrade, independent reconciliation and replay/race proof |
 | M3 / IE-03 | Customer 360 | Qualified client links, SALES facts and permissions; source parity |
@@ -119,17 +128,21 @@ MC-01…08 are proposed integration families; no tests executed here. Requiremen
 
 MVP I1: seller opens a customer card, compares booked orders and interaction history; warehouse user sees live available and movements; owner sees ABC/XYZ with selected period/metric and explicit unknown; authorized operator previews and enables safe in-app notification and receives deduplicated evidence from a canonical source. Existing J1 checkout/stock/pickup/return unaffected. Future I2: seller opens Radar, sees a verified Sales/Customer/Inventory signal, examines asOf/method/source/permission, opens owner detail, explicitly performs allowed action, refresh shows resolution only from current source. If provider fails or facts stale show unknown/partial; no automatic remedy.
 
-Open before implementation: source/owner and permissions, approved metric definitions and quality, daily/rollup dimensions, ABC/XYZ boundaries and coverage, event types/recipient roles/template/schedule limits, PG workload and targets, migration/worker topology. Before Radar: R0.1D, A1–A6 by vertical, priority/comparator, thresholds and stale policy, separate scope decision; financial/ML/outbound events only once corresponding contracts admitted. Suggested numerical thresholds remain proposals until reviewed. **Immediate priority IE-00**; implementation of analytics/EVT after that admission. Radar extension remains planned, not active, by Analytics First. No code, migrations, REST/UI or test results delivered by this master.
+Open before implementation: source/owner and permissions, approved metric definitions and quality, daily/rollup dimensions, ABC/XYZ boundaries and coverage, event types/recipient roles/template/schedule limits, PG workload and targets, migration/worker topology. Before Radar: R0.1D, A1–A6 by vertical, priority/comparator, thresholds and stale policy, separate scope decision; financial/ML/outbound events only once corresponding contracts admitted. Suggested numerical thresholds remain proposals until reviewed. **Immediate priority P0 → Q0 → Q1**; IE-00B after verified core merge and analytics/EVT implementation after IE-00 admission. Radar extension remains planned, not active, by Analytics First. No code, migrations, REST/UI or test results delivered by this master.
 
 ## Part I — Expanded MVP: complete Intelligence & EVT specification
 
 ## RM-MVP-INTELLIGENCE-EVT-SCOPE-R1 — Intelligent Commerce MVP
-### R1.0 — Analytics First + Event Foundation
+### R1.1 — Analytics First + Event Foundation · stabilization checkpoint
 
 **Дата:** 2026-11-25. **Source inventory SHA:** e3b2b999991711f0ae3c582488f419210291e9ce. **Repository:** alimbetov/RM, base_dev only.  
 **Decision:** CR-MVP-INTELLIGENCE-EVT-01 — владелец выбрал TOP-1…4 из рейтинга банка идей для MVP.  
 **Status:** OWNER SELECTED / SCOPED MVP DEVELOPMENT / STAGED ADMISSION / PRODUCTION HOLD.  
 Это письменное расширение MVP, а не доказательство реализации или release. Допускается разработка только описанных срезов после соответствующих входных gates. Остальные идеи остаются PARKED. Предложенные ниже числовые параметры и точные продуктовые метрики требуют утверждения в slice review, не являются production SLA.
+
+> **Общее ТЗ:** [RM-INTELLIGENT-COMMERCE-MASTER-R1](RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — полный объединённый план Intelligence/EVT + Radar Vision; текущий CR и staged MVP scope не изменены. Radar expansion сохраняет Analytics First и отдельный resumption gate.
+
+**Operational priority (2026-11-25, owner): STABILIZATION FIRST.** [PR #9](https://github.com/alimbetov/RM/pull/9) base_dev → main remains open on reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. First close required exact-SHA service/PG/security/migration/CI gates, then merge current core via PR #9 (expected head SHA, no force; verify main and post-merge checks). This is a code integration baseline, NOT expanded MVP acceptance, G2/G3/G4 or production release. Existing CR-MVP-INTELLIGENCE-EVT-01 remains selected but new implementation and IE-00B execution are paused until core merge is verified and base_dev reconciled with main; documentation-only planning may continue. No Radar expansion, no new features during stabilization. After merge revalidate source drift, then A1/A2 in parallel → A3 → B1/B2/E1; current 200ms/10% and all mandatory tests unchanged. If new mandatory failure appears, HOLD remains. [DAG R1.1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) is the operative execution queue; no new scope. PostgreSQL Outbox first, [Redis deferred](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md), no dependency or partition migration without measured proof.
 
 ### 1. Scope, priority and non-goals
 
@@ -175,6 +188,8 @@ Read scoped tenant/location/SKU quantity onHand/reserved/available, movements (r
 
 ABC uses selected positive metric (e.g. booked amount in one currency, or demand quantity within homogeneous units) and selected period. Sort descending metric + stable SKU key; cumulative share exact, boundaries/version approved; candidate A 80%, B next 15%, C remaining 5%, tie/zero/negative policy explicit and tested. Do not call ABC profitability without verified margin. XYZ requires regular complete equal-length demand buckets, zero vs missing distinction, mean >0, explicit coefficient-of-variation methodology and thresholds, adequate observations, seasonality/stockout/censoring flags; candidate 12 weekly buckets, X CV<=10%, Y<=25%, Z>25% subject to business review. Insufficient history = UNKNOWN, not Z. Report ABC×XYZ matrix, drilldown and reason, not auto purchasing/reorder. KPI semantics and threshold approval required before implementation of classification; SQL independent oracle for each. Stock availability remains live owner view.
 
+> **Transport decision:** [Event Transport R1](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md). PostgreSQL owner events/durable outbox and per-consumer receipts are the MVP foundation. Redis deferred; only infrastructure adapter later with separate admission and recovery evidence. No Redis runtime or cache in MVP, no change to scope.
+
 ### 6. EVT-01 — Event & Notification Builder MVP
 
 One configuration path: canonical trigger → scope → closed condition → eligible recipient → versioned template → delivery intent → bounded worker → receipt. Initial trigger candidates limited to verified order status changes (PLACED/CONFIRMED/READY_FOR_PICKUP), contract expiry and task deadline, subject to source inventory and policy; no derived future ML alert or auction/payment events. Explicit in-app recipients (authorized tenant roles or specific eligible users), verified actor, owner grant and per-recipient fresh permission. Minimal G2 management: select trigger, typed condition, recipient role, time/zone, template, preview, enable/pause, delivery history and operator retry. Test mode and default disabled. No arbitrary SQL, script, rich HTML/template code; allowlisted typed placeholders from safe projections; output escaping; no secrets or pickup credential in URL, no raw source event payload. In-app notification contains safe code and authorized deep link, reauthorization on open. Service and marketing consent separate; marketing delivery excluded. External adapter MOCK only for initial MVP; real email/SMS/push require separate owner/legal/consent/provider gate. No automatic confirmation, release reservation, changing price, completing task, marketing send. Scheduler only if approved within EVT stage after deterministic clock and persisted schedule qualification, no duplicate TASK worker. Original TASK R3.2B obligations/auto-review and R3.2C not blanket admitted.
@@ -196,7 +211,7 @@ Versioned policy + template, identity (tenant, trigger occurrence/source event, 
 | IE-08 Integrated G1 | exact-SHA all mandatory domain and IE tests; immutable RC | zero mandatory failures, no unexpected skips, no security/stock/price regression |
 | IE-09 G2/G3/G4 | approved narrow REST/UI, OIDC, I1 real UAT alongside J1, pilot/release | separate G2/G3/G4 evidence; no automatic production admission |
 
-IE-06 contract design may parallel IE-01…05; EVT core event delivery does not depend on analytical availability, new analytics-triggered events require separate scope. No active worker until stage proof. No REST/UI before integrated G1 and existing stage permissions. No broad FIN copy. Implementation selection is explicit, not permission to bypass prerequisite. Current next execution priority IE-00; core release blockers retain P0.
+IE-06 contract design may parallel IE-01…05; EVT core event delivery does not depend on analytical availability, new analytics-triggered events require separate scope. No active worker until stage proof. No REST/UI before integrated G1 and existing stage permissions. No broad FIN copy. Implementation selection is explicit, not permission to bypass prerequisite. Current next execution priority P0/Q0/Q1; IE-00B resumes after verified merge, then IE-01/06 under A3 admission.
 
 ### 8. BUS-MVP-I1 — additional acceptance journey
 
@@ -243,22 +258,32 @@ Map existing F2R/INSIGHT/TASK tests to appropriate subcases, avoid duplicating c
 
 ### 10. User acceptance and open decisions
 
-Proposed measurable outcomes: correctly answer selected customer and stock questions without manual spreadsheet; same result vs independent SQL, correct UNKNOWN when facts insufficient; notification exactly once visible per eligible recipient on tested canonical event, no unauthorized or real external delivery; existing J1 unchanged. Before IE-01/IE-06 respectively agree exact selected metrics/dimensions and business thresholds, approved event type list, recipient roles and schedule/limits. IE-00 to inventory actual source, select methods/test cases and define workload and reference fixtures. Owner confirms any broader campaign/SMTP/SMS/push, financial/ML, code import/licensing, advanced reports, additional providers separately. No new automatic actions. R1.0 documented and chosen for MVP; no code, no execution results, no production admission in this commit.
+Proposed measurable outcomes: correctly answer selected customer and stock questions without manual spreadsheet; same result vs independent SQL, correct UNKNOWN when facts insufficient; notification exactly once visible per eligible recipient on tested canonical event, no unauthorized or real external delivery; existing J1 unchanged. Before IE-01/IE-06 respectively agree exact selected metrics/dimensions and business thresholds, approved event type list, recipient roles and schedule/limits. IE-00 to inventory actual source, select methods/test cases and define workload and reference fixtures. Owner confirms any broader campaign/SMTP/SMS/push, financial/ML, code import/licensing, advanced reports, additional providers separately. No new automatic actions. R1.0 scope selected; R1.1 updates sequencing and stabilization, not feature authorization or test execution. No new code or production admission.
 
 
 ## Part II — Radar expansion: complete Business Control Center specification
 
 ## RM-RADAR-VISION-R1 — Intelligent Business Control Center
-### Стратегическое техническое задание R1.1 — Analytics First
+### Стратегическое техническое задание R1.2 — Analytics First / Stabilization First
 
 **Дата:** 2026-11-25. **Репозиторий:** alimbetov/RM. **Ветка:** base_dev. **Source review:** 4e55c82c653efc761bb7f381cb87d5a7ff9f7058.  
 **Идентификатор:** IDEA-18, связь с IDEA-16/KF-03.  
 **Статус:** SPEC_EXISTS / DOC-ONLY / POST-MVP PARKED / IMPLEMENTATION NOT AUTHORIZED / PRODUCTION HOLD.  
 **Решение владельца:** сформировать отдельное ТЗ развития Radar и зарегистрировать его в банке идей. Не является снятием freeze, допуском к реализации или утверждением конкретных будущих SLA.
 
+> **Общее ТЗ:** [RM-INTELLIGENT-COMMERCE-MASTER-R1](RM-INTELLIGENT-COMMERCE-MASTER-R1.md) включает полную данную спецификацию и общие зависимости от INT/EVT. Наличие master не снимает Analytics First deferment и не расширяет MVP scope.
+
+### 0A. Current R0.1 evidence and stabilization checkpoint (2026-11-25)
+
+**Operational priority (2026-11-25, owner): STABILIZATION FIRST.** [PR #9](https://github.com/alimbetov/RM/pull/9) base_dev → main remains open on reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. First close required exact-SHA service/PG/security/migration/CI gates, then merge current core via PR #9 (expected head SHA, no force; verify main and post-merge checks). This is a code integration baseline, NOT expanded MVP acceptance, G2/G3/G4 or production release. Existing CR-MVP-INTELLIGENCE-EVT-01 remains selected but new implementation and IE-00B execution are paused until core merge is verified and base_dev reconciled with main; documentation-only planning may continue. No Radar expansion, no new features during stabilization. After merge revalidate source drift, then A1/A2 in parallel → A3 → B1/B2/E1; current 200ms/10% and all mandatory tests unchanged. If new mandatory failure appears, HOLD remains. [DAG R1.1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) is the operative execution queue; no new scope. PostgreSQL Outbox first, [Redis deferred](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md), no dependency or partition migration without measured proof.
+
+[C3 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506): p95 TASK 4.599→5.193 ms, +12.900% >10%; mixed read p95 2.515 ms, 4966 reads, 4963 overlaps; 2/3 tests. [C2 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704): c202 account suspension denial occurred but message "Actor or tenant unavailable" differs from contract "Actor inactive or unknown"; 10/11 tests. Do not weaken assertion or infer entire IAM race suite green; preserve denial classification and re-run both commit orders. [F2 PASS](https://github.com/alimbetov/RM/actions/runs/45542620051/job/138964526239): 8/8, mixed read p95 133.275 ms, commands -3.277%, 250 overlapping reads. Separate CI runs not causal proof.
+
+Current R0.1 mandatory qualification remains HOLD; F2 PASS is not whole R0.1D PASS. Keep original 137 baseline target and 60 RAD/CAL families; R0.2/R1+ still DEFERRED_ANALYTICS_FIRST, explicit separate owner resumption and A1–A6 per provider after qualified data. C3 resource counters and partial index 0172 exist, effectiveness not proven; no automatic partitioning or Redis runtime admission. Do not wait for analytics to fix existing mandatory P0/security failures. No permission changes, tests, or code by this document.
+
 ### 0. Owner roadmap decision — Analytics First (2026-11-25)
 
-Владелец предложил отложить доработку Radar до развития аналитической базы: Radar должен получать достоверные показатели и исторические факты, а не создавать конкурирующий расчётный контур. **IDEA-18: DEFERRED / ANALYTICS_FIRST / POST-MVP PARKED.** Пауза плановых расширений и самостоятельной оптимизации Radar; существующий R0.1 сохраняется в коде, обязательные regression/security gates, минимальные исправления реальных блокеров и R0.1D acceptance requirements не отменяются. Незакрытую квалификацию не считать PASS; до отдельного возобновления не назначать Radar новым продуктовым приоритетом. R0.2 и все R1+ этапы остаются PARKED. Это решение не разрешает реализацию аналитики вопреки MVP freeze.
+Владелец предложил отложить доработку Radar до развития аналитической базы: Radar должен получать достоверные показатели и исторические факты, а не создавать конкурирующий расчётный контур. **IDEA-18: DEFERRED / ANALYTICS_FIRST / POST-MVP PARKED.** Пауза плановых расширений и самостоятельной оптимизации Radar, кроме необходимых исправлений текущих обязательных gate для стабилизации и merge; существующий R0.1 сохраняется в коде, обязательные regression/security gates, минимальные исправления реальных блокеров и R0.1D acceptance requirements не отменяются. Незакрытую квалификацию не считать PASS; до отдельного возобновления не назначать Radar новым продуктовым приоритетом. R0.2 и все R1+ этапы остаются PARKED. Это решение не разрешает реализацию аналитики вопреки MVP freeze.
 
 Порядок после соответствующего scope admission:
 1. RM-INSIGHT-R1: owner-owned достоверные SALES/INVENTORY facts, immutable history, source admission, reconciliation, replay/rebuild, tenant-safe read contracts, фактическая нагрузочная квалификация.
@@ -290,7 +315,7 @@ Source inventory подтверждает наличие классов, но н
 
 | Этап | Результат | Приоритет | Ценность / сложность (1–10, гипотеза) | Входной gate |
 |---|---|---|---|---|
-| R0.1 | Сохранить Task Radar; незакрытая квалификация при возобновлении, 60 RAD/CAL семейств | HOLD / обязательная регрессия | существующий scope | R0.1D, текущие CI, 200ms/10%; без waiver |
+| R0.1 | Сохранить Task Radar; текущие mandatory defects сейчас, полный R0.1D до расширения, 60 RAD/CAL семейств | HOLD / обязательная регрессия | существующий scope | R0.1D, текущие CI, 200ms/10%; без waiver |
 | R0.2 | Smart Deadline Text, локали, countdown без новых business writes | P1 | 8/2 | отдельный scope, R0.1D; G2 для UI |
 | R1.0 | Universal Business Signal Engine (минимальный контракт + композиция) | после INSIGHT | 9/4 | Analytics First A1–A6 для первого provider; R0.1D; post-MVP scope decision; G1/domain review |
 | R1.1 | Sales Radar | P1 | 10/4 | qualified SALES/QR + signal foundation |
@@ -459,7 +484,11 @@ R1.0 — 2026-11-25: strategic vision and future signal catalogue, service bound
 
 R1.1 — 2026-11-25: Owner Analytics First decision; defer Radar development pending qualified INSIGHT facts/metrics by vertical and explicit resumption. Existing R0.1 code and gates preserved, no scope extension or production admission.
 
+R1.2 — 2026-11-25: stabilization checkpoint, C2/C3 HOLD and F2 8/8 evidence on e1bced6cf1538bdb9fb7ec22a354255456964e7a; separate core merge from future Radar admission; preserve 48 BV families and all existing thresholds.
+
 
 ## Revision log (master)
 
 R1.0 — 2026-11-25: consolidated full INT/EVT and Radar Vision source text, 80 inherited planned qualification families, 8 proposed integrated families, common roadmap and ownership. No change to existing MVP or Radar authorization, no execution evidence.
+
+R1.1 — 2026-11-25: synchronize full revised child specs R1.1/R1.2, IE-00A delta and DAG Q0/Q1, PostgreSQL Outbox-first/Redis-deferred, no change to 32 IE-Q +48 BV +8 MC families; no implementation or release evidence beyond cited source SHA.

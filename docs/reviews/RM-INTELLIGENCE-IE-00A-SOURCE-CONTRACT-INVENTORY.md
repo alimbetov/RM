@@ -1,9 +1,28 @@
 # RM Intelligence IE-00A — Source & Contract Inventory
-## R1.0 — 2026-11-25 · exact source snapshot cf09e317f04c79b88c0f64276bc4985ccfa4b3aa
+## R1.1 — 2026-11-25 · original source snapshot cf09e317f04c79b88c0f64276bc4985ccfa4b3aa
 
-**Status: SOURCE REVIEW COMPLETE FOR MVP CANDIDATES / IE-00 ADMISSION OPEN / PRODUCTION HOLD.** Code and DDL reviewed through GitHub; no execution or access to populated production DB. Counts/coverage, actual indexes/plans and applied changesets must be verified against migrated PostgreSQL fixtures in IE-00B. Source-inventory scope is selected INT/EVT and future Radar interfaces, not an assertion that every one of 130 DDL declarations or all 13+ domains are qualified. The master changelog contains 130 matched CREATE TABLE declarations qualified with crm/public (includes repeated audit table definition; not count of deployed tables). Current check snapshot for source SHA: 24 successful, 13 in progress, 1 skipped, no completed failure at observation; not final exact-SHA GREEN. Existing P0/Radar/FX checks remain mandatory.
+**Status: SOURCE REVIEW COMPLETE FOR MVP CANDIDATES / IE-00 ADMISSION OPEN / PRODUCTION HOLD.** Code and DDL reviewed through GitHub; no execution or access to populated production DB. Counts/coverage, actual indexes/plans and applied changesets must be verified against migrated PostgreSQL fixtures in IE-00B. Source-inventory scope is selected INT/EVT and future Radar interfaces, not an assertion that every one of 130 DDL declarations or all 13+ domains are qualified. The master changelog contains 130 matched CREATE TABLE declarations qualified with crm/public (includes repeated audit table definition; not count of deployed tables). Historical check snapshot for original source SHA: 24 successful, 13 in progress, 1 skipped, no completed failure at observation; not final exact-SHA GREEN. Existing P0/Radar/FX checks remain mandatory.
 
 Normative: [Master](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md), [MVP scope](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md), [INSIGHT](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md), [FIN adaptation](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md), [Radar](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md), [Freeze](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md). Source links below pinned to review SHA. No code, DDL, feature enable or change of authorization by this review.
+
+## 0. Актуализация R1.1 — baseline stabilization and source delta
+
+**Reviewed HEAD:** `e1bced6cf1538bdb9fb7ec22a354255456964e7a` (source inventory originally pinned to cf09e317; original source links/counts preserved as historical evidence). Compared changes since inventory commit 408aa9d7: TASK timing/calendar/overdue, IAM read admission, new PG partial active-due index changeset 0172, sustained performance tests and diagnostics, PostgreSQL/Redis design; no new analytics/EVT implementation established by this diff. Do not relabel original 22 source groups/8 metric candidates as newly qualified. IE-00A source review complete; IE-00B OPEN / PAUSED UNTIL CORE MERGE. No live populated schema or tests run in this documentation pass.
+
+[C3 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506): p95 TASK 4.599→5.193 ms, +12.900% >10%; mixed read p95 2.515 ms, 4966 reads, 4963 overlaps; 2/3 tests. [C2 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704): c202 account suspension denial occurred but message "Actor or tenant unavailable" differs from contract "Actor inactive or unknown"; 10/11 tests. Do not weaken assertion or infer entire IAM race suite green; preserve denial classification and re-run both commit orders. [F2 PASS](https://github.com/alimbetov/RM/actions/runs/45542620051/job/138964526239): 8/8, mixed read p95 133.275 ms, commands -3.277%, 250 overlapping reads. Separate CI runs not causal proof.
+
+Observed CI snapshot for reviewed SHA: in_progress=12, success=35, skipped=2, failure=2; not final verdict. Failed checks: radar-c3-postgresql, radar-c2-postgresql. [PR #9](https://github.com/alimbetov/RM/pull/9) open, main not merged. All mandatory checks including exact-SHA manifest must be successful (only explicitly authorized skips) before core merge. Expanded MVP I1 and production gates remain separate.
+
+| Delta | Impact on IE-00 |
+|---|---|
+| IAM requireTaskRead (PG ordered actor/workspace fence candidate, separate fresh RBAC; H2 sequential) | SRC-17/read scope and §3 require current race/denial proof. C2 c202 remains red; don't reuse TASK-only implementation as generic analytics permission or command permit. |
+| TASK changeset 0172 idx_task_radar_active_due | Actual PG schema/index manifest in A1 must include it; not a qualified mixed-write improvement, no HASH partitioning assumed. Retain existing constraints; compare controlled plans/resources/write amplification before new physical design. |
+| Calendar page-history materialization and R0.1 timing | F2 green on reviewed SHA, not full Radar acceptance. Reuse canonical timing only after current regression/security and source qualification. |
+| Sustained C3/F2 harness | 3000/9000 commands per arm, at least 100 real overlapping reads, 200ms/10% unchanged. C3 resource snapshots (DB/WAL/SLRU/IO) are diagnostic, not causal attribution. |
+| [PostgreSQL Outbox First / Redis deferred](../spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md) | A2/B2 stable owner event identity, transaction atomicity, separate consumer receipts/replay; Redis candidate adapter later, no current runtime. |
+| Remaining source questions | Revocable buyer linkage, posting vs occurrence time, units/FX/cost/payment gaps, zone and coverage unchanged; confirm actual migrated fixtures and owner producer completeness after verified merge. |
+
+Next execution: P0→Q0 current core exact-SHA admission→Q1 verified merge/reconcile→A1/A2→A3. [DAG R1.1](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md). Preserve 22 source rows and 8 candidate metrics; no new source semantics authorized. Core merge is not G4 or expanded MVP PASS. 
 
 ## 1. Canonical source matrix
 
@@ -97,7 +116,7 @@ Need separate event occurrence key for time-triggered rules, not fabricated owne
 | G-09 mixed Radar gate previously failed | common resource contention | same SHA qualification still required, no lowering 200ms/10%, shared INT/EVT workload budget and exact overlap, no expansion |
 | G-10 EVT policy/recipient/clock/worker gates absent | unauthorized/duplicate sends | initial PLACED+in-app slice, typed closed rules, owner ADR, lease/stop/retry/recovery and no real external send |
 
-## 6. IE-00B acceptance tasks (next, not yet complete)
+## 6. IE-00B acceptance tasks (after verified core merge, not yet complete)
 
 1. PostgreSQL migrated schema manifest (clean + populated fixture; tables, actual columns, FK/unique/trigger/index, migration checksum) and actual current source HEAD; no production data needed. Count per tenant/source including legacy/unattributed rows, transition cardinality, snapshot line reconciliation, opening/closing stock/versions, return transfer evidence. Report exact sample and coverage, not assumed all production facts. H2 only compatibility.
 2. Confirm metric definitions M-S01…05/M-I01…03 including immutable total, posting vs event time, explicit zone/calendar, units, quality, cohort/denominator. ADR for package/prefix/owner ports, permissions/warehouse/cross-domain link/recipient fencing. Approve policy thresholds before ABC/XYZ.
@@ -106,4 +125,4 @@ Need separate event occurrence key for time-triggered rules, not fabricated owne
 5. Predeclare load profile and resource budget, plans and command baseline/mixed for checkout/reserve/fulfill/TASK and EVT/projection; no new SLA by this document. Existing exact-SHA mandatory jobs unchanged; record unresolved failures and P0 fixes.
 6. Deliver approved IE-00 admission register linking field→metric→SQL oracle→test→evidence; explicit HOLD for dependent blocked metrics. Only then begin IE-01 code and gated EVT work under CR-MVP-INTELLIGENCE-EVT-01. Source audit is not final gate. Do not create Java/DDL until admission; no release.
 
-See [Execution DAG R1](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) for crossing workstreams and admission gates.
+See [Execution DAG R1.1](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) for crossing workstreams and admission gates.

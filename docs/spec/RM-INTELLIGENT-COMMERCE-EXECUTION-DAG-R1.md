@@ -1,14 +1,28 @@
 # RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1 — Parallel implementation & integration plan
-## R1.0 · 2026-11-25 · source snapshot cf09e317f04c79b88c0f64276bc4985ccfa4b3aa
+## R1.1 · 2026-11-25 · reviewed HEAD e1bced6cf1538bdb9fb7ec22a354255456964e7a
 
-**Status: IE-00A SOURCE REVIEW COMPLETE / IE-00B OPEN / STAGED MVP / PRODUCTION HOLD.** [Inventory](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md), [Master](RM-INTELLIGENT-COMMERCE-MASTER-R1.md), [Scope CR](RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md). This document refines stage order, not scope; no code or new permissions. Dependency graph is proposed engineering sequence, not time estimate or new release authorization. User requested logical order with intersections: one common foundation, overlapping Customer, Warehouse, EVT streams where no data/contract dependency, gates at actual convergence. Machine-readable [DAG](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json) checked for unique IDs, valid dependencies and acyclicity at creation. No new branches.
+Original inventory snapshot cf09e317f04c79b88c0f64276bc4985ccfa4b3aa retained.
+
+**Status: IE-00A SOURCE REVIEW COMPLETE / IE-00B OPEN / PAUSED UNTIL CORE MERGE / STAGED MVP / PRODUCTION HOLD.** [Inventory](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md), [Master](RM-INTELLIGENT-COMMERCE-MASTER-R1.md), [Scope CR](RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md). This document refines stage order, not scope; no code or new permissions. Dependency graph is proposed engineering sequence, not time estimate or new release authorization. User requested logical order with intersections: one common foundation, overlapping Customer, Warehouse, EVT streams where no data/contract dependency, gates at actual convergence. Machine-readable [DAG](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json) checked for unique IDs, valid dependencies and acyclicity at creation. No new branches.
+
+## 0. Stabilization-first execution checkpoint
+
+**Operational priority (2026-11-25, owner): STABILIZATION FIRST.** [PR #9](https://github.com/alimbetov/RM/pull/9) base_dev → main remains open on reviewed SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. First close required exact-SHA service/PG/security/migration/CI gates, then merge current core via PR #9 (expected head SHA, no force; verify main and post-merge checks). This is a code integration baseline, NOT expanded MVP acceptance, G2/G3/G4 or production release. Existing CR-MVP-INTELLIGENCE-EVT-01 remains selected but new implementation and IE-00B execution are paused until core merge is verified and base_dev reconciled with main; documentation-only planning may continue. No Radar expansion, no new features during stabilization. After merge revalidate source drift, then A1/A2 in parallel → A3 → B1/B2/E1; current 200ms/10% and all mandatory tests unchanged. If new mandatory failure appears, HOLD remains. [DAG R1.1](RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md) is the operative execution queue; no new scope. PostgreSQL Outbox first, [Redis deferred](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md), no dependency or partition migration without measured proof.
+
+[C3 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506): p95 TASK 4.599→5.193 ms, +12.900% >10%; mixed read p95 2.515 ms, 4966 reads, 4963 overlaps; 2/3 tests. [C2 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704): c202 account suspension denial occurred but message "Actor or tenant unavailable" differs from contract "Actor inactive or unknown"; 10/11 tests. Do not weaken assertion or infer entire IAM race suite green; preserve denial classification and re-run both commit orders. [F2 PASS](https://github.com/alimbetov/RM/actions/runs/45542620051/job/138964526239): 8/8, mixed read p95 133.275 ms, commands -3.277%, 250 overlapping reads. Separate CI runs not causal proof.
+
+**Q0/Q1** are explicit integration gates, distinct from G1–G4 for the expanded MVP. Core code merge does not declare BUS-MVP-I1 implemented or authorize deployment. If main already changed in another stream, re-read PR and exact SHA, no stale merge. Latest checked source CI snapshot: in_progress=12, success=35, skipped=2, failure=2; any new failure remains blocker. Source proof for IE-00B not executed. The 32-node/48-edge JSON DAG is authoritative; checked unique IDs, dependencies and acyclicity.
 
 ## 1. Critical path and parallelization
 
 ```mermaid
 flowchart TD
- A0[IE-00A source inventory] --> A1[IE-00B schema and producer proof]
- A0 --> A2[IE-00B metric IAM event ADR]
+ P0[Mandatory CI and P0 fixes] --> Q0[Current core exact SHA GREEN]
+ Q0 --> Q1[Verified merge and reconciled baseline]
+ Q1 --> A1[IE-00B schema and producer proof]
+ Q1 --> A2[IE-00B metric IAM event ADR]
+ A0[IE-00A source inventory] --> A1
+ A0 --> A2
  A1 --> A3[IE-00 admission]
  A2 --> A3
  A3 --> B1[Metric Registry PeriodResolver direct SQL]
@@ -31,7 +45,7 @@ flowchart TD
  W3 --> X1
  E3 --> X1
  X1 --> G1[Exact SHA G1]
- P0[Existing mandatory CI P0 fixes] --> G1
+ P0 --> G1
  G1 --> G2[OIDC REST UI]
  G2 --> G3[Pilot UAT]
  G3 --> G4[Release decision]
@@ -44,16 +58,18 @@ flowchart TD
  W3 -.-> R4
 ```
 
-Parallel here means independent implementation/review streams, not promised background work, not different Git branches, and not unconstrained multiple edits to same files. Critical path structurally A0 → A1/A2 → A3 → B1/B2 → B3 → B4 → W2/W3 → X1 → G1…G4, but EVT or P0 may become actual longest blocker; no durations assumed. Customer/Warehouse direct read design need not wait for full L2. They must use same metric registry and owner filters, then integrate L1/L2 before final acceptance. EVT rule/preview can start after admission without waiting for analytics; delivery requires B2 + E1. Do not make every milestone wait for all unrelated work, but G1 requires all applicable exact-SHA mandatory results.
+Parallel here means independent implementation/review streams, not promised background work, not different Git branches, and not unconstrained multiple edits to same files. Critical path structurally P0 → Q0 → Q1 + A0 → A1/A2 → A3 → B1/B2 → B3 → B4 → W2/W3 → X1 → G1…G4, but EVT or P0 may become actual longest blocker; no durations assumed. Customer/Warehouse direct read design need not wait for full L2. They must use same metric registry and owner filters, then integrate L1/L2 before final acceptance. EVT rule/preview can start after admission without waiting for analytics; delivery requires B2 + E1. Do not make every milestone wait for all unrelated work, but G1 requires all applicable exact-SHA mandatory results.
 
 ## 2. Execution register
 
 | ID | Task | Lane | Depends on | Exit / handoff |
 |---|---|---|---|---|
-| P0 | Core mandatory CI and verified P0 corrections | core | — | existing gates; continuous, release blocker if fail |
+| P0 | Core mandatory CI and verified P0 corrections | core | — | existing gates; active stabilization, including C2/C3 |
+| Q0 | Current core exact-SHA qualification | core_gate | P0 | mandatory core CI/PG/security/migration and manifest GREEN; PR ready |
+| Q1 | Verified core merge and reconciled baseline | core_gate | Q0 | PR #9 expected SHA; main/CI verification, base_dev reconciliation; not release |
 | A0 | IE-00A source inventory | foundation | — | source review only, completed in this document |
-| A1 | IE-00B migrated schema and source producer/fixture proof | foundation | A0 | actual schema, coverage, owner event proof, baseline |
-| A2 | IE-00B common ADR + metric and IAM/event admission | foundation | A0 | reviewed definitions and typed scope; no invented grants |
+| A1 | IE-00B migrated schema and source producer/fixture proof | foundation | A0, Q1 | actual schema, coverage, owner event proof, baseline |
+| A2 | IE-00B common ADR + metric and IAM/event admission | foundation | A0, Q1 | reviewed definitions and typed scope; no invented grants |
 | A3 | IE-00 admission register | gate | A1, A2 | approved source/metric/event contracts; blocked items explicit |
 | B1 | IE-01 PeriodResolver + Metric Registry + direct SQL oracle | analytics | A3 | PG/H2 exact periods, numeric, source quality |
 | B2 | Shared canonical event contract and owner transactional producer qualification | shared | A3 | stable event key, atomic evidence, current owner regression |
@@ -81,7 +97,7 @@ Parallel here means independent implementation/review streams, not promised back
 | R6 | R-06 Predictive Radar | radar_deferred | R2 | separate features/labels/temporal validation, enough history/approval |
 | R7 | R-07 Action Advisor | radar_deferred | R2 | reliable signals, explicit owner command admission; ML optional |
 
-MVP stages retain original IE numbering; A/B/C/W/E/X labels split existing gates only. R-00…R-07 not new MVP authorization; R1 (Smart Deadline) does not block Sales provider conceptually but requires explicit resumption. R2 is earliest future signal slice only after R0.1D + data/owner gates; G1 here is proposed conservative prerequisite, actual future schedule per separate CR. R5–R7 additional domain/model/action gates not represented as completed graph nodes. No fake PASS because graph predecessors listed; external conditions must be proven. Current source review complete at A0; A1/A2 next, all code nodes blocked by A3.
+MVP stages retain original IE numbering; A/B/C/W/E/X labels split existing gates only. R-00…R-07 not new MVP authorization; R1 (Smart Deadline) does not block Sales provider conceptually but requires explicit resumption. R2 is earliest future signal slice only after R0.1D + data/owner gates; G1 here is proposed conservative prerequisite, actual future schedule per separate CR. R5–R7 additional domain/model/action gates not represented as completed graph nodes. No fake PASS because graph predecessors listed; external conditions must be proven. Current source review complete at A0; P0/Q0/Q1 next, A1/A2 paused until verified merge, all feature code nodes blocked by A3.
 
 ## 2A. Transport boundary — PostgreSQL first
 
@@ -105,6 +121,7 @@ Single branch: base_dev. Before every write fetch HEAD/diff; do not overwrite pa
 
 | Wave | Primary track | Overlapping track | Do not start yet |
 |---|---|---|---|
+| Pre-0 | P0 → Q0 → Q1 current core stabilization and merge | documentation reconciliation only | IE-00B and new feature code until verified merge |
 | 0 | A1 migrated schema + producer/fixture baseline | A2 IAM/metric/event design; existing P0 | Java/DDL until A3 |
 | 1 | B1 direct analytical core | B2 source envelope; E1 preview | L1 until B1/B2; delivery until E1/B2 |
 | 2 | B3 L1 and B4 L2/recovery sequential | C1 current-link Customer, W1 live Warehouse, E2 in-app | C2/W2 projection claims until B4; E3 deadline until E2 |
@@ -132,7 +149,9 @@ Families overlap; map concrete cases to normative IDs without double counting. E
 
 ## 6. Immediate work queue
 
-**A1 + A2** are the next executable tasks. A1: obtain actual migrated schema and owner event proof using PostgreSQL qualification fixtures, independently reconcile 8 candidate metrics, catalog null/legacy and ordering gaps. A2: owner/prefix/IAM/zone/event/metric definition ADR and scoped contract; start with safe SKU-native quantities, booked amounts only, canonical identity, first PLACED event and typed in-app. A3 accepts only documented evidence and decisions; unresolved financial, UOM, identity or XYZ history remain blocked/UNKNOWN rather than fake data. Then B1, B2 and E1 may begin concurrently in non-overlapping changes. The current pass did not execute tests or write Java/SQL. Next implement after admission, no unconditional time estimate.
+**P0 → Q0 → Q1** are the immediate execution tasks; A1 + A2 follow verified merge and revalidation of source drift. A1: obtain actual migrated schema and owner event proof using PostgreSQL qualification fixtures, independently reconcile 8 candidate metrics, catalog null/legacy and ordering gaps. A2: owner/prefix/IAM/zone/event/metric definition ADR and scoped contract; start with safe SKU-native quantities, booked amounts only, canonical identity, first PLACED event and typed in-app. A3 accepts only documented evidence and decisions; unresolved financial, UOM, identity or XYZ history remain blocked/UNKNOWN rather than fake data. Then B1, B2 and E1 may begin concurrently in non-overlapping changes. The current pass did not execute tests or write Java/SQL. Next implement after admission, no unconditional time estimate.
 
 ## Revision history
 R1.0 — 2026-11-25: 30 dependency nodes, validated DAG, cross-track integration plan, no scope extension.
+
+R1.1 — 2026-11-25: 32 nodes / 48 edges; add Q0/Q1 current core qualification/merge gates, preserve parallel streams after merge; update evidence and transport boundary; no code or release admission.

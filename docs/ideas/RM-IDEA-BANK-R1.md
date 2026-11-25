@@ -10,6 +10,8 @@
 
 > **Норматив:** [RM-MVP-CLOSURE-FREEZE-R1](../strategy/RM-MVP-CLOSURE-FREEZE-R1.md) и [RM-PRODUCT-STRATEGY-R2-SMB-QR](../strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md). Действующих продуктовых вертикалей две: **RM Business** и **RM QR Commerce**. RM Network, отдельная универсальная ERP/финансовая система и новые функции, не нужные MVP, сюда не включаются как активный roadmap. Не создавать новые ветки, не менять `main`, не открывать production на основании этого документа.
 
+> **Текущая очередь R1.9:** Stabilization First → exact-SHA GREEN → verified merge [PR #9](https://github.com/alimbetov/RM/pull/9) → IE-00B/A3 → parallel Intelligence/EVT. [Master R1.1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md), [DAG R1.1](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md). Выбранный MVP scope сохранён, реализация paused до merge; IDEA-18 отложена Analytics First. PostgreSQL Outbox сейчас, Redis позже отдельным gate. Code merge ≠ production release.
+
 ## 1. Как пользоваться банком
 
 Каждая карточка содержит **ID**, потребность пользователя, ожидаемый результат, существующий доменный источник/ТЗ, зависимости, критерий продуктовой проверки и приоритет. Идея считается зарегистрированной, но не реализованной. Ранее утверждённые спецификации не переопределяются описанием в банке.
@@ -28,13 +30,13 @@
 
 | ID | Инициатива | Пользовательский результат | Статус / очередь | Источник |
 |---|---|---|---|---|
-| **IDEA-01** | **RM-INSIGHT-R2 — Customer 360** | Статистика, активность, покупки и договоры по конкретному клиенту | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
-| **IDEA-02** | **RM-INSIGHT-R2 — Two-Layer Aggregates** | Неделя, декада, месяц без долгих запросов к истории | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
-| **IDEA-03** | **RM-INSIGHT-R2 — Warehouse 360** | Остатки, резервы, движения и эффективность складов/SKU | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
-| **IDEA-04** | **RM-INSIGHT-R3 — ABC/Pareto + XYZ** | Найти ключевые и нестабильные товары, излишки и риск дефицита | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | INSIGHT-R2 |
+| **IDEA-01** | **RM-INSIGHT-R2 — Customer 360** | Статистика, активность, покупки и договоры по конкретному клиенту | MVP SELECTED / PAUSED UNTIL CORE MERGE (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
+| **IDEA-02** | **RM-INSIGHT-R2 — Two-Layer Aggregates** | Неделя, декада, месяц без долгих запросов к истории | MVP SELECTED / PAUSED UNTIL CORE MERGE (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
+| **IDEA-03** | **RM-INSIGHT-R2 — Warehouse 360** | Остатки, резервы, движения и эффективность складов/SKU | MVP SELECTED / PAUSED UNTIL CORE MERGE (CR-MVP-INTELLIGENCE-EVT-01) | [INSIGHT-R1](../spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md) |
+| **IDEA-04** | **RM-INSIGHT-R3 — ABC/Pareto + XYZ** | Найти ключевые и нестабильные товары, излишки и риск дефицита | MVP SELECTED / PAUSED UNTIL CORE MERGE (CR-MVP-INTELLIGENCE-EVT-01) | INSIGHT-R2 |
 | **IDEA-05** | **RM-INSIGHT-R4 — Tribuo ML** | Прогноз спроса, stockout risk, аномалии и объяснимые рекомендации | IDEA / после качества статистики | INSIGHT-R3 |
 | **IDEA-06** | **RM-INSIGHT-R5 — Intelligence → EVT** | Уведомления по проверенным изменениям KPI/прогноза | IDEA / после квалификации обоих контуров | INSIGHT-R4 + EVT |
-| **IDEA-07** | **RM-EVT-R1 — Event-Driven Notification & Campaign Builder** | Общий конструктор триггеров, расписаний и шаблонов уведомлений | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11), [TASK-R3.2B](../spec/RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md) |
+| **IDEA-07** | **RM-EVT-R1 — Event-Driven Notification & Campaign Builder** | Общий конструктор триггеров, расписаний и шаблонов уведомлений | MVP SELECTED / PAUSED UNTIL CORE MERGE (CR-MVP-INTELLIGENCE-EVT-01) | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11), [TASK-R3.2B](../spec/RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md) |
 | **IDEA-08** | **RM-AUC-R1 — Multi-Mode Auction** | Закрытые, таймированные и английские торги на лот | IDEA / Post-MVP | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11) |
 | **IDEA-09** | **RM-AUC-R1 — Deal Chat** | Общение покупателя и продавца, связанное с лотом, торгом, заказом | IDEA / Post-MVP | [AUC Issue #11](https://github.com/alimbetov/RM/issues/11) |
 | **IDEA-10** | **CUR-R2C — Smart FX Shield FX_AUTO** | Массовое ценовое обновление в KZT в утверждённых пределах | SPEC_EXISTS + FOUNDATION_PARTIAL / Post-MVP | [CUR-R2C-R1.1](../spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md) |
@@ -44,7 +46,7 @@
 | **IDEA-14** | **Sales KPI / Role Dashboards** | Обзоры продаж, продавцов, склада и customer segments | IDEA / INSIGHT + UI | INSIGHT-R1 / P1 CRM |
 | **IDEA-15** | **KF-01 InstantDeal & KF-02 Promise Engine** | Быстрый B2B offer→order и достоверное обещание доступности | PARKED / отдельный review | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) |
 | **IDEA-16** | **KF-03 Relationship Radar & KF-04 Zero-Entry Order** | Следующее действие по клиенту, ввод заказа из CSV/XLSX | R0.1 ONLY AUTHORIZED (timeliness + calendar reads R1.1) / остальные PARKED | [Post-stabilization KF](../spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md) · [R0.1](../spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md) |
-| **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | MVP SELECTED / STAGED (CR-MVP-INTELLIGENCE-EVT-01) | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
+| **IDEA-17** | **RM-INSIGHT-FIN-ADAPT-R1 — FIN Patterns for RM Intelligence** | Собственный вычислительный контур RM: Period Resolver, Metric Registry, SQL, lineage, граф, отчёты, Tribuo feature contract; FIN остаётся независимым | MVP SELECTED / PAUSED UNTIL CORE MERGE (CR-MVP-INTELLIGENCE-EVT-01) | [FIN→RM адаптация](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md) |
 | **IDEA-18** | **RM-RADAR-VISION-R1 — Intelligent Business Control Center** | Единая лента операционных рисков и действий: TASK, SALES, CRM, INVENTORY, Financial/FX, прогнозы и рекомендации | SPEC_EXISTS / DEFERRED_ANALYTICS_FIRST / POST-MVP PARKED | [RM-RADAR-VISION-R1](../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) |
 
 **Неактивные направления:** Business Network / межорганизационная торговая сеть (старый KF-05), полный бухгалтерский/налоговый ledger, масштабная маркетинговая платформа без канонических данных, автономное изменение остатков ML — **не включать в текущий план**.
@@ -224,7 +226,7 @@ RM-INSIGHT-R5: проверенные аналитические события 
 
 **Спецификация с полным code-review, контрактами, 32 запланированными проверками и этапами F2R-00…07:** [RM-INSIGHT-FIN-ADAPT-R1](../spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md).
 
-**Текущий статус:** `SPEC_EXISTS / POST-MVP PARKED`. Квалификация FIN компонентов не переносится автоматически в RM. Текущая задача только документальная, без Java/SQL/REST/Tribuo изменений.
+**Текущий статус:** `SPEC_EXISTS / SCOPED MVP SELECTED / PAUSED UNTIL CORE MERGE`; только INT-01…03, прочие FIN adaptation stages PARKED. Квалификация FIN компонентов не переносится автоматически в RM. Текущая задача только документальная, без Java/SQL/REST/Tribuo изменений.
 
 ## 13B. IDEA-18 — Intelligent Business Control Center
 
@@ -236,7 +238,13 @@ RM-INSIGHT-R5: проверенные аналитические события 
 
 ## 13D. Общее ТЗ Intelligence + EVT + Business Radar (2026-11-25)
 
-[RM-INTELLIGENT-COMMERCE-MASTER-R1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — единый документ с полным содержанием двух действующих ТЗ, общей архитектурой, roadmap M0–M9 / R-00…R-07, 32 IE-Q + 48 BV planned families и 8 proposed integration families. IDEA-18 включена в общий roadmap без снятия DEFERRED_ANALYTICS_FIRST; INT-01…03/EVT-01 остаются выбранным MVP scope. IE-00 first, отдельное возобновление Radar, existing gates preserved.
+[RM-INTELLIGENT-COMMERCE-MASTER-R1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md) — единый документ с полным содержанием двух действующих ТЗ, общей архитектурой, roadmap M0–M9 / R-00…R-07, 32 IE-Q + 48 BV planned families и 8 proposed integration families. IDEA-18 включена в общий roadmap без снятия DEFERRED_ANALYTICS_FIRST; INT-01…03/EVT-01 остаются выбранным MVP scope. P0/Q0/Q1 first, затем IE-00B; отдельное возобновление Radar, existing gates preserved.
+
+## 13E. R1.9 — актуальная очередь реализации и допуск (2026-11-25)
+
+Reviewed source SHA `e1bced6cf1538bdb9fb7ec22a354255456964e7a`. [C3 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620232/job/138964527506): p95 TASK 4.599→5.193 ms, +12.900% >10%; mixed read p95 2.515 ms, 4966 reads, 4963 overlaps; 2/3 tests. [C2 FAIL](https://github.com/alimbetov/RM/actions/runs/45542620053/job/138964525704): c202 account suspension denial occurred but message "Actor or tenant unavailable" differs from contract "Actor inactive or unknown"; 10/11 tests. Do not weaken assertion or infer entire IAM race suite green; preserve denial classification and re-run both commit orders. [F2 PASS](https://github.com/alimbetov/RM/actions/runs/45542620051/job/138964526239): 8/8, mixed read p95 133.275 ms, commands -3.277%, 250 overlapping reads. Separate CI runs not causal proof.
+
+Реестр сохраняет 18 идей, выбранные IDEA-17/02, 01, 03/04, 07 — scoped MVP, PAUSED UNTIL CORE MERGE. IDEA-16 R0.1 existing foundation / mandatory qualification HOLD; IDEA-18 DEFERRED_ANALYTICS_FIRST, no implementation. IDEA-10 foundation partial, no AUTO admission. [Inventory R1.1](../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md), [Execution DAG R1.1](../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md), [Event transport](../spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md). Current merge is core integration checkpoint, not expanded I1 or production release. No new idea, no scope expansion.
 
 ## 14. Связанные документы и история решений
 
@@ -264,5 +272,6 @@ RM-INSIGHT-R5: проверенные аналитические события 
 | 2026-11-25 | R1.6 | IDEA-18 Analytics First: плановые доработки Radar отложены до квалификации аналитических источников INSIGHT/IDEA-17; отдельный допуск возобновления, существующая R0.1 и gates сохранены. |
 | 2026-11-25 | R1.7 | TOP-1…4: [RM-MVP-INTELLIGENCE-EVT-SCOPE-R1](../spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md), scoped MVP admission INT-01…03 + EVT-01; остальной банк PARKED. |
 | 2026-11-25 | R1.8 | [RM-INTELLIGENT-COMMERCE-MASTER-R1](../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md): консолидация ТЗ INT/EVT и Radar Vision, scope и deferment неизменны. |
+| 2026-11-25 | R1.9 | Актуализированы Master/DAG/Inventory, core merge priority Q0/Q1, current CI evidence, PostgreSQL Outbox-first / Redis deferred; остальные идеи/границы сохранены. |
 
 **Новый feature request:** добавить строку с новым `IDEA-XX`, ссылку на issue/spec и owner decision; не присваивать `IMPLEMENTED` на основании текста, тестового плана или наличия исходника.
