@@ -87,3 +87,7 @@ Owners: QA + соответствующий owner service + IAM. Новые те
 
 ## 6. Уточнение по свежему CORE-RET-04 review
 После source inspection появился [E7A normative review](https://github.com/alimbetov/RM/blob/d1019e6acdb04a5c9a03da79d0f9232649723ead/docs/reviews/RM-BSR-CORE-RET-04-E7A-NORMATIVE-REVIEW.md). Для R2-S14/S16/S37 явно включить actor A-only/B-only/A+B с разными правами в двух tenant, независимо изолированное inactive workspace, fixture prerequisites/isolation/interleaving/source metadata и independent reviewer verdict. Сохранить SUPPORTING_PARTIAL, пока текущий CORE gate не доказан; существующая fixture не означает end-to-end onboarding или external IdP acceptance.
+
+## 7. Детализация будущей квалификации Radar
+
+R2-S40 сохраняется как зонтичный сценарий. [Карта адаптации Radar](RADAR-ADAPTATION-TRACE-R2.json) связывает 48 BV семейств с этапами и конкретными предложенными проверками. Набор применимых проверок выбирается на допущенный provider. Отдельные условия действуют для модели, EVT, Advisor, UI и пилота. Сценарии имеют статус DEFERRED_ANALYTICS_FIRST.

@@ -2,6 +2,8 @@
 R2.0-draft · DESIGN ONLY / DEFERRED · Source SHA d9242e539a07ef1843c0e72aba9c651204bf42ae.
 Owner: соответствующий domain provider; aggregator ownership ADR OPEN. [Radar Vision](../../spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md) сохраняет 21 signal candidate и 48 BV families. Здесь уточняется их общий контракт, не разрешается реализация.
 
+[Адаптация после R2](D06A-RADAR-ADAPTATION-AFTER-R2.md) уточняет первый SALES срез, зависимость от источников RM и приёмку 48 семейств BV.
+
 ## 1. Signal contract
 Signal identity: tenant + signalType + subject + occurrence identity; policyVersion и sourceVersion входят в snapshot/evaluation metadata, не обязательно создают новый сигнал. Повтор refresh того же риска не даёт вторую карточку.
 Поля: safe subject ref, source refs/digest, method/policy version, evaluatedAt/validUntil, observed state, reasonCodes, allowed detail/action refs, dimensions/unit/currency, coverage/freshness, ranking components.

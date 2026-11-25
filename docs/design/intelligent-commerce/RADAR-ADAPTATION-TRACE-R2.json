@@ -1,0 +1,911 @@
+{
+  "schema": "RM-RADAR-ADAPTATION-TRACE/v1",
+  "status": "DEFERRED_ANALYTICS_FIRST",
+  "revision": "R2.2",
+  "source_sha": "a02766d76c38e1e15362d717a2bf729e6f01dfba",
+  "design_parent_sha": "015f765447fd1d26e5d119c38c30e3dc9e6e05ea",
+  "baseline_trace": "TRACEABILITY-R2.json",
+  "dag": "../../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json",
+  "design": "D06A-RADAR-ADAPTATION-AFTER-R2.md",
+  "runtime_evidence": [],
+  "candidate": {
+    "id": "S01",
+    "stage_id": "R2",
+    "read_mode": "LIVE_SALES_OWNER",
+    "admission": [
+      "R0.1D and restored passing push C3",
+      "R2 DAG dependencies",
+      "Vision A1–A6",
+      "separate scope approval"
+    ],
+    "qualification_note": "Applicable BV only. MULTI_PROVIDER, IF_PROJECTION_USED, IF_EVT_ADMITTED, UI and pilot retain separate conditions"
+  },
+  "signals": [
+    {
+      "id": "T01",
+      "name": "T01 TASK_OVERDUE",
+      "sources": [
+        "SRC-17"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "EXISTING_TASK_AUTHORITY_FUTURE_ADAPTER"
+    },
+    {
+      "id": "T02",
+      "name": "T02 TASK_DUE_SOON",
+      "sources": [
+        "SRC-17"
+      ],
+      "stage_ids": [
+        "R1"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "T03",
+      "name": "T03 TASK_TIMELINESS / ORIGINAL_LATE",
+      "sources": [
+        "SRC-17"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "EXISTING_TASK_AUTHORITY_FUTURE_ADAPTER"
+    },
+    {
+      "id": "S01",
+      "name": "S01 ORDER_PENDING_CONFIRMATION",
+      "sources": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "PROPOSED_FIRST_SALES_PROVIDER"
+    },
+    {
+      "id": "S02",
+      "name": "S02 QUOTE_AWAITING_RESPONSE",
+      "sources": [
+        "SRC-05"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "S03",
+      "name": "S03 PICKUP_DELAY",
+      "sources": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "S04",
+      "name": "S04 FULFILLMENT_STALLED",
+      "sources": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "S05",
+      "name": "S05 RETURN_PENDING",
+      "sources": [
+        "SRC-06"
+      ],
+      "stage_ids": [
+        "R2"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "C01",
+      "name": "C01 CONTRACT_EXPIRING",
+      "sources": [
+        "SRC-16"
+      ],
+      "stage_ids": [
+        "R3"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "C02",
+      "name": "C02 FOLLOWUP_GAP",
+      "sources": [
+        "SRC-15"
+      ],
+      "stage_ids": [
+        "R3"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "C03",
+      "name": "C03 CUSTOMER_ACTIVITY_DROP",
+      "sources": [
+        "SRC-01",
+        "SRC-02",
+        "SRC-14"
+      ],
+      "stage_ids": [
+        "R3"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "C04",
+      "name": "C04 REPEAT_PURCHASE_OPPORTUNITY",
+      "sources": [
+        "SRC-01",
+        "SRC-02",
+        "SRC-14",
+        "SRC-18"
+      ],
+      "stage_ids": [
+        "R3"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "I01",
+      "name": "I01 LOW_AVAILABLE_STOCK",
+      "sources": [
+        "SRC-07"
+      ],
+      "stage_ids": [
+        "R4"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "I02",
+      "name": "I02 LONG_LIVED_RESERVATION",
+      "sources": [
+        "SRC-09"
+      ],
+      "stage_ids": [
+        "R4"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "I03",
+      "name": "I03 STOCKTAKE_DISCREPANCY",
+      "sources": [
+        "SRC-10"
+      ],
+      "stage_ids": [
+        "R4"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "I04",
+      "name": "I04 EXCESS_OR_SLOW_STOCK",
+      "sources": [
+        "SRC-07",
+        "SRC-08"
+      ],
+      "stage_ids": [
+        "R4"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "F01",
+      "name": "F01 RECEIVABLE_DUE / OVERDUE",
+      "sources": [
+        "SRC-20"
+      ],
+      "stage_ids": [
+        "R5"
+      ],
+      "status": "BLOCKED_FINANCIAL_DEPENDENCY",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "F02",
+      "name": "F02 MARGIN_RISK",
+      "sources": [
+        "SRC-20",
+        "SRC-21"
+      ],
+      "stage_ids": [
+        "R5"
+      ],
+      "status": "BLOCKED_FINANCIAL_DEPENDENCY",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "F03",
+      "name": "F03 FX_EXPOSURE",
+      "sources": [
+        "SRC-22"
+      ],
+      "stage_ids": [
+        "R5"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "F04",
+      "name": "F04 FX_POLICY_HOLD",
+      "sources": [
+        "SRC-22"
+      ],
+      "stage_ids": [
+        "R5"
+      ],
+      "status": "DEFERRED_RADAR",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    },
+    {
+      "id": "F05",
+      "name": "F05 CASHFLOW_GAP",
+      "sources": [
+        "SRC-20"
+      ],
+      "stage_ids": [
+        "R5"
+      ],
+      "status": "BLOCKED_FINANCIAL_DEPENDENCY",
+      "adoption": "FUTURE_AFTER_OWN_CONTRACT"
+    }
+  ],
+  "families": [
+    {
+      "id": "BV-01",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "TASK_ADAPTER",
+      "suite": "TaskRadarAdapterQualificationTest",
+      "method": "preservesOriginalAndEffectiveTiming",
+      "expected": "Compare key/severity/magnitude and original evidence against authoritative R0.1 outputs for the same actor and cutoff",
+      "family_requirement": "R0.1 adapter preserves authoritative classification, magnitude, original evidence",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-02",
+      "stage_ids": [
+        "R1"
+      ],
+      "applies_to": "SMART_DEADLINE",
+      "suite": "SmartDeadlineTextQualificationTest",
+      "method": "usesApprovedBoundaryLocalizationAndStaleGuard",
+      "expected": "Assert before/equal/after, ru and kk plus supported locales, current source version, exact existing time classification",
+      "family_requirement": "R0.2 text boundary/equality, localization, stale state; original contract retained",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-03",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "SignalRegistryQualificationTest",
+      "method": "rejectsUnknownAndDisabledPolicies",
+      "expected": "Allowlisted type and version, default-off policy, invalid tenant and bounds produce no card",
+      "family_requirement": "Owner signal registry rejects unknown types/policies and disabled signals",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-04",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "SalesRadarQualificationTest",
+      "method": "keepsSignalKeyAcrossRefreshAndReplay",
+      "expected": "Same PLACED occurrence and policy revision update return one stable key",
+      "family_requirement": "Same source replay/refresh yields same identity, no duplicate",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-05",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "SignalIdentityQualificationTest",
+      "method": "separatesTenantTypeAndOccurrence",
+      "expected": "Identical subject ids in two tenants, distinct types and later occurrence keys remain different",
+      "family_requirement": "Distinct occurrence/type/tenant never merged",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-06",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "SalesRadarQualificationTest",
+      "method": "resolvesOnlyOnCurrentOwnerEvidence",
+      "expected": "Confirm/cancel removes active result and permits resolved evidence; provider timeout or missing fact stays unknown",
+      "family_requirement": "Source resolves risk; provider unavailable never falsely resolves",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-07",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "MULTI_PROVIDER",
+      "suite": "RadarTopKQualificationTest",
+      "method": "mergesProviderResultsWithSameTotalOrder",
+      "expected": "Independent full sorting oracle with ties, skew, empty provider, stable ID and seek",
+      "family_requirement": "Ordered top-K merge exact vs independent oracle, ties/multiple domains",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-08",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "RadarProviderQueryPgQualificationTest",
+      "method": "filtersBeforeLimitForSparseMatches",
+      "expected": "Denied and irrelevant rows precede permitted matches; bounded scan returns eligible results or partial budget status",
+      "family_requirement": "Filter before LIMIT; sparse matches and bounded fan-out",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-09",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "RadarCursorQualificationTest",
+      "method": "bindsCursorToCurrentScopePolicyAndProviders",
+      "expected": "Reject changed actor, tenant, filter, policy, comparator, limit, generation or provider set according to documented cursor semantics",
+      "family_requirement": "Cursor scope/filter/order/policy/size mismatch denied",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-10",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "RadarCursorQualificationTest",
+      "method": "traversesFrozenSetAndDocumentsLiveChanges",
+      "expected": "Exact frozen traversal and explicit handling of rows whose priority changes while paging",
+      "family_requirement": "Live updates between pages documented; static traversal exact",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-11",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "RadarCompletenessQualificationTest",
+      "method": "distinguishesPartialFromCompleteEmpty",
+      "expected": "Timeout, inaccessible source, exhausted candidate budget and full zero results produce the agreed indicators and no fabricated total",
+      "family_requirement": "Partial vs complete empty; no fabricated counts",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-12",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "CORE_PROVIDER",
+      "suite": "RadarCompletenessQualificationTest",
+      "method": "preservesSourceSpecificEvidenceBoundaries",
+      "expected": "Common clock plus per-source provenance and observation time; joined view makes no global snapshot promise",
+      "family_requirement": "Per-domain snapshot version coherent, no fake global commit watermark",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-13",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "S01",
+      "suite": "SalesRadarPgQualificationTest",
+      "method": "qualifiesPlacedWaitingAndCurrentStateTransition",
+      "expected": "Both PLACED paths; threshold before/equal/after; confirm/cancel order, future timestamp, missing transition and duplicate UUIDs for same business transition",
+      "family_requirement": "PLACED waiting signal appears/disappears on canonical confirm/cancel",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-14",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "S02",
+      "suite": "SalesRadarPgQualificationTest",
+      "method": "dropsStaleQuoteAcrossWithdrawExpiryAndCheckout",
+      "expected": "Both commit orders and authorized buyer/seller side; stale quote detail/action unavailable",
+      "family_requirement": "Quote response/expiry/withdraw/checkout races no stale actionable offer",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-15",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "S03_S04",
+      "suite": "SalesRadarPgQualificationTest",
+      "method": "usesCanonicalReadyAndFulfillmentEvidence",
+      "expected": "Current preparation/pickup state and eligible warehouse, status change versus list and detail, pickup credentials absent",
+      "family_requirement": "Pickup/fulfillment stage evidence correct, secrets excluded",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-16",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "S05",
+      "suite": "SalesRadarPgQualificationTest",
+      "method": "showsCurrentReturnStageWithoutMutation",
+      "expected": "Original secure handover lineage and current return stage; no changes to refunds or stock ledgers",
+      "family_requirement": "Return stages and owner state, no inventory posting/refund side effect",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-17",
+      "stage_ids": [
+        "R3"
+      ],
+      "applies_to": "C01",
+      "suite": "CustomerRadarPgQualificationTest",
+      "method": "appliesContractOwnerExpiryBoundary",
+      "expected": "Inclusive end date, inactive or missing agreement, policy revision and renewed detail",
+      "family_requirement": "Contract expiry exact boundary, inactive/missing contract excluded or unknown",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-18",
+      "stage_ids": [
+        "R3"
+      ],
+      "applies_to": "C02",
+      "suite": "CustomerRadarPgQualificationTest",
+      "method": "usesAuthorizedInteractionHistory",
+      "expected": "Confirm visible interaction evidence and no message creation from follow-up signal",
+      "family_requirement": "Follow-up gap based on authorized evidence, no automatic message",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-19",
+      "stage_ids": [
+        "R3"
+      ],
+      "applies_to": "C03",
+      "suite": "CustomerRadarPgQualificationTest",
+      "method": "requiresComparableQualifiedCustomerCohorts",
+      "expected": "Late buyer binding, revoked/relinked CRM link, period completeness, seasonality and missing history",
+      "family_requirement": "Activity decline comparable periods, sparse/seasonal data abstention",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-20",
+      "stage_ids": [
+        "R3"
+      ],
+      "applies_to": "C04",
+      "suite": "CustomerRadarPgQualificationTest",
+      "method": "checksPurchaseEvidenceAndConsent",
+      "expected": "Threshold horizon, canonical attributed history and current consent for action or channel",
+      "family_requirement": "Repeat purchase suggestion uses consent and valid historical facts",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-21",
+      "stage_ids": [
+        "R4"
+      ],
+      "applies_to": "I01",
+      "suite": "InventoryRadarPgQualificationTest",
+      "method": "readsCurrentPositionAndWarehouseGrant",
+      "expected": "Live on-hand minus active reserved, correct UOM, scoped warehouse, unproved position stays unknown",
+      "family_requirement": "Available stock by warehouse/SKU/unit, reservation counted correctly",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-22",
+      "stage_ids": [
+        "R4"
+      ],
+      "applies_to": "I02",
+      "suite": "InventoryRadarPgQualificationTest",
+      "method": "checksCurrentReservationAgainstReleaseAndFulfill",
+      "expected": "Both commit orders; related order visible only with required SALES permission",
+      "family_requirement": "Long reservation vs release/fulfill races no false promise",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-23",
+      "stage_ids": [
+        "R4"
+      ],
+      "applies_to": "I03",
+      "suite": "InventoryRadarPgQualificationTest",
+      "method": "usesQualifiedStocktakeDiscrepancy",
+      "expected": "Approved count, direct STOCKTAKE_ADJUSTMENT path, rollback and no mutation from signal",
+      "family_requirement": "Stocktake discrepancy; no automatic stock mutation",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-24",
+      "stage_ids": [
+        "R4"
+      ],
+      "applies_to": "I04",
+      "suite": "InventoryRadarPgQualificationTest",
+      "method": "requiresQualifiedTurnoverAndHistory",
+      "expected": "Returns and transfers, missing denominator, stockout and recorded-time versus posting sequence",
+      "family_requirement": "Slow stock/turnover with returns and missing denominator",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-25",
+      "stage_ids": [
+        "R5"
+      ],
+      "applies_to": "F01",
+      "suite": "FinanceRadarPgQualificationTest",
+      "method": "reconcilesReceivableWithLedgerAllocations",
+      "expected": "Invoice, payment allocation and credits with due evidence; candidate blocked until financial ledger is qualified",
+      "family_requirement": "AR overdue uses allocations/credits and due evidence, order not debt",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-26",
+      "stage_ids": [
+        "R5"
+      ],
+      "applies_to": "F02",
+      "suite": "FinanceRadarPgQualificationTest",
+      "method": "derivesMarginFromVerifiedCostAndNetRevenue",
+      "expected": "Net, discounts, tax, returns and COGS; missing cost yields unknown",
+      "family_requirement": "Margin with verified COGS, tax, return, discount; missing cost UNKNOWN",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-27",
+      "stage_ids": [
+        "R5"
+      ],
+      "applies_to": "FX_F03_F04",
+      "suite": "FxRadarPgQualificationTest",
+      "method": "keepsCurrencyNominalAndRateRevision",
+      "expected": "Historical and current revisions, decimal exactness and currency grouping",
+      "family_requirement": "Currency precision/nominal/revision; mixed currency no implicit sum",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-28",
+      "stage_ids": [
+        "R5"
+      ],
+      "applies_to": "FX_F03_F04",
+      "suite": "FxRadarPgQualificationTest",
+      "method": "showsStaleRateOrPolicyHoldWithoutRepricing",
+      "expected": "Recheck age/hold, explain reason and preserve agreed order prices",
+      "family_requirement": "FX stale source/hold; agreed order immutable, no repricing side effect",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-29",
+      "stage_ids": [
+        "R5"
+      ],
+      "applies_to": "F05",
+      "suite": "FinanceRadarPgQualificationTest",
+      "method": "separatesCashflowEvidenceFromScenario",
+      "expected": "Proven inflows/obligations, as-of and forecast labels; absent evidence yields unknown",
+      "family_requirement": "Cashflow missing data and scenario distinction",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-30",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarSecurityPgQualificationTest",
+      "method": "isolatesTenantInListCountCursorAndLog",
+      "expected": "Identical entity ids in two tenants, scope before LIMIT and secret-free logs",
+      "family_requirement": "Cross tenant same IDs, no row/count/cursor/log leak",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-31",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarSecurityPgQualificationTest",
+      "method": "enforcesLeastPrivilegeForOwnerAndAdmin",
+      "expected": "Verified current actor and asymmetric roles fail closed without domain grant in enforced and legacy tenant modes",
+      "family_requirement": "Least privilege, owner/global admin without domain grant denied",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-32",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarSecurityPgQualificationTest",
+      "method": "reauthorizesAcrossRevokeAndTokenExpiry",
+      "expected": "Both commit orders, no leaked evidence/counts, signed wrong audience or expired access token denied",
+      "family_requirement": "Revoke/suspend vs read both commit orders; signed access token expiry",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-33",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarSecurityPgQualificationTest",
+      "method": "reauthorizesDetailAndSanitizesPayload",
+      "expected": "No secrets, bearer, contact or payment details in card, cursor, audit and log where disallowed",
+      "family_requirement": "DTO/log/audit allowlist and detail reauthorization",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-34",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarFailurePgQualificationTest",
+      "method": "handlesSqlTimeoutAndFreshRetry",
+      "expected": "Timeout/cancel releases resource and returns partial or unknown; fresh retry rechecks actor and owner state",
+      "family_requirement": "SQL error/timeout/cancel fail closed and fresh retry",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-35",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarReadOnlyPgQualificationTest",
+      "method": "preservesOwnerLedgersAndBoundsQueries",
+      "expected": "Before/after business-table equality, statement/row evidence and no per-card query",
+      "family_requirement": "Zero business DML, before/after owner ledgers, one bounded provider query",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-36",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarLoadPgQualificationTest",
+      "method": "measuresRepresentativeProviderLatency",
+      "expected": "1k/10k/100k, skew and history, cold/warm, plans, CPU/IO/locks, latencies and variable poll load",
+      "family_requirement": "PG 1k/10k/100k, dense/sparse, skew/history, plans and latency",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-37",
+      "stage_ids": [
+        "R2"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarLoadPgQualificationTest",
+      "method": "provesActualOverlapAndOwnerCommandRegression",
+      "expected": "Baseline vs mixed with overlapping owner commands, raw samples and all active R0.1 thresholds",
+      "family_requirement": "Mixed concurrent canonical commands, regression and actual overlap",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-38",
+      "stage_ids": [
+        "R2",
+        "R3",
+        "R4"
+      ],
+      "applies_to": "IF_PROJECTION_USED",
+      "suite": "RadarProjectionPgQualificationTest",
+      "method": "preservesFreshnessAcrossReplayAndGenerationSwitch",
+      "expected": "Late commit before cutover, idempotent receipt, dirty L2, inactive generation and stale fallback after crash",
+      "family_requirement": "Projection replay/idempotency/version gap/rebuild/crash (only if admitted)",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-39",
+      "stage_ids": [
+        "R6"
+      ],
+      "applies_to": "MODEL",
+      "suite": "PredictiveRadarQualificationTest",
+      "method": "usesTemporalAsOfFeaturesWithoutLeakage",
+      "expected": "Feature source version, train/validation/test temporal cut and strict tenant policy",
+      "family_requirement": "Feature as-of and temporal split, no leakage/tenant mixing",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-40",
+      "stage_ids": [
+        "R6"
+      ],
+      "applies_to": "MODEL",
+      "suite": "PredictiveRadarQualificationTest",
+      "method": "reproducesBaselineCalibrationAndAbstention",
+      "expected": "Immutable dataset/model/provenance, comparable heuristic, calibration and incomplete input abstention",
+      "family_requirement": "Reproducible model/metric baseline, calibration and abstention",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-41",
+      "stage_ids": [
+        "R6"
+      ],
+      "applies_to": "MODEL",
+      "suite": "PredictiveRadarQualificationTest",
+      "method": "fallsBackOnDriftRollbackOrUnavailableModel",
+      "expected": "Versioned rollout and rollback, deterministic signal remains valid",
+      "family_requirement": "Drift/rollback/model unavailable fallback; rules unaffected",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-42",
+      "stage_ids": [
+        "R7"
+      ],
+      "applies_to": "ADVISOR",
+      "suite": "ActionAdvisorQualificationTest",
+      "method": "showsEvidenceAndRejectsStaleRecommendation",
+      "expected": "Allowed action ref, rationale and expected state/revision",
+      "family_requirement": "Advisor evidence, allowed action and stale version rejection",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-43",
+      "stage_ids": [
+        "R7"
+      ],
+      "applies_to": "ADVISOR",
+      "suite": "ActionAdvisorPgQualificationTest",
+      "method": "reauthorizesAndExecutesConfirmedOwnerActionOnce",
+      "expected": "User confirmation, domain authorization, idempotent request and atomic owner effects",
+      "family_requirement": "Confirmed action uses owner authorization/idempotency/atomicity",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-44",
+      "stage_ids": [
+        "R7"
+      ],
+      "applies_to": "ADVISOR",
+      "suite": "ActionAdvisorPgQualificationTest",
+      "method": "preservesHumanControlAndConsent",
+      "expected": "Recommendations and model responses produce no command before admitted confirmation",
+      "family_requirement": "No auto-action from signal/ML/LLM, audit and consent",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-45",
+      "stage_ids": [
+        "R2",
+        "R3",
+        "R4"
+      ],
+      "applies_to": "IF_EVT_ADMITTED",
+      "suite": "RadarEvtPgQualificationTest",
+      "method": "preservesAdmissionAcrossLateCommitAndRetry",
+      "expected": "Separate CR, audience/consent, enable/disable boundary, stable dedup, expiry and explicit retry budget",
+      "family_requirement": "EVT consent/dedup/expiry and failure handling (only if admitted)",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-46",
+      "stage_ids": [
+        "G2"
+      ],
+      "applies_to": "IF_UI_ADMITTED",
+      "suite": "RadarUiJourneyQualificationTest",
+      "method": "preservesFiltersAccessibilityAndPartialStatus",
+      "expected": "Role-based filters, timezone, keyboard/accessibility and partial list handling",
+      "family_requirement": "UI filters/partial pages/accessibility/timezone/expiry (G2)",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-47",
+      "stage_ids": [
+        "G3"
+      ],
+      "applies_to": "IF_PILOT_ADMITTED",
+      "suite": "RadarPilotAcceptance",
+      "method": "measuresQualifiedActionAndMissedSignal",
+      "expected": "Predeclared numerator/denominator, sample, eligible visibility and useful actions against owner facts",
+      "family_requirement": "Product metric denominator/attribution/unknown and pilot UAT",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    },
+    {
+      "id": "BV-48",
+      "stage_ids": [
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7",
+        "G4"
+      ],
+      "applies_to": "ALL_ADMITTED_PROVIDERS",
+      "suite": "RadarExactShaAdmission",
+      "method": "bindsCandidateAndOwnerRegressionsToEvidence",
+      "expected": "Exact-SHA manifest, qualification by scope, disable/rollback proof and independent release decision",
+      "family_requirement": "Exact-SHA manifest, all owner regressions, rollback and release admission",
+      "status": "PLANNED_DEFERRED_NOT_EXECUTED"
+    }
+  ],
+  "integration": [
+    {
+      "id": "MC-06",
+      "stage_ids": [
+        "R2",
+        "R3",
+        "R4"
+      ],
+      "existing_scenario": "R2-S40",
+      "scope": "Qualified source reads with stale/missing data and methodology changes"
+    },
+    {
+      "id": "MC-07",
+      "stage_ids": [
+        "R2",
+        "R3",
+        "R4",
+        "R7"
+      ],
+      "existing_scenario": "R2-S40",
+      "scope": "Only separately admitted EVT and Advisor behavior"
+    },
+    {
+      "id": "MC-08",
+      "stage_ids": [
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "existing_scenarios": [
+        "R2-S38",
+        "R2-S39"
+      ],
+      "scope": "Base MVP journeys preserved. BUS-RADAR-I2 optional and deferred subject to explicit scope"
+    }
+  ]
+}
