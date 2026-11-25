@@ -31,9 +31,8 @@ public class CanonicalFactAppender {
             c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
         Fact fact=load(key,pg);
         if(fact==null)throw new IllegalStateException("CANONICAL_SOURCE_NOT_FOUND");
-        String legacy=sha256("RM-FACT-V1|"+key.tenantId()+"|"+key.owner().name()+"|"+key.kind().name()+"|"+
-            key.sourceId()+"|"+fact.subject()+"|"+fact.occurred()+"|"+(fact.recorded()==null?"NULL":fact.recorded())+"|"+fact.payload());
-        String digest=sha256(frame("RM-FACT-V2",legacy,fact.extended()));
+        String legacy=legacyDigest(key,fact.subject(),fact.occurred(),fact.recorded(),fact.payload());
+        String digest=v2Digest(legacy,fact.extended());
         // PostgreSQL atomic insert-or-ignore avoids aborting the owner transaction on exact replay.
         // H2 is a test-only dialect; serialize via tenant row before check/insert.
         if(!pg)jdbc.queryForObject("SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE",UUID.class,key.tenantId());
@@ -132,6 +131,14 @@ public class CanonicalFactAppender {
             frame(rs.getObject(8,Long.class),rs.getString(9),rs.getString(10),rs.getString(11),
                 rs.getObject(12,UUID.class),rs.getObject(13,UUID.class),rs.getObject(14,UUID.class),rs.getString(15),rs.getString(16))):null,
             k.tenantId(),k.sourceId());
+    }
+    // Package-private pure encoding contract for fixed compatibility vectors.
+    static String legacyDigest(CanonicalFactKey key,UUID subject,Instant occurred,Instant recorded,String payload){
+        return sha256("RM-FACT-V1|"+key.tenantId()+"|"+key.owner().name()+"|"+key.kind().name()+"|"+
+            key.sourceId()+"|"+subject+"|"+occurred+"|"+(recorded==null?"NULL":recorded)+"|"+payload);
+    }
+    static String v2Digest(String legacy,String extended){
+        return sha256(frame("RM-FACT-V2",legacy,extended));
     }
     // Length framing distinguishes null, empty, delimiters and variable-length records.
     static String frame(Object... values){

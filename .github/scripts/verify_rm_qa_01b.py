@@ -80,6 +80,8 @@ REQUIRED_CASES = {
         ("IntelligenceB1ContractTest", "allEightMetricDefinitionsAreExplicit"),
         ("CanonicalFactEncodingTest", "framingDistinguishesNullEmptyAndDelimiters"),
         ("CanonicalFactEncodingTest", "decimalScaleIsCanonical"),
+        ("CanonicalFactEncodingTest", "fixedSalesV1V2GoldenVectors"),
+        ("CanonicalFactEncodingTest", "fixedInventoryV1V2GoldenVectors"),
     },
     "rm-intelligence-populated-seal-{sha}": {
         ("IntelligenceSourceSchemaQualificationTest", "migratedSourceColumnsAndOrderedTenantPrimaryKeys"),
@@ -551,6 +553,16 @@ def verify():
                 cls.rsplit(".", 1)[-1] == "TaskServiceQualificationTest" and
                 method.startswith(task_pg_only_prefixes) and
                 "rm-task-postgresql-" + sha in alternatives):
+            policy = "EXPECTED_SKIP_CONFIRMED"
+        if (artifact_name == "kms-h2-surefire" and
+                cls == "kz.rm.iam.BusMvpServiceJourneyQualificationTest" and
+                method in {
+                    "canonicalSourceAdmissionAndOwnerRollbackPg",
+                    "canonicalConcurrentReplayAndRollbackPg",
+                    "canonicalSourceSealingLockOrdersPg",
+                    "canonicalTenantSourceCollisionPg",
+                } and "CANONICAL_POSTGRESQL_REQUIRED" in reason and
+                "rm-mvp-w25-strict-pg-" + sha in alternatives):
             policy = "EXPECTED_SKIP_CONFIRMED"
         skip_inventory.append({"artifact": artifact_name, "class": cls, "method": method,
                                "reason": reason, "environment": environment,

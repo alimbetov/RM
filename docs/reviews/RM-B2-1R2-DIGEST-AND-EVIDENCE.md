@@ -1,0 +1,3 @@
+# B2.1R.2 fixed digest and skip evidence: RC-03/05
+Baseline b82311bface7664a16deb2af38ab09666f9b84de. Fixed SALES/INVENTORY V1/V2 SHA-256 constants generated independently using Python hashlib and literal frame specification. Extract pure package-private digest methods without changing encoding. Existing data-derived owner-row oracles remain. Both vector tests mandatory in A1 and global verifier.
+RC-05: four exact named H2-only omissions classified EXPECTED_SKIP_CONFIRMED only if the identical fully qualified method passes in exact-SHA strict PG artifact and reason matches; no PG skip allowed. Existing mandatory gates unchanged. No full Java or PG execution in this review; new CI pending. No schema or producer wiring changes. B2.2A HOLD.
