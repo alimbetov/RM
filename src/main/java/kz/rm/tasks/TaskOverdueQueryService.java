@@ -39,6 +39,7 @@ public class TaskOverdueQueryService {
     private final JdbcTemplate jdbc;
     private final TenantAuthorization authorization;
     private final Clock clock;
+    private boolean pg;
     private String firstPageSql;
     private String nextPageSql;
 
@@ -51,7 +52,7 @@ public class TaskOverdueQueryService {
         String product=jdbc.execute((ConnectionCallback<String>) c->c.getMetaData().getDatabaseProductName());
         if(!"PostgreSQL".equals(product)&&!"H2".equals(product))
             throw new IllegalStateException("TASK_TIMING_UNSUPPORTED_DATABASE");
-        boolean pg="PostgreSQL".equals(product);
+        pg="PostgreSQL".equals(product);
         firstPageSql=TaskTimingEngine.overduePage(pg,false);
         nextPageSql=TaskTimingEngine.overduePage(pg,true);
     }
@@ -77,7 +78,7 @@ public class TaskOverdueQueryService {
             if(after!=null){
                 var due=after.lastDueAt().atOffset(ZoneOffset.UTC);
                 ps.setObject(i++,due,Types.TIMESTAMP_WITH_TIMEZONE);
-                ps.setObject(i++,due,Types.TIMESTAMP_WITH_TIMEZONE);
+                if(!pg)ps.setObject(i++,due,Types.TIMESTAMP_WITH_TIMEZONE);
                 ps.setObject(i++,after.lastTaskId());
             }
             ps.setInt(i,limit+1);

@@ -186,7 +186,6 @@ class TaskRadarPgPerformanceQualificationTest {
             ps.setObject(i++,t.id());ps.setObject(i++,t.staff().userId());ps.setObject(i++,t.staff().userId());
             if(cursor!=null){
                 ps.setObject(i++,cursor.lastDueAt().atOffset(ZoneOffset.UTC),Types.TIMESTAMP_WITH_TIMEZONE);
-                ps.setObject(i++,cursor.lastDueAt().atOffset(ZoneOffset.UTC),Types.TIMESTAMP_WITH_TIMEZONE);
                 ps.setObject(i++,cursor.lastTaskId());
             }
             ps.setInt(i,limit+1);

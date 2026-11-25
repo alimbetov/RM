@@ -307,5 +307,28 @@ class TaskRadarR01CServiceQualificationTest {
         }
         assertThat(jdbc.queryForList("SELECT * FROM crm.task_item WHERE tenant_id IN (?,?) ORDER BY tenant_id,id",t.id(),other.id())).isEqualTo(rows);
         assertThat(jdbc.queryForList("SELECT * FROM crm.task_event WHERE tenant_id IN (?,?) ORDER BY tenant_id,task_id,new_version",t.id(),other.id())).isEqualTo(events);
+        // A dense tie across all three statuses must survive per-status top-K
+        // merge; check exact page size and cursor exhaustion at 100/101.
+        var dense=tenant();
+        for(int i=0;i<101;i++){
+            var task=create(dense,CUT.minusSeconds(30));
+            if(i%3!=0)tasks.start(dense.staff(),dense.id(),task.id(),0);
+            if(i%3==2)tasks.block(dense.staff(),dense.id(),task.id(),1);
+        }
+        List<UUID> ordered=jdbc.query("SELECT id FROM crm.task_item WHERE tenant_id=? ORDER BY due_at,id",
+            (rs,n)->rs.getObject(1,UUID.class),dense.id());
+        var first=radar.listMine(dense.staff(),dense.id(),100,null);
+        assertThat(ids(first)).containsExactlyElementsOf(ordered.subList(0,100));
+        assertThat(first.nextCursor()).isNotNull();
+        var last=radar.listMine(dense.staff(),dense.id(),100,first.nextCursor());
+        assertThat(ids(last)).containsExactly(ordered.getLast());
+        assertThat(last.nextCursor()).isNull();
+        tasks.cancel(dense.manager(),dense.id(),ordered.getLast(),
+            jdbc.queryForObject("SELECT row_version FROM crm.task_item WHERE tenant_id=? AND id=?",Long.class,dense.id(),ordered.getLast()),
+            "radar-bound-"+UUID.randomUUID());
+        var exact=radar.listMine(dense.staff(),dense.id(),100,null);
+        assertThat(ids(exact)).containsExactlyElementsOf(ordered.subList(0,100));
+        assertThat(exact.nextCursor()).isNull();
+
     }
 }

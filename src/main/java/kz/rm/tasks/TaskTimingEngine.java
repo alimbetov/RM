@@ -56,21 +56,41 @@ final class TaskTimingEngine {
 
     static String overduePage(boolean pg, boolean hasCursor) {
         if(pg){
-            // Exact membership predicate before LIMIT; duration only for returned
-            // keys. Native timestamp comparison avoids numeric interval arithmetic
-            // and repeated CASE evaluation over every candidate.
+            // Each status is disjoint. Its first K qualifying rows suffice for
+            // the global first K, including ties ordered by (due_at,id).
+            // Existing (tenant_id,status,due_at,id) index can serve each
+            // bounded ordered scan; scope and cursor precede BOTH limits.
             return """
                 SELECT id,status,due_at,row_version,-d AS magnitude_micros,%s AS severity
-                FROM (SELECT keys.*, 'OVERDUE' AS timeliness,%s AS d
-                      FROM (SELECT id,status,due_at,row_version,c.evaluated_at
-                            FROM crm.task_item
-                            CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
-                            WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)
-                              AND (%s) %s
-                            ORDER BY due_at,id LIMIT ?) keys) timing
-                ORDER BY due_at,id
+                FROM (
+                    SELECT keys.*, 'OVERDUE' AS timeliness,%s AS d
+                    FROM (
+                        SELECT candidate.*,p.evaluated_at
+                        FROM (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at,
+                                     CAST(? AS UUID) AS scope_tenant,
+                                     CAST(? AS UUID) AS assignee_actor,
+                                     CAST(? AS UUID) AS creator_actor,
+                                     %s CAST(? AS INTEGER) AS page_limit) p
+                        CROSS JOIN LATERAL (
+                            SELECT part.*
+                            FROM (VALUES (CAST('OPEN' AS VARCHAR(20))),
+                                         (CAST('IN_PROGRESS' AS VARCHAR(20))),
+                                         (CAST('BLOCKED' AS VARCHAR(20)))) AS states(active_state)
+                            CROSS JOIN LATERAL (
+                                SELECT id,status,due_at,row_version
+                                FROM crm.task_item
+                                WHERE tenant_id=p.scope_tenant AND status=states.active_state
+                                  AND (assignee_user_id=p.assignee_actor OR created_by=p.creator_actor)
+                                  AND (%s) %s
+                                ORDER BY due_at,id LIMIT p.page_limit
+                            ) part
+                            ORDER BY due_at,id LIMIT p.page_limit
+                        ) candidate
+                    ) keys
+                ) timing ORDER BY due_at,id
                 """.formatted(severity(),signedMicros(true,"evaluated_at","due_at"),
-                    activeOverduePredicate(),hasCursor?" AND (due_at>? OR (due_at=? AND id>?)) ":"");
+                    hasCursor?"CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS last_due, CAST(? AS UUID) AS last_id,":"",
+                    activeOverduePredicate(),hasCursor?" AND (due_at,id)>(p.last_due,p.last_id) ":"");
         }
         return "SELECT id,status,due_at,row_version,magnitude_micros,severity FROM ("+
             activeRelation(pg)+") AS timing WHERE timeliness='OVERDUE' "+
