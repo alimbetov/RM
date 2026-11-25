@@ -6245,3 +6245,40 @@ BEGIN
 END; $$;
 --rollback CREATE OR REPLACE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE actual_kato VARCHAR(16); node RECORD; next_source BIGINT;  expected_region VARCHAR(16); visited BIGINT[] := ARRAY[]::BIGINT[]; BEGIN  SELECT l.kato_code INTO actual_kato FROM public.org_location l  WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;  IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN    RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';  END IF;  SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node  FROM public.ref_kato_territory WHERE code=actual_kato;  FOR depth IN 1..32 LOOP    EXIT WHEN node.source_id IS NULL;    EXIT WHEN node.is_deleted OR node.source_id=ANY(visited);    visited:=array_append(visited,node.source_id);    IF node.level_no=2 THEN expected_region:=node.code; EXIT; END IF;    EXIT WHEN node.level_no<2 OR node.parent_source_id IS NULL;    next_source:=node.parent_source_id;    SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node    FROM public.ref_kato_territory WHERE source_id=next_source;  END LOOP;  IF expected_region IS DISTINCT FROM NEW.region_code OR     NEW.geo_quality IS DISTINCT FROM        (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN    RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';  END IF;  RETURN NEW; END; $$;
 --rollback DROP FUNCTION crm.int_resolve_semantic_region(VARCHAR);
+
+
+--changeset rm:0203-int-source-revision-event-journal
+-- Independent source commits must not serialize on one tenant revision row.
+-- Identity is a unique journal key, NOT a freshness watermark.
+CREATE TABLE crm.int_source_revision_event (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ event_id BIGINT GENERATED ALWAYS AS IDENTITY,
+ PRIMARY KEY(tenant_id,event_id)
+);
+--rollback DROP TABLE crm.int_source_revision_event;
+
+--changeset rm:0204-int-source-revision-append-only dbms:postgresql splitStatements:false
+-- Keep the old per-tenant revision as a frozen migration baseline. Every actual
+-- source insert writes an independent event in its owner transaction. Snapshot
+-- cardinality, not MAX(event_id), observes late commits and excludes rollbacks.
+CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_source_rev_baseline_immutable BEFORE INSERT OR UPDATE OR DELETE ON crm.int_source_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_source_rev_baseline_no_truncate BEFORE TRUNCATE ON crm.int_source_revision
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_source_rev_event_immutable BEFORE UPDATE OR DELETE ON crm.int_source_revision_event
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_source_rev_event_no_truncate BEFORE TRUNCATE ON crm.int_source_revision_event
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+-- Rollback is deliberately blocked after journal writes; dropping committed
+-- revision events would make earlier proofs appear current again.
+--rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_source_revision_event) THEN RAISE EXCEPTION 'INT_SOURCE_REVISION_ROLLBACK_UNSAFE'; END IF; END; $$;
+--rollback DROP TRIGGER trg_int_source_rev_event_no_truncate ON crm.int_source_revision_event;
+--rollback DROP TRIGGER trg_int_source_rev_event_immutable ON crm.int_source_revision_event;
+--rollback DROP TRIGGER trg_int_source_rev_baseline_no_truncate ON crm.int_source_revision;
+--rollback DROP TRIGGER trg_int_source_rev_baseline_immutable ON crm.int_source_revision;
+--rollback CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO crm.int_source_revision(tenant_id,revision) VALUES(NEW.tenant_id,1) ON CONFLICT(tenant_id) DO UPDATE SET revision=int_source_revision.revision+1; RETURN NEW; END; $$;

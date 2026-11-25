@@ -117,6 +117,8 @@ final class CanonicalDeliveryJourneyEvidence {
             // Lower UUID / earlier timestamp commits AFTER the higher one was
             // discovered and delivered. Both discovery and backfill must see it.
             UUID low=new UUID(0,1),high=new UUID(0,100);
+            long revisionBefore=count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",tenant);
+            long foreignBefore=count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",otherTenant);
             var inserted=new CountDownLatch(1);
             Future<?> late=pool.submit(()->tx.executeWithoutResult(status->{
                 source(jdbc,tenant,template,low,START.plusSeconds(1),false);
@@ -124,16 +126,38 @@ final class CanonicalDeliveryJourneyEvidence {
                 inserted.countDown();await(release);
             }));
             await(inserted);
+            assertThat(count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",tenant))
+                .isEqualTo(revisionBefore);
             tx.executeWithoutResult(status->{
                 source(jdbc,tenant,template,high,START.plusSeconds(2),false);
                 assertThat(appender.append(key(tenant,high))).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
             });
+            long afterHigh=count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",tenant);
+            assertThat(afterHigh).isEqualTo(revisionBefore+3);
             assertThat(service.backfillBatch(tenant,run,10)).extracting(Step::key).containsExactly(key(tenant,high));
             assertThat(service.coverage(tenant,run).complete()).isTrue();
             drain(service,tenant,CONSUMER,handler(jdbc,table,CONSUMER));
             assertThat(service.consumerCoverage(tenant,CONSUMER).caughtUp()).isTrue();
             assertThat(count(jdbc,"SELECT count(*) FROM crm."+table+" WHERE tenant_id=? AND source_id=?",tenant,low)).isZero();
             release.countDown();result(late);
+            assertThat(count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",tenant))
+                .isEqualTo(afterHigh+3);
+            assertThat(count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",otherTenant))
+                .isEqualTo(foreignBefore);
+            // The next identity can be allocated and rolled back; cardinality
+            // must not change and identity gaps must not invalidate evidence.
+            tx.executeWithoutResult(status->{
+                UUID rolled=UUID.randomUUID();
+                source(jdbc,tenant,template,rolled,START.plusSeconds(9),false);
+                assertThat(appender.append(key(tenant,rolled))).isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
+                assertThat(count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",tenant))
+                    .isEqualTo(afterHigh+6);
+                status.setRollbackOnly();
+            });
+            assertThat(count(jdbc,"SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?",tenant))
+                .isEqualTo(afterHigh+3);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM crm.int_source_revision_event WHERE tenant_id=?",tenant))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
             // Simulate a fresh process using durable database state, no in-memory cursor.
             var restarted=new CanonicalFactDeliveryService(jdbc,manager,appender);
             assertThat(restarted.coverage(tenant,run).unprocessed()).isEqualTo(1);

@@ -39,7 +39,8 @@ public class L1ProjectionService {
     public record Route(boolean materialized,UUID generation,UUID proofId,String reason){}
     private Revisions revisions(UUID tenant,UUID generation){
         return jdbc.queryForObject("""
-            SELECT COALESCE(s.revision,0),COALESCE(p.revision,0),l.revision
+            SELECT COALESCE(s.revision,0)+(SELECT count(*) FROM crm.int_source_revision_event e WHERE e.tenant_id=l.tenant_id),
+                   COALESCE(p.revision,0),l.revision
             FROM crm.int_projection_lifecycle l
             LEFT JOIN crm.int_source_revision s ON s.tenant_id=l.tenant_id
             LEFT JOIN crm.int_projection_revision p ON p.tenant_id=l.tenant_id AND p.generation_id=l.generation_id
@@ -52,6 +53,7 @@ public class L1ProjectionService {
             SELECT CASE
               WHEN f.proof_id IS NULL THEN 'UNPROVEN'
               WHEN f.source_revision<>COALESCE(s.revision,0)
+                +(SELECT count(*) FROM crm.int_source_revision_event e WHERE e.tenant_id=l.tenant_id)
                 OR f.projection_revision<>COALESCE(p.revision,0)
                 OR f.lifecycle_revision<>l.revision THEN 'STALE'
               WHEN c.missing_facts<>0 OR c.orphan_facts<>0 OR c.pending_facts<>0

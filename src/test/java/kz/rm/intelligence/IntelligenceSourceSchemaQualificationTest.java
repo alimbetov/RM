@@ -31,6 +31,7 @@ class IntelligenceSourceSchemaQualificationTest {
         new Source("crm","int_projection_generation",List.of("tenant_id","generation_id"),List.of("state","projection_code","consumer_code","method_version","calendar_version","from_day","until_day")),
         new Source("crm","int_projection_lifecycle",List.of("tenant_id","generation_id"),List.of("lifecycle_state","revision","changed_at")),
         new Source("crm","int_source_revision",List.of("tenant_id"),List.of("revision")),
+        new Source("crm","int_source_revision_event",List.of("tenant_id","event_id"),List.of()),
         new Source("crm","int_projection_revision",List.of("tenant_id","generation_id"),List.of("revision")),
         new Source("crm","int_coverage_fence",List.of("tenant_id","generation_id","proof_id"),List.of("source_revision","projection_revision","lifecycle_revision")),
         new Source("crm","int_active_generation",List.of("tenant_id","projection_code"),List.of("generation_id","proof_id","lifecycle_state")),
