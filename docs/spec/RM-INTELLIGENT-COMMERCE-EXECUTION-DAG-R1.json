@@ -316,5 +316,18 @@
       "exit": "reliable signals, explicit owner command admission; ML optional",
       "status": "DEFERRED_ANALYTICS_FIRST"
     }
-  ]
+  ],
+  "transport": {
+    "current": "POSTGRESQL_OUTBOX_FIRST",
+    "future": "REDIS_DEFERRED_SEPARATE_ADMISSION",
+    "contract": "RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md",
+    "required_at": [
+      "A2",
+      "B2",
+      "B3",
+      "E2",
+      "X1"
+    ],
+    "redis_mvp_dependency": false
+  }
 }

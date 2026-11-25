@@ -83,6 +83,10 @@ Parallel here means independent implementation/review streams, not promised back
 
 MVP stages retain original IE numbering; A/B/C/W/E/X labels split existing gates only. R-00…R-07 not new MVP authorization; R1 (Smart Deadline) does not block Sales provider conceptually but requires explicit resumption. R2 is earliest future signal slice only after R0.1D + data/owner gates; G1 here is proposed conservative prerequisite, actual future schedule per separate CR. R5–R7 additional domain/model/action gates not represented as completed graph nodes. No fake PASS because graph predecessors listed; external conditions must be proven. Current source review complete at A0; A1/A2 next, all code nodes blocked by A3.
 
+## 2A. Transport boundary — PostgreSQL first
+
+[Event Transport R1](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md): A2 fixes owner envelope, per-consumer receipts and transaction boundaries; B2 qualifies durable PostgreSQL outbox/owner events, B3/B4 and E2/E3 use independent idempotent consumers. Redis is a deferred transport candidate only, no current dependency or graph node. Future adapter admission requires replay/cutover/failure proof, preserving PG authority. No new scope or gate waiver.
+
 ## 3. Intersections and single-owner file/contract discipline
 
 | Intersection | Shared contract and primary owner | Parallel work allowed | Convergence / conflict avoidance |

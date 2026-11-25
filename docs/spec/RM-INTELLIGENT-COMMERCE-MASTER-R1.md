@@ -30,6 +30,8 @@ RM становится единой платформой интеллектуа
 - [INSIGHT-R1](RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md), [FIN Adaptation](RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md), [Task Radar R0.1](RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md), [Timing Contract](RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md), [Smart Deadline R0.2](RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md), [Smart FX Shield](RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md), [TASK durable outbox](RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md).
 - [Банк идей](../ideas/RM-IDEA-BANK-R1.md). Весь остальной банк PARKED, ранее выданные узкие исключения сохраняются.
 
+> **Owner transport decision 2026-11-25:** [Event Transport R1](RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md). PostgreSQL Outbox first; Redis planned later only as separately admitted infrastructure adapter. Stable owner event identity, consumer idempotency and database atomicity preserved; no Redis runtime in MVP. A2/B2 must review this boundary before implementation.
+
 ## B. Общая архитектура и единственный источник истины
 
 ```mermaid
