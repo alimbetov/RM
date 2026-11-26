@@ -636,6 +636,7 @@ class QrWarehouseHandoverQualificationTest {
     /** QR-06B/B1: persisted effect proof, not merely a successful service return. */
     private void assertExactlyOneHandover(Context c,Order o,int expectedLines) {
         assertThat(status(c,o)).isEqualTo("COMPLETED");
+        kz.rm.iam.CanonicalProducerEvidence.assertHandover(jdbc,c.tenant(),o.id(),expectedLines);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_pickup_handover
                 WHERE tenant_id=? AND order_id=?
@@ -668,6 +669,8 @@ class QrWarehouseHandoverQualificationTest {
 
     private void assertNoHandoverEffects(Context c,Order o) {
         assertThat(status(c,o)).isEqualTo("READY_FOR_PICKUP");
+        kz.rm.iam.CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),o.id(),"COMPLETED");
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,c.tenant());
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_pickup_handover
                 WHERE tenant_id=? AND order_id=?
@@ -1100,6 +1103,42 @@ class QrWarehouseHandoverQualificationTest {
      * credential consumption. The entire PostgreSQL transaction must rollback.
      * This models an abrupt SQL-side failure; it is NOT a process kill.
      */
+    @Test void p1PostgresHandoverSalesAndInventoryAppendFailureRollsBackBothDomains() throws Exception {
+        requirePostgres();
+        var c=context();var o=ready(c,true);
+        var issued=pickup.issue(c.buyer(),o.publicRef(),key());
+        long initialVersion=version(c,o);
+        String requestKey=key();
+        var before=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),o.id(),c.warehouse(),c.itemOne());
+        var facts=jdbc.queryForList("SELECT source_id,digest FROM crm.int_canonical_fact WHERE tenant_id=? ORDER BY source_id",c.tenant());
+        // Service posts lines in PostgreSQL UUID order. Reject the second inventory
+        // append, after the first movement/fact, then separately reject SALES append.
+        UUID second=jdbc.queryForObject("""
+            SELECT catalog_item_id_snapshot FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
+            ORDER BY catalog_item_id_snapshot DESC,id DESC LIMIT 1
+            """,UUID.class,c.tenant(),o.id());
+        for(String check:List.of("owner_module <> 'INVENTORY' OR subject_id <> '"+second+"'::uuid",
+                "owner_module <> 'SALES'")){
+            assertThatThrownBy(()->new TransactionTemplate(transactionManager).executeWithoutResult(status->{
+                jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_p1_handover_failure CHECK ("+check+") NOT VALID");
+                pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),true,initialVersion,requestKey);
+            })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("ck_p1_handover_failure");
+            assertNoHandoverEffects(c,o);
+            assertThat(version(c,o)).isEqualTo(initialVersion);
+            assertThat(stock(c,c.itemTwo(),"on_hand")).isEqualByComparingTo("20");
+            assertThat(stock(c,c.itemTwo(),"reserved")).isEqualByComparingTo("3");
+            assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),o.id(),c.warehouse(),c.itemOne())).isEqualTo(before);
+            assertThat(jdbc.queryForList("SELECT source_id,digest FROM crm.int_canonical_fact WHERE tenant_id=? ORDER BY source_id",c.tenant())).isEqualTo(facts);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid='crm.int_canonical_fact'::regclass AND conname='ck_p1_handover_failure'",Integer.class)).isZero();
+        }
+        var recovered=pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),true,initialVersion,requestKey);
+        assertExactlyOneHandover(c,o,2);
+        assertThat(pickup.complete(c.staff(),c.tenant(),c.warehouse(),issued.rawProof(),true,initialVersion,requestKey)).isEqualTo(recovered);
+        assertExactlyOneHandover(c,o,2);
+        kz.rm.iam.CanonicalProducerEvidence.assertSales(jdbc,c.tenant());
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,c.tenant());
+    }
+
     @Test void qr06bPgReceiptInsertFailureRollsBackAllEffectsThenRetrySucceeds() throws Exception {
         requirePostgres();
         var c=context();var o=ready(c,true);

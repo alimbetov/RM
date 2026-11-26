@@ -3,16 +3,7 @@ name: RM MVP W2-W5 Service Journeys PostgreSQL Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - 'src/main/java/kz/rm/organization/CommerceCurrencyAdmission.java'
-      - 'src/main/java/kz/rm/sales/SalesInventoryCommandService.java'
-      - 'src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java'
-      - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
-      - 'src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java'
-      - 'src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java'
-      - 'docs/operations/RM-MVP-SERVICE-CURRENCY-PREFLIGHT.sql'
-      - '.github/scripts/verify_rm_qa_01b.py'
-      - '.github/workflows/rm-mvp-w23-service-strict-pg.yml'
+    # Mandatory exact-SHA evidence: run for every base_dev candidate.
   workflow_dispatch:
 
 permissions:
@@ -68,6 +59,14 @@ jobs:
                     'mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation',
                     'mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled',
                     'busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg',
+                    'canonicalSalesAndInventoryDigestOraclePg',
+                    'canonicalSourceAdmissionAndOwnerRollbackPg',
+                    'canonicalConcurrentReplayAndRollbackPg',
+                    'canonicalSourceSealingLockOrdersPg',
+                    'canonicalTenantSourceCollisionPg',
+                    'p2CanonicalDurableDiscoveryReplayAndBackfillPg',
+                    'p3L1ProjectionParityAndLateDuplicatePg',
+                    'b4RegionAndNomenclatureSnapshotsPg',
                     'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
                     'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
           got={c.get('name') for c in cases}
@@ -90,7 +89,7 @@ jobs:
           docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -c "
             UPDATE public.tenant_currency_policy
             SET status='REVIEW_REQUIRED'
-            WHERE tenant_id=(SELECT tenant_id FROM crm.store_front LIMIT 1);
+            WHERE tenant_id=(SELECT tenant_id FROM crm.store_front WHERE state='PUBLISHED' ORDER BY tenant_id LIMIT 1);
           "
           if docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -f /tmp/mvp-preflight.sql > /tmp/mvp-negative.log 2>&1; then
             cat /tmp/mvp-negative.log

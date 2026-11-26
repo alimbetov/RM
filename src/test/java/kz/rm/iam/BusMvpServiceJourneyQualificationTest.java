@@ -56,6 +56,8 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired kz.rm.tasks.TaskCrmFollowupService followups;
     @Autowired kz.rm.crm.CrmInteractionService interactions;
     @Autowired CatalogItemService catalog;
+    @Autowired kz.rm.catalog.CatalogGroupService groups;
+    @Autowired kz.rm.intelligence.MultidimensionalReadService dimensions;
     @Autowired StorefrontManagementService stores;
     @Autowired StorefrontOfferService offers;
     @Autowired AuthenticatedInventoryCommands stock;
@@ -63,6 +65,13 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired AuthenticatedSalesCommands sales;
     @Autowired AuthenticatedSalesQueries orderReads;
     @Autowired JdbcTemplate jdbc;
+    @Autowired org.springframework.context.ApplicationContext applicationContext;
+    @Autowired kz.rm.intelligence.CanonicalFactAppender canonicalFacts;
+    @Autowired kz.rm.intelligence.CanonicalFactDeliveryService canonicalDelivery;
+    @Autowired kz.rm.intelligence.L1ProjectionService l1;
+    @Autowired org.springframework.transaction.PlatformTransactionManager canonicalTransactions;
+    @Autowired kz.rm.intelligence.MetricQueryService intelligence;
+    @Autowired kz.rm.intelligence.CalendarPolicyService calendar;
 
     private UUID account(String prefix) {
         return users.saveAndFlush(new UserAccountEntity(
@@ -91,7 +100,54 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1, DIMENSIONS }
+
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
+        runBusJourney(CanonicalCase.FULL);
+    }
+
+    @Test void canonicalSalesAndInventoryDigestOraclePg() {
+        runBusJourney(CanonicalCase.DIGEST);
+    }
+
+    @Test void canonicalSourceAdmissionAndOwnerRollbackPg() {
+        runNamedPostgresCase(CanonicalCase.ADMISSION_ROLLBACK);
+    }
+
+    @Test void canonicalConcurrentReplayAndRollbackPg() {
+        runNamedPostgresCase(CanonicalCase.CONCURRENCY);
+    }
+
+    @Test void canonicalSourceSealingLockOrdersPg() {
+        runNamedPostgresCase(CanonicalCase.SEALING);
+    }
+
+    @Test void canonicalTenantSourceCollisionPg() {
+        runNamedPostgresCase(CanonicalCase.TENANT);
+    }
+
+    @Test void p2CanonicalDurableDiscoveryReplayAndBackfillPg() {
+        runNamedPostgresCase(CanonicalCase.DELIVERY);
+    }
+
+    @Test void p3L1ProjectionParityAndLateDuplicatePg() {
+        runNamedPostgresCase(CanonicalCase.L1);
+    }
+
+    @Test void b4RegionAndNomenclatureSnapshotsPg(){
+        runNamedPostgresCase(CanonicalCase.DIMENSIONS);
+    }
+
+    private void runNamedPostgresCase(CanonicalCase scenario){
+        boolean pg=Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>)c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgresql")));
+        // The strict PostgreSQL workflow and central verifier require these named cases
+        // without skips. H2 must never present a successful PostgreSQL locking test.
+        org.junit.jupiter.api.Assumptions.assumeTrue(pg,"CANONICAL_POSTGRESQL_REQUIRED");
+        runBusJourney(scenario);
+    }
+
+    private void runBusJourney(CanonicalCase scenario) {
         UUID ownerId=account("bus-owner"),staffId=account("bus-staff");
         proveInitialOwnerEmail(ownerId);
         VerifiedActor owner=actor(ownerId),staff=actor(staffId);
@@ -163,17 +219,37 @@ class BusMvpServiceJourneyQualificationTest {
                 "RM business product",new BigDecimal("75.0000"),"KZT");
         var offer=offers.publish(staff,tenant,offerDraft.id(),offerDraft.rowVersion());
 
+        kz.rm.catalog.CatalogGroupService.Node root=null,leaf=null;
+        if(scenario==CanonicalCase.DIMENSIONS){
+            root=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01","Products",null,0);
+            leaf=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01.01","Original group",root.id(),0);
+            groups.assign(staff,tenant,published.id(),leaf.id(),0);
+            var serviceGroup=groups.appendNode(staff,tenant,CatalogItem.Kind.SERVICE,"02","Services",null,0);
+            assertThatThrownBy(()->groups.assign(staff,tenant,published.id(),serviceGroup.id(),1))
+                .hasMessage("CAT_ASSIGNMENT_GROUP_NOT_FOUND");
+            var serviceDraft=catalog.createDraft(staff,tenant,"SVC-"+UUID.randomUUID(),CatalogItem.Kind.SERVICE,"ru","Service",null);
+            assertThat(groups.assign(staff,tenant,serviceDraft.id(),serviceGroup.id(),0).groupId()).isEqualTo(serviceGroup.id());
+        }
         stock.receive(staff,tenant,warehouse.id(),published.id(),
                 "bus-receipt-"+UUID.randomUUID(),new BigDecimal("10"));
-        UUID orderId=checkout.checkout(store.slug(),
-                "bus-buyer-"+UUID.randomUUID()+"@example.kz",
-                "bus-order-"+UUID.randomUUID(),
-                List.of(new AutoOrderService.Line(offer.id(),3))).order().orderId();
+        String checkoutEmail="bus-buyer-"+UUID.randomUUID()+"@example.kz";
+        String checkoutKey="bus-order-"+UUID.randomUUID();
+        var checkoutLines=List.of(new AutoOrderService.Line(offer.id(),3));
+        UUID orderId=checkout.checkout(store.slug(),checkoutEmail,checkoutKey,checkoutLines).order().orderId();
+        UUID placedEvent=CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,orderId);
+        assertThat(checkout.checkout(store.slug(),checkoutEmail,checkoutKey,checkoutLines).order().orderId()).isEqualTo(orderId);
+        assertThat(CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,orderId)).isEqualTo(placedEvent);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.inv_stock_reservation
                 WHERE tenant_id=? AND order_id=?
                 """,Integer.class,tenant,orderId)).isZero();
 
+        kz.rm.catalog.CatalogGroupService.Node revisedRoot=null,revisedLeaf=null;
+        if(scenario==CanonicalCase.DIMENSIONS){
+            revisedRoot=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01","Products revised",null,1);
+            revisedLeaf=groups.appendNode(staff,tenant,CatalogItem.Kind.PRODUCT,"01.01","Revised group",revisedRoot.id(),1);
+            groups.assign(staff,tenant,published.id(),revisedLeaf.id(),1);
+        }
         var beforeDenied=JourneySqlEvidence.orderAndStock(jdbc,tenant,orderId,warehouse.id(),published.id());
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,tenant);
         for(var invalid:JourneySignedActorFixture.InvalidToken.values()){
@@ -188,8 +264,14 @@ class BusMvpServiceJourneyQualificationTest {
         roles.grant(owner,tenant,role.id(),DomainPermission.SALES_ORDER_CONFIRM);
         assertThat(sales.confirm(staff,tenant,orderId,warehouse.id()).status())
                 .isEqualTo("CONFIRMED");
+        UUID confirmedFact=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"CONFIRMED");
+        assertThat(sales.confirm(staff,tenant,orderId,warehouse.id()).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"CONFIRMED")).isEqualTo(confirmedFact);
         assertThat(sales.fulfill(staff,tenant,orderId).status()).isEqualTo("COMPLETED");
+        UUID completedFact=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"COMPLETED");
         assertThat(sales.fulfill(staff,tenant,orderId).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,orderId,"COMPLETED")).isEqualTo(completedFact);
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,tenant,orderId,"CANCELLED");
 
         assertThat(jdbc.queryForObject("""
                 SELECT unit_price_snapshot FROM crm.sales_order_line
@@ -213,15 +295,240 @@ class BusMvpServiceJourneyQualificationTest {
         assertThat(orderReads.detail(staff,tenant,orderId)).isNotNull();
         UUID cancelOrder=checkout.checkout(store.slug(),"bus-cancel-"+UUID.randomUUID()+"@example.kz",
                 "bus-cancel-order-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),2))).order().orderId();
+        CheckoutCanonicalEvidence.assertPlaced(jdbc,tenant,cancelOrder);
         assertThat(sales.confirm(staff,tenant,cancelOrder,warehouse.id()).status()).isEqualTo("CONFIRMED");
+        CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,cancelOrder,"CONFIRMED");
         assertThat(sales.cancel(staff,tenant,cancelOrder).status()).isEqualTo("CANCELLED");
+        UUID cancelledFact=CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,cancelOrder,"CANCELLED");
         assertThat(sales.cancel(staff,tenant,cancelOrder).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,tenant,cancelOrder,"CANCELLED")).isEqualTo(cancelledFact);
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,tenant,cancelOrder,"COMPLETED");
         assertThat(jdbc.queryForObject("SELECT reserved FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("0");
         assertThat(jdbc.queryForObject("SELECT on_hand FROM crm.inv_stock_balance WHERE tenant_id=? AND location_id=? AND item_id=?",BigDecimal.class,tenant,warehouse.id(),published.id())).isEqualByComparingTo("7");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.inv_stock_movement WHERE tenant_id=? AND source_type='SALES_ORDER' AND source_id=?",Integer.class,tenant,cancelOrder)).isZero();
         assertThat(orderReads.history(staff,tenant,cancelOrder,0,20)).hasSize(3);
         assertThat(JourneySqlEvidence.invoices(jdbc,tenant)).isEqualTo(invoicesBefore);
+        IntelligenceSourceOracle.assertTenantFacts(jdbc, tenant, warehouse.id(), published.id(),
+                2, "375", 2, 1, 1, "10", "3", "7");
+        // Fresh owner tenant, before synthetic historical fixtures.
+        CanonicalProducerEvidence.assertSales(jdbc,tenant);
+        CanonicalProducerEvidence.assertInventory(jdbc,tenant);
+        if(scenario==CanonicalCase.DIGEST){
+            CanonicalFactJourneyEvidence.digestReplayContract(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
+            CanonicalFactJourneyEvidence.inventoryDigestOracle(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            return;
+        }
+        if(scenario==CanonicalCase.CONCURRENCY){
+            CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
+            CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
+            return;
+        }
+        if(scenario==CanonicalCase.SEALING){
+            CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
+            CanonicalFactJourneyEvidence.sealingPermutations(jdbc,canonicalTransactions,tenant,orderId);
+            return;
+        }
+        UUID otherOwnerId=account("bus-other-owner");
+        proveInitialOwnerEmail(otherOwnerId);
+        VerifiedActor otherOwner=actor(otherOwnerId);
+        UUID otherTenant=UUID.randomUUID();
+        assertThat(onboarding.createFirstTenant(otherOwner,otherTenant,
+                "RM Canonical Isolation LLP","RM Canonical Isolation","KZ").tenantId()).isEqualTo(otherTenant);
+        currencies.initialize(otherOwner,otherTenant);
+        if(scenario==CanonicalCase.DIMENSIONS){
+            Instant from=Instant.now().minusSeconds(86400),until=Instant.now().plusSeconds(86400);
+            var booked=dimensions.booked(staff,tenant,from,until,31);
+            assertThat(booked).hasSize(2);
+            UUID originalRoot=root.id(),newRoot=revisedRoot.id();
+            assertThat(booked).anySatisfy(row->{assertThat(row.group().id()).isEqualTo(originalRoot);
+                assertThat(row.group().revision()).isEqualTo(1);assertThat(row.amount()).isEqualByComparingTo("225");
+                assertThat(row.distinctOrders()).isEqualTo(1);assertThat(row.distinctLines()).isEqualTo(1);
+                assertThat(row.distinctSkus()).isEqualTo(1);assertThat(row.productOrderUnits()).isEqualByComparingTo("3");});
+            assertThat(booked).anySatisfy(row->{assertThat(row.group().id()).isEqualTo(newRoot);
+                assertThat(row.group().revision()).isEqualTo(2);assertThat(row.amount()).isEqualByComparingTo("150");
+                assertThat(row.distinctOrders()).isEqualTo(1);assertThat(row.distinctLines()).isEqualTo(1);
+                assertThat(row.distinctSkus()).isEqualTo(1);assertThat(row.productOrderUnits()).isEqualByComparingTo("2");});
+            var fulfilled=dimensions.fulfilled(staff,tenant,List.of(warehouse.id()),from,until,31);
+            assertThat(fulfilled).hasSize(1);
+            assertThat(fulfilled.getFirst().region()).isEqualTo(kato);
+            assertThat(fulfilled.getFirst().group().id()).isEqualTo(originalRoot);
+            assertThat(fulfilled.getFirst().amount()).isEqualByComparingTo("225");
+            assertThat(fulfilled.getFirst().distinctOrders()).isEqualTo(1);
+            assertThat(fulfilled.getFirst().distinctLines()).isEqualTo(1);
+            assertThat(fulfilled.getFirst().distinctSkus()).isEqualTo(1);
+            assertThat(fulfilled.getFirst().productOrderUnits()).isEqualByComparingTo("3");
+            var first=dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31);
+            assertThat(first).hasSize(2);
+            assertThat(first).anySatisfy(row->{assertThat(row.region()).isEqualTo(kato);
+                assertThat(row.group().id()).isEqualTo(originalRoot);assertThat(row.in()).isEqualByComparingTo("10");});
+            assertThat(first).anySatisfy(row->{assertThat(row.group().id()).isEqualTo(newRoot);
+                assertThat(row.out()).isEqualByComparingTo("3");});
+            String secondKato=jdbc.queryForObject("""
+                SELECT code FROM public.ref_kato_territory WHERE is_deleted=FALSE AND level_no=2 AND code<>?
+                ORDER BY code LIMIT 1
+                """,String.class,kato);
+            String childKato=jdbc.query("""
+                SELECT c.code FROM public.ref_kato_territory c JOIN public.ref_kato_territory p
+                  ON p.source_id=c.parent_source_id
+                WHERE p.code=? AND c.level_no=3 AND c.is_deleted=FALSE ORDER BY c.code LIMIT 1
+                """,rs->rs.next()?rs.getString(1):null,secondKato);
+            var second=locations.create(staff,tenant,OrganizationLocationEntity.Type.WAREHOUSE,
+                "Second regional warehouse",childKato==null?secondKato:childKato,"Second warehouse");
+            assertThatThrownBy(()->dimensions.stock(staff,tenant,List.of(warehouse.id(),second.id()),from,until,31))
+                .isInstanceOf(SecurityException.class);
+            warehouseScope.assign(owner,tenant,second.id(),staffId);
+            stock.receive(staff,tenant,second.id(),published.id(),"b4-second-region-"+UUID.randomUUID(),new BigDecimal("5"));
+            var regions=dimensions.stock(staff,tenant,List.of(warehouse.id(),second.id()),from,until,31);
+            assertThat(regions).hasSize(3);
+            assertThat(regions).anySatisfy(row->{assertThat(row.region()).isEqualTo(secondKato);
+                assertThat(row.group().id()).isEqualTo(newRoot);assertThat(row.in()).isEqualByComparingTo("5");});
+            assertThatThrownBy(()->dimensions.stock(otherOwner,otherTenant,List.of(warehouse.id()),from,until,31))
+                .isInstanceOf(SecurityException.class);
+            // The second owner has no operational role: authorization is checked before lookup.
+            assertThatThrownBy(()->groups.assign(otherOwner,otherTenant,published.id(),newRoot,0))
+                .isInstanceOf(SecurityException.class).hasMessage("Tenant RBAC permission denied");
+            // Separately prove the data boundary AFTER successful admission within tenant B.
+            UUID otherStaffId=account("bus-other-dimension-staff");
+            VerifiedActor otherStaff=actor(otherStaffId);
+            assertThat(enrollment.invite(otherOwner,otherTenant,otherStaffId).status()).isEqualTo("INVITED");
+            assertThat(enrollment.accept(otherStaff,otherTenant).status()).isEqualTo("ACTIVE");
+            var otherRole=roles.createRole(otherOwner,otherTenant,"DIMENSION_TEST","Dimension isolation test");
+            for(var permission:List.of(DomainPermission.CATALOG_WRITE,DomainPermission.SALES_ORDER_READ,
+                    DomainPermission.INVENTORY_STOCK_READ))
+                roles.grant(otherOwner,otherTenant,otherRole.id(),permission);
+            roles.assign(otherOwner,otherTenant,otherStaffId,otherRole.id());
+            roles.enable(otherOwner,otherTenant);
+            assertThat(dimensions.booked(otherStaff,otherTenant,from,until,31)).isEmpty();
+            assertThatThrownBy(()->groups.assign(otherStaff,otherTenant,published.id(),newRoot,0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("CAT_ASSIGNMENT_ITEM_NOT_FOUND");
+            var otherItem=catalog.createDraft(otherStaff,otherTenant,"OTHER-"+UUID.randomUUID(),
+                CatalogItem.Kind.PRODUCT,"ru","Other tenant item",null);
+            assertThatThrownBy(()->groups.assign(otherStaff,otherTenant,otherItem.id(),newRoot,0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("CAT_ASSIGNMENT_GROUP_NOT_FOUND");
+            var otherGroup=groups.appendNode(otherStaff,otherTenant,CatalogItem.Kind.PRODUCT,"01","Other tenant group",null,0);
+            assertThat(groups.assign(otherStaff,otherTenant,otherItem.id(),otherGroup.id(),0).groupId()).isEqualTo(otherGroup.id());
+            assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))
+                .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.int_movement_dimension SET region_code=region_code WHERE tenant_id=?",tenant))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            // A synthetic legacy movement is backfilled without current category/geography.
+            UUID legacy=UUID.randomUUID();
+            new org.springframework.transaction.support.TransactionTemplate(canonicalTransactions).executeWithoutResult(status->{
+                assertThat(jdbc.update("""
+                    INSERT INTO crm.inv_stock_movement(tenant_id,id,location_id,item_id,request_key,delta_quantity,balance_before,balance_after,
+                      occurred_at,recorded_at,reason_code,movement_kind,actor_user_id,source_type,source_id,business_reason_code,posting_version)
+                    SELECT tenant_id,?,location_id,item_id,?,delta_quantity,balance_before,balance_after,
+                      occurred_at,recorded_at,reason_code,movement_kind,actor_user_id,source_type,source_id,business_reason_code,NULL
+                    FROM crm.inv_stock_movement WHERE tenant_id=? AND location_id=? AND reason_code='RECEIPT' ORDER BY id LIMIT 1
+                    """,legacy,"b4-legacy-"+legacy,tenant,warehouse.id())).isEqualTo(1);
+                canonicalFacts.append(new kz.rm.intelligence.CanonicalFactKey(tenant,kz.rm.intelligence.CanonicalFactKey.Owner.INVENTORY,
+                    kz.rm.intelligence.CanonicalFactKey.Kind.STOCK_MOVEMENT,legacy));
+            });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_movement_dimension WHERE tenant_id=? AND movement_id=?",
+                Long.class,tenant,legacy)).isZero();
+            // Same-tenant IDs are insufficient: the snapshot must match its source.
+            var wrongSku=catalog.createDraft(staff,tenant,"B4-WRONG-"+UUID.randomUUID(),
+                CatalogItem.Kind.PRODUCT,"ru","Wrong same-tenant SKU",null);
+            String insertDim="""
+                INSERT INTO crm.int_movement_dimension(tenant_id,movement_id,item_id,item_kind,
+                    location_id,kato_code,region_code,geo_quality)
+                VALUES (?,?,?,'PRODUCT',?,?,?,'RESOLVED')
+                """;
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,wrongSku.id(),warehouse.id(),kato,kato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_int_movement_dim_source");
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,published.id(),second.id(),
+                childKato==null?secondKato:childKato,secondKato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_int_movement_dim_source");
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,published.id(),warehouse.id(),secondKato,secondKato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_MOVEMENT_DIM_KATO_MISMATCH");
+            assertThatThrownBy(()->jdbc.update(insertDim,tenant,legacy,published.id(),warehouse.id(),kato,secondKato))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_MOVEMENT_DIM_REGION_MISMATCH");
+            UUID bookedLine=jdbc.queryForObject("SELECT id FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",
+                UUID.class,tenant,orderId);
+            // BEFORE INSERT guard rejects false UNKNOWN and different SKU before
+            // duplicate-key handling for the already captured line.
+            assertThatThrownBy(()->jdbc.update("""
+                INSERT INTO crm.int_sales_line_dimension(tenant_id,line_id) VALUES (?,?)
+                """,tenant,bookedLine)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_SALES_DIM_SOURCE_ITEM_MISMATCH");
+            assertThatThrownBy(()->jdbc.update("""
+                INSERT INTO crm.int_sales_line_dimension(tenant_id,line_id,item_id,item_kind)
+                VALUES (?,?,?,'PRODUCT')
+                """,tenant,bookedLine,wrongSku.id()))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("INT_SALES_DIM_SOURCE_ITEM_MISMATCH");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_movement_dimension WHERE tenant_id=? AND movement_id=?",
+                Long.class,tenant,legacy)).isZero();
+            var geoCoverage=dimensions.stockCoverage(staff,tenant,List.of(warehouse.id()),from,until);
+            assertThat(geoCoverage.sourceMovements()).isEqualTo(3);
+            assertThat(geoCoverage.missingSnapshots()).isEqualTo(1);
+            assertThat(geoCoverage.unknownRegion()).isZero();
+            assertThat(geoCoverage.resolvedRegion()).isEqualTo(2);
+            assertThat(geoCoverage.allClassified()).isFalse();
+            assertThatThrownBy(()->dimensions.stockCoverage(otherStaff,otherTenant,List.of(warehouse.id()),from,until))
+                .isInstanceOf(SecurityException.class);
+            assertThat(dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31)).anySatisfy(row->{
+                assertThat(row.region()).isNull();assertThat(row.group().id()).isNull();assertThat(row.in()).isEqualByComparingTo("10");
+            });
+            return;
+        }
+        if(scenario==CanonicalCase.L1){
+            long calendarVersion=calendar.append(owner,tenant,"Etc/UTC",0).version();
+            L1ProjectionJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
+                l1,tenant,otherTenant,orderId,warehouse.id(),published.id(),calendarVersion,applicationContext,staff,
+                ()->warehouseScope.revoke(owner,tenant,warehouse.id(),staffId),
+                ()->warehouseScope.assign(owner,tenant,warehouse.id(),staffId),otherOwner);
+            return;
+        }
+        if(scenario==CanonicalCase.DELIVERY){
+            CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
+                tenant,otherTenant,orderId);
+            return;
+        }
+        CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
+        if(scenario==CanonicalCase.TENANT){
+            CanonicalFactJourneyEvidence.tenantCollision(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
+            return;
+        }
+        String rollbackKey="bus-rollback-"+UUID.randomUUID();
+        CanonicalFactJourneyEvidence.ownerRollback(jdbc,canonicalTransactions,canonicalFacts,tenant,rollbackKey,
+            ()->checkout.checkout(store.slug(),"bus-rollback-"+UUID.randomUUID()+"@example.kz",
+                rollbackKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+        if(scenario==CanonicalCase.ADMISSION_ROLLBACK){
+            CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            CanonicalFactJourneyEvidence.rejectUnsealedSourceOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+            String faultKey="bus-fact-failure-"+UUID.randomUUID();
+            String faultEmail="bus-fact-failure-"+UUID.randomUUID()+"@example.kz";
+            CanonicalFactJourneyEvidence.checkoutAppendFailureOnPostgres(jdbc,canonicalTransactions,tenant,faultKey,
+                ()->checkout.checkout(store.slug(),faultEmail,faultKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+            return;
+        }
+        calendar.append(owner,tenant,"Etc/UTC",0);
+        var period=new kz.rm.intelligence.MetricSelection.PeriodChoice(
+            kz.rm.intelligence.PeriodResolver.Code.Y,java.time.LocalDate.now(java.time.ZoneOffset.UTC),1);
+        IntelligenceMetricQualification.allEight(intelligence,staff,tenant,warehouse.id(),published.id(),period);
+        var live=new kz.rm.intelligence.MetricQuery(kz.rm.intelligence.MetricRegistry.Code.CURRENT_AVAILABLE,1,
+            new kz.rm.intelligence.MetricSelection.LivePosition(warehouse.id(),published.id()));
+        assertThatThrownBy(()->intelligence.calculate(foreign,tenant,live)).isInstanceOf(SecurityException.class);
+        warehouseScope.revoke(owner,tenant,warehouse.id(),staffId);
+        assertThatThrownBy(()->intelligence.calculate(staff,tenant,live)).isInstanceOf(SecurityException.class);
+        warehouseScope.assign(owner,tenant,warehouse.id(),staffId);
+        roles.revoke(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
+        assertThatThrownBy(()->intelligence.calculate(staff,tenant,IntelligenceMetricQualification.order(
+            kz.rm.intelligence.MetricRegistry.Code.PLACED_ORDERS,period))).isInstanceOf(SecurityException.class);
         assertThat(tasks.getMine(staff,tenant,task.id()).state().name())
                 .isEqualTo("COMPLETED");
+        CanonicalFactJourneyEvidence.concurrentReplayOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,cancelOrder);
+        CanonicalFactJourneyEvidence.concurrentRollbackOnPostgres(jdbc,canonicalTransactions,canonicalFacts,tenant,cancelOrder);
+        CanonicalFactJourneyEvidence.sealingRace(jdbc,canonicalTransactions,tenant,orderId);
+        CanonicalFactJourneyEvidence.sealingPermutations(jdbc,canonicalTransactions,tenant,orderId);
+        CanonicalFactJourneyEvidence.rejectInconsistentSnapshots(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId);
+        CanonicalFactJourneyEvidence.tenantCollision(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
     }
 }

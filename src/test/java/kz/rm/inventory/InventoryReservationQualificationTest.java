@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.context.TestPropertySource;
 
 import javax.sql.DataSource;
@@ -31,6 +33,7 @@ import static org.assertj.core.api.Assertions.*;
 })
 class InventoryReservationQualificationTest {
     @Autowired InventoryReservationService reservations;
+    @Autowired StockEligibility stockEligibility;
     @Autowired AutoOrderService checkout;
     @Autowired JdbcTemplate jdbc;
     @Autowired OrganizationRepository organizations;
@@ -211,6 +214,24 @@ class InventoryReservationQualificationTest {
             """,a.tenant(),r.id())).isInstanceOf(Exception.class);
     }
 
+    @Test @Transactional
+    void q123StockEligibilityRejectsActualServiceSku() {
+        Store s=store(0);
+        UUID service=UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO crm.cat_item(tenant_id,id,sku,kind,source_locale,state,created_at)
+                VALUES (?,?,?,'SERVICE','ru','PUBLISHED',?)
+                """,s.tenant(),service,"svc-"+UUID.randomUUID(),Timestamp.from(Instant.now()));
+        // Actual reservation admission, reached by InventoryReservationService
+        // before a balance mutation. Checkout intentionally only books PRODUCT.
+        assertThatThrownBy(()->stockEligibility.requireReservable(s.tenant(),s.location(),service))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Published tenant PRODUCT required");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.inv_stock_reservation WHERE tenant_id=? AND item_id=?
+                """,Integer.class,s.tenant(),service)).isZero();
+    }
+
     @Test void q123ReservationRejectsInactiveWarehouseServiceAndArchiveButHonorsOldCommit() {
         Store s=store(10);
         OrderLine one=order(s,2,true);
@@ -225,13 +246,20 @@ class InventoryReservationQualificationTest {
                 UPDATE public.org_location SET status='ACTIVE'
                 WHERE workspace_id=? AND id=?
                 """,s.tenant(),s.location());
-        jdbc.update("UPDATE crm.cat_item SET kind='SERVICE' WHERE tenant_id=? AND id=?",
-                s.tenant(),s.item());
-        assertThatThrownBy(()->reservations.reserve(s.tenant(),one.order(),one.line(),
-                s.location(),s.item(),BigDecimal.valueOf(2)))
-                .isInstanceOf(IllegalArgumentException.class);
-        jdbc.update("UPDATE crm.cat_item SET kind='PRODUCT' WHERE tenant_id=? AND id=?",
-                s.tenant(),s.item());
+        // B4 captures the booked item kind. A referenced PRODUCT cannot be
+        // retyped to SERVICE: exercise the DB invariant instead of corrupting
+        // a live booked fixture to simulate the separate service rejection.
+        assertThatThrownBy(()->jdbc.update(
+                "UPDATE crm.cat_item SET kind='SERVICE' WHERE tenant_id=? AND id=?",
+                s.tenant(),s.item()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbc.queryForObject("""
+                SELECT kind FROM crm.cat_item WHERE tenant_id=? AND id=?
+                """,String.class,s.tenant(),s.item())).isEqualTo("PRODUCT");
+        assertThat(jdbc.queryForObject("""
+                SELECT item_kind FROM crm.int_sales_line_dimension
+                WHERE tenant_id=? AND line_id=? AND item_id=?
+                """,String.class,s.tenant(),one.line(),s.item())).isEqualTo("PRODUCT");
         var active=reservations.reserve(s.tenant(),one.order(),one.line(),
                 s.location(),s.item(),BigDecimal.valueOf(2));
         // The second order must be PLACED before SKU archival. A new checkout

@@ -1,0 +1,8 @@
+# B2.1R.1 SQ-01/02/06 increment
+Baseline d71e25d6bc53b9169d58ad845d667c5562dd8497; strict PostgreSQL journey success, 19 success/12 running/1 queued at observation. Not final exact-SHA admission.
+
+SQ-01: explicit PostgreSQL sealed header check before canonical admission. H2 supplies TRUE only for functional tests; no database sealing parity claimed.
+SQ-02: merchandise lines must be nonempty, positive quantity, nonnegative price, same currency as header, exact SUM(quantity*price) equal to booked total. Verified against both actual AutoOrderService checkout paths. Legacy nullable SKU/price source remain allowed; no inference or repair of historical data. Fail closed on inconsistent sources, including legacy V1 replay of an inconsistent source. Existing V2 framing unchanged. This is appender admission, not a new owner-side constraint on every historical/operational write. Negative fixtures assert rollback of invalid synthetic source and absence of fact. DataQuality/Coverage reconciliation belongs to discovery/backfill.
+SQ-06: extend existing PostgreSQL synthetic role gate with narrow source SELECT, source event/canonical INSERT and booked_snapshot_sealed column UPDATE; actual insert proves seal and canonical privileges, denial of unseal/trigger disable, no header amount/currency or journal mutation grants. Probe uses synthetic digest and rolls back; this is not deployment of production roles nor full owner producer privilege qualification.
+
+SQ-03 populated upgrade, SQ-04 remaining race permutations, SQ-05 positive tenant collision, SQ-07 V1/V2 oracle, SQ-08 ownership inventory and SQ-09 individually named evidence remain open. No production producers wired. Exact-SHA CI pending. A3-QUAL / Production HOLD.

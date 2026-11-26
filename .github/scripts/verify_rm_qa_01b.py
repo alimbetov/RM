@@ -30,6 +30,8 @@ REQUIRED = {
     "RM TASK R32B T00 PostgreSQL Contract Qualification": ("rm-task-t00-postgresql-{sha}",),
     "RM CUR-R2C Policy Schema PostgreSQL Qualification": ("cur-r2c-policy-pg-{sha}", "cur-r2c-populated-pg-{sha}", "cur-r2c-anchor-populated-pg-{sha}", "cur-r2c-revoke-populated-pg-{sha}"),
     RET04_WORKFLOW: ("qr07-r0-r1-{sha}", "qr07-full-pg-{sha}"),
+    "RM Intelligence A1 PostgreSQL Source Schema": ("rm-intelligence-a1-schema-{sha}", "rm-intelligence-populated-seal-{sha}"),
+    "RM MVP W2-W5 Service Journeys PostgreSQL Qualification": ("rm-mvp-w25-strict-pg-{sha}",),
 }
 # Required suite names are checked against actual test XML, never workflow labels alone.
 SUITES = {
@@ -61,11 +63,53 @@ SUITES = {
     "RM TASK R32B T00 PostgreSQL Contract Qualification": ("CrmInteractionQualificationTest",),
     "RM CUR-R2C Policy Schema PostgreSQL Qualification": ("FxAutoPolicySchemaPgTest", "FxAutoRollingLimitEvaluatorTest", "FxAutoDryRunTest", "FxAutoOwnerAdmissionQualificationTest", "TenantCurrencyPolicyQualificationTest", "SkuFxSellerApprovalQualificationTest"),
     RET04_WORKFLOW: ("QrWarehouseHandoverQualificationTest",),
+    "RM Intelligence A1 PostgreSQL Source Schema": ("IntelligenceSourceSchemaQualificationTest", "IntelligenceB1ContractTest", "CanonicalFactEncodingTest"),
+    "RM MVP W2-W5 Service Journeys PostgreSQL Qualification": ("BusMvpServiceJourneyQualificationTest", "QrMvpServiceJourneyQualificationTest", "MvpServiceWarehouseAdmissionQualificationTest", "MvpServiceCurrencyStartupQualificationTest"),
 }
 
 # These PostgreSQL interleavings must execute, not merely appear as skipped classes.
 REQUIRED_CASES = {
+    "rm-intelligence-a1-schema-{sha}": {
+        ("IntelligenceSourceSchemaQualificationTest", "migratedSourceColumnsAndOrderedTenantPrimaryKeys"),
+        ("IntelligenceSourceSchemaQualificationTest", "sourceNumericAndTimestampTypesArePreserved"),
+        ("IntelligenceB1ContractTest", "dstDaysUseCalendarNotFixedSeconds"),
+        ("IntelligenceB1ContractTest", "decadeLeapMonthAndIsoWeekBoundaries"),
+        ("IntelligenceB1ContractTest", "allSevenPeriodsAndVersion"),
+        ("IntelligenceB1ContractTest", "invalidCalendarRejected"),
+        ("IntelligenceB1ContractTest", "registryRejectsWrongSelectionAndVersion"),
+        ("IntelligenceB1ContractTest", "allEightMetricDefinitionsAreExplicit"),
+        ("CanonicalFactEncodingTest", "framingDistinguishesNullEmptyAndDelimiters"),
+        ("CanonicalFactEncodingTest", "decimalScaleIsCanonical"),
+        ("CanonicalFactEncodingTest", "fixedSalesV1V2GoldenVectors"),
+        ("CanonicalFactEncodingTest", "fixedInventoryV1V2GoldenVectors"),
+    },
+    "rm-intelligence-populated-seal-{sha}": {
+        ("IntelligenceSourceSchemaQualificationTest", "migratedSourceColumnsAndOrderedTenantPrimaryKeys"),
+        ("IntelligenceSourceSchemaQualificationTest", "sourceNumericAndTimestampTypesArePreserved"),
+    },
+    "qr07-full-pg-{sha}": {
+        ("QrWarehouseHandoverQualificationTest", "p1PostgresHandoverSalesAndInventoryAppendFailureRollsBackBothDomains"),
+    },
+    "rm-mvp-w25-strict-pg-{sha}": {
+        ("BusMvpServiceJourneyQualificationTest", "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalSalesAndInventoryDigestOraclePg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalSourceAdmissionAndOwnerRollbackPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalConcurrentReplayAndRollbackPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalSourceSealingLockOrdersPg"),
+        ("BusMvpServiceJourneyQualificationTest", "canonicalTenantSourceCollisionPg"),
+        ("BusMvpServiceJourneyQualificationTest", "p2CanonicalDurableDiscoveryReplayAndBackfillPg"),
+        ("BusMvpServiceJourneyQualificationTest", "p3L1ProjectionParityAndLateDuplicatePg"),
+        ("BusMvpServiceJourneyQualificationTest", "b4RegionAndNomenclatureSnapshotsPg"),
+        ("QrMvpServiceJourneyQualificationTest", "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"),
+        ("QrMvpServiceJourneyQualificationTest", "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"),
+        ("MvpServiceWarehouseAdmissionQualificationTest", "mvpW3StrictWarehouseAssignmentRequiredForConfirmAndFulfill"),
+        ("MvpServiceWarehouseAdmissionQualificationTest", "mvpW3ReleaseCannotUseTenantGrantAfterWarehouseScopeRevocation"),
+        ("MvpServiceCurrencyStartupQualificationTest", "mvpW2StrictServiceModeCannotStartWithPublicCurrencyAdmissionDisabled"),
+    },
     "kms-postgres-surefire": {
+        ("InventoryMovementQualificationTest", "p1PostgresMovementAppendFailureRestoresBalanceAndRetry"),
+        ("InventoryTransferStocktakeQualificationTest", "p1PostgresSecondTransferLegAndStocktakeAppendFailureAreAtomic"),
+        ("QrWarehouseHandoverQualificationTest", "p1PostgresHandoverSalesAndInventoryAppendFailureRollsBackBothDomains"),
         # MVP six-pack gates: require named cases from real PostgreSQL XML.
         # SELLER-EDIT-R0 preparation: identity, tenant, revoke and catalog CAS.
         # Warehouse-scope denial and both commit-order races are P0 blockers
@@ -146,6 +190,8 @@ REQUIRED_CASES = {
         ("KmsPersistedRoundTripTest", "persistedEnvelopeRestoresUsingFreshCryptoInstance"),
         ("KmsDeploymentGuardTest", "urR34DeploymentConfigurationAcceptsOnlySafeImmutableKeyModes"),
         ("SalesInventoryRbacQualificationTest", "urR32SalesConfirmDenyPreservesOrderReservationAndStatusHistory"),
+        ("SalesInventoryRbacQualificationTest", "b22a2PostgresCanonicalFailureRollsBackEverySalesTransition"),
+        ("SalesInventoryRbacQualificationTest", "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome"),
         ("SalesInventoryRbacQualificationTest", "urR32InventoryGrantRevokeAndForeignActorPreserveLedger"),
         ("CrmR1aQualificationTest", "urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"),
         ("CrmInteractionQualificationTest", "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"),
@@ -276,6 +322,22 @@ def verify():
                         Path(n).name.startswith("TEST-")]
                 if not xmls:
                     raise ValueError("No Surefire TEST-*.xml files")
+                if artifact_name == "rm-intelligence-populated-seal-" + sha:
+                    before = archive.read("before.txt")
+                    after = archive.read("after.txt")
+                    if not before.strip() or before != after:
+                        raise ValueError("Populated seal before/after evidence mismatch")
+                    baseline = ET.fromstring(archive.read("baseline.xml"))
+                    if (baseline.tag != "testsuite" or
+                            baseline.get("name", "").rsplit(".", 1)[-1] != "BusMvpServiceJourneyQualificationTest" or
+                            baseline.get("tests") != "1" or any(baseline.get(k) != "0" for k in ("errors", "failures", "skipped")) or
+                            [c.get("name") for c in baseline.findall("testcase")] !=
+                            ["busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"] or
+                            any(c.find(tag) is not None for c in baseline.findall("testcase") for tag in ("failure", "error", "skipped"))):
+                        raise ValueError("Invalid pre-0181 baseline evidence")
+                    for filename in ("RM-B2-1R-POPULATED-SEAL-SEED.sql", "RM-B2-1R-POPULATED-SEAL-SNAPSHOT.sql", "RM-B2-1R-POPULATED-SEAL-VERIFY.sql"):
+                        if archive.read(filename) != (ROOT / "docs/operations" / filename).read_bytes():
+                            raise ValueError("Populated seal probe drift: " + filename)
                 # Independently re-run SQL verifiers on raw QR evidence. The
                 # source artifact PASS and test labels alone are insufficient.
                 ret04_verified = None
@@ -337,7 +399,9 @@ def verify():
                     group = discovered_suites.setdefault(suite, {"tests": 0, "skipped": 0})
                     group["tests"] += values["tests"]
                     group["skipped"] += values["skipped"]
-                required_cases = REQUIRED_CASES.get(artifact_name, set())
+                required_cases = REQUIRED_CASES.get(artifact_name, REQUIRED_CASES.get(artifact_name.replace(sha, "{sha}"), set()))
+                if artifact_name.startswith(("rm-intelligence-", "rm-mvp-w25-strict-pg-")) and counts["skipped"]:
+                    problems.append(f"{artifact_name}: canonical qualification may not skip cases")
                 if artifact_name.startswith("rm-task-postgresql-"):
                     required_cases = {
                         ("TaskServiceQualificationTest", "t04PostgresqlConcurrentStartAllowsExactlyOneTransition"),
@@ -478,7 +542,7 @@ def verify():
             return "H2"
         if name.startswith("rustfs-real-infra"):
             return "REAL_INFRA"
-        if "postgres" in name or "-pg-" in name or name.startswith("qr07-"):
+        if "postgres" in name or "-pg-" in name or name.startswith(("qr07-", "rm-intelligence-")):
             return "POSTGRESQL"
         return "UNCLASSIFIED"
 
@@ -500,6 +564,19 @@ def verify():
                 cls.rsplit(".", 1)[-1] == "TaskServiceQualificationTest" and
                 method.startswith(task_pg_only_prefixes) and
                 "rm-task-postgresql-" + sha in alternatives):
+            policy = "EXPECTED_SKIP_CONFIRMED"
+        if (artifact_name == "kms-h2-surefire" and
+                cls == "kz.rm.iam.BusMvpServiceJourneyQualificationTest" and
+                method in {
+                    "canonicalSourceAdmissionAndOwnerRollbackPg",
+                    "canonicalConcurrentReplayAndRollbackPg",
+                    "canonicalSourceSealingLockOrdersPg",
+                    "canonicalTenantSourceCollisionPg",
+                    "p2CanonicalDurableDiscoveryReplayAndBackfillPg",
+                    "p3L1ProjectionParityAndLateDuplicatePg",
+                    "b4RegionAndNomenclatureSnapshotsPg",
+                } and "CANONICAL_POSTGRESQL_REQUIRED" in reason and
+                "rm-mvp-w25-strict-pg-" + sha in alternatives):
             policy = "EXPECTED_SKIP_CONFIRMED"
         skip_inventory.append({"artifact": artifact_name, "class": cls, "method": method,
                                "reason": reason, "environment": environment,

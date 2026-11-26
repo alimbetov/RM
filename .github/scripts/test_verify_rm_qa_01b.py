@@ -51,6 +51,11 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
             for item in (*mvp_mapping["scenarios"], *mvp_mapping["taskAddendum"])
             for p in item["requiredProofs"]
         }
+        for filename in ("RM-B2-1R-POPULATED-SEAL-SEED.sql", "RM-B2-1R-POPULATED-SEAL-SNAPSHOT.sql", "RM-B2-1R-POPULATED-SEAL-VERIFY.sql"):
+            source = Path("docs/operations") / filename
+            target = self.root / source
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((project_root / source).read_bytes())
         self.artifact_bytes = {}
         gates = []
         artifact_id = 100
@@ -189,6 +194,17 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
                         suite_cases = {suite: [f"syntheticCase{i}" for i in range(count)]
                                        for suite, count in expected.items()}
                 self.artifact_bytes[artifact_id] = self.make_zip(suite_cases, skipped)
+                if artifact_name.startswith("rm-intelligence-populated-seal-"):
+                    memory = io.BytesIO(self.artifact_bytes[artifact_id])
+                    with zipfile.ZipFile(memory, "a") as archive:
+                        baseline = self.make_zip({"BusMvpServiceJourneyQualificationTest": ["busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"]})
+                        with zipfile.ZipFile(io.BytesIO(baseline)) as old:
+                            archive.writestr("baseline.xml", old.read(old.namelist()[0]))
+                        archive.writestr("before.txt", "fixture\n")
+                        archive.writestr("after.txt", "fixture\n")
+                        for filename in ("RM-B2-1R-POPULATED-SEAL-SEED.sql", "RM-B2-1R-POPULATED-SEAL-SNAPSHOT.sql", "RM-B2-1R-POPULATED-SEAL-VERIFY.sql"):
+                            archive.writestr(filename, (self.root / "docs/operations" / filename).read_bytes())
+                    self.artifact_bytes[artifact_id] = memory.getvalue()
                 group["artifacts"].append({"name": artifact_name, "id": artifact_id})
                 artifact_id += 1
             gates.append(group)
@@ -429,6 +445,20 @@ class QualificationEvidenceVerifierTest(unittest.TestCase):
         result = json.loads(self.manifest_path.read_text())
         self.assertTrue(any("Ambiguous short suite identifiers" in e for e in result["evidenceErrors"]))
         self.assertIn("CommercialCoreE2EQualificationTest", result["skipAudit"]["classIdentityCollisions"])
+
+    def test_populated_seal_missing_raw_evidence_fails_closed(self):
+        artifact = next(a for g in self.manifest["required"] for a in g["artifacts"]
+                        if a["name"].startswith("rm-intelligence-populated-seal-"))
+        original = self.artifact_bytes[artifact["id"]]
+        for missing in ("before.txt", "baseline.xml"):
+            output = io.BytesIO()
+            with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(output, "w") as target:
+                for member in source.namelist():
+                    if member != missing:
+                        target.writestr(member, source.read(member))
+            self.artifact_bytes[artifact["id"]] = output.getvalue()
+            self.assertEqual(gate.verify(), 1)
+        self.artifact_bytes[artifact["id"]] = original
 
     def test_wrong_commit_sha_fails_closed(self):
         self.manifest["sha"] = "bad"

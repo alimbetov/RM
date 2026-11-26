@@ -1,0 +1,9 @@
+# B5.3 — observed pattern and anomaly interpretation
+
+B5.2 initial development package closed at beaf431a06b83f2210cdde72d8ff04c04f59f629: 24/24 workflows, targeted PostgreSQL 45801910522 (29/29), Exact-SHA 45801910369. Production/historical admission HOLD.
+
+B5.3 adds a descriptive pattern result to the authorized series. Single existing snapshot; last point excluded from baseline. 3..11 preceding periods + target, closed adjacent equal elapsed duration and all READY. No new schema, dependency or analytical projection. Reuses SMA, EMA, STDDEV_POP, CV, TREND and MetricActivityGate. Baseline uses current observed snapshot, not reconstructed historical knowledge or a backtest.
+
+Policy v1 has explicit caller-supplied positive sigma multiplier and nonnegative max CV; absolute AND relative materiality from B5.1. No universal production thresholds. Compare absolute deviation from SMA against population SD times multiplier, strictly outside band; equality is not a candidate. High baseline CV suppresses directional candidate (VOLATILE_BASELINE); zero mean abstains, zero variance on positive baseline allows a material departure without fabricating standardized score. EMA and slope are context, not causal evidence or trend-adjusted prediction. The band is descriptive, not a normal-distribution p-value or calibrated false alarm probability. No persisted hysteresis, seasonality, notification or automatic action. All decisions BLOCKED. Runtime PARTIAL/MISSING stays unavailable; READY positive cases are synthetic only.
+
+Eight independent hand-oracle test methods added, and actual PG journey checks negative and foreign tenant paths. These are bounded contrasts for BS-005/007/051/093/097/100/112, not full family admission. No inference of promotion, demand collapse, crisis, or other causal label from the outlier alone.

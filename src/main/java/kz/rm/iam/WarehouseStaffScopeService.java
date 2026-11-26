@@ -16,7 +16,7 @@ import java.util.UUID;
  * tenant's SALES/INVENTORY grants. Assignment is governed only by the
  * non-delegable IAM TENANT_RBAC_MANAGE capability (organization owner).
  *
- * App commands acquire order row before this scope and org_location SHARE
+ * App commands acquire order row before the org_location and scope SHARE
  * fence. Scope revocations use UPDATE and block new admission. The scope
  * check is a SECOND gate, not a replacement for dual-domain permission.
  */
@@ -56,12 +56,16 @@ public class WarehouseStaffScopeService {
             throw new SecurityException("WAREHOUSE_SCOPE_REQUIRED");
         // Operation must have passed its domain-specific transaction-scoped
         // TenantAuthorization gates before calling this scope check.
-        String status=jdbc.query(scopeLockSql,rs->rs.next()?rs.getString(1):null,
-                tenant,warehouse,actor);
-        if(!"ACTIVE".equals(status))
-            throw new SecurityException("WAREHOUSE_SCOPE_REQUIRED");
+        // Same location -> scope order as assign(), including existing assignments.
         String location=jdbc.query(locationLockSql,
                 rs->rs.next()?rs.getString(1):null,tenant,warehouse);
+        String status=jdbc.query(scopeLockSql,rs->rs.next()?rs.getString(1):null,
+                tenant,warehouse,actor);
+        // Acquire locks in location -> scope order, but preserve admission
+        // precedence: callers without an active assignment must not learn
+        // whether the requested warehouse exists or is active.
+        if(!"ACTIVE".equals(status))
+            throw new SecurityException("WAREHOUSE_SCOPE_REQUIRED");
         if(!"ACTIVE".equals(location))
             throw new SecurityException("WAREHOUSE_INACTIVE");
     }
@@ -116,7 +120,7 @@ public class WarehouseStaffScopeService {
         if(warehouse==null||staff==null)
             throw new IllegalArgumentException("Warehouse and staff required");
         // No location FOR UPDATE here: in-flight staff command locks the
-        // scope row before org_location. Only scope row is modified.
+        // location and scope row. Only scope row is modified.
         int modified=jdbc.update("""
                 UPDATE public.iam_warehouse_staff_scope
                 SET state='REVOKED',changed_at=?,row_version=row_version+1

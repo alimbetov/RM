@@ -1,0 +1,5 @@
+# B2.1R.2 residual risk closure: RC-02/04
+Baseline 1f55253f8ea8424cad0619ddc7a3ccb42662693a: A1 including populated upgrade and strict PostgreSQL journeys SUCCESS; global admission pending.
+RC-02: existing two-workspace rollback probe retained, then second tenant independently commits same source UUID, fresh replay in both scopes. Synthetic owner rows in isolated test DB; not simultaneous commit or authorization/checkout proof. Correct negative currency preflight to select published storefront deterministically because DRAFT fixtures may now persist.
+RC-04: PG-only named admission case temporarily disables the single sealing trigger in a transaction on ephemeral CI DB to inject an otherwise valid but unsealed source; require CANONICAL_SOURCE_NOT_SEALED, no remaining fact/order/event and restored enabled trigger after rollback. Requires CI table-owner privileges; never a production procedure.
+No schema migration or production producer changes. New exact-SHA CI pending. A3-QUAL/Production and B2.2A HOLD.

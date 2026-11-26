@@ -1,0 +1,782 @@
+{
+  "schema": "RM-IE-00B/source-inventory/v1",
+  "baselineSha": "31c8e43ef0a5545dc0f6b9976ff5cc1d1e91a363",
+  "designSha": "852b993271617d30721d24b3d3b759d17038ca5f",
+  "designTraceBlob": "bdef97c4ddaaa4fcebe3338a9d3623e5af2e6168",
+  "sourceInventory": [
+    {
+      "path": "pom.xml",
+      "designBlob": "4c48cd3fd1bf066943b4f2a1112328a2306336a8",
+      "baselineBlob": "4c48cd3fd1bf066943b4f2a1112328a2306336a8",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java",
+      "designBlob": "77d5cdd92d826e69c22478a8af13a2bf0661fc39",
+      "baselineBlob": "a024d13b8b3fe31cd0c252a5d58ffa134a452345",
+      "status": "DRIFT",
+      "priorBaselineBlob": "77d5cdd92d826e69c22478a8af13a2bf0661fc39",
+      "intermediateObservedBlob": "d879d4f8c82119b58e90debfa38174d657ffdb74"
+    },
+    {
+      "path": "src/main/java/kz/rm/iam/TenantAuthorization.java",
+      "designBlob": "358a01f06b6bf31f049565d2fadd86be7a96cd13",
+      "baselineBlob": "358a01f06b6bf31f049565d2fadd86be7a96cd13",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/iam/VerifiedActor.java",
+      "designBlob": "0dfa128453ae15244343e2c4c5df56181337a033",
+      "baselineBlob": "0dfa128453ae15244343e2c4c5df56181337a033",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/iam/DomainPermission.java",
+      "designBlob": "ea2d30de7f3403ca8eac44120091d497662db501",
+      "baselineBlob": "ea2d30de7f3403ca8eac44120091d497662db501",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/architecture/DomainModule.java",
+      "designBlob": "0f73b7ba8a128dcf4702e888c0de277ded260d2c",
+      "baselineBlob": "1a50a7617d17d65bf9a1744ccb222c77dea138d8",
+      "status": "DRIFT",
+      "priorBaselineBlob": "0f73b7ba8a128dcf4702e888c0de277ded260d2c"
+    },
+    {
+      "path": "src/main/resources/db/changelog/db.changelog-master.sql",
+      "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
+      "baselineBlob": "6d6d29ddf5780ad71532e1f8c16766e748aabe8a",
+      "status": "DRIFT",
+      "priorBaselineBlob": "432077b62aed127f9131b84c7b58710bb6c28971",
+      "previousBaselineBlob": "aacfa1477623fb3adb53971c2d83e3bde8bad0a6"
+    },
+    {
+      "path": "src/main/java/kz/rm/crm/ContractExpiryPolicy.java",
+      "designBlob": "4b97d6164e699691aaa4415ed2c03292d5e400fa",
+      "baselineBlob": "4b97d6164e699691aaa4415ed2c03292d5e400fa",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/crm/CrmContractService.java",
+      "designBlob": "44b4ce6126afa31a051f1c868a1cd37c97ba5972",
+      "baselineBlob": "44b4ce6126afa31a051f1c868a1cd37c97ba5972",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+      "designBlob": "77b61bbde28a1aa47f5c5211b47b9f87da732b58",
+      "baselineBlob": "77b61bbde28a1aa47f5c5211b47b9f87da732b58",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+      "designBlob": "7478c4162433011e7df2df3f875bf27413023e30",
+      "baselineBlob": "7478c4162433011e7df2df3f875bf27413023e30",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+      "designBlob": "a4366e97f9c4a9c2cdf3f6962a074a738ebed49f",
+      "baselineBlob": "28e8c57a92e264c121fa67766a36ac4119489319",
+      "status": "DRIFT",
+      "previousBaselineBlob": "a4366e97f9c4a9c2cdf3f6962a074a738ebed49f"
+    },
+    {
+      "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "designBlob": "a572038d74d4d0a15be588a270c11cadcf350407",
+      "baselineBlob": "e81f26d420ca2e2cf48b2478cac14c62303d33f2",
+      "status": "DRIFT",
+      "previousBaselineBlob": "efa40ffbb3dfee859135a5b8ce4b4a04a69af143"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+      "designBlob": "54b5c79959458f33e7d640f14bbab06bbaf7bb3f",
+      "baselineBlob": "9df98d8d0b4b491dc7c1c08558aade86ce6f4c45",
+      "status": "DRIFT",
+      "previousBaselineBlob": "54b5c79959458f33e7d640f14bbab06bbaf7bb3f"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
+      "designBlob": "44ce849d5cd378aadaf2d91a7b5cf51f43724a51",
+      "baselineBlob": "44ce849d5cd378aadaf2d91a7b5cf51f43724a51",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+      "designBlob": "3b25e1bd965131d95ddab478492516b06e51c040",
+      "baselineBlob": "f0047773e4af5f4991e692554534c38e01c7b9e4",
+      "status": "DRIFT",
+      "previousBaselineBlob": "17e89594332f6daacbd36aebca7000658649a231"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/StockBalanceRepository.java",
+      "designBlob": "9d2a9a73e9931c9dea34555ca549668829cf5e6a",
+      "baselineBlob": "9d2a9a73e9931c9dea34555ca549668829cf5e6a",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesAuthenticatedCommandController.java",
+      "designBlob": "25c45c30dddbf6c8bb225062701ad2dff736929e",
+      "baselineBlob": "25c45c30dddbf6c8bb225062701ad2dff736929e",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryHistoryQueryService.java",
+      "designBlob": "e29e8b21eb4d03b939ca61302db80d2cf98eecdf",
+      "baselineBlob": "e29e8b21eb4d03b939ca61302db80d2cf98eecdf",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesOrderRepository.java",
+      "designBlob": "f55cc551dfd5d0eb0a1701f6765b232d7746996a",
+      "baselineBlob": "f55cc551dfd5d0eb0a1701f6765b232d7746996a",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+      "designBlob": "2e651d2094574a43eb0effd395d6816a911427ed",
+      "baselineBlob": "a5625926b103de602cd5d45eec4cbe92fc1ed27d",
+      "status": "DRIFT",
+      "previousBaselineBlob": "6abaec72cf1f07d8a8e139e859601571a8205a78"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesReturnQuarantineResolutionService.java",
+      "designBlob": "06ae22df66e4f95666744160c0913415c900357b",
+      "baselineBlob": "06ae22df66e4f95666744160c0913415c900357b",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+      "designBlob": "2d0eb7f5cc8d7b4d798f14f1db531ae103083fcc",
+      "baselineBlob": "0700b7a8e0b7b3d31d450ef5c2d881740d2280c7",
+      "status": "DRIFT",
+      "previousBaselineBlob": "b3f2c483e419bd668305df7c47d624047200486b"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryPostingVersion.java",
+      "designBlob": "bd277ababdaa83f0ba863ad66b6e329e6c78396b",
+      "baselineBlob": "bd277ababdaa83f0ba863ad66b6e329e6c78396b",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/ReturnInventoryPostingPort.java",
+      "designBlob": "a66aa0688634e530c1d762340704232453007762",
+      "baselineBlob": "a66aa0688634e530c1d762340704232453007762",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/tasks/TaskService.java",
+      "designBlob": "7dff7bda8ec58ee5d999cca4ffbd3e794a4b85b7",
+      "baselineBlob": "7dff7bda8ec58ee5d999cca4ffbd3e794a4b85b7",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/tasks/TaskCrmFollowupService.java",
+      "designBlob": "011f66b480de7661c96f633d71384c5d3b1d28cf",
+      "baselineBlob": "011f66b480de7661c96f633d71384c5d3b1d28cf",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/tasks/TaskTimingQueryService.java",
+      "designBlob": "23f5eb809806cc9490a52c9f2bb5c8435ae1a11d",
+      "baselineBlob": "23f5eb809806cc9490a52c9f2bb5c8435ae1a11d",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/OidcJwtCryptoQualificationTest.java",
+      "designBlob": "aeb3c1bd3684f4c9da09cd729abdabed2af30a5a",
+      "baselineBlob": "aeb3c1bd3684f4c9da09cd729abdabed2af30a5a",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/test/java/kz/rm/tasks/TaskTimingCompletionQualificationTest.java",
+      "designBlob": "35c73bf4dd95c6f5d3f67191daeafff9fac6a93b",
+      "baselineBlob": "35c73bf4dd95c6f5d3f67191daeafff9fac6a93b",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+      "designBlob": "6995fa323aba6dabba49bdf36a779854bfa11845",
+      "baselineBlob": "ec431a35f98c34b255537f50f1007f008c837eb8",
+      "status": "DRIFT",
+      "previousBaselineBlob": "6995fa323aba6dabba49bdf36a779854bfa11845"
+    },
+    {
+      "path": "src/main/java/kz/rm/iam/OidcJwtConfiguration.java",
+      "designBlob": "b693676127c18b2fdaa305e253d8e31cc9285040",
+      "baselineBlob": "b693676127c18b2fdaa305e253d8e31cc9285040",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/iam/OidcActorResolver.java",
+      "designBlob": "60ae68a4421709a9bb7ad3ba2eb6dd4040ea430f",
+      "baselineBlob": "60ae68a4421709a9bb7ad3ba2eb6dd4040ea430f",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/test/java/kz/rm/inventory/InventoryReservationQualificationTest.java",
+      "designBlob": "47694577180d7a019f771b6bb3b2aa9bd24afd51",
+      "baselineBlob": "0d2b8ff0d0d36fc2698581138ea414d51e5b8f9e",
+      "status": "DRIFT",
+      "previousBaselineBlob": "47694577180d7a019f771b6bb3b2aa9bd24afd51"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/OrderPackagingService.java",
+      "designBlob": "1d6645574d7157d0c461d430b7be4ffc4058e8d8",
+      "baselineBlob": "1d6645574d7157d0c461d430b7be4ffc4058e8d8",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+      "designBlob": "d6edc12766f22e937bf101dfc0262d11eb56ee4e",
+      "baselineBlob": "e0ae0757e99d78aca7a083970f1d38f93572968c",
+      "status": "DRIFT",
+      "previousBaselineBlob": "d7dd0c75de77e66c7c65cd4666057fea51fe9237"
+    },
+    {
+      "path": "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+      "designBlob": "58159d43eb4fe72f061ee677224e5faf8b17453e",
+      "baselineBlob": "58159d43eb4fe72f061ee677224e5faf8b17453e",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/AuthenticatedInventoryQueries.java",
+      "designBlob": "4c6d17ed352371ebac95b4d61c9bac5b24eb923f",
+      "baselineBlob": "4c6d17ed352371ebac95b4d61c9bac5b24eb923f",
+      "status": "UNCHANGED"
+    },
+    {
+      "path": "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+      "designBlob": "1de3a7185fe060b126cd21ca94a2ac0568181073",
+      "baselineBlob": "1de3a7185fe060b126cd21ca94a2ac0568181073",
+      "status": "UNCHANGED"
+    }
+  ],
+  "sourceGroups": [
+    {
+      "id": "SRC-01",
+      "source_contract": "crm.sales_order (tenant_id,id; buyer_user_id nullable, status,total_amount,currency,created_at,row_version,fulfillment_mode)",
+      "owner": "AutoOrderService, SalesInventoryCommandService, SalesOrderQueryService",
+      "constraints": "Booked product order amount; verify immutability of amount under all current paths, no paid revenue; historical buyer may be null",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-02",
+      "source_contract": "crm.sales_order_status_event (tenant_id,id; order_id,event_type,occurred_at), indexed tenant/order/time",
+      "owner": "AutoOrderService checkout/accepted quote, SalesInventoryCommandService, SalesOrderPreparationService, SalesPickupHandoverService",
+      "constraints": "PLACED/CONFIRMED/COMPLETED/CANCELLED; no aggregate version column in initial DDL, do not assume UUID order or timestamp is commit sequence; duplicate/missing transition and immutability proof required",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-03",
+      "source_contract": "crm.sales_order_line (tenant_id,id; order_id,offer_id,quantity,unit_price_snapshot,currency,catalog_item_id_snapshot,accepted_quote_id,price_source)",
+      "owner": "AutoOrderService",
+      "constraints": "SKU ABC via canonical line snapshot, never current storefront offer SKU or price; null legacy snapshot -> PARTIAL, aggregate per order separately from line joins",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-04",
+      "source_contract": "crm.sales_order_service_line / service_event / service_receipt (order_id,service_code,price_snapshot,currency_snapshot,tax_rate_snapshot,status,created_at,decided_at; event revision)",
+      "owner": "OrderPackagingService",
+      "constraints": "Separate packaging evidence; reviewed service path doesn't update order.total_amount; do not fold offered/rejected/accepted extras into booked product amount without approved definition",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-05",
+      "source_contract": "crm.sales_price_proposal, sales_price_proposal_event, sales_accepted_quote, sales_proposal_command_receipt",
+      "owner": "SalesPriceProposalService",
+      "constraints": "Future Sales Radar quote expiry/response/withdrawal; validate version and current state, no automatic checkout; not initial IE core metrics",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-06",
+      "source_contract": "crm.sales_return_request/line/event/reception/inspection/posting, return_quarantine_resolution; posting return_id,posting_id,warehouse_id,item_id,quantity,disposition,movement_id,happened_at",
+      "owner": "SalesReturnRequest/Review/Physical/QuarantineResolution services",
+      "constraints": "Physical returns distinct from monetary refund. Posting and linked movement counted once; quarantine later resolution must not duplicate restock. Complete disposition/state DDL after Liquibase",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-07",
+      "source_contract": "crm.inv_stock_balance (tenant_id,location_id,item_id; on_hand,reserved,row_version)",
+      "owner": "StockBalanceQueryService, InventoryHistoryQueryService",
+      "constraints": "Available = on_hand-reserved, live only; no absent position fabricated as zero, no sum across dates",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-08",
+      "source_contract": "crm.inv_stock_movement (tenant_id,id; request_key unique tenant; delta_quantity,balance_before,balance_after,occurred_at,recorded_at,movement_kind,reason_code,source_type,source_id,reservation_id,posting_version)",
+      "owner": "InventoryMovementService, InventoryReservationService, InventoryTransferService, return posting owner",
+      "constraints": "Exact movement facts, posting chain; history search currently filters recorded_at not occurred_at; separate event-time vs posting-time metric definition, no hidden backdate shift; legacy null provenance/version coverage",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-09",
+      "source_contract": "crm.inv_stock_reservation (tenant_id,id; order_line_id,order_id,location_id,item_id,quantity,state,created_at,updated_at,row_version), inv_reservation_event (tenant_id,id,reservation_id,event_type,occurred_at,actor_user_id)",
+      "owner": "InventoryReservationService",
+      "constraints": "ACTIVE/RELEASED/FULFILLED; event RESERVED/RELEASED/FULFILLED unique per reservation+type. Reservation activity not physical movements",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-10",
+      "source_contract": "crm.inv_stock_transfer, inv_stocktake, inv_stocktake_line, inv_reconciliation_run/finding, inv_return_quarantine_balance/movement",
+      "owner": "InventoryTransferService, InventoryStocktakeService, ReturnInventoryPostingPort",
+      "constraints": "paired TRANSFER_IN/OUT, warehouse/stocktake/return reconciliation; transfer header not extra physical quantity, quarantine not ordinary available",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-11",
+      "source_contract": "crm.cat_item (tenant_id,id; sku,kind,state,row_version), cat_item_i18n, cat_price",
+      "owner": "CATALOG",
+      "constraints": "PRODUCT/SERVICE split; SKU lineage from line snapshot; no proven universal immutable UOM in basic cat_item DDL. unit_code exists in FX commercial-context bindings, not authority for all inventory histories. Restrict quantity measures to SKU and declared unit context; cross-SKU quantity ABC blocked until canonical homogeneous units",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-12",
+      "source_contract": "public.org_location (workspace_id,id), warehouse state/type; public.iam_warehouse_staff_scope (tenant,warehouse,actor,state)",
+      "owner": "ORG / WarehouseStaffScopeService",
+      "constraints": "Current tenant/location context; distinguish historical inactive warehouses from operational action eligibility, no geography inferred from current address",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-13",
+      "source_contract": "crm.customer (tenant_id,id; type,status,row_version), customer_change_event, contact, contact_change_event",
+      "owner": "CrmCustomerService/HistoryService",
+      "constraints": "CRM profile under CRM_READ, personal fields under CRM_PII_READ; no PII in metric registry, aggregate or logs",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-14",
+      "source_contract": "crm.customer_buyer_link (tenant_id,id; customer_id,buyer_user_id,status,confirmed_at,row_version), customer_buyer_link_event, dispute_decision",
+      "owner": "CrmBuyerLinkService",
+      "constraints": "Current confirmed link and active customer+buyer required; no historical projection bypass on revocation/dispute/suspension; current attribution differs from immutable as-of historical attribution",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-15",
+      "source_contract": "crm.customer_interaction / event (tenant,id; customer_id,kind,status,responsible_user_id,occurred_at,next_action_at,row_version; event previous/new_version)",
+      "owner": "CrmInteractionService",
+      "constraints": "History and next action, distinguish occurrence date from recording time; no confidential notes/contacts in alerts",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-16",
+      "source_contract": "crm.customer_contract / contract_revision (tenant,id; customer_id,starts_on,ends_on,status,row_version; revision_no,occurred_at)",
+      "owner": "CrmContractService, ContractExpiryPolicy",
+      "constraints": "DATE inclusive ends_on: EXPIRED only asOf after end; warningDays 0..365; no new stored EXPIRED state; renew/cancel invalidates pending occurrence",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-17",
+      "source_contract": "crm.task_item / task_event / task_crm_followup (tenant,task_id,interaction_id)",
+      "owner": "TaskService, TaskTimingQueryService, TaskCalendarQueryService, TaskCrmFollowupService",
+      "constraints": "Current task read scope + linked interaction. Use R0.1 timing source, exact duration; no new SLA lifecycle or scheduler. Event versions, due changes; legacy incomplete histories explicit",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "SELECTED_IMPLEMENTATIONS_INSPECTED",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-18",
+      "source_contract": "crm.email_consent_event (tenant,id,contact_id,granted,purpose,policy_version,occurred_at), crm.mkt_campaign",
+      "owner": "CRM consent, marketing placeholder",
+      "constraints": "Consent evidence not generic service authorization; campaign states exist but marketing Java inventory only CampaignState. No generic EVT implementation or delivery readiness from table presence",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-19",
+      "source_contract": "public.iam_deletion_oidc_revocation_outbox and IAM email delivery infrastructure",
+      "owner": "IAM",
+      "constraints": "Lifecycle/identity only, no generic business delivery reuse. CrmCancellationReviewIntentPort + disabled sink is T00 seam, not enabled EVT",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-20",
+      "source_contract": "crm.fin_invoice (tenant,id; order_id,amount,currency,state DRAFT/ISSUED/VOID,created_at); finance Java inventory only Money.java",
+      "owner": "FINANCE placeholder",
+      "constraints": "no qualified payment/allocation/due ledger, no AR/AP/cash flow, paid revenue, margin or payment reminders in MVP",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-21",
+      "source_contract": "crm.inv_cost_policy_version (method,functional_currency,effective_from,approved_at)",
+      "owner": "inventory cost policy foundation",
+      "constraints": "Policy does not prove valuation, COGS, daily cost balances. Cost-based turnover/margin BLOCKED_DEPENDENCY",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    },
+    {
+      "id": "SRC-22",
+      "source_contract": "crm.fx_official_rate_snapshot (global id; provider,base,quote,nominal,rate,valid_date,source_revision,source_payload_sha256,synthetic,recorded_at), sku_fx_policy/calculation/decision/guardrail, FX_AUTO preparation/simulation/budget evidence",
+      "owner": "FX services",
+      "constraints": "Separate qualified FX revision/age/anchor lineage. Global public rate doesn't authorize tenant price. Do not infer autonomous publish, no FX expansion scope here",
+      "baseline_file": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "review_level": "INVENTORY_AND_SOURCE_PRESENCE_ONLY",
+      "runtime_qualified": false
+    }
+  ],
+  "metrics": [
+    {
+      "id": "M-S01",
+      "code": "PLACED_ORDERS",
+      "sources": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S04",
+        "R2-S05"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "CUSTOMER_SUMMARY",
+        "CUSTOMER_PERIOD_COMPARISON"
+      ],
+      "future_signal_dependencies": [
+        "C03"
+      ],
+      "dependency_caveat": "Activity decline requires qualified comparable periods, current link and sufficient history"
+    },
+    {
+      "id": "M-S02",
+      "code": "BOOKED_ORDER_AMOUNT",
+      "sources": [
+        "SRC-01",
+        "SRC-02"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S02",
+        "R2-S06",
+        "R2-S07"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "CUSTOMER_SUMMARY",
+        "CUSTOMER_PERIOD_COMPARISON"
+      ],
+      "future_signal_dependencies": [],
+      "dependency_caveat": "Source facts and owner authorization remain authoritative"
+    },
+    {
+      "id": "M-S03",
+      "code": "CONFIRMED_ORDERS",
+      "sources": [
+        "SRC-02",
+        "SRC-09"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S04",
+        "R2-S07"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "CUSTOMER_SUMMARY"
+      ],
+      "future_signal_dependencies": [],
+      "dependency_caveat": "Source facts and owner authorization remain authoritative"
+    },
+    {
+      "id": "M-S04",
+      "code": "FULFILLED_ORDERS",
+      "sources": [
+        "SRC-02",
+        "SRC-08",
+        "SRC-09"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S07"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "CUSTOMER_SUMMARY"
+      ],
+      "future_signal_dependencies": [],
+      "dependency_caveat": "Source facts and owner authorization remain authoritative"
+    },
+    {
+      "id": "M-S05",
+      "code": "CANCELLED_ORDERS",
+      "sources": [
+        "SRC-02",
+        "SRC-09"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S04"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "CUSTOMER_SUMMARY"
+      ],
+      "future_signal_dependencies": [],
+      "dependency_caveat": "Source facts and owner authorization remain authoritative"
+    },
+    {
+      "id": "M-I01",
+      "code": "STOCK_IN_QTY",
+      "sources": [
+        "SRC-08",
+        "SRC-10",
+        "SRC-06"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S08",
+        "R2-S09",
+        "R2-S10",
+        "R2-S11"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "WAREHOUSE_HISTORY"
+      ],
+      "future_signal_dependencies": [],
+      "dependency_caveat": "Source facts and owner authorization remain authoritative"
+    },
+    {
+      "id": "M-I02",
+      "code": "STOCK_OUT_QTY",
+      "sources": [
+        "SRC-08",
+        "SRC-09",
+        "SRC-10"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S07",
+        "R2-S08",
+        "R2-S09"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "WAREHOUSE_HISTORY"
+      ],
+      "future_signal_dependencies": [],
+      "dependency_caveat": "Total STOCK_OUT is not demand; XYZ requires qualified fulfillment subset"
+    },
+    {
+      "id": "M-I03",
+      "code": "CURRENT_AVAILABLE",
+      "sources": [
+        "SRC-07",
+        "SRC-09"
+      ],
+      "scenario_refs": [
+        "R2-S01",
+        "R2-S07",
+        "R2-S09",
+        "R2-S16"
+      ],
+      "contract": "D02-METRIC-CATALOG-AND-ORACLES-R2.md",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "oracle": "HAND_EXAMPLE_AND_DIRECT_SQL_PLAN",
+      "evidence": [],
+      "view_contracts": [
+        "WAREHOUSE_POSITION"
+      ],
+      "future_signal_dependencies": [
+        "I01"
+      ],
+      "dependency_caveat": "Source facts and owner authorization remain authoritative"
+    }
+  ],
+  "scenarioIds": [
+    "R2-S01",
+    "R2-S02",
+    "R2-S03",
+    "R2-S04",
+    "R2-S05",
+    "R2-S06",
+    "R2-S07",
+    "R2-S08",
+    "R2-S09",
+    "R2-S10",
+    "R2-S11",
+    "R2-S12",
+    "R2-S13",
+    "R2-S14",
+    "R2-S15",
+    "R2-S16",
+    "R2-S17",
+    "R2-S18",
+    "R2-S19",
+    "R2-S20",
+    "R2-S21",
+    "R2-S22",
+    "R2-S23",
+    "R2-S24",
+    "R2-S25",
+    "R2-S26",
+    "R2-S27",
+    "R2-S28",
+    "R2-S29",
+    "R2-S30",
+    "R2-S31",
+    "R2-S32",
+    "R2-S33",
+    "R2-S34",
+    "R2-S35",
+    "R2-S36",
+    "R2-S37",
+    "R2-S38",
+    "R2-S39",
+    "R2-S40"
+  ],
+  "acceptanceFamilyIds": [
+    "IE-Q01",
+    "IE-Q02",
+    "IE-Q03",
+    "IE-Q04",
+    "IE-Q05",
+    "IE-Q06",
+    "IE-Q07",
+    "IE-Q08",
+    "IE-Q09",
+    "IE-Q10",
+    "IE-Q11",
+    "IE-Q12",
+    "IE-Q13",
+    "IE-Q14",
+    "IE-Q15",
+    "IE-Q16",
+    "IE-Q17",
+    "IE-Q18",
+    "IE-Q19",
+    "IE-Q20",
+    "IE-Q21",
+    "IE-Q22",
+    "IE-Q23",
+    "IE-Q24",
+    "IE-Q25",
+    "IE-Q26",
+    "IE-Q27",
+    "IE-Q28",
+    "IE-Q29",
+    "IE-Q30",
+    "IE-Q31",
+    "IE-Q32",
+    "BV-01",
+    "BV-02",
+    "BV-03",
+    "BV-04",
+    "BV-05",
+    "BV-06",
+    "BV-07",
+    "BV-08",
+    "BV-09",
+    "BV-10",
+    "BV-11",
+    "BV-12",
+    "BV-13",
+    "BV-14",
+    "BV-15",
+    "BV-16",
+    "BV-17",
+    "BV-18",
+    "BV-19",
+    "BV-20",
+    "BV-21",
+    "BV-22",
+    "BV-23",
+    "BV-24",
+    "BV-25",
+    "BV-26",
+    "BV-27",
+    "BV-28",
+    "BV-29",
+    "BV-30",
+    "BV-31",
+    "BV-32",
+    "BV-33",
+    "BV-34",
+    "BV-35",
+    "BV-36",
+    "BV-37",
+    "BV-38",
+    "BV-39",
+    "BV-40",
+    "BV-41",
+    "BV-42",
+    "BV-43",
+    "BV-44",
+    "BV-45",
+    "BV-46",
+    "BV-47",
+    "BV-48",
+    "MC-01",
+    "MC-02",
+    "MC-03",
+    "MC-04",
+    "MC-05",
+    "MC-06",
+    "MC-07",
+    "MC-08"
+  ],
+  "runtimeQualification": "NOT_EXECUTED",
+  "admission": "HOLD",
+  "lastObservedChangeset": "d298bcd10de93fa9cf23605fd69ecaaefb4cf616",
+  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded; B4.0 inventory qualification fixture repair at 7d818c62: reject booked PRODUCT retyping and separately exercise genuine SERVICE reservation admission; prior blob preserved; B4.1A exact source FK and PostgreSQL insert guards; previous migration blob retained; B4.1B/C generation lifecycle and KATO audit; prior blob retained; B4.1B KATO administrative release 2026-11-17; append-only migration, legacy source IDs retained; B4.2/B4.3 transactional revision fences and inactive pointer; prior blob retained; DEC-B4-GEO-02 explicit administrative semantics and regional admission; B4.3R append-only source revision events to preserve independent late commits; B4.3R2 least-privilege journal trigger repair; B4.3R3 restricted projection receipt and bucket revision triggers, prior migration blob retained; runtime qualification pending; B4.4A/B4.5 storage and dirty revision foundation; previous migration blob retained; runtime pending; B4.4B dedicated consumer binding, source provenance and L3 stamp invalidation; runtime pending; B4.5A/B exact order membership and transactional L3 rollup; runtime pending; B4.5C independent proof and materialization/receipt fences; runtime pending; B4.5D/B4.5E append-only 0214–0220: product units, observation journal, immutable feature candidates, evidence metadata, uniqueness, SHA-256 and payload binding; prior baseline retained; runtime qualification pending; B4.6 append-only controlled L3 activation; source fingerprint updated; runtime pending; B4.8 warehouse location-before-scope lock order with original authorization error precedence; previous baseline and intermediate observed blob retained; runtime pending"
+}

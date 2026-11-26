@@ -8,6 +8,8 @@ import kz.rm.iam.WarehouseStaffScopeService;
 import kz.rm.inventory.OrderInventoryPort;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +54,7 @@ public class SalesPickupHandoverService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Duration TTL=Duration.ofMinutes(10); // UAT policy
     private final JdbcTemplate jdbc;
+    private final CanonicalFactAppender canonicalFacts;
     private final SalesOrderQrReferenceService orderQr;
     private final SalesOrderPreparationService preparation;
     private final TenantAuthorization authorization;
@@ -64,13 +67,14 @@ public class SalesPickupHandoverService {
                      SalesOrderPreparationService preparation,
                      TenantAuthorization authorization,
                      WarehouseStaffScopeService scopes,
-                     OrderInventoryPort inventory) {
+                     OrderInventoryPort inventory, CanonicalFactAppender canonicalFacts) {
         this.jdbc=jdbc;
         this.orderQr=orderQr;
         this.preparation=preparation;
         this.authorization=authorization;
         this.scopes=scopes;
         this.inventory=inventory;
+        this.canonicalFacts=java.util.Objects.requireNonNull(canonicalFacts);
     }
     @PostConstruct
     void init() {
@@ -255,6 +259,9 @@ public class SalesPickupHandoverService {
                  (tenant_id,id,order_id,event_type,occurred_at)
                 VALUES (?,?,?,'COMPLETED',?)
                 """,tenant,event,target.orderId(),now);
+        if(canonicalFacts.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_COMPLETED,event))
+                !=CanonicalFactAppender.Outcome.INSERTED)
+            throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
         jdbc.update("""
                 INSERT INTO crm.sales_pickup_handover
                  (tenant_id,id,order_id,warehouse_id,credential_id,staff_actor_id,

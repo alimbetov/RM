@@ -1,0 +1,202 @@
+{
+  "schema": "RM-INT-TARGETED/v1",
+  "admission": "DIAGNOSTIC_ONLY",
+  "dependencies": {
+    "runtime": "src/main/java/** (full Spring application context and transitive service dependencies; not yet narrowed)",
+    "resources": "src/main/resources/**",
+    "tests": "src/test/java/** (compiled; selected methods executed)",
+    "build": [
+      "pom.xml"
+    ],
+    "securityProbe": "docs/operations/RM-FINAL-SEC-GATE-DB-ROLE-QUALIFICATION.sql",
+    "environment": [
+      "PostgreSQL 17 (tag, not immutable digest)",
+      "Temurin 21 (major, not pinned patch)",
+      "ubuntu-latest"
+    ],
+    "unresolved": [
+      "Maven effective dependency graph",
+      "transitive test fixture graph",
+      "runner and container immutable fingerprints"
+    ]
+  },
+  "requiredCases": [
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalSalesAndInventoryDigestOraclePg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalSourceAdmissionAndOwnerRollbackPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalConcurrentReplayAndRollbackPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalSourceSealingLockOrdersPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalTenantSourceCollisionPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "p2CanonicalDurableDiscoveryReplayAndBackfillPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "p3L1ProjectionParityAndLateDuplicatePg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "b4RegionAndNomenclatureSnapshotsPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "deterministicMathematics"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "missingIsNotZeroAndFutureRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "activitySeparatesGapHistoryAndDecision"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "numericParityFailsClosed"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedPostgresQualificationTest",
+      "name": "allOperatorsAgainstJavaAcrossBatch"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedPostgresQualificationTest",
+      "name": "boundedBatchWorkload"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "unsupportedMethodVersionRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs065DeclineCannotIdentifyCause"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs093ZeroIsNotMissing"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs095OpenAndNonAdjacentPeriodsRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs097ShortAndPartialHistory"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs099MatchedSymptomsAbstain"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs112MaterialityBoundary"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "incompatibleTenantAndRevisionFailClosed"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs001StableAndCumulativeDrift"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs002MonotonicObservedGrowth"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs003MonotonicObservedDecline"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs006SingleShockNotSustained"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs097ShortMissingAndPartialWindow"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs102ReboundIsNotRecovery"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "unequalCalendarDurationAbstains"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs005SpikeExcludesTargetFromBaseline"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs051DropAndNonconstantBaseline"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs100NoiseAndBandBoundary"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs007VolatileBaselineSuppressesDirectionalCandidate"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs093ZeroBaselineAndMissing"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs097ShortPartialAndUnequalDuration"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs112StableNoFalseAlarm"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "incompatibleEvidenceAndPolicyRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs065StockFlowsDoNotIdentifyAvailability"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs098DifferentFlowDirectionIsNotCausalConflict"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs068PartialAndMissingNeverPromoted"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs106ForeignTenantOrWarehouseRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs108RevisionMismatchInvalidatesFactorEvidence"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs112StableSalesNoUnsupportedRecommendation"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "growthDoesNotIdentifyPromotionOrDemand"
+    }
+  ],
+  "securityGate": "REQUIRED_AFTER_JUNIT"
+}

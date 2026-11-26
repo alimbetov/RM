@@ -1,8 +1,8 @@
 {
-  "revision": "R1.1",
+  "revision": "R1.2",
   "source_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a",
-  "status": "STABILIZATION_FIRST_MERGE_HOLD",
-  "admission": "CR-MVP-INTELLIGENCE-EVT-01 selected; IE-00A source review complete; IE-00B and new feature execution paused until verified core merge; Radar expansion deferred; production HOLD",
+  "status": "DEVELOPMENT_ADMITTED_PRODUCTION_HOLD",
+  "admission": "Owner approved A3-DEV; A3-QUAL and G1-G4 mandatory before acceptance/release; Radar deferred",
   "nodes": [
     {
       "id": "P0",
@@ -20,7 +20,7 @@
         "P0"
       ],
       "exit": "remaining mandatory exact-SHA CI/PG/security/migration/manifest GREEN; only explicit C3 core-merge deferral and approved skips; actual branch protection must permit; not Radar or production PASS",
-      "status": "HOLD_REQUIRED_CHECKS"
+      "status": "CORE_BASELINE_PASS"
     },
     {
       "id": "Q1",
@@ -30,7 +30,7 @@
         "Q0"
       ],
       "exit": "PR #9 merge expected head SHA; verify main tree/merge commit and applicable post-merge checks, reconcile base_dev without force; record baseline; not production admission",
-      "status": "BLOCKED_BY_Q0"
+      "status": "CORE_MERGE_VERIFIED"
     },
     {
       "id": "A0",
@@ -49,7 +49,7 @@
         "Q1"
       ],
       "exit": "actual schema, coverage, owner event proof, baseline",
-      "status": "PAUSED_UNTIL_VERIFIED_CORE_MERGE"
+      "status": "PARTIAL_PG_PASS"
     },
     {
       "id": "A2",
@@ -60,18 +60,19 @@
         "Q1"
       ],
       "exit": "reviewed definitions and typed scope; no invented grants",
-      "status": "PAUSED_UNTIL_VERIFIED_CORE_MERGE"
+      "status": "OWNER_APPROVED"
     },
     {
       "id": "A3",
-      "title": "IE-00 admission register",
+      "title": "A3-DEV development admission",
       "lane": "gate",
       "depends_on": [
-        "A1",
-        "A2"
+        "A0",
+        "A2",
+        "Q1"
       ],
-      "exit": "approved source/metric/event contracts; blocked items explicit",
-      "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
+      "exit": "Approved architecture and source inventory; runtime proof remains qualification obligation",
+      "status": "OWNER_APPROVED"
     },
     {
       "id": "B1",
@@ -219,7 +220,8 @@
       "lane": "gate",
       "depends_on": [
         "X1",
-        "P0"
+        "P0",
+        "A3-QUAL"
       ],
       "exit": "all required CI/PG/BSR/previous tests pass; immutable candidate",
       "status": "PLANNED_BLOCKED_BY_PREREQUISITES"
@@ -337,6 +339,19 @@
       ],
       "exit": "reliable signals, explicit owner command admission; ML optional",
       "status": "DEFERRED_ANALYTICS_FIRST"
+    },
+    {
+      "id": "A3-QUAL",
+      "title": "Runtime source and functional qualification",
+      "lane": "gate",
+      "depends_on": [
+        "A1",
+        "B1",
+        "B2",
+        "E1"
+      ],
+      "exit": "Actual schema, source coverage, IAM and implementation evidence; no false READY",
+      "status": "PENDING"
     }
   ],
   "transport": {
@@ -404,5 +419,12 @@
     "restore_before": "Radar resumption or production admission",
     "threshold_pct": 10,
     "source_evidence_sha": "e1bced6cf1538bdb9fb7ec22a354255456964e7a"
+  },
+  "developmentAdmissionEvidence": {
+    "baselineSha": "54de1e3d7c7aaa54c182dae72d779e7e0a6f9c6e",
+    "sourceSchemaRun": 45591134734,
+    "producerRun": 45588358130,
+    "ownerApprovedDecisions": 15,
+    "production": "HOLD"
   }
 }

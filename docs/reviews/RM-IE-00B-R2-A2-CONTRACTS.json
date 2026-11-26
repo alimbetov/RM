@@ -1,0 +1,207 @@
+{
+  "schema": "RM-IE-00B-A2/v1",
+  "baselineSha": "fa16b7e53ddfbd665184c3cd9a89ae6e0ddbf37c",
+  "designSha": "852b993271617d30721d24b3d3b759d17038ca5f",
+  "admission": "HOLD",
+  "runtimeQualification": "NOT_EXECUTED",
+  "decisions": [
+    {
+      "id": "DEC-R2-01",
+      "state": "OWNER_APPROVED",
+      "contract": "Sales status occurred_at; stock movement recorded_at; live position gauge"
+    },
+    {
+      "id": "DEC-R2-02",
+      "state": "OWNER_APPROVED",
+      "contract": "Explicit versioned tenant IANA zone; no implicit default; half-open intervals"
+    },
+    {
+      "id": "DEC-R2-03",
+      "state": "OWNER_APPROVED",
+      "contract": "Eight D02 metrics; typed Native SQL registry; no paid revenue, margin or monetary refunds"
+    },
+    {
+      "id": "DEC-R2-04",
+      "state": "OWNER_APPROVED",
+      "contract": "Current confirmed buyer link; CRM_READ and SALES_ORDER_READ independently"
+    },
+    {
+      "id": "DEC-R2-05",
+      "state": "OWNER_APPROVED",
+      "contract": "INVENTORY_STOCK_READ plus active warehouse assignment; manager exception deferred"
+    },
+    {
+      "id": "DEC-R2-06",
+      "state": "OWNER_APPROVED",
+      "contract": "ABC booked line snapshots per tenant/currency; warehouse attribution blocked"
+    },
+    {
+      "id": "DEC-R2-07",
+      "state": "OWNER_APPROVED",
+      "contract": "ABC 80/95/100 using cumulativeBefore and stable key tie break"
+    },
+    {
+      "id": "DEC-R2-08",
+      "state": "OWNER_APPROVED",
+      "contract": "XYZ population CV on 12 completed weekly fulfilled quantity buckets; X <=10%, Y <=25%, Z >25%; unknown for incomplete/zero mean"
+    },
+    {
+      "id": "DEC-R2-09",
+      "state": "OWNER_APPROVED",
+      "contract": "PLACED first; typed DSL, PostgreSQL outbox, in-app/mock, immutable rule revision"
+    },
+    {
+      "id": "DEC-R2-10",
+      "state": "OWNER_APPROVED",
+      "contract": "Versioned deadline schedule, invalidation and expired-window no-send"
+    },
+    {
+      "id": "DEC-R2-11",
+      "state": "OWNER_APPROVED",
+      "contract": "INT/EVT modular monolith, int_/evt_ prefixes; explicit grants and worker identity review"
+    },
+    {
+      "id": "DEC-R2-12",
+      "state": "OWNER_APPROVED",
+      "contract": "L0 native SQL then L1 daily and L2 rollups; measured workloads before budgets"
+    },
+    {
+      "id": "DEC-R2-13",
+      "state": "OWNER_APPROVED",
+      "contract": "Separate retention; daily 36 months, monthly 60 months, notification/log 90 days and retired generation 7 days candidate values; dedup >= replay horizon; automatic cleanup deferred"
+    },
+    {
+      "id": "DEC-R2-14",
+      "state": "OWNER_APPROVED",
+      "contract": "Radar SignalProvider contract; implementation deferred until separate admission"
+    },
+    {
+      "id": "DEC-R2-15",
+      "state": "OWNER_APPROVED",
+      "contract": "base_dev only; no design branch merge; preserve main"
+    }
+  ],
+  "metrics": [
+    {
+      "code": "PLACED_ORDERS",
+      "owner": "SALES",
+      "timeBasis": "STATUS_OCCURRED",
+      "selection": "ORDER_PERIOD",
+      "unit": "COUNT",
+      "methodVersion": 1,
+      "permission": "SALES_ORDER_READ",
+      "warehouseAssignment": false
+    },
+    {
+      "code": "BOOKED_ORDER_AMOUNT",
+      "owner": "SALES",
+      "timeBasis": "STATUS_OCCURRED",
+      "selection": "ORDER_PERIOD",
+      "unit": "CURRENCY_AMOUNT",
+      "methodVersion": 1,
+      "permission": "SALES_ORDER_READ",
+      "warehouseAssignment": false
+    },
+    {
+      "code": "CONFIRMED_ORDERS",
+      "owner": "SALES",
+      "timeBasis": "STATUS_OCCURRED",
+      "selection": "ORDER_PERIOD",
+      "unit": "COUNT",
+      "methodVersion": 1,
+      "permission": "SALES_ORDER_READ",
+      "warehouseAssignment": false
+    },
+    {
+      "code": "FULFILLED_ORDERS",
+      "owner": "SALES",
+      "timeBasis": "STATUS_OCCURRED",
+      "selection": "ORDER_PERIOD",
+      "unit": "COUNT",
+      "methodVersion": 1,
+      "permission": "SALES_ORDER_READ",
+      "warehouseAssignment": false
+    },
+    {
+      "code": "CANCELLED_ORDERS",
+      "owner": "SALES",
+      "timeBasis": "STATUS_OCCURRED",
+      "selection": "ORDER_PERIOD",
+      "unit": "COUNT",
+      "methodVersion": 1,
+      "permission": "SALES_ORDER_READ",
+      "warehouseAssignment": false
+    },
+    {
+      "code": "STOCK_IN_QTY",
+      "owner": "INVENTORY",
+      "timeBasis": "STOCK_RECORDED",
+      "selection": "MOVEMENT_PERIOD",
+      "unit": "SKU_QUANTITY",
+      "methodVersion": 1,
+      "permission": "INVENTORY_STOCK_READ",
+      "warehouseAssignment": true
+    },
+    {
+      "code": "STOCK_OUT_QTY",
+      "owner": "INVENTORY",
+      "timeBasis": "STOCK_RECORDED",
+      "selection": "MOVEMENT_PERIOD",
+      "unit": "SKU_QUANTITY",
+      "methodVersion": 1,
+      "permission": "INVENTORY_STOCK_READ",
+      "warehouseAssignment": true
+    },
+    {
+      "code": "CURRENT_AVAILABLE",
+      "owner": "INVENTORY",
+      "timeBasis": "LIVE_POSITION",
+      "selection": "LIVE_POSITION",
+      "unit": "SKU_QUANTITY",
+      "methodVersion": 1,
+      "permission": "INVENTORY_STOCK_READ",
+      "warehouseAssignment": true
+    }
+  ],
+  "calendar": {
+    "periods": [
+      "D",
+      "W",
+      "DEC",
+      "M",
+      "Q",
+      "H",
+      "Y"
+    ],
+    "zone": "EXPLICIT_IANA",
+    "versioned": true,
+    "interval": "HALF_OPEN",
+    "defaultZoneAllowed": false
+  },
+  "quality": {
+    "values": [
+      "READY",
+      "PARTIAL",
+      "MISSING",
+      "STALE",
+      "NOT_MEASURABLE"
+    ],
+    "unknownAsZero": false,
+    "completenessAndFreshnessIndependent": true
+  },
+  "security": {
+    "identity": "VerifiedActor",
+    "authorization": "TenantAuthorization.requireForCommand",
+    "warehouse": "WarehouseStaffScopeService.requireAssigned",
+    "recheckActorBeforeReturn": true,
+    "tenantWideWarehouseRead": false,
+    "customerLink": "CURRENT_CONFIRMED",
+    "workerMayMintActor": false
+  },
+  "productionAdmission": "HOLD",
+  "ownerApproval": {
+    "date": "2026-11-25",
+    "scope": "All 15 decisions explicitly approved by user",
+    "runtimeAdmission": "HOLD"
+  }
+}

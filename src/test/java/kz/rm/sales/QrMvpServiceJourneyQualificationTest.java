@@ -246,6 +246,7 @@ class QrMvpServiceJourneyQualificationTest {
             .isEqualTo("PICKUP_PROOF_REQUIRED");
         assertGenericDeniedWithoutEffects(s,orderId);
         assertThat(committed.status()).isEqualTo("COMPLETED");
+        kz.rm.iam.CanonicalProducerEvidence.assertHandover(jdbc,s.tenant(),orderId,1);
         var beforeReplay=JourneySqlEvidence.orderAndStock(jdbc,s.tenant(),orderId,s.warehouse(),s.sku());
         assertThat(pickup.complete(s.staff(),s.tenant(),s.warehouse(),
                 issued.rawProof(),true,before,handoverKey).handoverId())
@@ -322,9 +323,14 @@ class QrMvpServiceJourneyQualificationTest {
 
     @Test void qrMvpJ1VerifiedListPriceToHandoverAndRestockPg() throws Exception {
         Scenario s=setup();
+        String requestKey=key();
         UUID order=listCheckout.checkoutVerified(s.buyer(),s.publicQr(),3,
-                s.offerVersion(),new BigDecimal("100.0000"),"KZT",key())
+                s.offerVersion(),new BigDecimal("100.0000"),"KZT",requestKey)
                 .order().orderId();
+        UUID placed=kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order);
+        assertThat(listCheckout.checkoutVerified(s.buyer(),s.publicQr(),3,
+                s.offerVersion(),new BigDecimal("100.0000"),"KZT",requestKey).order().orderId()).isEqualTo(order);
+        assertThat(kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order)).isEqualTo(placed);
         assertThat(jdbc.queryForObject("""
                 SELECT buyer_user_id FROM crm.sales_order WHERE tenant_id=? AND id=?
                 """,UUID.class,s.tenant(),order)).isEqualTo(s.buyer().userId());
@@ -333,12 +339,16 @@ class QrMvpServiceJourneyQualificationTest {
                 """,String.class,s.tenant(),order)).isEqualTo("PICKUP_PROOF_REQUIRED");
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "300", 0, 0, 0, "10", "0", "10");
         UUID line=handover(s,order,3,true);
         assertThat(sellable(s)).isEqualByComparingTo("7");
         returnAndInspect(s,order,line,2,SalesReturnPhysicalService.Disposition.RESTOCK);
         assertThat(sellable(s)).isEqualByComparingTo("9");
         returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.WRITE_OFF);
         assertThat(sellable(s)).isEqualByComparingTo("9");
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "300", 1, 1, 0, "12", "3", "9");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_return_posting p JOIN crm.sales_return_request r ON r.tenant_id=p.tenant_id AND r.id=p.return_id WHERE p.tenant_id=? AND r.order_id=? AND p.disposition='WRITE_OFF' AND p.movement_id IS NULL AND p.quarantine_movement_id IS NULL",Integer.class,s.tenant(),order)).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM crm.sales_return_posting p
@@ -347,6 +357,8 @@ class QrMvpServiceJourneyQualificationTest {
                 WHERE p.tenant_id=? AND r.order_id=?
                 """,Integer.class,s.tenant(),order)).isEqualTo(2);
         assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
+        kz.rm.iam.CanonicalProducerEvidence.assertSales(jdbc,s.tenant());
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,s.tenant());
     }
 
     @Test void qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg() throws Exception {
@@ -355,19 +367,22 @@ class QrMvpServiceJourneyQualificationTest {
                 new BigDecimal("80.0000"),"KZT",key());
         var accepted=proposals.sellerRespond(s.staff(),s.tenant(),proposed.proposalId(),
                 proposed.revision(),SalesPriceProposalService.Action.ACCEPT,null,key());
-        UUID order=quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),
-                accepted.quoteId(),
-                // Accepted quote snapshots the revision being accepted, not
-                // the incremented terminal proposal revision.
-                new AutoOrderService.AcceptedQuoteAck(proposed.revision(),2,
-                        new BigDecimal("80.0000"),"KZT"),
-                key()).order().orderId();
+        String requestKey=key();
+        // Accepted quote snapshots the revision being accepted, not the incremented terminal proposal revision.
+        var ack=new AutoOrderService.AcceptedQuoteAck(proposed.revision(),2,new BigDecimal("80.0000"),"KZT");
+        UUID order=quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),accepted.quoteId(),ack,requestKey).order().orderId();
+        UUID placed=kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order);
+        assertThat(quoteCheckout.checkoutAcceptedQuote(s.buyer(),s.tenant(),accepted.quoteId(),ack,requestKey)
+                .order().orderId()).isEqualTo(order);
+        assertThat(kz.rm.iam.CheckoutCanonicalEvidence.assertPlaced(jdbc,s.tenant(),order)).isEqualTo(placed);
         assertThat(jdbc.queryForObject("""
                 SELECT unit_price_snapshot FROM crm.sales_order_line
                 WHERE tenant_id=? AND order_id=?
                 """,BigDecimal.class,s.tenant(),order)).isEqualByComparingTo("80.0000");
         var invoicesBefore=JourneySqlEvidence.invoices(jdbc,s.tenant());
         linkBuyer(s,order);
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "160", 0, 0, 0, "10", "0", "10");
         UUID line=handover(s,order,2,false);
         assertThat(sellable(s)).isEqualByComparingTo("8");
         returnAndInspect(s,order,line,1,SalesReturnPhysicalService.Disposition.QUARANTINE);
@@ -377,6 +392,10 @@ class QrMvpServiceJourneyQualificationTest {
                 WHERE tenant_id=? AND warehouse_id=? AND item_id=?
                 """,BigDecimal.class,s.tenant(),s.warehouse(),s.sku()))
                 .isEqualByComparingTo("1");
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc, s.tenant(), s.warehouse(), s.sku(),
+                1, "160", 1, 1, 0, "10", "2", "8");
         assertThat(JourneySqlEvidence.invoices(jdbc,s.tenant())).isEqualTo(invoicesBefore);
+        kz.rm.iam.CanonicalProducerEvidence.assertSales(jdbc,s.tenant());
+        kz.rm.iam.CanonicalProducerEvidence.assertInventory(jdbc,s.tenant());
     }
 }

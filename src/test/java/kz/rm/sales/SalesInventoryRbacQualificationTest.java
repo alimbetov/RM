@@ -727,6 +727,53 @@ class SalesInventoryRbacQualificationTest {
      * R1.3: simulate a process failure after the domain method returns but before
      * the outer transaction commits. The retry must recreate exactly one effect.
      */
+    @Test void b22a2PostgresCanonicalFailureRollsBackEverySalesTransition() throws Exception {
+        try(var connection=dataSource.getConnection()){
+            Assumptions.assumeTrue(connection.getMetaData().getDatabaseProductName().toLowerCase().contains("postgresql"));
+        }
+        Context c=context(10);
+        allow(c,DomainPermission.SALES_ORDER_CONFIRM,DomainPermission.INVENTORY_RESERVE,
+            DomainPermission.SALES_ORDER_CANCEL,DomainPermission.INVENTORY_RELEASE,
+            DomainPermission.SALES_ORDER_FULFILL,DomainPermission.INVENTORY_FULFILL);
+        UUID cancelled=order(c,3),completed=order(c,2);
+        for(UUID id:List.of(cancelled,completed)){
+            failCanonicalTransition(c,id,"CONFIRMED",()->commands.confirm(c.staff(),c.tenant(),id,c.location()));
+            assertThat(commands.confirm(c.staff(),c.tenant(),id,c.location()).affectedLines()).isEqualTo(1);
+            UUID event=CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),id,"CONFIRMED");
+            assertThat(commands.confirm(c.staff(),c.tenant(),id,c.location()).affectedLines()).isZero();
+            assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),id,"CONFIRMED")).isEqualTo(event);
+        }
+        failCanonicalTransition(c,cancelled,"CANCELLED",()->commands.cancel(c.staff(),c.tenant(),cancelled));
+        assertThat(commands.cancel(c.staff(),c.tenant(),cancelled).affectedLines()).isEqualTo(1);
+        UUID cancelEvent=CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),cancelled,"CANCELLED");
+        assertThat(commands.cancel(c.staff(),c.tenant(),cancelled).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),cancelled,"CANCELLED")).isEqualTo(cancelEvent);
+        failCanonicalTransition(c,completed,"COMPLETED",()->commands.fulfill(c.staff(),c.tenant(),completed));
+        assertThat(commands.fulfill(c.staff(),c.tenant(),completed).affectedLines()).isEqualTo(1);
+        UUID completeEvent=CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),completed,"COMPLETED");
+        assertThat(commands.fulfill(c.staff(),c.tenant(),completed).affectedLines()).isZero();
+        assertThat(CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),completed,"COMPLETED")).isEqualTo(completeEvent);
+        assertThat(scalar(c,"on_hand")).isEqualByComparingTo("8");
+        assertThat(scalar(c,"reserved")).isEqualByComparingTo("0");
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),cancelled,"COMPLETED");
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),completed,"CANCELLED");
+    }
+
+    private void failCanonicalTransition(Context c,UUID order,String kind,Runnable command){
+        var before=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),order,c.location(),c.item());
+        var reservations=jdbc.queryForList("SELECT * FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? ORDER BY id",c.tenant(),order);
+        var movements=jdbc.queryForList("SELECT * FROM crm.inv_stock_movement WHERE tenant_id=? AND item_id=? ORDER BY id",c.tenant(),c.item());
+        assertThatThrownBy(()->new TransactionTemplate(transactionManager).executeWithoutResult(status->{
+            jdbc.execute("ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_test_sales_fact_failure CHECK (owner_module <> 'SALES') NOT VALID");
+            command.run();
+        })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("ck_test_sales_fact_failure");
+        assertThat(JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),order,c.location(),c.item())).isEqualTo(before);
+        assertThat(jdbc.queryForList("SELECT * FROM crm.inv_stock_reservation WHERE tenant_id=? AND order_id=? ORDER BY id",c.tenant(),order)).isEqualTo(reservations);
+        assertThat(jdbc.queryForList("SELECT * FROM crm.inv_stock_movement WHERE tenant_id=? AND item_id=? ORDER BY id",c.tenant(),c.item())).isEqualTo(movements);
+        CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),order,kind);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid='crm.int_canonical_fact'::regclass AND conname='ck_test_sales_fact_failure'",Integer.class)).isZero();
+    }
+
     @Test void r13RollbackAfterSuccessfulDomainCallsCanBeSafelyRetried() {
         Context c=context(10);
         UUID id=order(c,3);
@@ -814,6 +861,9 @@ class SalesInventoryRbacQualificationTest {
                 assertThat(eventCount(c,id,"CANCELLED")).isEqualTo(cancelFirst?1:0);
                 assertThat(eventCount(c,id,"COMPLETED")).isEqualTo(cancelFirst?0:1);
                 assertThat(eventCount(c,id,"CONFIRMED")).isEqualTo(1);
+                CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),id,"CONFIRMED");
+                CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),id,cancelFirst?"CANCELLED":"COMPLETED");
+                CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),id,cancelFirst?"COMPLETED":"CANCELLED");
                 assertThat(JourneySqlEvidence.invoices(jdbc,c.tenant())).isEqualTo(invoices);
                 var terminal=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item());
                 assertThat((cancelFirst?authenticatedCommands.cancel(staff,c.tenant(),id):authenticatedCommands.fulfill(staff,c.tenant(),id)).affectedLines()).isZero();
@@ -844,6 +894,10 @@ class SalesInventoryRbacQualificationTest {
             assertThat(reservationCount(c,id,"FULFILLED")).isZero();
             assertThat(eventCount(c,id,"CONFIRMED")).isEqualTo(cancelFirst?0:1);
             assertThat(eventCount(c,id,"CANCELLED")).isEqualTo(1);
+            CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),id,"CANCELLED");
+            if(cancelFirst)CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),id,"CONFIRMED");
+            else CheckoutCanonicalEvidence.assertStatus(jdbc,c.tenant(),id,"CONFIRMED");
+            CheckoutCanonicalEvidence.assertAbsent(jdbc,c.tenant(),id,"COMPLETED");
             assertThat(fulfillmentMovementCount(c,id)).isZero();
             assertThat(JourneySqlEvidence.invoices(jdbc,c.tenant())).isEqualTo(invoices);
             var terminal=JourneySqlEvidence.orderAndStock(jdbc,c.tenant(),id,c.location(),c.item());

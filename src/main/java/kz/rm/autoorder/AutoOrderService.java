@@ -1,6 +1,8 @@
 package kz.rm.autoorder;
 
 import kz.rm.iam.EmailIdentityService;
+import kz.rm.intelligence.CanonicalFactAppender;
+import kz.rm.intelligence.CanonicalFactKey;
 import kz.rm.organization.CommerceCurrencyAdmission;
 import kz.rm.sales.SalesOrderQrReferenceService;
 import kz.rm.iam.VerifiedActor;
@@ -30,21 +32,27 @@ public class AutoOrderService {
     private final EmailIdentityService emailIdentities;
     private final SalesOrderQrReferenceService orderQrReferences;
     private final CommerceCurrencyAdmission currencyAdmission;
+    private final CanonicalFactAppender canonicalFacts;
     private String verifiedBuyerIdentityLockSql;
 
     public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
-                            SalesOrderQrReferenceService orderQrReferences) {
-        this(jdbc,emailIdentities,orderQrReferences,null);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
                             SalesOrderQrReferenceService orderQrReferences,
-                            CommerceCurrencyAdmission currencyAdmission) {
+                            CommerceCurrencyAdmission currencyAdmission,
+                            CanonicalFactAppender canonicalFacts) {
         this.jdbc=jdbc;
         this.emailIdentities=emailIdentities;
         this.orderQrReferences=orderQrReferences;
         this.currencyAdmission=currencyAdmission;
+        this.canonicalFacts=Objects.requireNonNull(canonicalFacts);
+    }
+
+    // The owner source is already persisted and sealed inside the caller transaction.
+    // A new source must insert a new fact; a collision is not a checkout replay.
+    private void appendPlacedFact(UUID tenant,UUID eventId) {
+        var outcome=canonicalFacts.appendLive(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,
+            CanonicalFactKey.Kind.ORDER_PLACED,eventId));
+        if(outcome!=CanonicalFactAppender.Outcome.INSERTED)
+            throw new IllegalStateException("CANONICAL_NEW_SOURCE_ALREADY_PRESENT");
     }
 
     private void lockCurrencyMarket(UUID tenant) {
@@ -253,10 +261,12 @@ public class AutoOrderService {
                 """,tenant,UUID.randomUUID(),orderId,o.offerId(),o.title(),
                     o.quantity(),o.unitPrice(),currency,o.catalogItemId());
         }
+        UUID placedEventId=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at)
             VALUES (?,?,?,'PLACED',?)
-            """,tenant,UUID.randomUUID(),orderId,now);
+            """,tenant,placedEventId,orderId,now);
+        appendPlacedFact(tenant,placedEventId);
         jdbc.update("""
             INSERT INTO crm.sales_checkout_receipt(tenant_id,idempotency_key,request_sha256,order_id,created_at)
             VALUES (?,?,?,?,?)
@@ -462,11 +472,13 @@ public class AutoOrderService {
                 """,tenant,UUID.randomUUID(),orderId,offerId,offer.title(),
                 quote.quantity(),quote.price(),quote.currency(),
                 offer.catalogItemId(),quoteId);
+        UUID placedEventId=UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO crm.sales_order_status_event
                   (tenant_id,id,order_id,event_type,occurred_at)
                 VALUES (?,?,?,'PLACED',?)
-                """,tenant,UUID.randomUUID(),orderId,now);
+                """,tenant,placedEventId,orderId,now);
+        appendPlacedFact(tenant,placedEventId);
         jdbc.update("""
                 INSERT INTO crm.sales_checkout_receipt
                   (tenant_id,idempotency_key,request_sha256,order_id,created_at)

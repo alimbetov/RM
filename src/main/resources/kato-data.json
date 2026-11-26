@@ -1,1 +1,4652 @@
-[{"IsMarkedToDelete":false,"NameKaz":"АҚМОЛА ОБЛЫСЫ","Parent":"","Level":2,"Id":1,"AreaType":0,"Code":110000000,"NameRus":"АКМОЛИНСКАЯ ОБЛАСТЬ"},{"IsMarkedToDelete":false,"NameKaz":"СТЕПНОГОР Қ.","Parent":9,"Level":4,"Id":10,"AreaType":1,"Code":111810000,"NameRus":"Г.СТЕПНОГОРСК"},{"IsMarkedToDelete":false,"NameKaz":"ШОРТАНДЫ А.","Parent":97,"Level":5,"Id":100,"AreaType":2,"Code":113445400,"NameRus":"С.ШОРТАНДЫ"},{"IsMarkedToDelete":false,"NameKaz":"БРУСИЛОВКА А.","Parent":997,"Level":5,"Id":1000,"AreaType":2,"Code":117053200,"NameRus":"С.БРУСИЛОВКА"},{"IsMarkedToDelete":false,"NameKaz":"ДРУЖБА А.","Parent":9999,"Level":6,"Id":10000,"AreaType":2,"Code":396857105,"NameRus":"С.ДРУЖБА"},{"IsMarkedToDelete":false,"NameKaz":"ТРАКТОВЫЙ А.","Parent":9998,"Level":5,"Id":10001,"AreaType":2,"Code":396857400,"NameRus":"С.ТРАКТОВОЕ"},{"IsMarkedToDelete":false,"NameKaz":"ПЕШКОВ А.О.","Parent":9940,"Level":4,"Id":10002,"AreaType":2,"Code":396859000,"NameRus":"ПЕШКОВСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ПЕШКОВ А.","Parent":10002,"Level":5,"Id":10003,"AreaType":2,"Code":396859100,"NameRus":"С.ПЕШКОВКА"},{"IsMarkedToDelete":false,"NameKaz":"БОЛЬШОЕ А.","Parent":10002,"Level":5,"Id":10004,"AreaType":2,"Code":396859200,"NameRus":"С.БОЛЬШОЕ"},{"IsMarkedToDelete":false,"NameKaz":"КАЛИНОВ А.","Parent":10002,"Level":5,"Id":10005,"AreaType":2,"Code":396859400,"NameRus":"С.КАЛИНОВКА"},{"IsMarkedToDelete":false,"NameKaz":"КРАВЦОВО А.","Parent":10002,"Level":5,"Id":10006,"AreaType":2,"Code":396859500,"NameRus":"С.КРАВЦОВО"},{"IsMarkedToDelete":false,"NameKaz":"ПОЛТАВА А.","Parent":10002,"Level":5,"Id":10007,"AreaType":2,"Code":396859700,"NameRus":"С.ПОЛТАВКА"},{"IsMarkedToDelete":true,"NameKaz":"Шаңдақ а.о.","Parent":9940,"Level":4,"Id":10008,"AreaType":2,"Code":396865000,"NameRus":"Чандакский с.о."},{"IsMarkedToDelete":true,"NameKaz":"Мирный а.","Parent":10008,"Level":5,"Id":10009,"AreaType":2,"Code":396865100,"NameRus":"с.Мирное"},{"IsMarkedToDelete":false,"NameKaz":"БАЯНБАЙ А.","Parent":997,"Level":5,"Id":1001,"AreaType":2,"Code":117053300,"NameRus":"С.БАЯНБАЙ"},{"IsMarkedToDelete":true,"NameKaz":"Дорожный а.","Parent":10008,"Level":5,"Id":10010,"AreaType":2,"Code":396865300,"NameRus":"с.Дорожное"},{"IsMarkedToDelete":true,"NameKaz":"Крамской а.","Parent":10008,"Level":5,"Id":10011,"AreaType":2,"Code":396865400,"NameRus":"с.Крамское"},{"IsMarkedToDelete":false,"NameKaz":"ҚЫЗЫЛОРДА ОБЛЫСЫ","Parent":"","Level":2,"Id":10012,"AreaType":0,"Code":430000000,"NameRus":"КЫЗЫЛОРДИНСКАЯ ОБЛАСТЬ"},{"IsMarkedToDelete":false,"NameKaz":"ҚЫЗЫЛОРДА Қ.Ә.","Parent":10012,"Level":3,"Id":10013,"AreaType":3,"Code":431000000,"NameRus":"КЫЗЫЛОРДА Г.А."},{"IsMarkedToDelete":false,"NameKaz":"ҚЫЗЫЛОРДА Қ.","Parent":10013,"Level":4,"Id":10014,"AreaType":1,"Code":431010000,"NameRus":"Г.КЫЗЫЛОРДА"},{"IsMarkedToDelete":false,"NameKaz":"АҚЖАРМА А.О.","Parent":10013,"Level":4,"Id":10015,"AreaType":2,"Code":431033000,"NameRus":"АКЖАРМИНСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"БАЙМҰРАТ БАТЫР А.","Parent":10015,"Level":5,"Id":10016,"AreaType":2,"Code":431033100,"NameRus":"С.БАЙМҰРАТ БАТЫР"},{"IsMarkedToDelete":true,"NameKaz":"Қалғандария а.","Parent":10015,"Level":5,"Id":10017,"AreaType":2,"Code":431033200,"NameRus":"с.Калгандарья"},{"IsMarkedToDelete":true,"NameKaz":"Қубас а.","Parent":10015,"Level":5,"Id":10018,"AreaType":2,"Code":431033300,"NameRus":"с.Кубас"},{"IsMarkedToDelete":false,"NameKaz":"ТАЛДЫАРАЛ А.","Parent":10015,"Level":5,"Id":10019,"AreaType":2,"Code":431033400,"NameRus":"С.ТАЛДЫАРАЛ"},{"IsMarkedToDelete":false,"NameKaz":"РЗД.17","Parent":998,"Level":6,"Id":1002,"AreaType":2,"Code":117053108,"NameRus":"РЗД.17"},{"IsMarkedToDelete":false,"NameKaz":"АҚСУАТ А.О.","Parent":10013,"Level":4,"Id":10020,"AreaType":2,"Code":431035000,"NameRus":"АКСУАТСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"МАҚАМБЕТОВ А.","Parent":10020,"Level":5,"Id":10021,"AreaType":2,"Code":431035100,"NameRus":"С.МАХАМБЕТОВА"},{"IsMarkedToDelete":false,"NameKaz":"БЕЛКӨЛ К.Ә.","Parent":10013,"Level":4,"Id":10022,"AreaType":2,"Code":431037000,"NameRus":"БЕЛКОЛЬСКАЯ П.А."},{"IsMarkedToDelete":false,"NameKaz":"БЕЛКӨЛ К.","Parent":10022,"Level":5,"Id":10023,"AreaType":2,"Code":431037100,"NameRus":"П.БЕЛКОЛЬ"},{"IsMarkedToDelete":false,"NameKaz":"БІРҚАЗАН А.","Parent":10022,"Level":5,"Id":10024,"AreaType":2,"Code":431037200,"NameRus":"С.БИРКАЗАН"},{"IsMarkedToDelete":false,"NameKaz":"ҚОСШЫҢЫРАУ А.О.","Parent":10013,"Level":4,"Id":10025,"AreaType":2,"Code":431039000,"NameRus":"КОСШЫНЫРАУСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"АБАЙ А.","Parent":10025,"Level":5,"Id":10026,"AreaType":2,"Code":431039100,"NameRus":"С.АБАЙ"},{"IsMarkedToDelete":false,"NameKaz":"ДОСАН А.","Parent":10025,"Level":5,"Id":10027,"AreaType":2,"Code":431039200,"NameRus":"С.ДОСАН"},{"IsMarkedToDelete":false,"NameKaz":"ҚАРАУЫЛТӨБЕ А.О.","Parent":10013,"Level":4,"Id":10028,"AreaType":2,"Code":431041000,"NameRus":"КАРАУЛТОБИНСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ҚАРАУЫЛТӨБЕ А.","Parent":10028,"Level":5,"Id":10029,"AreaType":2,"Code":431041100,"NameRus":"С.КАРАУЛТОБЕ"},{"IsMarkedToDelete":false,"NameKaz":"РЗД.19","Parent":998,"Level":6,"Id":1003,"AreaType":2,"Code":117053109,"NameRus":"РЗД.19"},{"IsMarkedToDelete":false,"NameKaz":"ҚЫЗЫЛЖАРМА А.О","Parent":10013,"Level":4,"Id":10030,"AreaType":2,"Code":431043000,"NameRus":"КЫЗЫЛЖАРМИНСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ҚЫЗЫЛЖАРМА А.","Parent":10030,"Level":5,"Id":10031,"AreaType":2,"Code":431043100,"NameRus":"С.КЫЗЫЛЖАРМА"},{"IsMarkedToDelete":true,"NameKaz":"Байқадам а.","Parent":10030,"Level":5,"Id":10032,"AreaType":2,"Code":431043400,"NameRus":"с.Байкадам"},{"IsMarkedToDelete":true,"NameKaz":"рзд.11","Parent":10030,"Level":5,"Id":10033,"AreaType":2,"Code":431043600,"NameRus":"рзд.11"},{"IsMarkedToDelete":false,"NameKaz":"ҚЫЗЫЛӨЗЕК А.О.","Parent":10013,"Level":4,"Id":10034,"AreaType":2,"Code":431045000,"NameRus":"КЫЗЫЛОЗЕКСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ҚАРАӨЗЕК А.","Parent":10034,"Level":5,"Id":10035,"AreaType":2,"Code":431045100,"NameRus":"С.КАРАОЗЕК"},{"IsMarkedToDelete":false,"NameKaz":"АЙНАКӨЛ А.","Parent":10034,"Level":5,"Id":10036,"AreaType":2,"Code":431045200,"NameRus":"С.АЙНАКОЛЬ"},{"IsMarkedToDelete":false,"NameKaz":"ҚАРАӨЗЕК СТ.","Parent":10034,"Level":5,"Id":10037,"AreaType":2,"Code":431045300,"NameRus":"СТ.КАРАОЗЕК"},{"IsMarkedToDelete":false,"NameKaz":"ТАЛСУАТ А.О.","Parent":10013,"Level":4,"Id":10038,"AreaType":2,"Code":431046000,"NameRus":"ТАЛСУАТСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ТАЛСУАТ А.","Parent":10038,"Level":5,"Id":10039,"AreaType":2,"Code":431046100,"NameRus":"С.ТАЛСУАТ"},{"IsMarkedToDelete":false,"NameKaz":"АТАМЕКЕН А.О.","Parent":958,"Level":4,"Id":1004,"AreaType":2,"Code":117055000,"NameRus":"С.О.АТАМЕКЕН"},{"IsMarkedToDelete":true,"NameKaz":"Геологов а.","Parent":10038,"Level":5,"Id":10040,"AreaType":2,"Code":431046300,"NameRus":"с.Геологов"},{"IsMarkedToDelete":false,"NameKaz":"ТАСБӨГЕТ К.Ә.","Parent":10013,"Level":4,"Id":10041,"AreaType":2,"Code":431047000,"NameRus":"ТАСБУГЕТСКАЯ П.А."},{"IsMarkedToDelete":false,"NameKaz":"ТАСБӨГЕТ К.","Parent":10041,"Level":5,"Id":10042,"AreaType":2,"Code":431047100,"NameRus":"П.ТАСБУГЕТ"},{"IsMarkedToDelete":false,"NameKaz":"ИІРКӨЛ А.","Parent":10041,"Level":5,"Id":10043,"AreaType":2,"Code":431047200,"NameRus":"С.ИРКОЛЬ"},{"IsMarkedToDelete":false,"NameKaz":"БАЙҚОҢЫР Қ.Ә.","Parent":10012,"Level":3,"Id":10044,"AreaType":1,"Code":431900000,"NameRus":"БАЙКОНЫР Г.А."},{"IsMarkedToDelete":false,"NameKaz":"БАЙҚОҢЫР Қ.","Parent":10044,"Level":4,"Id":10045,"AreaType":1,"Code":431910000,"NameRus":"Г.БАЙКОНЫР"},{"IsMarkedToDelete":false,"NameKaz":"АРАЛ АУДАНЫ","Parent":10012,"Level":3,"Id":10046,"AreaType":4,"Code":433200000,"NameRus":"АРАЛЬСКИЙ РАЙОН"},{"IsMarkedToDelete":false,"NameKaz":"АРАЛ Қ.Ә.","Parent":10046,"Level":4,"Id":10047,"AreaType":1,"Code":433220000,"NameRus":"АРАЛЬСКАЯ Г.А."},{"IsMarkedToDelete":false,"NameKaz":"АРАЛ Қ.","Parent":10047,"Level":5,"Id":10048,"AreaType":1,"Code":433220100,"NameRus":"Г.АРАЛЬСК"},{"IsMarkedToDelete":false,"NameKaz":"АҚИРЕК А.О.","Parent":10046,"Level":4,"Id":10049,"AreaType":2,"Code":433231000,"NameRus":"АКИРЕКСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"АТАМЕКЕН А.","Parent":1004,"Level":5,"Id":1005,"AreaType":2,"Code":117055100,"NameRus":"С.АТАМЕКЕН"},{"IsMarkedToDelete":false,"NameKaz":"АҚБАЙ А.","Parent":10049,"Level":5,"Id":10050,"AreaType":2,"Code":433231100,"NameRus":"С.АКБАЙ"},{"IsMarkedToDelete":false,"NameKaz":"АТАНШИ А.О.","Parent":10046,"Level":4,"Id":10051,"AreaType":2,"Code":433232000,"NameRus":"АТАНШИНСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ЖІҢІШКЕҚҰМ А.","Parent":10051,"Level":5,"Id":10052,"AreaType":2,"Code":433232100,"NameRus":"С.ЖИНИШКЕКУМ"},{"IsMarkedToDelete":true,"NameKaz":"Атанши а.","Parent":10051,"Level":5,"Id":10053,"AreaType":2,"Code":433232200,"NameRus":"с.Атанши"},{"IsMarkedToDelete":false,"NameKaz":"АМАНӨТКЕЛ А.О.","Parent":10046,"Level":4,"Id":10054,"AreaType":2,"Code":433233000,"NameRus":"АМАНОТКЕЛЬСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"АМАНӨТКЕЛ А.","Parent":10054,"Level":5,"Id":10055,"AreaType":2,"Code":433233100,"NameRus":"С.АМАНОТКЕЛЬ"},{"IsMarkedToDelete":false,"NameKaz":"АҚҚҰЛАҚ А.","Parent":10054,"Level":5,"Id":10056,"AreaType":2,"Code":433233300,"NameRus":"С.АККУЛАК"},{"IsMarkedToDelete":false,"NameKaz":"АҚШАТАУ А.","Parent":10054,"Level":5,"Id":10057,"AreaType":2,"Code":433233400,"NameRus":"С.АКШАТАУ"},{"IsMarkedToDelete":false,"NameKaz":"ХАН А.","Parent":10054,"Level":5,"Id":10058,"AreaType":2,"Code":433233700,"NameRus":"С.ХАН"},{"IsMarkedToDelete":false,"NameKaz":"АРАЛҚҰМ А.О.","Parent":10046,"Level":4,"Id":10059,"AreaType":2,"Code":433234000,"NameRus":"АРАЛКУМСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ЖАҢАЖОЛ А.","Parent":1004,"Level":5,"Id":1006,"AreaType":2,"Code":117055200,"NameRus":"С.ЖАНАЖОЛ"},{"IsMarkedToDelete":false,"NameKaz":"АРАЛҚҰМ СТ.","Parent":10059,"Level":5,"Id":10060,"AreaType":2,"Code":433234100,"NameRus":"СТ.АРАЛКУМ"},{"IsMarkedToDelete":false,"NameKaz":"МОЙНАҚ А.","Parent":10059,"Level":5,"Id":10061,"AreaType":2,"Code":433234400,"NameRus":"С.МОЙНАК"},{"IsMarkedToDelete":false,"NameKaz":"ШӨМІШ СТ.","Parent":10059,"Level":5,"Id":10062,"AreaType":2,"Code":433234700,"NameRus":"СТ.ШОМИШ"},{"IsMarkedToDelete":false,"NameKaz":"БӨГЕН А.О","Parent":10046,"Level":4,"Id":10063,"AreaType":2,"Code":433235000,"NameRus":"БОГЕНСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"БӨГЕН А.","Parent":10063,"Level":5,"Id":10064,"AreaType":2,"Code":433235100,"NameRus":"С.БОГЕН"},{"IsMarkedToDelete":true,"NameKaz":"Көне Бөген  а.","Parent":10063,"Level":5,"Id":10065,"AreaType":2,"Code":433235200,"NameRus":"с.Коне Боген"},{"IsMarkedToDelete":false,"NameKaz":"ҚАРАШАЛАҢ А.","Parent":10063,"Level":5,"Id":10066,"AreaType":2,"Code":433235300,"NameRus":"С.КАРАШАЛАН"},{"IsMarkedToDelete":false,"NameKaz":"ЖАҢАҚҰРЫЛЫС А.О.","Parent":10046,"Level":4,"Id":10067,"AreaType":2,"Code":433236000,"NameRus":"ЖАНАКУРЫЛЫССКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ЖАҢАҚҰРЫЛЫС А.","Parent":10067,"Level":5,"Id":10068,"AreaType":2,"Code":433236100,"NameRus":"С.ЖАНАКУРЫЛЫС"},{"IsMarkedToDelete":false,"NameKaz":"ЖАҚСЫҚЫЛЫШ А.О.","Parent":10046,"Level":4,"Id":10069,"AreaType":2,"Code":433237000,"NameRus":"ЖАКСЫКЫЛЫШСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ЖАРҚАЙЫҢ А.","Parent":1004,"Level":5,"Id":1007,"AreaType":2,"Code":117055300,"NameRus":"С.ЖАРКАЙЫН"},{"IsMarkedToDelete":false,"NameKaz":"ЖАҚСЫҚЫЛЫШ А.","Parent":10069,"Level":5,"Id":10070,"AreaType":2,"Code":433237100,"NameRus":"С.ЖАКСЫКЫЛЫШ"},{"IsMarkedToDelete":false,"NameKaz":"БЕКБАУЫЛ А.О.","Parent":10046,"Level":4,"Id":10071,"AreaType":2,"Code":433238000,"NameRus":"БЕКБАУЫЛСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"БЕКБАУЫЛ СТ.","Parent":10071,"Level":5,"Id":10072,"AreaType":2,"Code":433238100,"NameRus":"СТ.БЕКБАУЫЛ"},{"IsMarkedToDelete":false,"NameKaz":"ҚҰМБАЗАР А.","Parent":10071,"Level":5,"Id":10073,"AreaType":2,"Code":433238500,"NameRus":"С.КУМБАЗАР"},{"IsMarkedToDelete":false,"NameKaz":"РЗД.93 ҮКІЛІСАЙ","Parent":10071,"Level":5,"Id":10074,"AreaType":2,"Code":433238700,"NameRus":"РЗД.93 УКУЛИСАЙ"},{"IsMarkedToDelete":false,"NameKaz":"ҚАМЫСТЫБАС А.О.","Parent":10046,"Level":4,"Id":10075,"AreaType":2,"Code":433239000,"NameRus":"КАМЫСТЫБАССКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"КАМЫСТЫБАС СТ.","Parent":10075,"Level":5,"Id":10076,"AreaType":2,"Code":433239100,"NameRus":"СТ.КАМЫСТЫБАС"},{"IsMarkedToDelete":true,"NameKaz":"рзд.91","Parent":10075,"Level":5,"Id":10077,"AreaType":2,"Code":433239800,"NameRus":"рзд.91"},{"IsMarkedToDelete":false,"NameKaz":"РЗД.92","Parent":10075,"Level":5,"Id":10078,"AreaType":2,"Code":433239880,"NameRus":"РЗД.92"},{"IsMarkedToDelete":false,"NameKaz":"ЖІҢІШКЕҚҰМ А.О.","Parent":10046,"Level":4,"Id":10079,"AreaType":2,"Code":433241000,"NameRus":"ЖИНИШКЕКУМСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"ЖАСЫЛ А.","Parent":1004,"Level":5,"Id":1008,"AreaType":2,"Code":117055400,"NameRus":"С.ЖАСЫЛ"},{"IsMarkedToDelete":false,"NameKaz":"ТОҚАБАЙ А.","Parent":10079,"Level":5,"Id":10080,"AreaType":2,"Code":433241100,"NameRus":"С.ТОКАБАЙ"},{"IsMarkedToDelete":false,"NameKaz":"ЖЕТЕС БИ А.О.","Parent":10046,"Level":4,"Id":10081,"AreaType":2,"Code":433242000,"NameRus":"С.О. ЖЕТЕС БИ"},{"IsMarkedToDelete":false,"NameKaz":"РАИЫМ А.","Parent":10081,"Level":5,"Id":10082,"AreaType":2,"Code":433242100,"NameRus":"С.РАИМ"},{"IsMarkedToDelete":true,"NameKaz":"Водокачка а.","Parent":10081,"Level":5,"Id":10083,"AreaType":2,"Code":433242300,"NameRus":"с.Водокачка"},{"IsMarkedToDelete":false,"NameKaz":"ЕСКІҰРА А.","Parent":10081,"Level":5,"Id":10084,"AreaType":2,"Code":433242500,"NameRus":"С.ЕСКИУРА"},{"IsMarkedToDelete":false,"NameKaz":"ҚАРАҚҰМ А.О.","Parent":10046,"Level":4,"Id":10085,"AreaType":2,"Code":433243000,"NameRus":"КАРАКУМСКИЙ С.О."},{"IsMarkedToDelete":false,"NameKaz":"АБАЙ А.","Parent":10085,"Level":5,"Id":10086,"AreaType":2,"Code":433243100,"NameRus":"С.АБАЙ"},{"IsMarkedToDelete":false,"NameKaz":"ЕРІМБЕТЖАҒА А.","Parent":10085,"Level":5,"Id":10087,"AreaType":2,"Code":433243300,"NameRus":"С.ЕРИМБЕТЖАГА"}]
+[
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚМОЛА ОБЛЫСЫ",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1,
+    "AreaType": 0,
+    "Code": 110000000,
+    "NameRus": "АКМОЛИНСКАЯ ОБЛАСТЬ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "СТЕПНОГОР Қ.",
+    "Parent": 1111800000,
+    "Level": 4,
+    "Id": 10,
+    "AreaType": 1,
+    "Code": 111810000,
+    "NameRus": "Г.СТЕПНОГОРСК"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ШОРТАНДЫ А.",
+    "Parent": 97,
+    "Level": 5,
+    "Id": 100,
+    "AreaType": 2,
+    "Code": 113445400,
+    "NameRus": "С.ШОРТАНДЫ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БРУСИЛОВКА А.",
+    "Parent": 997,
+    "Level": 5,
+    "Id": 1000,
+    "AreaType": 2,
+    "Code": 117053200,
+    "NameRus": "С.БРУСИЛОВКА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ДРУЖБА А.",
+    "Parent": 9999,
+    "Level": 6,
+    "Id": 10000,
+    "AreaType": 2,
+    "Code": 396857105,
+    "NameRus": "С.ДРУЖБА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТРАКТОВЫЙ А.",
+    "Parent": 9998,
+    "Level": 5,
+    "Id": 10001,
+    "AreaType": 2,
+    "Code": 396857400,
+    "NameRus": "С.ТРАКТОВОЕ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ПЕШКОВ А.О.",
+    "Parent": 9940,
+    "Level": 4,
+    "Id": 10002,
+    "AreaType": 2,
+    "Code": 396859000,
+    "NameRus": "ПЕШКОВСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ПЕШКОВ А.",
+    "Parent": 10002,
+    "Level": 5,
+    "Id": 10003,
+    "AreaType": 2,
+    "Code": 396859100,
+    "NameRus": "С.ПЕШКОВКА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БОЛЬШОЕ А.",
+    "Parent": 10002,
+    "Level": 5,
+    "Id": 10004,
+    "AreaType": 2,
+    "Code": 396859200,
+    "NameRus": "С.БОЛЬШОЕ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "КАЛИНОВ А.",
+    "Parent": 10002,
+    "Level": 5,
+    "Id": 10005,
+    "AreaType": 2,
+    "Code": 396859400,
+    "NameRus": "С.КАЛИНОВКА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "КРАВЦОВО А.",
+    "Parent": 10002,
+    "Level": 5,
+    "Id": 10006,
+    "AreaType": 2,
+    "Code": 396859500,
+    "NameRus": "С.КРАВЦОВО"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ПОЛТАВА А.",
+    "Parent": 10002,
+    "Level": 5,
+    "Id": 10007,
+    "AreaType": 2,
+    "Code": 396859700,
+    "NameRus": "С.ПОЛТАВКА"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Шаңдақ а.о.",
+    "Parent": 9940,
+    "Level": 4,
+    "Id": 10008,
+    "AreaType": 2,
+    "Code": 396865000,
+    "NameRus": "Чандакский с.о."
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Мирный а.",
+    "Parent": 10008,
+    "Level": 5,
+    "Id": 10009,
+    "AreaType": 2,
+    "Code": 396865100,
+    "NameRus": "с.Мирное"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БАЯНБАЙ А.",
+    "Parent": 997,
+    "Level": 5,
+    "Id": 1001,
+    "AreaType": 2,
+    "Code": 117053300,
+    "NameRus": "С.БАЯНБАЙ"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Дорожный а.",
+    "Parent": 10008,
+    "Level": 5,
+    "Id": 10010,
+    "AreaType": 2,
+    "Code": 396865300,
+    "NameRus": "с.Дорожное"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Крамской а.",
+    "Parent": 10008,
+    "Level": 5,
+    "Id": 10011,
+    "AreaType": 2,
+    "Code": 396865400,
+    "NameRus": "с.Крамское"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚЫЗЫЛОРДА ОБЛЫСЫ",
+    "Parent": "",
+    "Level": 2,
+    "Id": 10012,
+    "AreaType": 0,
+    "Code": 430000000,
+    "NameRus": "КЫЗЫЛОРДИНСКАЯ ОБЛАСТЬ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚЫЗЫЛОРДА Қ.Ә.",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 10013,
+    "AreaType": 3,
+    "Code": 431000000,
+    "NameRus": "КЫЗЫЛОРДА Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚЫЗЫЛОРДА Қ.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10014,
+    "AreaType": 1,
+    "Code": 431010000,
+    "NameRus": "Г.КЫЗЫЛОРДА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚЖАРМА А.О.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10015,
+    "AreaType": 2,
+    "Code": 431033000,
+    "NameRus": "АКЖАРМИНСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БАЙМҰРАТ БАТЫР А.",
+    "Parent": 10015,
+    "Level": 5,
+    "Id": 10016,
+    "AreaType": 2,
+    "Code": 431033100,
+    "NameRus": "С.БАЙМҰРАТ БАТЫР"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Қалғандария а.",
+    "Parent": 10015,
+    "Level": 5,
+    "Id": 10017,
+    "AreaType": 2,
+    "Code": 431033200,
+    "NameRus": "с.Калгандарья"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Қубас а.",
+    "Parent": 10015,
+    "Level": 5,
+    "Id": 10018,
+    "AreaType": 2,
+    "Code": 431033300,
+    "NameRus": "с.Кубас"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТАЛДЫАРАЛ А.",
+    "Parent": 10015,
+    "Level": 5,
+    "Id": 10019,
+    "AreaType": 2,
+    "Code": 431033400,
+    "NameRus": "С.ТАЛДЫАРАЛ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "РЗД.17",
+    "Parent": 998,
+    "Level": 6,
+    "Id": 1002,
+    "AreaType": 2,
+    "Code": 117053108,
+    "NameRus": "РЗД.17"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚСУАТ А.О.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10020,
+    "AreaType": 2,
+    "Code": 431035000,
+    "NameRus": "АКСУАТСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "МАҚАМБЕТОВ А.",
+    "Parent": 10020,
+    "Level": 5,
+    "Id": 10021,
+    "AreaType": 2,
+    "Code": 431035100,
+    "NameRus": "С.МАХАМБЕТОВА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БЕЛКӨЛ К.Ә.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10022,
+    "AreaType": 2,
+    "Code": 431037000,
+    "NameRus": "БЕЛКОЛЬСКАЯ П.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БЕЛКӨЛ К.",
+    "Parent": 10022,
+    "Level": 5,
+    "Id": 10023,
+    "AreaType": 2,
+    "Code": 431037100,
+    "NameRus": "П.БЕЛКОЛЬ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БІРҚАЗАН А.",
+    "Parent": 10022,
+    "Level": 5,
+    "Id": 10024,
+    "AreaType": 2,
+    "Code": 431037200,
+    "NameRus": "С.БИРКАЗАН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚОСШЫҢЫРАУ А.О.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10025,
+    "AreaType": 2,
+    "Code": 431039000,
+    "NameRus": "КОСШЫНЫРАУСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АБАЙ А.",
+    "Parent": 10025,
+    "Level": 5,
+    "Id": 10026,
+    "AreaType": 2,
+    "Code": 431039100,
+    "NameRus": "С.АБАЙ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ДОСАН А.",
+    "Parent": 10025,
+    "Level": 5,
+    "Id": 10027,
+    "AreaType": 2,
+    "Code": 431039200,
+    "NameRus": "С.ДОСАН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАРАУЫЛТӨБЕ А.О.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10028,
+    "AreaType": 2,
+    "Code": 431041000,
+    "NameRus": "КАРАУЛТОБИНСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАРАУЫЛТӨБЕ А.",
+    "Parent": 10028,
+    "Level": 5,
+    "Id": 10029,
+    "AreaType": 2,
+    "Code": 431041100,
+    "NameRus": "С.КАРАУЛТОБЕ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "РЗД.19",
+    "Parent": 998,
+    "Level": 6,
+    "Id": 1003,
+    "AreaType": 2,
+    "Code": 117053109,
+    "NameRus": "РЗД.19"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚЫЗЫЛЖАРМА А.О",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10030,
+    "AreaType": 2,
+    "Code": 431043000,
+    "NameRus": "КЫЗЫЛЖАРМИНСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚЫЗЫЛЖАРМА А.",
+    "Parent": 10030,
+    "Level": 5,
+    "Id": 10031,
+    "AreaType": 2,
+    "Code": 431043100,
+    "NameRus": "С.КЫЗЫЛЖАРМА"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Байқадам а.",
+    "Parent": 10030,
+    "Level": 5,
+    "Id": 10032,
+    "AreaType": 2,
+    "Code": 431043400,
+    "NameRus": "с.Байкадам"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "рзд.11",
+    "Parent": 10030,
+    "Level": 5,
+    "Id": 10033,
+    "AreaType": 2,
+    "Code": 431043600,
+    "NameRus": "рзд.11"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚЫЗЫЛӨЗЕК А.О.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10034,
+    "AreaType": 2,
+    "Code": 431045000,
+    "NameRus": "КЫЗЫЛОЗЕКСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАРАӨЗЕК А.",
+    "Parent": 10034,
+    "Level": 5,
+    "Id": 10035,
+    "AreaType": 2,
+    "Code": 431045100,
+    "NameRus": "С.КАРАОЗЕК"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АЙНАКӨЛ А.",
+    "Parent": 10034,
+    "Level": 5,
+    "Id": 10036,
+    "AreaType": 2,
+    "Code": 431045200,
+    "NameRus": "С.АЙНАКОЛЬ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАРАӨЗЕК СТ.",
+    "Parent": 10034,
+    "Level": 5,
+    "Id": 10037,
+    "AreaType": 2,
+    "Code": 431045300,
+    "NameRus": "СТ.КАРАОЗЕК"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТАЛСУАТ А.О.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10038,
+    "AreaType": 2,
+    "Code": 431046000,
+    "NameRus": "ТАЛСУАТСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТАЛСУАТ А.",
+    "Parent": 10038,
+    "Level": 5,
+    "Id": 10039,
+    "AreaType": 2,
+    "Code": 431046100,
+    "NameRus": "С.ТАЛСУАТ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АТАМЕКЕН А.О.",
+    "Parent": 958,
+    "Level": 4,
+    "Id": 1004,
+    "AreaType": 2,
+    "Code": 117055000,
+    "NameRus": "С.О.АТАМЕКЕН"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Геологов а.",
+    "Parent": 10038,
+    "Level": 5,
+    "Id": 10040,
+    "AreaType": 2,
+    "Code": 431046300,
+    "NameRus": "с.Геологов"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТАСБӨГЕТ К.Ә.",
+    "Parent": 10013,
+    "Level": 4,
+    "Id": 10041,
+    "AreaType": 2,
+    "Code": 431047000,
+    "NameRus": "ТАСБУГЕТСКАЯ П.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТАСБӨГЕТ К.",
+    "Parent": 10041,
+    "Level": 5,
+    "Id": 10042,
+    "AreaType": 2,
+    "Code": 431047100,
+    "NameRus": "П.ТАСБУГЕТ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ИІРКӨЛ А.",
+    "Parent": 10041,
+    "Level": 5,
+    "Id": 10043,
+    "AreaType": 2,
+    "Code": 431047200,
+    "NameRus": "С.ИРКОЛЬ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БАЙҚОҢЫР Қ.Ә.",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 10044,
+    "AreaType": 1,
+    "Code": 431900000,
+    "NameRus": "БАЙКОНЫР Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БАЙҚОҢЫР Қ.",
+    "Parent": 10044,
+    "Level": 4,
+    "Id": 10045,
+    "AreaType": 1,
+    "Code": 431910000,
+    "NameRus": "Г.БАЙКОНЫР"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АРАЛ АУДАНЫ",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 10046,
+    "AreaType": 4,
+    "Code": 433200000,
+    "NameRus": "АРАЛЬСКИЙ РАЙОН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АРАЛ Қ.Ә.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10047,
+    "AreaType": 1,
+    "Code": 433220000,
+    "NameRus": "АРАЛЬСКАЯ Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АРАЛ Қ.",
+    "Parent": 10047,
+    "Level": 5,
+    "Id": 10048,
+    "AreaType": 1,
+    "Code": 433220100,
+    "NameRus": "Г.АРАЛЬСК"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚИРЕК А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10049,
+    "AreaType": 2,
+    "Code": 433231000,
+    "NameRus": "АКИРЕКСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АТАМЕКЕН А.",
+    "Parent": 1004,
+    "Level": 5,
+    "Id": 1005,
+    "AreaType": 2,
+    "Code": 117055100,
+    "NameRus": "С.АТАМЕКЕН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚБАЙ А.",
+    "Parent": 10049,
+    "Level": 5,
+    "Id": 10050,
+    "AreaType": 2,
+    "Code": 433231100,
+    "NameRus": "С.АКБАЙ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АТАНШИ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10051,
+    "AreaType": 2,
+    "Code": 433232000,
+    "NameRus": "АТАНШИНСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖІҢІШКЕҚҰМ А.",
+    "Parent": 10051,
+    "Level": 5,
+    "Id": 10052,
+    "AreaType": 2,
+    "Code": 433232100,
+    "NameRus": "С.ЖИНИШКЕКУМ"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Атанши а.",
+    "Parent": 10051,
+    "Level": 5,
+    "Id": 10053,
+    "AreaType": 2,
+    "Code": 433232200,
+    "NameRus": "с.Атанши"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АМАНӨТКЕЛ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10054,
+    "AreaType": 2,
+    "Code": 433233000,
+    "NameRus": "АМАНОТКЕЛЬСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АМАНӨТКЕЛ А.",
+    "Parent": 10054,
+    "Level": 5,
+    "Id": 10055,
+    "AreaType": 2,
+    "Code": 433233100,
+    "NameRus": "С.АМАНОТКЕЛЬ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚҚҰЛАҚ А.",
+    "Parent": 10054,
+    "Level": 5,
+    "Id": 10056,
+    "AreaType": 2,
+    "Code": 433233300,
+    "NameRus": "С.АККУЛАК"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АҚШАТАУ А.",
+    "Parent": 10054,
+    "Level": 5,
+    "Id": 10057,
+    "AreaType": 2,
+    "Code": 433233400,
+    "NameRus": "С.АКШАТАУ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ХАН А.",
+    "Parent": 10054,
+    "Level": 5,
+    "Id": 10058,
+    "AreaType": 2,
+    "Code": 433233700,
+    "NameRus": "С.ХАН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АРАЛҚҰМ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10059,
+    "AreaType": 2,
+    "Code": 433234000,
+    "NameRus": "АРАЛКУМСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАҢАЖОЛ А.",
+    "Parent": 1004,
+    "Level": 5,
+    "Id": 1006,
+    "AreaType": 2,
+    "Code": 117055200,
+    "NameRus": "С.ЖАНАЖОЛ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АРАЛҚҰМ СТ.",
+    "Parent": 10059,
+    "Level": 5,
+    "Id": 10060,
+    "AreaType": 2,
+    "Code": 433234100,
+    "NameRus": "СТ.АРАЛКУМ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "МОЙНАҚ А.",
+    "Parent": 10059,
+    "Level": 5,
+    "Id": 10061,
+    "AreaType": 2,
+    "Code": 433234400,
+    "NameRus": "С.МОЙНАК"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ШӨМІШ СТ.",
+    "Parent": 10059,
+    "Level": 5,
+    "Id": 10062,
+    "AreaType": 2,
+    "Code": 433234700,
+    "NameRus": "СТ.ШОМИШ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БӨГЕН А.О",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10063,
+    "AreaType": 2,
+    "Code": 433235000,
+    "NameRus": "БОГЕНСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БӨГЕН А.",
+    "Parent": 10063,
+    "Level": 5,
+    "Id": 10064,
+    "AreaType": 2,
+    "Code": 433235100,
+    "NameRus": "С.БОГЕН"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Көне Бөген  а.",
+    "Parent": 10063,
+    "Level": 5,
+    "Id": 10065,
+    "AreaType": 2,
+    "Code": 433235200,
+    "NameRus": "с.Коне Боген"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАРАШАЛАҢ А.",
+    "Parent": 10063,
+    "Level": 5,
+    "Id": 10066,
+    "AreaType": 2,
+    "Code": 433235300,
+    "NameRus": "С.КАРАШАЛАН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАҢАҚҰРЫЛЫС А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10067,
+    "AreaType": 2,
+    "Code": 433236000,
+    "NameRus": "ЖАНАКУРЫЛЫССКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАҢАҚҰРЫЛЫС А.",
+    "Parent": 10067,
+    "Level": 5,
+    "Id": 10068,
+    "AreaType": 2,
+    "Code": 433236100,
+    "NameRus": "С.ЖАНАКУРЫЛЫС"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАҚСЫҚЫЛЫШ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10069,
+    "AreaType": 2,
+    "Code": 433237000,
+    "NameRus": "ЖАКСЫКЫЛЫШСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАРҚАЙЫҢ А.",
+    "Parent": 1004,
+    "Level": 5,
+    "Id": 1007,
+    "AreaType": 2,
+    "Code": 117055300,
+    "NameRus": "С.ЖАРКАЙЫН"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАҚСЫҚЫЛЫШ А.",
+    "Parent": 10069,
+    "Level": 5,
+    "Id": 10070,
+    "AreaType": 2,
+    "Code": 433237100,
+    "NameRus": "С.ЖАКСЫКЫЛЫШ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БЕКБАУЫЛ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10071,
+    "AreaType": 2,
+    "Code": 433238000,
+    "NameRus": "БЕКБАУЫЛСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "БЕКБАУЫЛ СТ.",
+    "Parent": 10071,
+    "Level": 5,
+    "Id": 10072,
+    "AreaType": 2,
+    "Code": 433238100,
+    "NameRus": "СТ.БЕКБАУЫЛ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚҰМБАЗАР А.",
+    "Parent": 10071,
+    "Level": 5,
+    "Id": 10073,
+    "AreaType": 2,
+    "Code": 433238500,
+    "NameRus": "С.КУМБАЗАР"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "РЗД.93 ҮКІЛІСАЙ",
+    "Parent": 10071,
+    "Level": 5,
+    "Id": 10074,
+    "AreaType": 2,
+    "Code": 433238700,
+    "NameRus": "РЗД.93 УКУЛИСАЙ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАМЫСТЫБАС А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10075,
+    "AreaType": 2,
+    "Code": 433239000,
+    "NameRus": "КАМЫСТЫБАССКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "КАМЫСТЫБАС СТ.",
+    "Parent": 10075,
+    "Level": 5,
+    "Id": 10076,
+    "AreaType": 2,
+    "Code": 433239100,
+    "NameRus": "СТ.КАМЫСТЫБАС"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "рзд.91",
+    "Parent": 10075,
+    "Level": 5,
+    "Id": 10077,
+    "AreaType": 2,
+    "Code": 433239800,
+    "NameRus": "рзд.91"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "РЗД.92",
+    "Parent": 10075,
+    "Level": 5,
+    "Id": 10078,
+    "AreaType": 2,
+    "Code": 433239880,
+    "NameRus": "РЗД.92"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖІҢІШКЕҚҰМ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10079,
+    "AreaType": 2,
+    "Code": 433241000,
+    "NameRus": "ЖИНИШКЕКУМСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖАСЫЛ А.",
+    "Parent": 1004,
+    "Level": 5,
+    "Id": 1008,
+    "AreaType": 2,
+    "Code": 117055400,
+    "NameRus": "С.ЖАСЫЛ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ТОҚАБАЙ А.",
+    "Parent": 10079,
+    "Level": 5,
+    "Id": 10080,
+    "AreaType": 2,
+    "Code": 433241100,
+    "NameRus": "С.ТОКАБАЙ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЖЕТЕС БИ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10081,
+    "AreaType": 2,
+    "Code": 433242000,
+    "NameRus": "С.О. ЖЕТЕС БИ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "РАИЫМ А.",
+    "Parent": 10081,
+    "Level": 5,
+    "Id": 10082,
+    "AreaType": 2,
+    "Code": 433242100,
+    "NameRus": "С.РАИМ"
+  },
+  {
+    "IsMarkedToDelete": true,
+    "NameKaz": "Водокачка а.",
+    "Parent": 10081,
+    "Level": 5,
+    "Id": 10083,
+    "AreaType": 2,
+    "Code": 433242300,
+    "NameRus": "с.Водокачка"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЕСКІҰРА А.",
+    "Parent": 10081,
+    "Level": 5,
+    "Id": 10084,
+    "AreaType": 2,
+    "Code": 433242500,
+    "NameRus": "С.ЕСКИУРА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ҚАРАҚҰМ А.О.",
+    "Parent": 10046,
+    "Level": 4,
+    "Id": 10085,
+    "AreaType": 2,
+    "Code": 433243000,
+    "NameRus": "КАРАКУМСКИЙ С.О."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "АБАЙ А.",
+    "Parent": 10085,
+    "Level": 5,
+    "Id": 10086,
+    "AreaType": 2,
+    "Code": 433243100,
+    "NameRus": "С.АБАЙ"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "ЕРІМБЕТЖАҒА А.",
+    "Parent": 10085,
+    "Level": 5,
+    "Id": 10087,
+    "AreaType": 2,
+    "Code": 433243300,
+    "NameRus": "С.ЕРИМБЕТЖАГА"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Абай облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1100000000,
+    "AreaType": 0,
+    "Code": 100000000,
+    "NameRus": "область Абай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтөбе облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1150000000,
+    "AreaType": 0,
+    "Code": 150000000,
+    "NameRus": "Актюбинская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алматы облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1190000000,
+    "AreaType": 0,
+    "Code": 190000000,
+    "NameRus": "Алматинская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Атырау облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1230000000,
+    "AreaType": 0,
+    "Code": 230000000,
+    "NameRus": "Атырауская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Батыс Қазақстан облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1270000000,
+    "AreaType": 0,
+    "Code": 270000000,
+    "NameRus": "Западно-Казахстанская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жамбыл облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1310000000,
+    "AreaType": 0,
+    "Code": 310000000,
+    "NameRus": "Жамбылская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жетісу облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1330000000,
+    "AreaType": 0,
+    "Code": 330000000,
+    "NameRus": "область Жетісу"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарағанды облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1350000000,
+    "AreaType": 0,
+    "Code": 350000000,
+    "NameRus": "Карагандинская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қостанай облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1390000000,
+    "AreaType": 0,
+    "Code": 390000000,
+    "NameRus": "Костанайская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Маңғыстау облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1470000000,
+    "AreaType": 0,
+    "Code": 470000000,
+    "NameRus": "Мангистауская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Павлодар облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1550000000,
+    "AreaType": 0,
+    "Code": 550000000,
+    "NameRus": "Павлодарская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Солтүстік Қазақстан облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1590000000,
+    "AreaType": 0,
+    "Code": 590000000,
+    "NameRus": "Северо-Казахстанская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Түркістан облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1610000000,
+    "AreaType": 0,
+    "Code": 610000000,
+    "NameRus": "Туркестанская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ұлытау облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1620000000,
+    "AreaType": 0,
+    "Code": 620000000,
+    "NameRus": "область Ұлытау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шығыс Қазақстан облысы",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1630000000,
+    "AreaType": 0,
+    "Code": 630000000,
+    "NameRus": "Восточно-Казахстанская область"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Астана қ.",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1710000000,
+    "AreaType": 1,
+    "Code": 710000000,
+    "NameRus": "г.Астана"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алматы қ.",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1750000000,
+    "AreaType": 1,
+    "Code": 750000000,
+    "NameRus": "г.Алматы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шымкент қ.",
+    "Parent": "",
+    "Level": 2,
+    "Id": 1790000000,
+    "AreaType": 1,
+    "Code": 790000000,
+    "NameRus": "г.Шымкент"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Семей Қ.Ә.",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1101000000,
+    "AreaType": 1,
+    "Code": 101000000,
+    "NameRus": "Семей Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Курчатов Қ.Ә.",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1101800000,
+    "AreaType": 1,
+    "Code": 101800000,
+    "NameRus": "Курчатов Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Абай ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1103200000,
+    "AreaType": 2,
+    "Code": 103200000,
+    "NameRus": "Абайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақсуат ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1103400000,
+    "AreaType": 2,
+    "Code": 103400000,
+    "NameRus": "район Ақсуат"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Аягөз ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1103600000,
+    "AreaType": 4,
+    "Code": 103600000,
+    "NameRus": "Аягозский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бесқарағай ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1103800000,
+    "AreaType": 2,
+    "Code": 103800000,
+    "NameRus": "Бескарагайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бородулиха ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1104000000,
+    "AreaType": 2,
+    "Code": 104000000,
+    "NameRus": "Бородулихинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңасемей ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1104100000,
+    "AreaType": 2,
+    "Code": 104100000,
+    "NameRus": "район Жаңасемей"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жарма ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1104200000,
+    "AreaType": 4,
+    "Code": 104200000,
+    "NameRus": "Жарминский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Көкпекті ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1104400000,
+    "AreaType": 2,
+    "Code": 104400000,
+    "NameRus": "Кокпектинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мақаншы ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1104500000,
+    "AreaType": 2,
+    "Code": 104500000,
+    "NameRus": "район Мақаншы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Үржар ауданы",
+    "Parent": 1100000000,
+    "Level": 3,
+    "Id": 1104600000,
+    "AreaType": 2,
+    "Code": 104600000,
+    "NameRus": "Урджарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Көкшетау Қ.Ә.",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1111000000,
+    "AreaType": 3,
+    "Code": 111000000,
+    "NameRus": "Кокшетау Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қосшы Қ.Ә.",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1111600000,
+    "AreaType": 3,
+    "Code": 111600000,
+    "NameRus": "Косшы Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Степногор Қ.Ә.",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1111800000,
+    "AreaType": 3,
+    "Code": 111800000,
+    "NameRus": "Степногорск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақкөл ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1113200000,
+    "AreaType": 4,
+    "Code": 113200000,
+    "NameRus": "Аккольский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Аршалы ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1113400000,
+    "AreaType": 2,
+    "Code": 113400000,
+    "NameRus": "Аршалынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Астрахан ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1113600000,
+    "AreaType": 2,
+    "Code": 113600000,
+    "NameRus": "Астраханский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Атбасар ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1113800000,
+    "AreaType": 4,
+    "Code": 113800000,
+    "NameRus": "Атбасарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бұланды ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1114000000,
+    "AreaType": 4,
+    "Code": 114000000,
+    "NameRus": "Буландынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Егіндікөл ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1114400000,
+    "AreaType": 2,
+    "Code": 114400000,
+    "NameRus": "Егиндыкольский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Біржан сал ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1114500000,
+    "AreaType": 4,
+    "Code": 114500000,
+    "NameRus": "район Биржан сал"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ерейментау ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1114600000,
+    "AreaType": 4,
+    "Code": 114600000,
+    "NameRus": "Ерейментауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Есіл ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1114800000,
+    "AreaType": 4,
+    "Code": 114800000,
+    "NameRus": "Есильский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жақсы ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1115200000,
+    "AreaType": 2,
+    "Code": 115200000,
+    "NameRus": "Жаксынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жарқайың ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1115400000,
+    "AreaType": 4,
+    "Code": 115400000,
+    "NameRus": "Жаркаинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Зеренді ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1115600000,
+    "AreaType": 2,
+    "Code": 115600000,
+    "NameRus": "Зерендинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қорғалжын ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1116000000,
+    "AreaType": 2,
+    "Code": 116000000,
+    "NameRus": "Коргалжынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сандықтау ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1116400000,
+    "AreaType": 2,
+    "Code": 116400000,
+    "NameRus": "Сандыктауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Целиноград ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1116600000,
+    "AreaType": 2,
+    "Code": 116600000,
+    "NameRus": "Целиноградский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шортанды ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1116800000,
+    "AreaType": 2,
+    "Code": 116800000,
+    "NameRus": "Шортандинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бурабай ауданы",
+    "Parent": 1,
+    "Level": 3,
+    "Id": 1117000000,
+    "AreaType": 4,
+    "Code": 117000000,
+    "NameRus": "Бурабайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтөбе Қ.Ә.",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1151000000,
+    "AreaType": 1,
+    "Code": 151000000,
+    "NameRus": "Актобе Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алға ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1153200000,
+    "AreaType": 4,
+    "Code": 153200000,
+    "NameRus": "Алгинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әйтеке би ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1153400000,
+    "AreaType": 2,
+    "Code": 153400000,
+    "NameRus": "Айтекебийский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Байғанин ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1153600000,
+    "AreaType": 2,
+    "Code": 153600000,
+    "NameRus": "Байганинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарғалы ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1154000000,
+    "AreaType": 2,
+    "Code": 154000000,
+    "NameRus": "Каргалинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қобда ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1154200000,
+    "AreaType": 2,
+    "Code": 154200000,
+    "NameRus": "Хобдинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мәртөк ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1154600000,
+    "AreaType": 2,
+    "Code": 154600000,
+    "NameRus": "Мартукский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мұғалжар ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1154800000,
+    "AreaType": 4,
+    "Code": 154800000,
+    "NameRus": "Мугалжарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ойыл ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1155200000,
+    "AreaType": 2,
+    "Code": 155200000,
+    "NameRus": "Уилский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Темір ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1155600000,
+    "AreaType": 4,
+    "Code": 155600000,
+    "NameRus": "Темирский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Хромтау ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1156000000,
+    "AreaType": 4,
+    "Code": 156000000,
+    "NameRus": "Хромтауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шалқар ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1156400000,
+    "AreaType": 4,
+    "Code": 156400000,
+    "NameRus": "Шалкарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ырғыз ауданы",
+    "Parent": 1150000000,
+    "Level": 3,
+    "Id": 1156800000,
+    "AreaType": 2,
+    "Code": 156800000,
+    "NameRus": "Иргизский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қонаев Қ.Ә.",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1191000000,
+    "AreaType": 3,
+    "Code": 191000000,
+    "NameRus": "Қонаев Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алатау Қ.Ә.",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1191800000,
+    "AreaType": 1,
+    "Code": 191800000,
+    "NameRus": "Алатау Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Балқаш ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1193600000,
+    "AreaType": 2,
+    "Code": 193600000,
+    "NameRus": "Балхашский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Еңбекшіқазақ ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1194000000,
+    "AreaType": 4,
+    "Code": 194000000,
+    "NameRus": "Енбекшиказахский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жамбыл ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1194200000,
+    "AreaType": 2,
+    "Code": 194200000,
+    "NameRus": "Жамбылский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Кеген ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1194400000,
+    "AreaType": 2,
+    "Code": 194400000,
+    "NameRus": "Кегенский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарасай ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1195200000,
+    "AreaType": 4,
+    "Code": 195200000,
+    "NameRus": "Карасайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Райымбек ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1195800000,
+    "AreaType": 2,
+    "Code": 195800000,
+    "NameRus": "Райымбекский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Талғар ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1196200000,
+    "AreaType": 4,
+    "Code": 196200000,
+    "NameRus": "Талгарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ұйғыр ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1196600000,
+    "AreaType": 2,
+    "Code": 196600000,
+    "NameRus": "Уйгурский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Іле ауданы",
+    "Parent": 1190000000,
+    "Level": 3,
+    "Id": 1196800000,
+    "AreaType": 2,
+    "Code": 196800000,
+    "NameRus": "Илийский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Атырау Қ.Ә.",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1231000000,
+    "AreaType": 3,
+    "Code": 231000000,
+    "NameRus": "Атырау Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жылыой ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1233600000,
+    "AreaType": 4,
+    "Code": 233600000,
+    "NameRus": "Жылыойский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Индер ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1234000000,
+    "AreaType": 2,
+    "Code": 234000000,
+    "NameRus": "Индерский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Исатай ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1234200000,
+    "AreaType": 2,
+    "Code": 234200000,
+    "NameRus": "Исатайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Құрманғазы ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1234600000,
+    "AreaType": 2,
+    "Code": 234600000,
+    "NameRus": "Курмангазинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қызылқоға ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1234800000,
+    "AreaType": 2,
+    "Code": 234800000,
+    "NameRus": "Кзылкогинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мақат ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1235200000,
+    "AreaType": 2,
+    "Code": 235200000,
+    "NameRus": "Макатский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Махамбет ауданы",
+    "Parent": 1230000000,
+    "Level": 3,
+    "Id": 1235600000,
+    "AreaType": 2,
+    "Code": 235600000,
+    "NameRus": "Махамбетский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Орал Қ.Ә.",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1271000000,
+    "AreaType": 3,
+    "Code": 271000000,
+    "NameRus": "Уральск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақжайық ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1273200000,
+    "AreaType": 2,
+    "Code": 273200000,
+    "NameRus": "Акжаикский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бөрлі ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1273600000,
+    "AreaType": 4,
+    "Code": 273600000,
+    "NameRus": "Бурлинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңақала ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1274000000,
+    "AreaType": 2,
+    "Code": 274000000,
+    "NameRus": "Жангалинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жәнібек ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1274200000,
+    "AreaType": 2,
+    "Code": 274200000,
+    "NameRus": "Жанибекский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бәйтерек ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1274400000,
+    "AreaType": 2,
+    "Code": 274400000,
+    "NameRus": "район Бәйтерек"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Казталовка ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1274800000,
+    "AreaType": 2,
+    "Code": 274800000,
+    "NameRus": "Казталовский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаратөбе ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1275000000,
+    "AreaType": 2,
+    "Code": 275000000,
+    "NameRus": "Каратобинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бөкейордасы ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1275400000,
+    "AreaType": 2,
+    "Code": 275400000,
+    "NameRus": "Бокейординский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сырым ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1275800000,
+    "AreaType": 2,
+    "Code": 275800000,
+    "NameRus": "Сырымский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тасқала ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1276000000,
+    "AreaType": 2,
+    "Code": 276000000,
+    "NameRus": "Таскалинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Теректі ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1276200000,
+    "AreaType": 2,
+    "Code": 276200000,
+    "NameRus": "Теректинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шыңғырлау ауданы",
+    "Parent": 1270000000,
+    "Level": 3,
+    "Id": 1276600000,
+    "AreaType": 2,
+    "Code": 276600000,
+    "NameRus": "Чингирлауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тараз Қ.Ә.",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1311000000,
+    "AreaType": 1,
+    "Code": 311000000,
+    "NameRus": "Тараз Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Байзақ ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1313600000,
+    "AreaType": 2,
+    "Code": 313600000,
+    "NameRus": "Байзакский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жамбыл ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1314000000,
+    "AreaType": 2,
+    "Code": 314000000,
+    "NameRus": "Жамбылский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жуалы ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1314200000,
+    "AreaType": 2,
+    "Code": 314200000,
+    "NameRus": "Жуалынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қордай ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1314800000,
+    "AreaType": 2,
+    "Code": 314800000,
+    "NameRus": "Кордайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тұрар Рысқұлов ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1315000000,
+    "AreaType": 2,
+    "Code": 315000000,
+    "NameRus": "район Турара Рыскулова"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мерке ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1315400000,
+    "AreaType": 2,
+    "Code": 315400000,
+    "NameRus": "Меркенский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мойынқұм ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1315600000,
+    "AreaType": 2,
+    "Code": 315600000,
+    "NameRus": "Мойынкумский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарысу ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1316000000,
+    "AreaType": 4,
+    "Code": 316000000,
+    "NameRus": "Сарысуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Талас ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1316200000,
+    "AreaType": 4,
+    "Code": 316200000,
+    "NameRus": "Таласский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шу ауданы",
+    "Parent": 1310000000,
+    "Level": 3,
+    "Id": 1316600000,
+    "AreaType": 4,
+    "Code": 316600000,
+    "NameRus": "Шуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Талдықорған Қ.Ә.",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1331000000,
+    "AreaType": 3,
+    "Code": 331000000,
+    "NameRus": "Талдыкорган Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Текелі Қ.Ә.",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1331800000,
+    "AreaType": 3,
+    "Code": 331800000,
+    "NameRus": "Текели Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақсу ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1333200000,
+    "AreaType": 2,
+    "Code": 333200000,
+    "NameRus": "Аксуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алакөл ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1333400000,
+    "AreaType": 4,
+    "Code": 333400000,
+    "NameRus": "Алакольский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ескелді ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1333600000,
+    "AreaType": 2,
+    "Code": 333600000,
+    "NameRus": "Ескельдинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Кербұлақ ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1334000000,
+    "AreaType": 2,
+    "Code": 334000000,
+    "NameRus": "Кербулакский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Көксу ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1334200000,
+    "AreaType": 2,
+    "Code": 334200000,
+    "NameRus": "Коксуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаратал ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1334400000,
+    "AreaType": 4,
+    "Code": 334400000,
+    "NameRus": "Каратальский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Панфилов ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1334600000,
+    "AreaType": 4,
+    "Code": 334600000,
+    "NameRus": "Панфиловский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарқан ауданы",
+    "Parent": 1330000000,
+    "Level": 3,
+    "Id": 1334800000,
+    "AreaType": 4,
+    "Code": 334800000,
+    "NameRus": "Сарканский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарағанды Қ.Ә.",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1351000000,
+    "AreaType": 3,
+    "Code": 351000000,
+    "NameRus": "Караганда Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Балқаш Қ.Ә.",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1351600000,
+    "AreaType": 3,
+    "Code": 351600000,
+    "NameRus": "Балхаш Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Приозерск Қ.Ә.",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1352100000,
+    "AreaType": 1,
+    "Code": 352100000,
+    "NameRus": "Приозерск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Саран Қ.Ә.",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1352200000,
+    "AreaType": 3,
+    "Code": 352200000,
+    "NameRus": "Сарань Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Теміртау Қ.Ә.",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1352400000,
+    "AreaType": 3,
+    "Code": 352400000,
+    "NameRus": "Темиртау Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шахтинск Қ.Ә.",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1352800000,
+    "AreaType": 3,
+    "Code": 352800000,
+    "NameRus": "Шахтинск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Абай ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1353200000,
+    "AreaType": 4,
+    "Code": 353200000,
+    "NameRus": "Абайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтоғай ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1353600000,
+    "AreaType": 2,
+    "Code": 353600000,
+    "NameRus": "Актогайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бұқар жырау ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1354000000,
+    "AreaType": 2,
+    "Code": 354000000,
+    "NameRus": "Бухар-Жырауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарқаралы ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1354800000,
+    "AreaType": 4,
+    "Code": 354800000,
+    "NameRus": "Каркаралинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Нұра ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1355200000,
+    "AreaType": 2,
+    "Code": 355200000,
+    "NameRus": "Нуринский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Осакаров ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1355600000,
+    "AreaType": 2,
+    "Code": 355600000,
+    "NameRus": "Осакаровский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шет ауданы",
+    "Parent": 1350000000,
+    "Level": 3,
+    "Id": 1356400000,
+    "AreaType": 2,
+    "Code": 356400000,
+    "NameRus": "Шетский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қостанай Қ.Ә.",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1391000000,
+    "AreaType": 1,
+    "Code": 391000000,
+    "NameRus": "Костанай Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Арқалық Қ.Ә.",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1391600000,
+    "AreaType": 3,
+    "Code": 391600000,
+    "NameRus": "Аркалык Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Лисаков Қ.Ә.",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1392000000,
+    "AreaType": 3,
+    "Code": 392000000,
+    "NameRus": "Лисаковск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Рудный Қ.Ә.",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1392400000,
+    "AreaType": 3,
+    "Code": 392400000,
+    "NameRus": "Рудный Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алтынсарин ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1393200000,
+    "AreaType": 2,
+    "Code": 393200000,
+    "NameRus": "Алтынсаринский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Амангелді ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1393400000,
+    "AreaType": 2,
+    "Code": 393400000,
+    "NameRus": "Амангельдинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әулиекөл ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1393600000,
+    "AreaType": 2,
+    "Code": 393600000,
+    "NameRus": "Аулиекольский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Денисов ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1394000000,
+    "AreaType": 2,
+    "Code": 394000000,
+    "NameRus": "Денисовский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жангелдин ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1394200000,
+    "AreaType": 2,
+    "Code": 394200000,
+    "NameRus": "Жангельдинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жітіқара ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1394400000,
+    "AreaType": 4,
+    "Code": 394400000,
+    "NameRus": "Житикаринский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қамысты ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1394800000,
+    "AreaType": 2,
+    "Code": 394800000,
+    "NameRus": "Камыстинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарабалық ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1395000000,
+    "AreaType": 2,
+    "Code": 395000000,
+    "NameRus": "Карабалыкский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарасу ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1395200000,
+    "AreaType": 2,
+    "Code": 395200000,
+    "NameRus": "Карасуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қостанай ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1395400000,
+    "AreaType": 4,
+    "Code": 395400000,
+    "NameRus": "Костанайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Меңдіқара ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1395600000,
+    "AreaType": 2,
+    "Code": 395600000,
+    "NameRus": "Мендыкаринский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Наурызым ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1395800000,
+    "AreaType": 2,
+    "Code": 395800000,
+    "NameRus": "Наурзумский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарыкөл ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1396200000,
+    "AreaType": 2,
+    "Code": 396200000,
+    "NameRus": "Сарыкольский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бейімбет Майлин ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1396400000,
+    "AreaType": 2,
+    "Code": 396400000,
+    "NameRus": "район Беимбета Майлина"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ұзынкөл ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1396600000,
+    "AreaType": 2,
+    "Code": 396600000,
+    "NameRus": "Узункольский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Федоров ауданы",
+    "Parent": 1390000000,
+    "Level": 3,
+    "Id": 1396800000,
+    "AreaType": 2,
+    "Code": 396800000,
+    "NameRus": "Федоровский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жалағаш ауданы",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 1433600000,
+    "AreaType": 2,
+    "Code": 433600000,
+    "NameRus": "Жалагашский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңақорған ауданы",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 1434000000,
+    "AreaType": 2,
+    "Code": 434000000,
+    "NameRus": "Жанакорганский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қазалы ауданы",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 1434400000,
+    "AreaType": 4,
+    "Code": 434400000,
+    "NameRus": "Казалинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қармақшы ауданы",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 1434600000,
+    "AreaType": 2,
+    "Code": 434600000,
+    "NameRus": "Кармакшинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сырдария ауданы",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 1434800000,
+    "AreaType": 2,
+    "Code": 434800000,
+    "NameRus": "Сырдарьинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шиелі ауданы",
+    "Parent": 10012,
+    "Level": 3,
+    "Id": 1435200000,
+    "AreaType": 2,
+    "Code": 435200000,
+    "NameRus": "Шиелийский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтау Г.А.",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1471000000,
+    "AreaType": 3,
+    "Code": 471000000,
+    "NameRus": "Актау Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңаөзен Қ.Ә.",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1471800000,
+    "AreaType": 3,
+    "Code": 471800000,
+    "NameRus": "Жанаозен Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бейнеу ауданы",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1473600000,
+    "AreaType": 2,
+    "Code": 473600000,
+    "NameRus": "Бейнеуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарақия ауданы",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1474200000,
+    "AreaType": 2,
+    "Code": 474200000,
+    "NameRus": "Каракиянский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Маңғыстау ауданы",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1474600000,
+    "AreaType": 2,
+    "Code": 474600000,
+    "NameRus": "Мангистауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мұнайлы ауданы",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1475000000,
+    "AreaType": 2,
+    "Code": 475000000,
+    "NameRus": "Мунайлинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Түпқараған ауданы",
+    "Parent": 1470000000,
+    "Level": 3,
+    "Id": 1475200000,
+    "AreaType": 4,
+    "Code": 475200000,
+    "NameRus": "Тупкараганский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Павлодар Қ.Ә.",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1551000000,
+    "AreaType": 3,
+    "Code": 551000000,
+    "NameRus": "Павлодар Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақсу Қ.Ә.",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1551600000,
+    "AreaType": 3,
+    "Code": 551600000,
+    "NameRus": "Аксу Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Екібастұз Қ.Ә.",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1552200000,
+    "AreaType": 3,
+    "Code": 552200000,
+    "NameRus": "Экибастуз Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтоғай ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1553200000,
+    "AreaType": 2,
+    "Code": 553200000,
+    "NameRus": "Актогайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Баянауыл ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1553600000,
+    "AreaType": 2,
+    "Code": 553600000,
+    "NameRus": "Баянаульский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Железин ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1554200000,
+    "AreaType": 2,
+    "Code": 554200000,
+    "NameRus": "Железинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ертіс ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1554600000,
+    "AreaType": 2,
+    "Code": 554600000,
+    "NameRus": "Иртышский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тереңкөл ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1554800000,
+    "AreaType": 2,
+    "Code": 554800000,
+    "NameRus": "район Тереңкөл"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Аққулы ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1555200000,
+    "AreaType": 2,
+    "Code": 555200000,
+    "NameRus": "район Аққулы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Май ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1555600000,
+    "AreaType": 2,
+    "Code": 555600000,
+    "NameRus": "Майский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Павлодар ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1556000000,
+    "AreaType": 2,
+    "Code": 556000000,
+    "NameRus": "Павлодарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Успен ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1556400000,
+    "AreaType": 2,
+    "Code": 556400000,
+    "NameRus": "Успенский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шарбақты ауданы",
+    "Parent": 1550000000,
+    "Level": 3,
+    "Id": 1556800000,
+    "AreaType": 2,
+    "Code": 556800000,
+    "NameRus": "Щербактинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Петропавл Қ.Ә.",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1591000000,
+    "AreaType": 1,
+    "Code": 591000000,
+    "NameRus": "Петропавловск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Айыртау ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1593200000,
+    "AreaType": 2,
+    "Code": 593200000,
+    "NameRus": "Айыртауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақжар ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1593400000,
+    "AreaType": 2,
+    "Code": 593400000,
+    "NameRus": "Акжарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мағжан Жұмабаев ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1593600000,
+    "AreaType": 4,
+    "Code": 593600000,
+    "NameRus": "Район Магжана Жумабаева"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Есіл ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1594200000,
+    "AreaType": 2,
+    "Code": 594200000,
+    "NameRus": "Есильский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жамбыл ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1594600000,
+    "AreaType": 2,
+    "Code": 594600000,
+    "NameRus": "Жамбылский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қызылжар ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1595000000,
+    "AreaType": 2,
+    "Code": 595000000,
+    "NameRus": "Кызылжарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мамлют ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1595200000,
+    "AreaType": 4,
+    "Code": 595200000,
+    "NameRus": "Мамлютский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шал ақын ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1595600000,
+    "AreaType": 4,
+    "Code": 595600000,
+    "NameRus": "Район Шал акына"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Аққайың ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1595800000,
+    "AreaType": 2,
+    "Code": 595800000,
+    "NameRus": "Аккайынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тайынша ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1596000000,
+    "AreaType": 4,
+    "Code": 596000000,
+    "NameRus": "Тайыншинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тимирязев ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1596200000,
+    "AreaType": 2,
+    "Code": 596200000,
+    "NameRus": "Тимирязевский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Уәлиханов ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1596400000,
+    "AreaType": 2,
+    "Code": 596400000,
+    "NameRus": "Уалихановский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ғабит Мүсірепов атын.ауданы",
+    "Parent": 1590000000,
+    "Level": 3,
+    "Id": 1596600000,
+    "AreaType": 2,
+    "Code": 596600000,
+    "NameRus": "Район им.Габита Мусрепова"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Түркістан Қ.Ә.",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1611000000,
+    "AreaType": 1,
+    "Code": 611000000,
+    "NameRus": "Туркестан Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Арыс Қ.Ә.",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1611600000,
+    "AreaType": 3,
+    "Code": 611600000,
+    "NameRus": "Арысь Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Кентау Қ.Ә.",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1612000000,
+    "AreaType": 3,
+    "Code": 612000000,
+    "NameRus": "Кентау Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бәйдібек ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1613600000,
+    "AreaType": 2,
+    "Code": 613600000,
+    "NameRus": "район Байдибека"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жетісай ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1613800000,
+    "AreaType": 4,
+    "Code": 613800000,
+    "NameRus": "Жетысайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Келес ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1613900000,
+    "AreaType": 2,
+    "Code": 613900000,
+    "NameRus": "Келесский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қазығұрт ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1614000000,
+    "AreaType": 2,
+    "Code": 614000000,
+    "NameRus": "Казыгуртский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мақтаарал ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1614400000,
+    "AreaType": 2,
+    "Code": 614400000,
+    "NameRus": "Мактааральский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ордабасы ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1614600000,
+    "AreaType": 2,
+    "Code": 614600000,
+    "NameRus": "Ордабасынский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Отырар ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1614800000,
+    "AreaType": 2,
+    "Code": 614800000,
+    "NameRus": "Отрарский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сайрам ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1615200000,
+    "AreaType": 2,
+    "Code": 615200000,
+    "NameRus": "Сайрамский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарыағаш ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1615400000,
+    "AreaType": 4,
+    "Code": 615400000,
+    "NameRus": "Сарыагашский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сауран ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1615500000,
+    "AreaType": 2,
+    "Code": 615500000,
+    "NameRus": "район Сауран"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Созақ ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1615600000,
+    "AreaType": 2,
+    "Code": 615600000,
+    "NameRus": "Сузакский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Төле би ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1615800000,
+    "AreaType": 4,
+    "Code": 615800000,
+    "NameRus": "Толебийский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Түлкібас ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1616000000,
+    "AreaType": 2,
+    "Code": 616000000,
+    "NameRus": "Тюлькубасский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шардара ауданы",
+    "Parent": 1610000000,
+    "Level": 3,
+    "Id": 1616400000,
+    "AreaType": 4,
+    "Code": 616400000,
+    "NameRus": "Шардаринский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жезқазған Қ.Ә.",
+    "Parent": 1620000000,
+    "Level": 3,
+    "Id": 1621000000,
+    "AreaType": 3,
+    "Code": 621000000,
+    "NameRus": "Жезказган Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаражал Қ.Ә.",
+    "Parent": 1620000000,
+    "Level": 3,
+    "Id": 1621800000,
+    "AreaType": 3,
+    "Code": 621800000,
+    "NameRus": "Каражал Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сәтбаев Қ.Ә.",
+    "Parent": 1620000000,
+    "Level": 3,
+    "Id": 1622000000,
+    "AreaType": 3,
+    "Code": 622000000,
+    "NameRus": "Сатпаев Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңаарқа ауданы",
+    "Parent": 1620000000,
+    "Level": 3,
+    "Id": 1623600000,
+    "AreaType": 2,
+    "Code": 623600000,
+    "NameRus": "Жанааркинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ұлытау ауданы",
+    "Parent": 1620000000,
+    "Level": 3,
+    "Id": 1623800000,
+    "AreaType": 2,
+    "Code": 623800000,
+    "NameRus": "Улытауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Өскемен Қ.Ә.",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1631000000,
+    "AreaType": 3,
+    "Code": 631000000,
+    "NameRus": "Усть-Каменогорск Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Риддер Қ.Ә.",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1632400000,
+    "AreaType": 3,
+    "Code": 632400000,
+    "NameRus": "Риддер Г.А."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Глубокое ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1634000000,
+    "AreaType": 2,
+    "Code": 634000000,
+    "NameRus": "Глубоковский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Зайсан ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1634600000,
+    "AreaType": 4,
+    "Code": 634600000,
+    "NameRus": "Зайсанский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алтай ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1634800000,
+    "AreaType": 4,
+    "Code": 634800000,
+    "NameRus": "район Алтай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Күршім ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1635200000,
+    "AreaType": 2,
+    "Code": 635200000,
+    "NameRus": "Курчумский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Катонқарағай ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1635400000,
+    "AreaType": 2,
+    "Code": 635400000,
+    "NameRus": "Катон-Карагайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Марқакөл ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1635500000,
+    "AreaType": 2,
+    "Code": 635500000,
+    "NameRus": "район Марқакөл"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Самар ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1635600000,
+    "AreaType": 2,
+    "Code": 635600000,
+    "NameRus": "район Самар"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тарбағатай ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1635800000,
+    "AreaType": 2,
+    "Code": 635800000,
+    "NameRus": "Тарбагатайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ұлан ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1636200000,
+    "AreaType": 2,
+    "Code": 636200000,
+    "NameRus": "Уланский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Үлкен Нарын ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1636300000,
+    "AreaType": 2,
+    "Code": 636300000,
+    "NameRus": "район Үлкен Нарын"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шемонаиха ауданы",
+    "Parent": 1630000000,
+    "Level": 3,
+    "Id": 1636800000,
+    "AreaType": 4,
+    "Code": 636800000,
+    "NameRus": "Шемонаихинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алматы ауданы",
+    "Parent": 1710000000,
+    "Level": 3,
+    "Id": 1711110000,
+    "AreaType": 1,
+    "Code": 711110000,
+    "NameRus": "район Алматы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Есіл ауданы",
+    "Parent": 1710000000,
+    "Level": 3,
+    "Id": 1711210000,
+    "AreaType": 1,
+    "Code": 711210000,
+    "NameRus": "район Есиль"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарыарқа ауданы",
+    "Parent": 1710000000,
+    "Level": 3,
+    "Id": 1711310000,
+    "AreaType": 1,
+    "Code": 711310000,
+    "NameRus": "район Сарыарка"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Байқоңыр ауданы",
+    "Parent": 1710000000,
+    "Level": 3,
+    "Id": 1711410000,
+    "AreaType": 1,
+    "Code": 711410000,
+    "NameRus": "район Байқоңыр"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Нұра ауданы",
+    "Parent": 1710000000,
+    "Level": 3,
+    "Id": 1711510000,
+    "AreaType": 1,
+    "Code": 711510000,
+    "NameRus": "район Нұра"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарайшық ауданы",
+    "Parent": 1710000000,
+    "Level": 3,
+    "Id": 1711610000,
+    "AreaType": 1,
+    "Code": 711610000,
+    "NameRus": "район Сарайшық"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алмалы ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751110000,
+    "AreaType": 1,
+    "Code": 751110000,
+    "NameRus": "Алмалинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алатау ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751210000,
+    "AreaType": 1,
+    "Code": 751210000,
+    "NameRus": "Алатауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әуезов ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751310000,
+    "AreaType": 1,
+    "Code": 751310000,
+    "NameRus": "Ауэзовский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Бостандық ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751410000,
+    "AreaType": 1,
+    "Code": 751410000,
+    "NameRus": "Бостандыкский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жетісу ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751510000,
+    "AreaType": 1,
+    "Code": 751510000,
+    "NameRus": "Жетысуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Медеу ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751710000,
+    "AreaType": 1,
+    "Code": 751710000,
+    "NameRus": "Медеуский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Наурызбай ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751810000,
+    "AreaType": 1,
+    "Code": 751810000,
+    "NameRus": "Наурызбайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Түрксіб ауданы",
+    "Parent": 1750000000,
+    "Level": 3,
+    "Id": 1751910000,
+    "AreaType": 1,
+    "Code": 751910000,
+    "NameRus": "Турксибский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Абай ауданы",
+    "Parent": 1790000000,
+    "Level": 3,
+    "Id": 1791110000,
+    "AreaType": 1,
+    "Code": 791110000,
+    "NameRus": "Абайский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әл Фараби ауданы",
+    "Parent": 1790000000,
+    "Level": 3,
+    "Id": 1791310000,
+    "AreaType": 1,
+    "Code": 791310000,
+    "NameRus": "Аль-Фарабийский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Еңбекші ауданы",
+    "Parent": 1790000000,
+    "Level": 3,
+    "Id": 1791510000,
+    "AreaType": 1,
+    "Code": 791510000,
+    "NameRus": "Енбекшинский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаратау ауданы",
+    "Parent": 1790000000,
+    "Level": 3,
+    "Id": 1791710000,
+    "AreaType": 1,
+    "Code": 791710000,
+    "NameRus": "Каратауский район"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тұран ауданы",
+    "Parent": 1790000000,
+    "Level": 3,
+    "Id": 1791910000,
+    "AreaType": 1,
+    "Code": 791910000,
+    "NameRus": "район Тұран"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Семей қ.",
+    "Parent": 1101000000,
+    "Level": 4,
+    "Id": 1101010000,
+    "AreaType": 1,
+    "Code": 101010000,
+    "NameRus": "г.Семей"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Курчатов қ.",
+    "Parent": 1101800000,
+    "Level": 4,
+    "Id": 1101810000,
+    "AreaType": 1,
+    "Code": 101810000,
+    "NameRus": "г.Курчатов"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Аягөз қ.ә.",
+    "Parent": 1103600000,
+    "Level": 4,
+    "Id": 1103620000,
+    "AreaType": 3,
+    "Code": 103620000,
+    "NameRus": "Аягоз г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шар қ.ә.",
+    "Parent": 1104200000,
+    "Level": 4,
+    "Id": 1104221000,
+    "AreaType": 3,
+    "Code": 104221000,
+    "NameRus": "Шарская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Көкшетау қ.",
+    "Parent": 1111000000,
+    "Level": 4,
+    "Id": 1111010000,
+    "AreaType": 1,
+    "Code": 111010000,
+    "NameRus": "г.Кокшетау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қосшы қ.",
+    "Parent": 1111600000,
+    "Level": 4,
+    "Id": 1111610000,
+    "AreaType": 1,
+    "Code": 111610000,
+    "NameRus": "г.Косшы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақкөл қ.ә.",
+    "Parent": 1113200000,
+    "Level": 4,
+    "Id": 1113220000,
+    "AreaType": 3,
+    "Code": 113220000,
+    "NameRus": "Аккольская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Атбасар қ.",
+    "Parent": 1113800000,
+    "Level": 4,
+    "Id": 1113820100,
+    "AreaType": 1,
+    "Code": 113820100,
+    "NameRus": "г.Атбасар"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Макинск қ.",
+    "Parent": 1114000000,
+    "Level": 4,
+    "Id": 1114020100,
+    "AreaType": 1,
+    "Code": 114020100,
+    "NameRus": "г.Макинск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Степняк қ.ә.",
+    "Parent": 1114500000,
+    "Level": 4,
+    "Id": 1114520000,
+    "AreaType": 3,
+    "Code": 114520000,
+    "NameRus": "Степнякская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ерейментау қ.",
+    "Parent": 1114600000,
+    "Level": 4,
+    "Id": 1114620100,
+    "AreaType": 1,
+    "Code": 114620100,
+    "NameRus": "г.Ерейментау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Есіл қ.",
+    "Parent": 1114800000,
+    "Level": 4,
+    "Id": 1114820100,
+    "AreaType": 1,
+    "Code": 114820100,
+    "NameRus": "г.Есиль"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Державин қ.",
+    "Parent": 1115400000,
+    "Level": 4,
+    "Id": 1115420100,
+    "AreaType": 1,
+    "Code": 115420100,
+    "NameRus": "г.Державинск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Щучинск қ.ә.",
+    "Parent": 1117000000,
+    "Level": 4,
+    "Id": 1117020000,
+    "AreaType": 1,
+    "Code": 117020000,
+    "NameRus": "Щучинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтөбе қ.",
+    "Parent": 1151000000,
+    "Level": 4,
+    "Id": 1151010000,
+    "AreaType": 1,
+    "Code": 151010000,
+    "NameRus": "г.Актобе"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Астана ауданы",
+    "Parent": 1151000000,
+    "Level": 4,
+    "Id": 1151011100,
+    "AreaType": 1,
+    "Code": 151011100,
+    "NameRus": "район Астана"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алматы ауданы",
+    "Parent": 1151000000,
+    "Level": 4,
+    "Id": 1151013100,
+    "AreaType": 1,
+    "Code": 151013100,
+    "NameRus": "район Алматы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алға қ.ә.",
+    "Parent": 1153200000,
+    "Level": 4,
+    "Id": 1153220000,
+    "AreaType": 1,
+    "Code": 153220000,
+    "NameRus": "Алгинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қандыағаш қ.ә.",
+    "Parent": 1154800000,
+    "Level": 4,
+    "Id": 1154820000,
+    "AreaType": 1,
+    "Code": 154820000,
+    "NameRus": "Кандыагашская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ембі қ.ә.",
+    "Parent": 1154800000,
+    "Level": 4,
+    "Id": 1154823000,
+    "AreaType": 3,
+    "Code": 154823000,
+    "NameRus": "Эмбинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жем қ.ә.",
+    "Parent": 1154800000,
+    "Level": 4,
+    "Id": 1154825000,
+    "AreaType": 1,
+    "Code": 154825000,
+    "NameRus": "Жемская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Темір қ.ә.",
+    "Parent": 1155600000,
+    "Level": 4,
+    "Id": 1155621000,
+    "AreaType": 3,
+    "Code": 155621000,
+    "NameRus": "Темирская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Хромтау қ.",
+    "Parent": 1156000000,
+    "Level": 4,
+    "Id": 1156020100,
+    "AreaType": 1,
+    "Code": 156020100,
+    "NameRus": "г.Хромтау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шалқар қ.ә.",
+    "Parent": 1156400000,
+    "Level": 4,
+    "Id": 1156420000,
+    "AreaType": 1,
+    "Code": 156420000,
+    "NameRus": "Шалкарская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қонаев қ.",
+    "Parent": 1191000000,
+    "Level": 4,
+    "Id": 1191010000,
+    "AreaType": 1,
+    "Code": 191010000,
+    "NameRus": "г.Қонаев"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алатау қ.",
+    "Parent": 1191800000,
+    "Level": 4,
+    "Id": 1191810000,
+    "AreaType": 1,
+    "Code": 191810000,
+    "NameRus": "г.Алатау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Есік қ.ә.",
+    "Parent": 1194000000,
+    "Level": 4,
+    "Id": 1194020000,
+    "AreaType": 1,
+    "Code": 194020000,
+    "NameRus": "Есикская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаскелең қ.ә.",
+    "Parent": 1195200000,
+    "Level": 4,
+    "Id": 1195220000,
+    "AreaType": 3,
+    "Code": 195220000,
+    "NameRus": "Каскеленская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Талғар қ.ә.",
+    "Parent": 1196200000,
+    "Level": 4,
+    "Id": 1196220000,
+    "AreaType": 1,
+    "Code": 196220000,
+    "NameRus": "Талгарская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Атырау қ.",
+    "Parent": 1231000000,
+    "Level": 4,
+    "Id": 1231010000,
+    "AreaType": 1,
+    "Code": 231010000,
+    "NameRus": "г.Атырау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Құлсары қ.ә.",
+    "Parent": 1233600000,
+    "Level": 4,
+    "Id": 1233620000,
+    "AreaType": 1,
+    "Code": 233620000,
+    "NameRus": "Кульсаринская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Орал қ.",
+    "Parent": 1271000000,
+    "Level": 4,
+    "Id": 1271010000,
+    "AreaType": 1,
+    "Code": 271010000,
+    "NameRus": "г.Уральск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақсай қ.ә.",
+    "Parent": 1273600000,
+    "Level": 4,
+    "Id": 1273620000,
+    "AreaType": 1,
+    "Code": 273620000,
+    "NameRus": "Аксайская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тараз қ.",
+    "Parent": 1311000000,
+    "Level": 4,
+    "Id": 1311010000,
+    "AreaType": 1,
+    "Code": 311010000,
+    "NameRus": "г.Тараз"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әулиеата ауданы",
+    "Parent": 1311000000,
+    "Level": 4,
+    "Id": 1311011100,
+    "AreaType": 1,
+    "Code": 311011100,
+    "NameRus": "район Әулиеата"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жібек жолы ауданы",
+    "Parent": 1311000000,
+    "Level": 4,
+    "Id": 1311013100,
+    "AreaType": 1,
+    "Code": 311013100,
+    "NameRus": "район Жібек жолы"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңатас қ.",
+    "Parent": 1316000000,
+    "Level": 4,
+    "Id": 1316020100,
+    "AreaType": 1,
+    "Code": 316020100,
+    "NameRus": "г.Жанатас"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаратау қ.",
+    "Parent": 1316200000,
+    "Level": 4,
+    "Id": 1316220100,
+    "AreaType": 1,
+    "Code": 316220100,
+    "NameRus": "г.Каратау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шу қ.ә.",
+    "Parent": 1316600000,
+    "Level": 4,
+    "Id": 1316621000,
+    "AreaType": 1,
+    "Code": 316621000,
+    "NameRus": "Шуская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Талдықорған қ.",
+    "Parent": 1331000000,
+    "Level": 4,
+    "Id": 1331010000,
+    "AreaType": 1,
+    "Code": 331010000,
+    "NameRus": "г.Талдыкорган"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Текелі қ.",
+    "Parent": 1331800000,
+    "Level": 4,
+    "Id": 1331810000,
+    "AreaType": 1,
+    "Code": 331810000,
+    "NameRus": "г.Текели"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Үшарал қ.ә.",
+    "Parent": 1333400000,
+    "Level": 4,
+    "Id": 1333420000,
+    "AreaType": 3,
+    "Code": 333420000,
+    "NameRus": "Ушаральская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Үштөбе қ.ә.",
+    "Parent": 1334400000,
+    "Level": 4,
+    "Id": 1334420000,
+    "AreaType": 3,
+    "Code": 334420000,
+    "NameRus": "Уштобинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаркент қ.ә.",
+    "Parent": 1334600000,
+    "Level": 4,
+    "Id": 1334620000,
+    "AreaType": 1,
+    "Code": 334620000,
+    "NameRus": "Жаркентская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарқан қ.ә.",
+    "Parent": 1334800000,
+    "Level": 4,
+    "Id": 1334820000,
+    "AreaType": 3,
+    "Code": 334820000,
+    "NameRus": "Сарканская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарағанды қ.",
+    "Parent": 1351000000,
+    "Level": 4,
+    "Id": 1351010000,
+    "AreaType": 1,
+    "Code": 351010000,
+    "NameRus": "г.Караганда"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әлихан Бөкейхан а.ә.",
+    "Parent": 1351000000,
+    "Level": 4,
+    "Id": 1351011000,
+    "AreaType": 3,
+    "Code": 351011000,
+    "NameRus": "Әлихан Бөкейхан р.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қазыбек би атын. а.ә.",
+    "Parent": 1351000000,
+    "Level": 4,
+    "Id": 1351013000,
+    "AreaType": 1,
+    "Code": 351013000,
+    "NameRus": "р.а. им.Казыбек би"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Балқаш қ.",
+    "Parent": 1351600000,
+    "Level": 4,
+    "Id": 1351610000,
+    "AreaType": 1,
+    "Code": 351610000,
+    "NameRus": "г.Балхаш"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Приозерск қ.",
+    "Parent": 1352100000,
+    "Level": 4,
+    "Id": 1352110000,
+    "AreaType": 1,
+    "Code": 352110000,
+    "NameRus": "г.Приозерск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Саран қ.",
+    "Parent": 1352200000,
+    "Level": 4,
+    "Id": 1352210000,
+    "AreaType": 1,
+    "Code": 352210000,
+    "NameRus": "г.Сарань"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Теміртау қ.",
+    "Parent": 1352400000,
+    "Level": 4,
+    "Id": 1352410000,
+    "AreaType": 1,
+    "Code": 352410000,
+    "NameRus": "г.Темиртау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шахтинск қ.",
+    "Parent": 1352800000,
+    "Level": 4,
+    "Id": 1352810000,
+    "AreaType": 1,
+    "Code": 352810000,
+    "NameRus": "г.Шахтинск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Абай қ.ә.",
+    "Parent": 1353200000,
+    "Level": 4,
+    "Id": 1353220000,
+    "AreaType": 1,
+    "Code": 353220000,
+    "NameRus": "Абайская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қарқаралы қ.",
+    "Parent": 1354800000,
+    "Level": 4,
+    "Id": 1354820100,
+    "AreaType": 1,
+    "Code": 354820100,
+    "NameRus": "г.Каркаралинск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қостанай қ.",
+    "Parent": 1391000000,
+    "Level": 4,
+    "Id": 1391010000,
+    "AreaType": 1,
+    "Code": 391010000,
+    "NameRus": "г.Костанай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Арқалық қ.",
+    "Parent": 1391600000,
+    "Level": 4,
+    "Id": 1391610000,
+    "AreaType": 1,
+    "Code": 391610000,
+    "NameRus": "г.Аркалык"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Лисаков қ.",
+    "Parent": 1392000000,
+    "Level": 4,
+    "Id": 1392010000,
+    "AreaType": 1,
+    "Code": 392010000,
+    "NameRus": "г.Лисаковск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Рудный қ.",
+    "Parent": 1392400000,
+    "Level": 4,
+    "Id": 1392410000,
+    "AreaType": 1,
+    "Code": 392410000,
+    "NameRus": "г.Рудный"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жітіқара қ.",
+    "Parent": 1394400000,
+    "Level": 4,
+    "Id": 1394420100,
+    "AreaType": 1,
+    "Code": 394420100,
+    "NameRus": "г.Житикара"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тобыл қ.ә.",
+    "Parent": 1395400000,
+    "Level": 4,
+    "Id": 1395420000,
+    "AreaType": 1,
+    "Code": 395420000,
+    "NameRus": "Тобылская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қазалы қ.ә.",
+    "Parent": 1434400000,
+    "Level": 4,
+    "Id": 1434423000,
+    "AreaType": 1,
+    "Code": 434423000,
+    "NameRus": "Казалинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақтау қ.",
+    "Parent": 1471000000,
+    "Level": 4,
+    "Id": 1471010000,
+    "AreaType": 1,
+    "Code": 471010000,
+    "NameRus": "г.Актау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаңаөзен қ.",
+    "Parent": 1471800000,
+    "Level": 4,
+    "Id": 1471810000,
+    "AreaType": 1,
+    "Code": 471810000,
+    "NameRus": "г.Жанаозен"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Форт-Шевченко ќ.",
+    "Parent": 1475200000,
+    "Level": 4,
+    "Id": 1475220100,
+    "AreaType": 1,
+    "Code": 475220100,
+    "NameRus": "г.Форт-Шевченко"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Павлодар қ.",
+    "Parent": 1551000000,
+    "Level": 4,
+    "Id": 1551010000,
+    "AreaType": 1,
+    "Code": 551010000,
+    "NameRus": "г.Павлодар"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақсу қ.",
+    "Parent": 1551600000,
+    "Level": 4,
+    "Id": 1551610000,
+    "AreaType": 1,
+    "Code": 551610000,
+    "NameRus": "г.Аксу"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Екібастұз қ.",
+    "Parent": 1552200000,
+    "Level": 4,
+    "Id": 1552210000,
+    "AreaType": 1,
+    "Code": 552210000,
+    "NameRus": "г.Экибастуз"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Петропавл қ.",
+    "Parent": 1591000000,
+    "Level": 4,
+    "Id": 1591010000,
+    "AreaType": 1,
+    "Code": 591010000,
+    "NameRus": "г.Петропавловск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Булаев қ.ә.",
+    "Parent": 1593600000,
+    "Level": 4,
+    "Id": 1593620000,
+    "AreaType": 3,
+    "Code": 593620000,
+    "NameRus": "Булаевская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мамлют қ.ә.",
+    "Parent": 1595200000,
+    "Level": 4,
+    "Id": 1595220000,
+    "AreaType": 1,
+    "Code": 595220000,
+    "NameRus": "Мамлютская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сергеев қ.ә.",
+    "Parent": 1595600000,
+    "Level": 4,
+    "Id": 1595620000,
+    "AreaType": 1,
+    "Code": 595620000,
+    "NameRus": "Сергеевская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тайынша қ.ә.",
+    "Parent": 1596000000,
+    "Level": 4,
+    "Id": 1596020000,
+    "AreaType": 1,
+    "Code": 596020000,
+    "NameRus": "Тайыншинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Түркістан қ.",
+    "Parent": 1611000000,
+    "Level": 4,
+    "Id": 1611010000,
+    "AreaType": 1,
+    "Code": 611010000,
+    "NameRus": "г.Туркестан"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Арыс қ.",
+    "Parent": 1611600000,
+    "Level": 4,
+    "Id": 1611610000,
+    "AreaType": 1,
+    "Code": 611610000,
+    "NameRus": "г.Арысь"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Кентау қ.",
+    "Parent": 1612000000,
+    "Level": 4,
+    "Id": 1612010000,
+    "AreaType": 1,
+    "Code": 612010000,
+    "NameRus": "г.Кентау"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жетісай қ.",
+    "Parent": 1613800000,
+    "Level": 4,
+    "Id": 1613820100,
+    "AreaType": 1,
+    "Code": 613820100,
+    "NameRus": "г.Жетысай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарыағаш қ.",
+    "Parent": 1615400000,
+    "Level": 4,
+    "Id": 1615420100,
+    "AreaType": 1,
+    "Code": 615420100,
+    "NameRus": "г.Сарыагаш"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Леңгір қ.",
+    "Parent": 1615800000,
+    "Level": 4,
+    "Id": 1615820100,
+    "AreaType": 1,
+    "Code": 615820100,
+    "NameRus": "г.Ленгер"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шардара қ.",
+    "Parent": 1616400000,
+    "Level": 4,
+    "Id": 1616420100,
+    "AreaType": 1,
+    "Code": 616420100,
+    "NameRus": "г.Шардара"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жезқазған қ.",
+    "Parent": 1621000000,
+    "Level": 4,
+    "Id": 1621010000,
+    "AreaType": 1,
+    "Code": 621010000,
+    "NameRus": "г.Жезказган"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаражал қ.",
+    "Parent": 1621800000,
+    "Level": 4,
+    "Id": 1621810000,
+    "AreaType": 1,
+    "Code": 621810000,
+    "NameRus": "г.Каражал"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сәтбаев қ.",
+    "Parent": 1622000000,
+    "Level": 4,
+    "Id": 1622010000,
+    "AreaType": 1,
+    "Code": 622010000,
+    "NameRus": "г.Сатпаев"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Өскемен қ.",
+    "Parent": 1631000000,
+    "Level": 4,
+    "Id": 1631010000,
+    "AreaType": 1,
+    "Code": 631010000,
+    "NameRus": "г.Усть-Каменогорск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Риддер қ.",
+    "Parent": 1632400000,
+    "Level": 4,
+    "Id": 1632410000,
+    "AreaType": 1,
+    "Code": 632410000,
+    "NameRus": "г.Риддер"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Зайсан қ.ә.",
+    "Parent": 1634600000,
+    "Level": 4,
+    "Id": 1634620000,
+    "AreaType": 1,
+    "Code": 634620000,
+    "NameRus": "Зайсанская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алтай қ.ә.",
+    "Parent": 1634800000,
+    "Level": 4,
+    "Id": 1634820000,
+    "AreaType": 3,
+    "Code": 634820000,
+    "NameRus": "г.а.Алтай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Серебрянск қ.",
+    "Parent": 1634800000,
+    "Level": 4,
+    "Id": 1634821100,
+    "AreaType": 1,
+    "Code": 634821100,
+    "NameRus": "г.Серебрянск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шемонаиха қ.ә.",
+    "Parent": 1636800000,
+    "Level": 4,
+    "Id": 1636820000,
+    "AreaType": 1,
+    "Code": 636820000,
+    "NameRus": "Шемонаихинская г.а."
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Аягөз қ.",
+    "Parent": 1103620000,
+    "Level": 5,
+    "Id": 1103620100,
+    "AreaType": 1,
+    "Code": 103620100,
+    "NameRus": "г.Аягоз"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шар қ.",
+    "Parent": 1104221000,
+    "Level": 5,
+    "Id": 1104221100,
+    "AreaType": 1,
+    "Code": 104221100,
+    "NameRus": "г.Шар"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақкөл қ.",
+    "Parent": 1113220000,
+    "Level": 5,
+    "Id": 1113220100,
+    "AreaType": 1,
+    "Code": 113220100,
+    "NameRus": "г.Акколь"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Степняк қ.",
+    "Parent": 1114520000,
+    "Level": 5,
+    "Id": 1114520100,
+    "AreaType": 1,
+    "Code": 114520100,
+    "NameRus": "г.Степняк"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Щучинск қ.",
+    "Parent": 1117020000,
+    "Level": 5,
+    "Id": 1117020100,
+    "AreaType": 1,
+    "Code": 117020100,
+    "NameRus": "г.Щучинск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алға қ.",
+    "Parent": 1153220000,
+    "Level": 5,
+    "Id": 1153220100,
+    "AreaType": 1,
+    "Code": 153220100,
+    "NameRus": "г.Алга"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қандыағаш қ.",
+    "Parent": 1154820000,
+    "Level": 5,
+    "Id": 1154820100,
+    "AreaType": 1,
+    "Code": 154820100,
+    "NameRus": "г.Кандыагаш"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ембі қ.",
+    "Parent": 1154823000,
+    "Level": 5,
+    "Id": 1154823100,
+    "AreaType": 1,
+    "Code": 154823100,
+    "NameRus": "г.Эмба"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жем қ.",
+    "Parent": 1154825000,
+    "Level": 5,
+    "Id": 1154825100,
+    "AreaType": 1,
+    "Code": 154825100,
+    "NameRus": "г.Жем"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Темір қ.",
+    "Parent": 1155621000,
+    "Level": 5,
+    "Id": 1155621100,
+    "AreaType": 1,
+    "Code": 155621100,
+    "NameRus": "г.Темир"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шалқар қ.",
+    "Parent": 1156420000,
+    "Level": 5,
+    "Id": 1156420100,
+    "AreaType": 1,
+    "Code": 156420100,
+    "NameRus": "г.Шалкар"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Есік қ.",
+    "Parent": 1194020000,
+    "Level": 5,
+    "Id": 1194020100,
+    "AreaType": 1,
+    "Code": 194020100,
+    "NameRus": "г.Есик"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қаскелең қ.",
+    "Parent": 1195220000,
+    "Level": 5,
+    "Id": 1195220100,
+    "AreaType": 1,
+    "Code": 195220100,
+    "NameRus": "г.Каскелен"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Талғар қ.",
+    "Parent": 1196220000,
+    "Level": 5,
+    "Id": 1196220100,
+    "AreaType": 1,
+    "Code": 196220100,
+    "NameRus": "г.Талгар"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Құлсары қ.",
+    "Parent": 1233620000,
+    "Level": 5,
+    "Id": 1233620100,
+    "AreaType": 1,
+    "Code": 233620100,
+    "NameRus": "г.Кульсары"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Ақсай қ.",
+    "Parent": 1273620000,
+    "Level": 5,
+    "Id": 1273620100,
+    "AreaType": 1,
+    "Code": 273620100,
+    "NameRus": "г.Аксай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шу қ.",
+    "Parent": 1316621000,
+    "Level": 5,
+    "Id": 1316621100,
+    "AreaType": 1,
+    "Code": 316621100,
+    "NameRus": "г.Шу"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Үшарал қ.",
+    "Parent": 1333420000,
+    "Level": 5,
+    "Id": 1333420100,
+    "AreaType": 1,
+    "Code": 333420100,
+    "NameRus": "г.Ушарал"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Үштөбе қ.",
+    "Parent": 1334420000,
+    "Level": 5,
+    "Id": 1334420100,
+    "AreaType": 1,
+    "Code": 334420100,
+    "NameRus": "г.Уштобе"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Жаркент қ.",
+    "Parent": 1334620000,
+    "Level": 5,
+    "Id": 1334620100,
+    "AreaType": 1,
+    "Code": 334620100,
+    "NameRus": "г.Жаркент"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сарқан қ.",
+    "Parent": 1334820000,
+    "Level": 5,
+    "Id": 1334820100,
+    "AreaType": 1,
+    "Code": 334820100,
+    "NameRus": "г.Саркан"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Әлихан Бөкейхан ауданы",
+    "Parent": 1351011000,
+    "Level": 5,
+    "Id": 1351011100,
+    "AreaType": 1,
+    "Code": 351011100,
+    "NameRus": "район Әлихан Бөкейхан"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қазыбек би атын.ауданы",
+    "Parent": 1351013000,
+    "Level": 5,
+    "Id": 1351013100,
+    "AreaType": 1,
+    "Code": 351013100,
+    "NameRus": "район им.Казыбек би"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Абай қ.",
+    "Parent": 1353220000,
+    "Level": 5,
+    "Id": 1353220100,
+    "AreaType": 1,
+    "Code": 353220100,
+    "NameRus": "г.Абай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тобыл қ.",
+    "Parent": 1395420000,
+    "Level": 5,
+    "Id": 1395420100,
+    "AreaType": 1,
+    "Code": 395420100,
+    "NameRus": "г.Тобыл"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Қазалы қ.",
+    "Parent": 1434423000,
+    "Level": 5,
+    "Id": 1434423100,
+    "AreaType": 1,
+    "Code": 434423100,
+    "NameRus": "г.Казалинск"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Булаев қ.",
+    "Parent": 1593620000,
+    "Level": 5,
+    "Id": 1593620100,
+    "AreaType": 1,
+    "Code": 593620100,
+    "NameRus": "г.Булаево"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Мамлют қ.",
+    "Parent": 1595220000,
+    "Level": 5,
+    "Id": 1595220100,
+    "AreaType": 1,
+    "Code": 595220100,
+    "NameRus": "г.Мамлютка"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Сергеев қ.",
+    "Parent": 1595620000,
+    "Level": 5,
+    "Id": 1595620100,
+    "AreaType": 1,
+    "Code": 595620100,
+    "NameRus": "г.Сергеевка"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Тайынша қ.",
+    "Parent": 1596020000,
+    "Level": 5,
+    "Id": 1596020100,
+    "AreaType": 1,
+    "Code": 596020100,
+    "NameRus": "г.Тайынша"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Зайсан қ.",
+    "Parent": 1634620000,
+    "Level": 5,
+    "Id": 1634620100,
+    "AreaType": 1,
+    "Code": 634620100,
+    "NameRus": "г.Зайсан"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Алтай қ.",
+    "Parent": 1634820000,
+    "Level": 5,
+    "Id": 1634820100,
+    "AreaType": 1,
+    "Code": 634820100,
+    "NameRus": "г.Алтай"
+  },
+  {
+    "IsMarkedToDelete": false,
+    "NameKaz": "Шемонайха қ.",
+    "Parent": 1636820000,
+    "Level": 5,
+    "Id": 1636820100,
+    "AreaType": 1,
+    "Code": 636820100,
+    "NameRus": "г.Шемонаиха"
+  }
+]

@@ -5080,3 +5080,1958 @@ CREATE INDEX idx_task_radar_active_due ON crm.task_item(tenant_id,due_at,id)
  WHERE status IN ('OPEN','IN_PROGRESS','BLOCKED')
    AND assignee_user_id IS NOT NULL AND due_at IS NOT NULL;
 --rollback DROP INDEX crm.idx_task_radar_active_due;
+
+--changeset rm:0173-int-calendar-policy
+CREATE TABLE crm.int_calendar_policy (
+ tenant_id UUID NOT NULL,
+ version BIGINT NOT NULL,
+ zone_id VARCHAR(64) NOT NULL,
+ effective_from TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_by UUID NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ CONSTRAINT pk_int_calendar_policy PRIMARY KEY(tenant_id,version),
+ CONSTRAINT fk_int_calendar_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT fk_int_calendar_actor FOREIGN KEY(created_by) REFERENCES public.iam_user_account(id),
+ CONSTRAINT ck_int_calendar_version CHECK(version>0),
+ CONSTRAINT ck_int_calendar_zone CHECK(length(trim(zone_id))>0),
+ CONSTRAINT ck_int_calendar_effective CHECK(effective_from=created_at)
+);
+--rollback DROP TABLE crm.int_calendar_policy;
+
+--changeset rm:0174-int-calendar-policy-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_reject_calendar_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CALENDAR_POLICY_IMMUTABLE';
+END; $$;
+CREATE TRIGGER trg_int_calendar_immutable BEFORE UPDATE OR DELETE ON crm.int_calendar_policy
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_calendar_mutation();
+CREATE TRIGGER trg_int_calendar_no_truncate BEFORE TRUNCATE ON crm.int_calendar_policy
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_calendar_mutation();
+--rollback DROP TRIGGER trg_int_calendar_no_truncate ON crm.int_calendar_policy;
+--rollback DROP TRIGGER trg_int_calendar_immutable ON crm.int_calendar_policy;
+--rollback DROP FUNCTION crm.int_reject_calendar_mutation();
+
+--changeset rm:0175-int-canonical-fact
+CREATE TABLE crm.int_canonical_fact (
+ tenant_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,
+ subject_id UUID NOT NULL,
+ source_version BIGINT,
+ occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ recorded_at TIMESTAMP WITH TIME ZONE,
+ schema_version INTEGER NOT NULL,
+ digest VARCHAR(64) NOT NULL,
+ CONSTRAINT pk_int_canonical_fact PRIMARY KEY(tenant_id,owner_module,source_kind,source_id),
+ CONSTRAINT fk_int_fact_tenant FOREIGN KEY(tenant_id) REFERENCES public.iam_workspace(id),
+ CONSTRAINT ck_int_fact_schema CHECK(schema_version=1),
+ CONSTRAINT ck_int_fact_digest CHECK(length(digest)=64),
+ CONSTRAINT ck_int_fact_kind CHECK((owner_module='SALES' AND source_kind IN ('ORDER_PLACED','ORDER_CONFIRMED','ORDER_COMPLETED','ORDER_CANCELLED') AND recorded_at IS NULL)
+ OR (owner_module='INVENTORY' AND source_kind='STOCK_MOVEMENT' AND recorded_at IS NOT NULL)),
+ CONSTRAINT ck_int_fact_version CHECK(source_version IS NULL OR source_version>=0)
+);
+--rollback DROP TABLE crm.int_canonical_fact;
+
+--changeset rm:0176-int-canonical-fact-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_reject_fact_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'CANONICAL_FACT_IMMUTABLE';
+END; $$;
+CREATE TRIGGER trg_int_fact_immutable BEFORE UPDATE OR DELETE ON crm.int_canonical_fact
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_fact_no_truncate BEFORE TRUNCATE ON crm.int_canonical_fact
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_fact_no_truncate ON crm.int_canonical_fact;
+--rollback DROP TRIGGER trg_int_fact_immutable ON crm.int_canonical_fact;
+--rollback DROP FUNCTION crm.int_reject_fact_mutation();
+ 
+--changeset rm:0177-int-canonical-fact-v2
+ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_schema;
+ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_schema CHECK(schema_version IN (1,2));
+--rollback ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_schema;
+--rollback ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_schema CHECK(schema_version=1);
+
+--changeset rm:0178-int-canonical-fact-hex dbms:postgresql
+ALTER TABLE crm.int_canonical_fact ADD CONSTRAINT ck_int_fact_hex CHECK(digest ~ '^[0-9a-f]{64}$');
+--rollback ALTER TABLE crm.int_canonical_fact DROP CONSTRAINT ck_int_fact_hex;
+
+--changeset rm:0179-sales-canonical-status-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_sales_status_event_immutable
+ BEFORE UPDATE OR DELETE ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_sales_status_event_no_truncate
+ BEFORE TRUNCATE ON crm.sales_order_status_event
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_sales_status_event_no_truncate ON crm.sales_order_status_event;
+--rollback DROP TRIGGER trg_sales_status_event_immutable ON crm.sales_order_status_event;
+
+--changeset rm:0180-sales-canonical-booked-header-immutable dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.reject_sales_booked_header_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.total_amount IS DISTINCT FROM OLD.total_amount OR NEW.currency IS DISTINCT FROM OLD.currency
+ THEN RAISE EXCEPTION 'SALES_BOOKED_HEADER_IMMUTABLE'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_booked_header_immutable BEFORE UPDATE ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_booked_header_mutation();
+--rollback DROP TRIGGER trg_sales_booked_header_immutable ON crm.sales_order;
+--rollback DROP FUNCTION crm.reject_sales_booked_header_mutation();
+
+
+--changeset rm:0181-sales-booked-snapshot-seal dbms:postgresql splitStatements:false
+-- Both checkout producers persist merchandise lines before their first status event.
+-- A committed historical status event seals the existing snapshot, not its historical completeness.
+ALTER TABLE crm.sales_order ADD COLUMN booked_snapshot_sealed BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE crm.sales_order o SET booked_snapshot_sealed=TRUE
+ WHERE EXISTS (SELECT 1 FROM crm.sales_order_status_event e
+               WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id);
+CREATE FUNCTION crm.reject_sales_snapshot_unseal() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.booked_snapshot_sealed AND NOT NEW.booked_snapshot_sealed
+ THEN RAISE EXCEPTION 'SALES_BOOKED_SNAPSHOT_IMMUTABLE'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_snapshot_no_unseal BEFORE UPDATE ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_sales_snapshot_unseal();
+CREATE FUNCTION crm.seal_sales_booked_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE crm.sales_order SET booked_snapshot_sealed=TRUE
+ WHERE tenant_id=NEW.tenant_id AND id=NEW.order_id AND NOT booked_snapshot_sealed;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_snapshot_seal BEFORE INSERT ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.seal_sales_booked_snapshot();
+CREATE FUNCTION crm.reject_late_sales_order_line() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE sealed BOOLEAN;
+BEGIN
+ SELECT booked_snapshot_sealed INTO sealed FROM crm.sales_order
+ WHERE tenant_id=NEW.tenant_id AND id=NEW.order_id FOR NO KEY UPDATE;
+ IF sealed IS TRUE THEN RAISE EXCEPTION 'SALES_BOOKED_SNAPSHOT_SEALED'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_sales_line_no_late_insert BEFORE INSERT ON crm.sales_order_line
+ FOR EACH ROW EXECUTE FUNCTION crm.reject_late_sales_order_line();
+--rollback DROP TRIGGER trg_sales_line_no_late_insert ON crm.sales_order_line;
+--rollback DROP FUNCTION crm.reject_late_sales_order_line();
+--rollback DROP TRIGGER trg_sales_snapshot_seal ON crm.sales_order_status_event;
+--rollback DROP FUNCTION crm.seal_sales_booked_snapshot();
+--rollback DROP TRIGGER trg_sales_snapshot_no_unseal ON crm.sales_order;
+--rollback DROP FUNCTION crm.reject_sales_snapshot_unseal();
+--rollback ALTER TABLE crm.sales_order DROP COLUMN booked_snapshot_sealed;
+
+--changeset rm:0182-canonical-source-no-truncate dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_sales_line_no_truncate BEFORE TRUNCATE ON crm.sales_order_line
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
+CREATE TRIGGER trg_inv_movement_no_truncate BEFORE TRUNCATE ON crm.inv_stock_movement
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.reject_r13_history_mutation();
+--rollback DROP TRIGGER trg_inv_movement_no_truncate ON crm.inv_stock_movement;
+--rollback DROP TRIGGER trg_sales_line_no_truncate ON crm.sales_order_line;
+
+
+--changeset rm:0183-int-durable-discovery
+-- Internal consumer identity is a target/epoch, not a global cursor.
+CREATE TABLE crm.int_fact_consumer (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ consumer_code VARCHAR(96) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,consumer_code),
+ CHECK(length(trim(consumer_code))>0)
+);
+CREATE TABLE crm.int_fact_consumer_receipt (
+ tenant_id UUID NOT NULL,
+ consumer_code VARCHAR(96) NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,
+ digest VARCHAR(64) NOT NULL CHECK(length(digest)=64),
+ schema_version INTEGER NOT NULL CHECK(schema_version IN (1,2)),
+ disposition VARCHAR(24) NOT NULL,
+ error_code VARCHAR(64),
+ processed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,consumer_code,owner_module,source_kind,source_id),
+ FOREIGN KEY(tenant_id,consumer_code) REFERENCES crm.int_fact_consumer(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,owner_module,source_kind,source_id)
+   REFERENCES crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id),
+ CHECK((disposition IN ('APPLIED','OUTSIDE_COVERAGE') AND error_code IS NULL)
+    OR (disposition='REJECTED' AND error_code IS NOT NULL))
+);
+--rollback DROP TABLE crm.int_fact_consumer_receipt;
+--rollback DROP TABLE crm.int_fact_consumer;
+
+--changeset rm:0184-int-bounded-backfill
+CREATE TABLE crm.int_fact_backfill_run (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ run_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ range_start TIMESTAMP WITH TIME ZONE NOT NULL,
+ range_end TIMESTAMP WITH TIME ZONE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,run_id),
+ UNIQUE(tenant_id,run_id,owner_module,source_kind),
+ CHECK(range_start<range_end),
+ CHECK((owner_module='SALES' AND source_kind IN ('ORDER_PLACED','ORDER_CONFIRMED','ORDER_COMPLETED','ORDER_CANCELLED'))
+    OR (owner_module='INVENTORY' AND source_kind='STOCK_MOVEMENT'))
+);
+CREATE TABLE crm.int_fact_backfill_receipt (
+ tenant_id UUID NOT NULL,
+ run_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL,
+ source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,
+ disposition VARCHAR(16) NOT NULL,
+ digest VARCHAR(64),
+ schema_version INTEGER,
+ error_code VARCHAR(64),
+ processed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,run_id,owner_module,source_kind,source_id),
+ FOREIGN KEY(tenant_id,run_id,owner_module,source_kind)
+   REFERENCES crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind),
+ CHECK((disposition IN ('INSERTED','VERIFIED') AND digest IS NOT NULL AND length(digest)=64
+        AND schema_version IS NOT NULL AND schema_version IN (1,2) AND error_code IS NULL)
+    OR (disposition IN ('CONFLICT','INVALID') AND digest IS NULL AND schema_version IS NULL AND error_code IS NOT NULL))
+);
+--rollback DROP TABLE crm.int_fact_backfill_receipt;
+--rollback DROP TABLE crm.int_fact_backfill_run;
+
+--changeset rm:0185-int-backfill-range-indexes
+CREATE INDEX idx_int_backfill_sales_range ON crm.sales_order_status_event(tenant_id,event_type,occurred_at,id);
+CREATE INDEX idx_int_backfill_inventory_range ON crm.inv_stock_movement(tenant_id,occurred_at,id);
+CREATE INDEX idx_int_fact_range ON crm.int_canonical_fact(tenant_id,owner_module,source_kind,occurred_at,source_id);
+--rollback DROP INDEX crm.idx_int_fact_range;
+--rollback DROP INDEX crm.idx_int_backfill_inventory_range;
+--rollback DROP INDEX crm.idx_int_backfill_sales_range;
+
+--changeset rm:0186-int-discovery-evidence-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_int_consumer_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_consumer
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_consumer_no_truncate BEFORE TRUNCATE ON crm.int_fact_consumer
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_consumer_receipt_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_consumer_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_consumer_receipt_no_truncate BEFORE TRUNCATE ON crm.int_fact_consumer_receipt
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_run_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_backfill_run
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_run_no_truncate BEFORE TRUNCATE ON crm.int_fact_backfill_run
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_receipt_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_backfill_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_backfill_receipt_no_truncate BEFORE TRUNCATE ON crm.int_fact_backfill_receipt
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_backfill_receipt_no_truncate ON crm.int_fact_backfill_receipt;
+--rollback DROP TRIGGER trg_int_backfill_receipt_immutable ON crm.int_fact_backfill_receipt;
+--rollback DROP TRIGGER trg_int_backfill_run_no_truncate ON crm.int_fact_backfill_run;
+--rollback DROP TRIGGER trg_int_backfill_run_immutable ON crm.int_fact_backfill_run;
+--rollback DROP TRIGGER trg_int_consumer_receipt_no_truncate ON crm.int_fact_consumer_receipt;
+--rollback DROP TRIGGER trg_int_consumer_receipt_immutable ON crm.int_fact_consumer_receipt;
+--rollback DROP TRIGGER trg_int_consumer_no_truncate ON crm.int_fact_consumer;
+--rollback DROP TRIGGER trg_int_consumer_immutable ON crm.int_fact_consumer;
+
+
+--changeset rm:0187-int-backfill-time-basis
+-- Existing runs retain occurred_at semantics. New inventory runs use recorded_at.
+ALTER TABLE crm.int_fact_backfill_run ADD COLUMN time_basis VARCHAR(16) DEFAULT 'OCCURRED' NOT NULL;
+ALTER TABLE crm.int_fact_backfill_run ADD CONSTRAINT ck_int_backfill_basis
+ CHECK(time_basis='OCCURRED' OR (owner_module='INVENTORY' AND time_basis='RECORDED'));
+CREATE INDEX idx_int_backfill_inventory_recorded ON crm.inv_stock_movement(tenant_id,recorded_at,id);
+CREATE INDEX idx_int_fact_recorded ON crm.int_canonical_fact(tenant_id,owner_module,source_kind,recorded_at,source_id);
+--rollback DROP INDEX crm.idx_int_fact_recorded;
+--rollback DROP INDEX crm.idx_int_backfill_inventory_recorded;
+--rollback ALTER TABLE crm.int_fact_backfill_run DROP CONSTRAINT ck_int_backfill_basis;
+--rollback ALTER TABLE crm.int_fact_backfill_run DROP COLUMN time_basis;
+
+--changeset rm:0188-int-l1-generation
+CREATE TABLE crm.int_projection_generation (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ projection_code VARCHAR(24) NOT NULL CHECK(projection_code='L1'),
+ state VARCHAR(16) NOT NULL DEFAULT 'BUILDING' CHECK(state='BUILDING'),
+ consumer_code VARCHAR(96) NOT NULL,
+ method_version INTEGER NOT NULL CHECK(method_version=1),
+ calendar_version BIGINT NOT NULL,
+ from_day DATE NOT NULL,
+ until_day DATE NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,generation_id),
+ UNIQUE(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,consumer_code) REFERENCES crm.int_fact_consumer(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,calendar_version) REFERENCES crm.int_calendar_policy(tenant_id,version),
+ CHECK(from_day<until_day)
+);
+-- P2 receipt is the single effect receipt; generation -> consumer is one-to-one.
+-- No active reader route is enabled in this slice.
+CREATE TABLE crm.int_daily_bucket (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ metric_code VARCHAR(32) NOT NULL,
+ local_day DATE NOT NULL,
+ currency_key VARCHAR(3) NOT NULL,
+ warehouse_key UUID NOT NULL,
+ sku_key UUID NOT NULL,
+ amount NUMERIC NOT NULL CHECK(amount>=0),
+ observations BIGINT NOT NULL CHECK(observations>=0),
+ PRIMARY KEY(tenant_id,generation_id,metric_code,local_day,currency_key,warehouse_key,sku_key),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ CHECK((metric_code IN ('PLACED_ORDERS','CONFIRMED_ORDERS','FULFILLED_ORDERS','CANCELLED_ORDERS') AND currency_key='~')
+    OR (metric_code='BOOKED_ORDER_AMOUNT' AND currency_key<>'~')
+    OR (metric_code IN ('STOCK_IN_QTY','STOCK_OUT_QTY') AND currency_key='~')),
+ CHECK(metric_code IN ('STOCK_IN_QTY','STOCK_OUT_QTY') OR
+   (warehouse_key=CAST('00000000-0000-0000-0000-000000000000' AS UUID)
+    AND sku_key=CAST('00000000-0000-0000-0000-000000000000' AS UUID)))
+);
+CREATE TABLE crm.int_l1_sales_contribution (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ event_kind VARCHAR(32) NOT NULL,
+ order_id UUID NOT NULL,
+ local_day DATE NOT NULL,
+ currency VARCHAR(3) NOT NULL,
+ booked_amount NUMERIC NOT NULL CHECK(booked_amount>=0),
+ PRIMARY KEY(tenant_id,generation_id,event_kind,order_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id),
+ CHECK(event_kind IN ('ORDER_PLACED','ORDER_CONFIRMED','ORDER_COMPLETED','ORDER_CANCELLED'))
+);
+CREATE TABLE crm.int_projection_coverage (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ proof_id UUID NOT NULL,
+ observed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ missing_facts BIGINT NOT NULL,
+ orphan_facts BIGINT NOT NULL,
+ pending_facts BIGINT NOT NULL,
+ rejected_facts BIGINT NOT NULL,
+ receipt_mismatches BIGINT NOT NULL,
+ bucket_mismatches BIGINT NOT NULL,
+ PRIMARY KEY(tenant_id,generation_id,proof_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id)
+);
+--rollback DROP TABLE crm.int_projection_coverage;
+--rollback DROP TABLE crm.int_l1_sales_contribution;
+--rollback DROP TABLE crm.int_daily_bucket;
+--rollback DROP TABLE crm.int_projection_generation;
+
+--changeset rm:0189-int-l1-immutable-evidence dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_int_l1_generation_immutable BEFORE UPDATE OR DELETE ON crm.int_projection_generation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l1_generation_no_truncate BEFORE TRUNCATE ON crm.int_projection_generation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l1_coverage_immutable BEFORE UPDATE OR DELETE ON crm.int_projection_coverage
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l1_coverage_no_truncate BEFORE TRUNCATE ON crm.int_projection_coverage
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_l1_coverage_no_truncate ON crm.int_projection_coverage;
+--rollback DROP TRIGGER trg_int_l1_coverage_immutable ON crm.int_projection_coverage;
+--rollback DROP TRIGGER trg_int_l1_generation_no_truncate ON crm.int_projection_generation;
+--rollback DROP TRIGGER trg_int_l1_generation_immutable ON crm.int_projection_generation;
+
+
+--changeset rm:0190-catalog-group-classification
+ALTER TABLE crm.cat_item ADD CONSTRAINT uq_cat_item_kind_identity UNIQUE(tenant_id,id,kind);
+CREATE TABLE crm.cat_group_node (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ id UUID NOT NULL,
+ kind VARCHAR(20) NOT NULL CHECK(kind IN ('PRODUCT','SERVICE')),
+ group_code VARCHAR(80) NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ parent_id UUID,
+ label VARCHAR(240) NOT NULL,
+ created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,id,kind),
+ UNIQUE(tenant_id,kind,group_code,revision),
+ FOREIGN KEY(tenant_id,parent_id,kind) REFERENCES crm.cat_group_node(tenant_id,id,kind),
+ CHECK(parent_id IS NULL OR parent_id<>id)
+);
+CREATE TABLE crm.cat_group_assignment (
+ tenant_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ kind VARCHAR(20) NOT NULL,
+ group_id UUID NOT NULL,
+ assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,item_id,revision),
+ UNIQUE(tenant_id,item_id,revision,group_id),
+ FOREIGN KEY(tenant_id,item_id,kind) REFERENCES crm.cat_item(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,group_id,kind) REFERENCES crm.cat_group_node(tenant_id,id,kind)
+);
+--rollback DROP TABLE crm.cat_group_assignment;
+--rollback DROP TABLE crm.cat_group_node;
+--rollback ALTER TABLE crm.cat_item DROP CONSTRAINT uq_cat_item_kind_identity;
+
+--changeset rm:0191-int-dimension-snapshots
+-- Historical absence is not reconstructed from today's master data.
+CREATE TABLE crm.int_sales_line_dimension (
+ tenant_id UUID NOT NULL,
+ line_id UUID NOT NULL,
+ item_id UUID,
+ item_kind VARCHAR(20),
+ group_id UUID,
+ assignment_revision BIGINT,
+ captured_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,line_id),
+ FOREIGN KEY(tenant_id,line_id) REFERENCES crm.sales_order_line(tenant_id,id),
+ FOREIGN KEY(tenant_id,item_id,item_kind) REFERENCES crm.cat_item(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,item_id,assignment_revision,group_id) REFERENCES crm.cat_group_assignment(tenant_id,item_id,revision,group_id),
+ CHECK((item_id IS NULL AND item_kind IS NULL) OR (item_id IS NOT NULL AND item_kind IS NOT NULL)),
+ CHECK((group_id IS NULL AND assignment_revision IS NULL) OR
+   (group_id IS NOT NULL AND assignment_revision IS NOT NULL AND item_id IS NOT NULL))
+);
+CREATE TABLE crm.int_movement_dimension (
+ tenant_id UUID NOT NULL,
+ movement_id UUID NOT NULL,
+ item_id UUID NOT NULL,
+ item_kind VARCHAR(20) NOT NULL,
+ group_id UUID,
+ assignment_revision BIGINT,
+ location_id UUID NOT NULL,
+ kato_code VARCHAR(16) NOT NULL,
+ region_code VARCHAR(16),
+ geo_quality VARCHAR(16) NOT NULL CHECK(geo_quality IN ('RESOLVED','UNKNOWN')),
+ captured_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,movement_id),
+ FOREIGN KEY(tenant_id,movement_id) REFERENCES crm.inv_stock_movement(tenant_id,id),
+ FOREIGN KEY(tenant_id,item_id,item_kind) REFERENCES crm.cat_item(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,item_id,assignment_revision,group_id) REFERENCES crm.cat_group_assignment(tenant_id,item_id,revision,group_id),
+ FOREIGN KEY(tenant_id,location_id) REFERENCES public.org_location(workspace_id,id),
+ CHECK((group_id IS NULL AND assignment_revision IS NULL) OR
+       (group_id IS NOT NULL AND assignment_revision IS NOT NULL)),
+ CHECK((geo_quality='RESOLVED' AND region_code IS NOT NULL) OR (geo_quality='UNKNOWN' AND region_code IS NULL))
+);
+CREATE INDEX idx_int_movement_dimension_geo ON crm.int_movement_dimension(tenant_id,region_code,group_id);
+CREATE INDEX idx_int_sales_dimension_group ON crm.int_sales_line_dimension(tenant_id,group_id,line_id);
+--rollback DROP TABLE crm.int_movement_dimension;
+--rollback DROP TABLE crm.int_sales_line_dimension;
+
+--changeset rm:0192-int-dimension-immutable dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_cat_group_node_immutable BEFORE UPDATE OR DELETE ON crm.cat_group_node
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_cat_group_node_no_truncate BEFORE TRUNCATE ON crm.cat_group_node
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_cat_group_assignment_immutable BEFORE UPDATE OR DELETE ON crm.cat_group_assignment
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_cat_group_assignment_no_truncate BEFORE TRUNCATE ON crm.cat_group_assignment
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_sales_dim_immutable BEFORE UPDATE OR DELETE ON crm.int_sales_line_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_sales_dim_no_truncate BEFORE TRUNCATE ON crm.int_sales_line_dimension
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_movement_dim_immutable BEFORE UPDATE OR DELETE ON crm.int_movement_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_movement_dim_no_truncate BEFORE TRUNCATE ON crm.int_movement_dimension
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_movement_dim_no_truncate ON crm.int_movement_dimension;
+--rollback DROP TRIGGER trg_int_movement_dim_immutable ON crm.int_movement_dimension;
+--rollback DROP TRIGGER trg_int_sales_dim_no_truncate ON crm.int_sales_line_dimension;
+--rollback DROP TRIGGER trg_int_sales_dim_immutable ON crm.int_sales_line_dimension;
+--rollback DROP TRIGGER trg_cat_group_assignment_no_truncate ON crm.cat_group_assignment;
+--rollback DROP TRIGGER trg_cat_group_assignment_immutable ON crm.cat_group_assignment;
+--rollback DROP TRIGGER trg_cat_group_node_no_truncate ON crm.cat_group_node;
+--rollback DROP TRIGGER trg_cat_group_node_immutable ON crm.cat_group_node;
+
+
+--changeset rm:0193-int-dimension-source-binding
+-- Bind copied identities to their exact source, not merely to valid tenant entities.
+-- Existing mismatched non-null snapshots fail migration; no historical repair.
+ALTER TABLE crm.sales_order_line ADD CONSTRAINT uq_sales_line_source_item
+ UNIQUE(tenant_id,id,catalog_item_id_snapshot);
+ALTER TABLE crm.inv_stock_movement ADD CONSTRAINT uq_inv_movement_source_dims
+ UNIQUE(tenant_id,id,item_id,location_id);
+ALTER TABLE crm.int_sales_line_dimension ADD CONSTRAINT fk_int_sales_dim_source_item
+ FOREIGN KEY(tenant_id,line_id,item_id)
+ REFERENCES crm.sales_order_line(tenant_id,id,catalog_item_id_snapshot);
+ALTER TABLE crm.int_movement_dimension ADD CONSTRAINT fk_int_movement_dim_source
+ FOREIGN KEY(tenant_id,movement_id,item_id,location_id)
+ REFERENCES crm.inv_stock_movement(tenant_id,id,item_id,location_id);
+--rollback ALTER TABLE crm.int_movement_dimension DROP CONSTRAINT fk_int_movement_dim_source;
+--rollback ALTER TABLE crm.int_sales_line_dimension DROP CONSTRAINT fk_int_sales_dim_source_item;
+--rollback ALTER TABLE crm.inv_stock_movement DROP CONSTRAINT uq_inv_movement_source_dims;
+--rollback ALTER TABLE crm.sales_order_line DROP CONSTRAINT uq_sales_line_source_item;
+
+--changeset rm:0194-int-dimension-source-null-guard dbms:postgresql splitStatements:false
+-- MATCH SIMPLE skips NULL; verify equality including NULL.
+-- Historical absence of the entire dimension row remains valid.
+DO $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM crm.int_sales_line_dimension d
+   JOIN crm.sales_order_line l ON l.tenant_id=d.tenant_id AND l.id=d.line_id
+   WHERE d.item_id IS DISTINCT FROM l.catalog_item_id_snapshot) THEN
+   RAISE EXCEPTION 'INT_SALES_DIM_SOURCE_ITEM_MISMATCH';
+ END IF;
+END; $$;
+CREATE FUNCTION crm.int_check_sales_dimension_source() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM crm.sales_order_line l
+   WHERE l.tenant_id=NEW.tenant_id AND l.id=NEW.line_id
+   AND l.catalog_item_id_snapshot IS NOT DISTINCT FROM NEW.item_id) THEN
+   RAISE EXCEPTION 'INT_SALES_DIM_SOURCE_ITEM_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_sales_dim_source BEFORE INSERT ON crm.int_sales_line_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_check_sales_dimension_source();
+--rollback DROP TRIGGER trg_int_sales_dim_source ON crm.int_sales_line_dimension;
+--rollback DROP FUNCTION crm.int_check_sales_dimension_source();
+
+--changeset rm:0195-int-movement-dimension-geo-admission dbms:postgresql splitStatements:false
+-- Validate geography on insertion, without reinterpreting older snapshots.
+CREATE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE actual_kato VARCHAR(16); node RECORD; next_source BIGINT;
+ expected_region VARCHAR(16); visited BIGINT[] := ARRAY[]::BIGINT[];
+BEGIN
+ SELECT l.kato_code INTO actual_kato FROM public.org_location l
+ WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;
+ IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node
+ FROM public.ref_kato_territory WHERE code=actual_kato;
+ FOR depth IN 1..32 LOOP
+   EXIT WHEN node.source_id IS NULL;
+   EXIT WHEN node.is_deleted OR node.source_id=ANY(visited);
+   visited:=array_append(visited,node.source_id);
+   IF node.level_no=2 THEN expected_region:=node.code; EXIT; END IF;
+   EXIT WHEN node.level_no<2 OR node.parent_source_id IS NULL;
+   next_source:=node.parent_source_id;
+   SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node
+   FROM public.ref_kato_territory WHERE source_id=next_source;
+ END LOOP;
+ IF expected_region IS DISTINCT FROM NEW.region_code OR
+    NEW.geo_quality IS DISTINCT FROM
+       (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_movement_dim_geo BEFORE INSERT ON crm.int_movement_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_check_movement_dimension_geo();
+--rollback DROP TRIGGER trg_int_movement_dim_geo ON crm.int_movement_dimension;
+--rollback DROP FUNCTION crm.int_check_movement_dimension_geo();
+
+
+--changeset rm:0196-int-generation-runtime-lifecycle
+-- Existing immutable generation configuration and evidence are not rewritten.
+CREATE TABLE crm.int_projection_lifecycle (
+ tenant_id UUID NOT NULL,
+ generation_id UUID NOT NULL,
+ lifecycle_state VARCHAR(16) NOT NULL DEFAULT 'BUILDING',
+ revision BIGINT NOT NULL DEFAULT 0,
+ changed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ CHECK((lifecycle_state='BUILDING' AND revision=0) OR
+       (lifecycle_state='ABORTED' AND revision=1))
+);
+INSERT INTO crm.int_projection_lifecycle(tenant_id,generation_id,changed_at)
+ SELECT tenant_id,generation_id,created_at FROM crm.int_projection_generation;
+--rollback DROP TABLE crm.int_projection_lifecycle;
+
+--changeset rm:0197-int-generation-runtime-guard dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_init_generation_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ INSERT INTO crm.int_projection_lifecycle(tenant_id,generation_id,changed_at)
+ VALUES (NEW.tenant_id,NEW.generation_id,NEW.created_at);
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_generation_lifecycle_init AFTER INSERT ON crm.int_projection_generation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_init_generation_lifecycle();
+CREATE FUNCTION crm.int_guard_generation_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.lifecycle_state='BUILDING' AND NEW.revision=0 THEN RETURN NEW; END IF;
+ ELSIF TG_OP='UPDATE' THEN
+   IF OLD.tenant_id=NEW.tenant_id AND OLD.generation_id=NEW.generation_id
+      AND OLD.lifecycle_state='BUILDING' AND OLD.revision=0
+      AND NEW.lifecycle_state='ABORTED' AND NEW.revision=1
+      AND NEW.changed_at>=OLD.changed_at THEN RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'INT_GENERATION_LIFECYCLE_TRANSITION' USING ERRCODE='23514';
+END; $$;
+CREATE TRIGGER trg_int_generation_lifecycle_guard BEFORE INSERT OR UPDATE OR DELETE
+ ON crm.int_projection_lifecycle FOR EACH ROW EXECUTE FUNCTION crm.int_guard_generation_lifecycle();
+CREATE TRIGGER trg_int_generation_lifecycle_no_truncate BEFORE TRUNCATE ON crm.int_projection_lifecycle
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_generation_lifecycle_no_truncate ON crm.int_projection_lifecycle;
+--rollback DROP TRIGGER trg_int_generation_lifecycle_guard ON crm.int_projection_lifecycle;
+--rollback DROP FUNCTION crm.int_guard_generation_lifecycle();
+--rollback DROP TRIGGER trg_int_generation_lifecycle_init ON crm.int_projection_generation;
+--rollback DROP FUNCTION crm.int_init_generation_lifecycle();
+
+--changeset rm:0198-kato-admin-release-20261117
+-- Source: user-provided KATO_17.11.2026.xlsx; SHA-256: 7dd2a5cde003b664cdd581a5805bacd33405181d702731265476d2c46cb2d660
+-- Scope: 20 roots (17 oblasts + 3 cities), 195 district records, 91 city records (3 overlap roots),
+-- 39 level-3 city administrations and 33 required intermediate nodes = 375 selected codes.
+-- Parent relationships derived from the longest existing selected KATO prefix; IDs are internal, not official.
+-- Existing source IDs, names and archival flags are preserved. New name_en is generated transliteration.
+-- area_type on new rows stores the source k column; it is not an English type label.
+-- Scope SHA-256 (UTF-8 compact JSON rows [code,parent,level,k,kk,ru], sorted by level/code): 53a3a6d643d1e91267dd58524d56fa160223ff164ad602203d5fb03ab09f6213
+-- 365 new records; repair only the dangling Stepnogorsk city parent. No settlements imported.
+INSERT INTO public.ref_kato_territory (code,source_id,parent_source_id,level_no,area_type,name_kk,name_ru,name_en,is_deleted) VALUES
+ ('100000000',1100000000,NULL,2,0,'Абай облысы','область Абай','oblast Abay',FALSE),
+ ('150000000',1150000000,NULL,2,0,'Ақтөбе облысы','Актюбинская область','Aktyubinskaya oblast',FALSE),
+ ('190000000',1190000000,NULL,2,0,'Алматы облысы','Алматинская область','Almatinskaya oblast',FALSE),
+ ('230000000',1230000000,NULL,2,0,'Атырау облысы','Атырауская область','Atyrauskaya oblast',FALSE),
+ ('270000000',1270000000,NULL,2,0,'Батыс Қазақстан облысы','Западно-Казахстанская область','Zapadno-Kazakhstanskaya oblast',FALSE),
+ ('310000000',1310000000,NULL,2,0,'Жамбыл облысы','Жамбылская область','Zhambylskaya oblast',FALSE),
+ ('330000000',1330000000,NULL,2,0,'Жетісу облысы','область Жетісу','oblast Zhetisu',FALSE),
+ ('350000000',1350000000,NULL,2,0,'Қарағанды облысы','Карагандинская область','Karagandinskaya oblast',FALSE),
+ ('390000000',1390000000,NULL,2,0,'Қостанай облысы','Костанайская область','Kostanayskaya oblast',FALSE),
+ ('470000000',1470000000,NULL,2,0,'Маңғыстау облысы','Мангистауская область','Mangistauskaya oblast',FALSE),
+ ('550000000',1550000000,NULL,2,0,'Павлодар облысы','Павлодарская область','Pavlodarskaya oblast',FALSE),
+ ('590000000',1590000000,NULL,2,0,'Солтүстік Қазақстан облысы','Северо-Казахстанская область','Severo-Kazakhstanskaya oblast',FALSE),
+ ('610000000',1610000000,NULL,2,0,'Түркістан облысы','Туркестанская область','Turkestanskaya oblast',FALSE),
+ ('620000000',1620000000,NULL,2,0,'Ұлытау облысы','область Ұлытау','oblast Ulytau',FALSE),
+ ('630000000',1630000000,NULL,2,0,'Шығыс Қазақстан облысы','Восточно-Казахстанская область','Vostochno-Kazakhstanskaya oblast',FALSE),
+ ('710000000',1710000000,NULL,2,1,'Астана қ.','г.Астана','g.Astana',FALSE),
+ ('750000000',1750000000,NULL,2,1,'Алматы қ.','г.Алматы','g.Almaty',FALSE),
+ ('790000000',1790000000,NULL,2,1,'Шымкент қ.','г.Шымкент','g.Shymkent',FALSE),
+ ('101000000',1101000000,1100000000,3,1,'Семей Қ.Ә.','Семей Г.А.','Semey G.A.',FALSE),
+ ('101800000',1101800000,1100000000,3,1,'Курчатов Қ.Ә.','Курчатов Г.А.','Kurchatov G.A.',FALSE),
+ ('103200000',1103200000,1100000000,3,2,'Абай ауданы','Абайский район','Abayskiy rayon',FALSE),
+ ('103400000',1103400000,1100000000,3,2,'Ақсуат ауданы','район Ақсуат','rayon Aqsuat',FALSE),
+ ('103600000',1103600000,1100000000,3,4,'Аягөз ауданы','Аягозский район','Ayagozskiy rayon',FALSE),
+ ('103800000',1103800000,1100000000,3,2,'Бесқарағай ауданы','Бескарагайский район','Beskaragayskiy rayon',FALSE),
+ ('104000000',1104000000,1100000000,3,2,'Бородулиха ауданы','Бородулихинский район','Borodulikhinskiy rayon',FALSE),
+ ('104100000',1104100000,1100000000,3,2,'Жаңасемей ауданы','район Жаңасемей','rayon Zhangasemey',FALSE),
+ ('104200000',1104200000,1100000000,3,4,'Жарма ауданы','Жарминский район','Zharminskiy rayon',FALSE),
+ ('104400000',1104400000,1100000000,3,2,'Көкпекті ауданы','Кокпектинский район','Kokpektinskiy rayon',FALSE),
+ ('104500000',1104500000,1100000000,3,2,'Мақаншы ауданы','район Мақаншы','rayon Maqanshy',FALSE),
+ ('104600000',1104600000,1100000000,3,2,'Үржар ауданы','Урджарский район','Urdzharskiy rayon',FALSE),
+ ('111000000',1111000000,1,3,3,'Көкшетау Қ.Ә.','Кокшетау Г.А.','Kokshetau G.A.',FALSE),
+ ('111600000',1111600000,1,3,3,'Қосшы Қ.Ә.','Косшы Г.А.','Kosshy G.A.',FALSE),
+ ('111800000',1111800000,1,3,3,'Степногор Қ.Ә.','Степногорск Г.А.','Stepnogorsk G.A.',FALSE),
+ ('113200000',1113200000,1,3,4,'Ақкөл ауданы','Аккольский район','Akkolskiy rayon',FALSE),
+ ('113400000',1113400000,1,3,2,'Аршалы ауданы','Аршалынский район','Arshalynskiy rayon',FALSE),
+ ('113600000',1113600000,1,3,2,'Астрахан ауданы','Астраханский район','Astrakhanskiy rayon',FALSE),
+ ('113800000',1113800000,1,3,4,'Атбасар ауданы','Атбасарский район','Atbasarskiy rayon',FALSE),
+ ('114000000',1114000000,1,3,4,'Бұланды ауданы','Буландынский район','Bulandynskiy rayon',FALSE),
+ ('114400000',1114400000,1,3,2,'Егіндікөл ауданы','Егиндыкольский район','Egindykolskiy rayon',FALSE),
+ ('114500000',1114500000,1,3,4,'Біржан сал ауданы','район Биржан сал','rayon Birzhan sal',FALSE),
+ ('114600000',1114600000,1,3,4,'Ерейментау ауданы','Ерейментауский район','Ereymentauskiy rayon',FALSE),
+ ('114800000',1114800000,1,3,4,'Есіл ауданы','Есильский район','Esilskiy rayon',FALSE),
+ ('115200000',1115200000,1,3,2,'Жақсы ауданы','Жаксынский район','Zhaksynskiy rayon',FALSE),
+ ('115400000',1115400000,1,3,4,'Жарқайың ауданы','Жаркаинский район','Zharkainskiy rayon',FALSE),
+ ('115600000',1115600000,1,3,2,'Зеренді ауданы','Зерендинский район','Zerendinskiy rayon',FALSE),
+ ('116000000',1116000000,1,3,2,'Қорғалжын ауданы','Коргалжынский район','Korgalzhynskiy rayon',FALSE),
+ ('116400000',1116400000,1,3,2,'Сандықтау ауданы','Сандыктауский район','Sandyktauskiy rayon',FALSE),
+ ('116600000',1116600000,1,3,2,'Целиноград ауданы','Целиноградский район','Tselinogradskiy rayon',FALSE),
+ ('116800000',1116800000,1,3,2,'Шортанды ауданы','Шортандинский район','Shortandinskiy rayon',FALSE),
+ ('117000000',1117000000,1,3,4,'Бурабай ауданы','Бурабайский район','Burabayskiy rayon',FALSE),
+ ('151000000',1151000000,1150000000,3,1,'Ақтөбе Қ.Ә.','Актобе Г.А.','Aktobe G.A.',FALSE),
+ ('153200000',1153200000,1150000000,3,4,'Алға ауданы','Алгинский район','Alginskiy rayon',FALSE),
+ ('153400000',1153400000,1150000000,3,2,'Әйтеке би ауданы','Айтекебийский район','Aytekebiyskiy rayon',FALSE),
+ ('153600000',1153600000,1150000000,3,2,'Байғанин ауданы','Байганинский район','Bayganinskiy rayon',FALSE),
+ ('154000000',1154000000,1150000000,3,2,'Қарғалы ауданы','Каргалинский район','Kargalinskiy rayon',FALSE),
+ ('154200000',1154200000,1150000000,3,2,'Қобда ауданы','Хобдинский район','Khobdinskiy rayon',FALSE),
+ ('154600000',1154600000,1150000000,3,2,'Мәртөк ауданы','Мартукский район','Martukskiy rayon',FALSE),
+ ('154800000',1154800000,1150000000,3,4,'Мұғалжар ауданы','Мугалжарский район','Mugalzharskiy rayon',FALSE),
+ ('155200000',1155200000,1150000000,3,2,'Ойыл ауданы','Уилский район','Uilskiy rayon',FALSE),
+ ('155600000',1155600000,1150000000,3,4,'Темір ауданы','Темирский район','Temirskiy rayon',FALSE),
+ ('156000000',1156000000,1150000000,3,4,'Хромтау ауданы','Хромтауский район','Khromtauskiy rayon',FALSE),
+ ('156400000',1156400000,1150000000,3,4,'Шалқар ауданы','Шалкарский район','Shalkarskiy rayon',FALSE),
+ ('156800000',1156800000,1150000000,3,2,'Ырғыз ауданы','Иргизский район','Irgizskiy rayon',FALSE),
+ ('191000000',1191000000,1190000000,3,3,'Қонаев Қ.Ә.','Қонаев Г.А.','Qonaev G.A.',FALSE),
+ ('191800000',1191800000,1190000000,3,1,'Алатау Қ.Ә.','Алатау Г.А.','Alatau G.A.',FALSE),
+ ('193600000',1193600000,1190000000,3,2,'Балқаш ауданы','Балхашский район','Balkhashskiy rayon',FALSE),
+ ('194000000',1194000000,1190000000,3,4,'Еңбекшіқазақ ауданы','Енбекшиказахский район','Enbekshikazakhskiy rayon',FALSE),
+ ('194200000',1194200000,1190000000,3,2,'Жамбыл ауданы','Жамбылский район','Zhambylskiy rayon',FALSE),
+ ('194400000',1194400000,1190000000,3,2,'Кеген ауданы','Кегенский район','Kegenskiy rayon',FALSE),
+ ('195200000',1195200000,1190000000,3,4,'Қарасай ауданы','Карасайский район','Karasayskiy rayon',FALSE),
+ ('195800000',1195800000,1190000000,3,2,'Райымбек ауданы','Райымбекский район','Rayymbekskiy rayon',FALSE),
+ ('196200000',1196200000,1190000000,3,4,'Талғар ауданы','Талгарский район','Talgarskiy rayon',FALSE),
+ ('196600000',1196600000,1190000000,3,2,'Ұйғыр ауданы','Уйгурский район','Uygurskiy rayon',FALSE),
+ ('196800000',1196800000,1190000000,3,2,'Іле ауданы','Илийский район','Iliyskiy rayon',FALSE),
+ ('231000000',1231000000,1230000000,3,3,'Атырау Қ.Ә.','Атырау Г.А.','Atyrau G.A.',FALSE),
+ ('233600000',1233600000,1230000000,3,4,'Жылыой ауданы','Жылыойский район','Zhylyoyskiy rayon',FALSE),
+ ('234000000',1234000000,1230000000,3,2,'Индер ауданы','Индерский район','Inderskiy rayon',FALSE),
+ ('234200000',1234200000,1230000000,3,2,'Исатай ауданы','Исатайский район','Isatayskiy rayon',FALSE),
+ ('234600000',1234600000,1230000000,3,2,'Құрманғазы ауданы','Курмангазинский район','Kurmangazinskiy rayon',FALSE),
+ ('234800000',1234800000,1230000000,3,2,'Қызылқоға ауданы','Кзылкогинский район','Kzylkoginskiy rayon',FALSE),
+ ('235200000',1235200000,1230000000,3,2,'Мақат ауданы','Макатский район','Makatskiy rayon',FALSE),
+ ('235600000',1235600000,1230000000,3,2,'Махамбет ауданы','Махамбетский район','Makhambetskiy rayon',FALSE),
+ ('271000000',1271000000,1270000000,3,3,'Орал Қ.Ә.','Уральск Г.А.','Uralsk G.A.',FALSE),
+ ('273200000',1273200000,1270000000,3,2,'Ақжайық ауданы','Акжаикский район','Akzhaikskiy rayon',FALSE),
+ ('273600000',1273600000,1270000000,3,4,'Бөрлі ауданы','Бурлинский район','Burlinskiy rayon',FALSE),
+ ('274000000',1274000000,1270000000,3,2,'Жаңақала ауданы','Жангалинский район','Zhangalinskiy rayon',FALSE),
+ ('274200000',1274200000,1270000000,3,2,'Жәнібек ауданы','Жанибекский район','Zhanibekskiy rayon',FALSE),
+ ('274400000',1274400000,1270000000,3,2,'Бәйтерек ауданы','район Бәйтерек','rayon Bayterek',FALSE),
+ ('274800000',1274800000,1270000000,3,2,'Казталовка ауданы','Казталовский район','Kaztalovskiy rayon',FALSE),
+ ('275000000',1275000000,1270000000,3,2,'Қаратөбе ауданы','Каратобинский район','Karatobinskiy rayon',FALSE),
+ ('275400000',1275400000,1270000000,3,2,'Бөкейордасы ауданы','Бокейординский район','Bokeyordinskiy rayon',FALSE),
+ ('275800000',1275800000,1270000000,3,2,'Сырым ауданы','Сырымский район','Syrymskiy rayon',FALSE),
+ ('276000000',1276000000,1270000000,3,2,'Тасқала ауданы','Таскалинский район','Taskalinskiy rayon',FALSE),
+ ('276200000',1276200000,1270000000,3,2,'Теректі ауданы','Теректинский район','Terektinskiy rayon',FALSE),
+ ('276600000',1276600000,1270000000,3,2,'Шыңғырлау ауданы','Чингирлауский район','Chingirlauskiy rayon',FALSE),
+ ('311000000',1311000000,1310000000,3,1,'Тараз Қ.Ә.','Тараз Г.А.','Taraz G.A.',FALSE),
+ ('313600000',1313600000,1310000000,3,2,'Байзақ ауданы','Байзакский район','Bayzakskiy rayon',FALSE),
+ ('314000000',1314000000,1310000000,3,2,'Жамбыл ауданы','Жамбылский район','Zhambylskiy rayon',FALSE),
+ ('314200000',1314200000,1310000000,3,2,'Жуалы ауданы','Жуалынский район','Zhualynskiy rayon',FALSE),
+ ('314800000',1314800000,1310000000,3,2,'Қордай ауданы','Кордайский район','Kordayskiy rayon',FALSE),
+ ('315000000',1315000000,1310000000,3,2,'Тұрар Рысқұлов ауданы','район Турара Рыскулова','rayon Turara Ryskulova',FALSE),
+ ('315400000',1315400000,1310000000,3,2,'Мерке ауданы','Меркенский район','Merkenskiy rayon',FALSE),
+ ('315600000',1315600000,1310000000,3,2,'Мойынқұм ауданы','Мойынкумский район','Moyynkumskiy rayon',FALSE),
+ ('316000000',1316000000,1310000000,3,4,'Сарысу ауданы','Сарысуский район','Sarysuskiy rayon',FALSE),
+ ('316200000',1316200000,1310000000,3,4,'Талас ауданы','Таласский район','Talasskiy rayon',FALSE),
+ ('316600000',1316600000,1310000000,3,4,'Шу ауданы','Шуский район','Shuskiy rayon',FALSE),
+ ('331000000',1331000000,1330000000,3,3,'Талдықорған Қ.Ә.','Талдыкорган Г.А.','Taldykorgan G.A.',FALSE),
+ ('331800000',1331800000,1330000000,3,3,'Текелі Қ.Ә.','Текели Г.А.','Tekeli G.A.',FALSE),
+ ('333200000',1333200000,1330000000,3,2,'Ақсу ауданы','Аксуский район','Aksuskiy rayon',FALSE),
+ ('333400000',1333400000,1330000000,3,4,'Алакөл ауданы','Алакольский район','Alakolskiy rayon',FALSE),
+ ('333600000',1333600000,1330000000,3,2,'Ескелді ауданы','Ескельдинский район','Eskeldinskiy rayon',FALSE),
+ ('334000000',1334000000,1330000000,3,2,'Кербұлақ ауданы','Кербулакский район','Kerbulakskiy rayon',FALSE),
+ ('334200000',1334200000,1330000000,3,2,'Көксу ауданы','Коксуский район','Koksuskiy rayon',FALSE),
+ ('334400000',1334400000,1330000000,3,4,'Қаратал ауданы','Каратальский район','Karatalskiy rayon',FALSE),
+ ('334600000',1334600000,1330000000,3,4,'Панфилов ауданы','Панфиловский район','Panfilovskiy rayon',FALSE),
+ ('334800000',1334800000,1330000000,3,4,'Сарқан ауданы','Сарканский район','Sarkanskiy rayon',FALSE),
+ ('351000000',1351000000,1350000000,3,3,'Қарағанды Қ.Ә.','Караганда Г.А.','Karaganda G.A.',FALSE),
+ ('351600000',1351600000,1350000000,3,3,'Балқаш Қ.Ә.','Балхаш Г.А.','Balkhash G.A.',FALSE),
+ ('352100000',1352100000,1350000000,3,1,'Приозерск Қ.Ә.','Приозерск Г.А.','Priozersk G.A.',FALSE),
+ ('352200000',1352200000,1350000000,3,3,'Саран Қ.Ә.','Сарань Г.А.','Saran G.A.',FALSE),
+ ('352400000',1352400000,1350000000,3,3,'Теміртау Қ.Ә.','Темиртау Г.А.','Temirtau G.A.',FALSE),
+ ('352800000',1352800000,1350000000,3,3,'Шахтинск Қ.Ә.','Шахтинск Г.А.','Shakhtinsk G.A.',FALSE),
+ ('353200000',1353200000,1350000000,3,4,'Абай ауданы','Абайский район','Abayskiy rayon',FALSE),
+ ('353600000',1353600000,1350000000,3,2,'Ақтоғай ауданы','Актогайский район','Aktogayskiy rayon',FALSE),
+ ('354000000',1354000000,1350000000,3,2,'Бұқар жырау ауданы','Бухар-Жырауский район','Bukhar-Zhyrauskiy rayon',FALSE),
+ ('354800000',1354800000,1350000000,3,4,'Қарқаралы ауданы','Каркаралинский район','Karkaralinskiy rayon',FALSE),
+ ('355200000',1355200000,1350000000,3,2,'Нұра ауданы','Нуринский район','Nurinskiy rayon',FALSE),
+ ('355600000',1355600000,1350000000,3,2,'Осакаров ауданы','Осакаровский район','Osakarovskiy rayon',FALSE),
+ ('356400000',1356400000,1350000000,3,2,'Шет ауданы','Шетский район','Shetskiy rayon',FALSE),
+ ('391000000',1391000000,1390000000,3,1,'Қостанай Қ.Ә.','Костанай Г.А.','Kostanay G.A.',FALSE),
+ ('391600000',1391600000,1390000000,3,3,'Арқалық Қ.Ә.','Аркалык Г.А.','Arkalyk G.A.',FALSE),
+ ('392000000',1392000000,1390000000,3,3,'Лисаков Қ.Ә.','Лисаковск Г.А.','Lisakovsk G.A.',FALSE),
+ ('392400000',1392400000,1390000000,3,3,'Рудный Қ.Ә.','Рудный Г.А.','Rudnyy G.A.',FALSE),
+ ('393200000',1393200000,1390000000,3,2,'Алтынсарин ауданы','Алтынсаринский район','Altynsarinskiy rayon',FALSE),
+ ('393400000',1393400000,1390000000,3,2,'Амангелді ауданы','Амангельдинский район','Amangeldinskiy rayon',FALSE),
+ ('393600000',1393600000,1390000000,3,2,'Әулиекөл ауданы','Аулиекольский район','Auliekolskiy rayon',FALSE),
+ ('394000000',1394000000,1390000000,3,2,'Денисов ауданы','Денисовский район','Denisovskiy rayon',FALSE),
+ ('394200000',1394200000,1390000000,3,2,'Жангелдин ауданы','Жангельдинский район','Zhangeldinskiy rayon',FALSE),
+ ('394400000',1394400000,1390000000,3,4,'Жітіқара ауданы','Житикаринский район','Zhitikarinskiy rayon',FALSE),
+ ('394800000',1394800000,1390000000,3,2,'Қамысты ауданы','Камыстинский район','Kamystinskiy rayon',FALSE),
+ ('395000000',1395000000,1390000000,3,2,'Қарабалық ауданы','Карабалыкский район','Karabalykskiy rayon',FALSE),
+ ('395200000',1395200000,1390000000,3,2,'Қарасу ауданы','Карасуский район','Karasuskiy rayon',FALSE),
+ ('395400000',1395400000,1390000000,3,4,'Қостанай ауданы','Костанайский район','Kostanayskiy rayon',FALSE),
+ ('395600000',1395600000,1390000000,3,2,'Меңдіқара ауданы','Мендыкаринский район','Mendykarinskiy rayon',FALSE),
+ ('395800000',1395800000,1390000000,3,2,'Наурызым ауданы','Наурзумский район','Naurzumskiy rayon',FALSE),
+ ('396200000',1396200000,1390000000,3,2,'Сарыкөл ауданы','Сарыкольский район','Sarykolskiy rayon',FALSE),
+ ('396400000',1396400000,1390000000,3,2,'Бейімбет Майлин ауданы','район Беимбета Майлина','rayon Beimbeta Maylina',FALSE),
+ ('396600000',1396600000,1390000000,3,2,'Ұзынкөл ауданы','Узункольский район','Uzunkolskiy rayon',FALSE),
+ ('396800000',1396800000,1390000000,3,2,'Федоров ауданы','Федоровский район','Fedorovskiy rayon',FALSE),
+ ('433600000',1433600000,10012,3,2,'Жалағаш ауданы','Жалагашский район','Zhalagashskiy rayon',FALSE),
+ ('434000000',1434000000,10012,3,2,'Жаңақорған ауданы','Жанакорганский район','Zhanakorganskiy rayon',FALSE),
+ ('434400000',1434400000,10012,3,4,'Қазалы ауданы','Казалинский район','Kazalinskiy rayon',FALSE),
+ ('434600000',1434600000,10012,3,2,'Қармақшы ауданы','Кармакшинский район','Karmakshinskiy rayon',FALSE),
+ ('434800000',1434800000,10012,3,2,'Сырдария ауданы','Сырдарьинский район','Syrdarinskiy rayon',FALSE),
+ ('435200000',1435200000,10012,3,2,'Шиелі ауданы','Шиелийский район','Shieliyskiy rayon',FALSE),
+ ('471000000',1471000000,1470000000,3,3,'Ақтау Г.А.','Актау Г.А.','Aktau G.A.',FALSE),
+ ('471800000',1471800000,1470000000,3,3,'Жаңаөзен Қ.Ә.','Жанаозен Г.А.','Zhanaozen G.A.',FALSE),
+ ('473600000',1473600000,1470000000,3,2,'Бейнеу ауданы','Бейнеуский район','Beyneuskiy rayon',FALSE),
+ ('474200000',1474200000,1470000000,3,2,'Қарақия ауданы','Каракиянский район','Karakiyanskiy rayon',FALSE),
+ ('474600000',1474600000,1470000000,3,2,'Маңғыстау ауданы','Мангистауский район','Mangistauskiy rayon',FALSE),
+ ('475000000',1475000000,1470000000,3,2,'Мұнайлы ауданы','Мунайлинский район','Munaylinskiy rayon',FALSE),
+ ('475200000',1475200000,1470000000,3,4,'Түпқараған ауданы','Тупкараганский район','Tupkaraganskiy rayon',FALSE),
+ ('551000000',1551000000,1550000000,3,3,'Павлодар Қ.Ә.','Павлодар Г.А.','Pavlodar G.A.',FALSE),
+ ('551600000',1551600000,1550000000,3,3,'Ақсу Қ.Ә.','Аксу Г.А.','Aksu G.A.',FALSE),
+ ('552200000',1552200000,1550000000,3,3,'Екібастұз Қ.Ә.','Экибастуз Г.А.','Ekibastuz G.A.',FALSE),
+ ('553200000',1553200000,1550000000,3,2,'Ақтоғай ауданы','Актогайский район','Aktogayskiy rayon',FALSE),
+ ('553600000',1553600000,1550000000,3,2,'Баянауыл ауданы','Баянаульский район','Bayanaulskiy rayon',FALSE),
+ ('554200000',1554200000,1550000000,3,2,'Железин ауданы','Железинский район','Zhelezinskiy rayon',FALSE),
+ ('554600000',1554600000,1550000000,3,2,'Ертіс ауданы','Иртышский район','Irtyshskiy rayon',FALSE),
+ ('554800000',1554800000,1550000000,3,2,'Тереңкөл ауданы','район Тереңкөл','rayon Terengkol',FALSE),
+ ('555200000',1555200000,1550000000,3,2,'Аққулы ауданы','район Аққулы','rayon Aqquly',FALSE),
+ ('555600000',1555600000,1550000000,3,2,'Май ауданы','Майский район','Mayskiy rayon',FALSE),
+ ('556000000',1556000000,1550000000,3,2,'Павлодар ауданы','Павлодарский район','Pavlodarskiy rayon',FALSE),
+ ('556400000',1556400000,1550000000,3,2,'Успен ауданы','Успенский район','Uspenskiy rayon',FALSE),
+ ('556800000',1556800000,1550000000,3,2,'Шарбақты ауданы','Щербактинский район','Shcherbaktinskiy rayon',FALSE),
+ ('591000000',1591000000,1590000000,3,1,'Петропавл Қ.Ә.','Петропавловск Г.А.','Petropavlovsk G.A.',FALSE),
+ ('593200000',1593200000,1590000000,3,2,'Айыртау ауданы','Айыртауский район','Ayyrtauskiy rayon',FALSE),
+ ('593400000',1593400000,1590000000,3,2,'Ақжар ауданы','Акжарский район','Akzharskiy rayon',FALSE),
+ ('593600000',1593600000,1590000000,3,4,'Мағжан Жұмабаев ауданы','Район Магжана Жумабаева','Rayon Magzhana Zhumabaeva',FALSE),
+ ('594200000',1594200000,1590000000,3,2,'Есіл ауданы','Есильский район','Esilskiy rayon',FALSE),
+ ('594600000',1594600000,1590000000,3,2,'Жамбыл ауданы','Жамбылский район','Zhambylskiy rayon',FALSE),
+ ('595000000',1595000000,1590000000,3,2,'Қызылжар ауданы','Кызылжарский район','Kyzylzharskiy rayon',FALSE),
+ ('595200000',1595200000,1590000000,3,4,'Мамлют ауданы','Мамлютский район','Mamlyutskiy rayon',FALSE),
+ ('595600000',1595600000,1590000000,3,4,'Шал ақын ауданы','Район Шал акына','Rayon Shal akyna',FALSE),
+ ('595800000',1595800000,1590000000,3,2,'Аққайың ауданы','Аккайынский район','Akkayynskiy rayon',FALSE),
+ ('596000000',1596000000,1590000000,3,4,'Тайынша ауданы','Тайыншинский район','Tayynshinskiy rayon',FALSE),
+ ('596200000',1596200000,1590000000,3,2,'Тимирязев ауданы','Тимирязевский район','Timiryazevskiy rayon',FALSE),
+ ('596400000',1596400000,1590000000,3,2,'Уәлиханов ауданы','Уалихановский район','Ualikhanovskiy rayon',FALSE),
+ ('596600000',1596600000,1590000000,3,2,'Ғабит Мүсірепов атын.ауданы','Район им.Габита Мусрепова','Rayon im.Gabita Musrepova',FALSE),
+ ('611000000',1611000000,1610000000,3,1,'Түркістан Қ.Ә.','Туркестан Г.А.','Turkestan G.A.',FALSE),
+ ('611600000',1611600000,1610000000,3,3,'Арыс Қ.Ә.','Арысь Г.А.','Arys G.A.',FALSE),
+ ('612000000',1612000000,1610000000,3,3,'Кентау Қ.Ә.','Кентау Г.А.','Kentau G.A.',FALSE),
+ ('613600000',1613600000,1610000000,3,2,'Бәйдібек ауданы','район Байдибека','rayon Baydibeka',FALSE),
+ ('613800000',1613800000,1610000000,3,4,'Жетісай ауданы','Жетысайский район','Zhetysayskiy rayon',FALSE),
+ ('613900000',1613900000,1610000000,3,2,'Келес ауданы','Келесский район','Kelesskiy rayon',FALSE),
+ ('614000000',1614000000,1610000000,3,2,'Қазығұрт ауданы','Казыгуртский район','Kazygurtskiy rayon',FALSE),
+ ('614400000',1614400000,1610000000,3,2,'Мақтаарал ауданы','Мактааральский район','Maktaaralskiy rayon',FALSE),
+ ('614600000',1614600000,1610000000,3,2,'Ордабасы ауданы','Ордабасынский район','Ordabasynskiy rayon',FALSE),
+ ('614800000',1614800000,1610000000,3,2,'Отырар ауданы','Отрарский район','Otrarskiy rayon',FALSE),
+ ('615200000',1615200000,1610000000,3,2,'Сайрам ауданы','Сайрамский район','Sayramskiy rayon',FALSE),
+ ('615400000',1615400000,1610000000,3,4,'Сарыағаш ауданы','Сарыагашский район','Saryagashskiy rayon',FALSE),
+ ('615500000',1615500000,1610000000,3,2,'Сауран ауданы','район Сауран','rayon Sauran',FALSE),
+ ('615600000',1615600000,1610000000,3,2,'Созақ ауданы','Сузакский район','Suzakskiy rayon',FALSE),
+ ('615800000',1615800000,1610000000,3,4,'Төле би ауданы','Толебийский район','Tolebiyskiy rayon',FALSE),
+ ('616000000',1616000000,1610000000,3,2,'Түлкібас ауданы','Тюлькубасский район','Tyulkubasskiy rayon',FALSE),
+ ('616400000',1616400000,1610000000,3,4,'Шардара ауданы','Шардаринский район','Shardarinskiy rayon',FALSE),
+ ('621000000',1621000000,1620000000,3,3,'Жезқазған Қ.Ә.','Жезказган Г.А.','Zhezkazgan G.A.',FALSE),
+ ('621800000',1621800000,1620000000,3,3,'Қаражал Қ.Ә.','Каражал Г.А.','Karazhal G.A.',FALSE),
+ ('622000000',1622000000,1620000000,3,3,'Сәтбаев Қ.Ә.','Сатпаев Г.А.','Satpaev G.A.',FALSE),
+ ('623600000',1623600000,1620000000,3,2,'Жаңаарқа ауданы','Жанааркинский район','Zhanaarkinskiy rayon',FALSE),
+ ('623800000',1623800000,1620000000,3,2,'Ұлытау ауданы','Улытауский район','Ulytauskiy rayon',FALSE),
+ ('631000000',1631000000,1630000000,3,3,'Өскемен Қ.Ә.','Усть-Каменогорск Г.А.','Ust-Kamenogorsk G.A.',FALSE),
+ ('632400000',1632400000,1630000000,3,3,'Риддер Қ.Ә.','Риддер Г.А.','Ridder G.A.',FALSE),
+ ('634000000',1634000000,1630000000,3,2,'Глубокое ауданы','Глубоковский район','Glubokovskiy rayon',FALSE),
+ ('634600000',1634600000,1630000000,3,4,'Зайсан ауданы','Зайсанский район','Zaysanskiy rayon',FALSE),
+ ('634800000',1634800000,1630000000,3,4,'Алтай ауданы','район Алтай','rayon Altay',FALSE),
+ ('635200000',1635200000,1630000000,3,2,'Күршім ауданы','Курчумский район','Kurchumskiy rayon',FALSE),
+ ('635400000',1635400000,1630000000,3,2,'Катонқарағай ауданы','Катон-Карагайский район','Katon-Karagayskiy rayon',FALSE),
+ ('635500000',1635500000,1630000000,3,2,'Марқакөл ауданы','район Марқакөл','rayon Marqakol',FALSE),
+ ('635600000',1635600000,1630000000,3,2,'Самар ауданы','район Самар','rayon Samar',FALSE),
+ ('635800000',1635800000,1630000000,3,2,'Тарбағатай ауданы','Тарбагатайский район','Tarbagatayskiy rayon',FALSE),
+ ('636200000',1636200000,1630000000,3,2,'Ұлан ауданы','Уланский район','Ulanskiy rayon',FALSE),
+ ('636300000',1636300000,1630000000,3,2,'Үлкен Нарын ауданы','район Үлкен Нарын','rayon Ulken Naryn',FALSE),
+ ('636800000',1636800000,1630000000,3,4,'Шемонаиха ауданы','Шемонаихинский район','Shemonaikhinskiy rayon',FALSE),
+ ('711110000',1711110000,1710000000,3,1,'Алматы ауданы','район Алматы','rayon Almaty',FALSE),
+ ('711210000',1711210000,1710000000,3,1,'Есіл ауданы','район Есиль','rayon Esil',FALSE),
+ ('711310000',1711310000,1710000000,3,1,'Сарыарқа ауданы','район Сарыарка','rayon Saryarka',FALSE),
+ ('711410000',1711410000,1710000000,3,1,'Байқоңыр ауданы','район Байқоңыр','rayon Bayqongyr',FALSE),
+ ('711510000',1711510000,1710000000,3,1,'Нұра ауданы','район Нұра','rayon Nura',FALSE),
+ ('711610000',1711610000,1710000000,3,1,'Сарайшық ауданы','район Сарайшық','rayon Sarayshyq',FALSE),
+ ('751110000',1751110000,1750000000,3,1,'Алмалы ауданы','Алмалинский район','Almalinskiy rayon',FALSE),
+ ('751210000',1751210000,1750000000,3,1,'Алатау ауданы','Алатауский район','Alatauskiy rayon',FALSE),
+ ('751310000',1751310000,1750000000,3,1,'Әуезов ауданы','Ауэзовский район','Auezovskiy rayon',FALSE),
+ ('751410000',1751410000,1750000000,3,1,'Бостандық ауданы','Бостандыкский район','Bostandykskiy rayon',FALSE),
+ ('751510000',1751510000,1750000000,3,1,'Жетісу ауданы','Жетысуский район','Zhetysuskiy rayon',FALSE),
+ ('751710000',1751710000,1750000000,3,1,'Медеу ауданы','Медеуский район','Medeuskiy rayon',FALSE),
+ ('751810000',1751810000,1750000000,3,1,'Наурызбай ауданы','Наурызбайский район','Nauryzbayskiy rayon',FALSE),
+ ('751910000',1751910000,1750000000,3,1,'Түрксіб ауданы','Турксибский район','Turksibskiy rayon',FALSE),
+ ('791110000',1791110000,1790000000,3,1,'Абай ауданы','Абайский район','Abayskiy rayon',FALSE),
+ ('791310000',1791310000,1790000000,3,1,'Әл Фараби ауданы','Аль-Фарабийский район','Al-Farabiyskiy rayon',FALSE),
+ ('791510000',1791510000,1790000000,3,1,'Еңбекші ауданы','Енбекшинский район','Enbekshinskiy rayon',FALSE),
+ ('791710000',1791710000,1790000000,3,1,'Қаратау ауданы','Каратауский район','Karatauskiy rayon',FALSE),
+ ('791910000',1791910000,1790000000,3,1,'Тұран ауданы','район Тұран','rayon Turan',FALSE),
+ ('101010000',1101010000,1101000000,4,1,'Семей қ.','г.Семей','g.Semey',FALSE),
+ ('101810000',1101810000,1101800000,4,1,'Курчатов қ.','г.Курчатов','g.Kurchatov',FALSE),
+ ('103620000',1103620000,1103600000,4,3,'Аягөз қ.ә.','Аягоз г.а.','Ayagoz g.a.',FALSE),
+ ('104221000',1104221000,1104200000,4,3,'Шар қ.ә.','Шарская г.а.','Sharskaya g.a.',FALSE),
+ ('111010000',1111010000,1111000000,4,1,'Көкшетау қ.','г.Кокшетау','g.Kokshetau',FALSE),
+ ('111610000',1111610000,1111600000,4,1,'Қосшы қ.','г.Косшы','g.Kosshy',FALSE),
+ ('113220000',1113220000,1113200000,4,3,'Ақкөл қ.ә.','Аккольская г.а.','Akkolskaya g.a.',FALSE),
+ ('113820100',1113820100,1113800000,4,1,'Атбасар қ.','г.Атбасар','g.Atbasar',FALSE),
+ ('114020100',1114020100,1114000000,4,1,'Макинск қ.','г.Макинск','g.Makinsk',FALSE),
+ ('114520000',1114520000,1114500000,4,3,'Степняк қ.ә.','Степнякская г.а.','Stepnyakskaya g.a.',FALSE),
+ ('114620100',1114620100,1114600000,4,1,'Ерейментау қ.','г.Ерейментау','g.Ereymentau',FALSE),
+ ('114820100',1114820100,1114800000,4,1,'Есіл қ.','г.Есиль','g.Esil',FALSE),
+ ('115420100',1115420100,1115400000,4,1,'Державин қ.','г.Державинск','g.Derzhavinsk',FALSE),
+ ('117020000',1117020000,1117000000,4,1,'Щучинск қ.ә.','Щучинская г.а.','Shchuchinskaya g.a.',FALSE),
+ ('151010000',1151010000,1151000000,4,1,'Ақтөбе қ.','г.Актобе','g.Aktobe',FALSE),
+ ('151011100',1151011100,1151000000,4,1,'Астана ауданы','район Астана','rayon Astana',FALSE),
+ ('151013100',1151013100,1151000000,4,1,'Алматы ауданы','район Алматы','rayon Almaty',FALSE),
+ ('153220000',1153220000,1153200000,4,1,'Алға қ.ә.','Алгинская г.а.','Alginskaya g.a.',FALSE),
+ ('154820000',1154820000,1154800000,4,1,'Қандыағаш қ.ә.','Кандыагашская г.а.','Kandyagashskaya g.a.',FALSE),
+ ('154823000',1154823000,1154800000,4,3,'Ембі қ.ә.','Эмбинская г.а.','Embinskaya g.a.',FALSE),
+ ('154825000',1154825000,1154800000,4,1,'Жем қ.ә.','Жемская г.а.','Zhemskaya g.a.',FALSE),
+ ('155621000',1155621000,1155600000,4,3,'Темір қ.ә.','Темирская г.а.','Temirskaya g.a.',FALSE),
+ ('156020100',1156020100,1156000000,4,1,'Хромтау қ.','г.Хромтау','g.Khromtau',FALSE),
+ ('156420000',1156420000,1156400000,4,1,'Шалқар қ.ә.','Шалкарская г.а.','Shalkarskaya g.a.',FALSE),
+ ('191010000',1191010000,1191000000,4,1,'Қонаев қ.','г.Қонаев','g.Qonaev',FALSE),
+ ('191810000',1191810000,1191800000,4,1,'Алатау қ.','г.Алатау','g.Alatau',FALSE),
+ ('194020000',1194020000,1194000000,4,1,'Есік қ.ә.','Есикская г.а.','Esikskaya g.a.',FALSE),
+ ('195220000',1195220000,1195200000,4,3,'Қаскелең қ.ә.','Каскеленская г.а.','Kaskelenskaya g.a.',FALSE),
+ ('196220000',1196220000,1196200000,4,1,'Талғар қ.ә.','Талгарская г.а.','Talgarskaya g.a.',FALSE),
+ ('231010000',1231010000,1231000000,4,1,'Атырау қ.','г.Атырау','g.Atyrau',FALSE),
+ ('233620000',1233620000,1233600000,4,1,'Құлсары қ.ә.','Кульсаринская г.а.','Kulsarinskaya g.a.',FALSE),
+ ('271010000',1271010000,1271000000,4,1,'Орал қ.','г.Уральск','g.Uralsk',FALSE),
+ ('273620000',1273620000,1273600000,4,1,'Ақсай қ.ә.','Аксайская г.а.','Aksayskaya g.a.',FALSE),
+ ('311010000',1311010000,1311000000,4,1,'Тараз қ.','г.Тараз','g.Taraz',FALSE),
+ ('311011100',1311011100,1311000000,4,1,'Әулиеата ауданы','район Әулиеата','rayon Aulieata',FALSE),
+ ('311013100',1311013100,1311000000,4,1,'Жібек жолы ауданы','район Жібек жолы','rayon Zhibek zholy',FALSE),
+ ('316020100',1316020100,1316000000,4,1,'Жаңатас қ.','г.Жанатас','g.Zhanatas',FALSE),
+ ('316220100',1316220100,1316200000,4,1,'Қаратау қ.','г.Каратау','g.Karatau',FALSE),
+ ('316621000',1316621000,1316600000,4,1,'Шу қ.ә.','Шуская г.а.','Shuskaya g.a.',FALSE),
+ ('331010000',1331010000,1331000000,4,1,'Талдықорған қ.','г.Талдыкорган','g.Taldykorgan',FALSE),
+ ('331810000',1331810000,1331800000,4,1,'Текелі қ.','г.Текели','g.Tekeli',FALSE),
+ ('333420000',1333420000,1333400000,4,3,'Үшарал қ.ә.','Ушаральская г.а.','Usharalskaya g.a.',FALSE),
+ ('334420000',1334420000,1334400000,4,3,'Үштөбе қ.ә.','Уштобинская г.а.','Ushtobinskaya g.a.',FALSE),
+ ('334620000',1334620000,1334600000,4,1,'Жаркент қ.ә.','Жаркентская г.а.','Zharkentskaya g.a.',FALSE),
+ ('334820000',1334820000,1334800000,4,3,'Сарқан қ.ә.','Сарканская г.а.','Sarkanskaya g.a.',FALSE),
+ ('351010000',1351010000,1351000000,4,1,'Қарағанды қ.','г.Караганда','g.Karaganda',FALSE),
+ ('351011000',1351011000,1351000000,4,3,'Әлихан Бөкейхан а.ә.','Әлихан Бөкейхан р.а.','Alikhan Bokeykhan r.a.',FALSE),
+ ('351013000',1351013000,1351000000,4,1,'Қазыбек би атын. а.ә.','р.а. им.Казыбек би','r.a. im.Kazybek bi',FALSE),
+ ('351610000',1351610000,1351600000,4,1,'Балқаш қ.','г.Балхаш','g.Balkhash',FALSE),
+ ('352110000',1352110000,1352100000,4,1,'Приозерск қ.','г.Приозерск','g.Priozersk',FALSE),
+ ('352210000',1352210000,1352200000,4,1,'Саран қ.','г.Сарань','g.Saran',FALSE),
+ ('352410000',1352410000,1352400000,4,1,'Теміртау қ.','г.Темиртау','g.Temirtau',FALSE),
+ ('352810000',1352810000,1352800000,4,1,'Шахтинск қ.','г.Шахтинск','g.Shakhtinsk',FALSE),
+ ('353220000',1353220000,1353200000,4,1,'Абай қ.ә.','Абайская г.а.','Abayskaya g.a.',FALSE),
+ ('354820100',1354820100,1354800000,4,1,'Қарқаралы қ.','г.Каркаралинск','g.Karkaralinsk',FALSE),
+ ('391010000',1391010000,1391000000,4,1,'Қостанай қ.','г.Костанай','g.Kostanay',FALSE),
+ ('391610000',1391610000,1391600000,4,1,'Арқалық қ.','г.Аркалык','g.Arkalyk',FALSE),
+ ('392010000',1392010000,1392000000,4,1,'Лисаков қ.','г.Лисаковск','g.Lisakovsk',FALSE),
+ ('392410000',1392410000,1392400000,4,1,'Рудный қ.','г.Рудный','g.Rudnyy',FALSE),
+ ('394420100',1394420100,1394400000,4,1,'Жітіқара қ.','г.Житикара','g.Zhitikara',FALSE),
+ ('395420000',1395420000,1395400000,4,1,'Тобыл қ.ә.','Тобылская г.а.','Tobylskaya g.a.',FALSE),
+ ('434423000',1434423000,1434400000,4,1,'Қазалы қ.ә.','Казалинская г.а.','Kazalinskaya g.a.',FALSE),
+ ('471010000',1471010000,1471000000,4,1,'Ақтау қ.','г.Актау','g.Aktau',FALSE),
+ ('471810000',1471810000,1471800000,4,1,'Жаңаөзен қ.','г.Жанаозен','g.Zhanaozen',FALSE),
+ ('475220100',1475220100,1475200000,4,1,'Форт-Шевченко ќ.','г.Форт-Шевченко','g.Fort-Shevchenko',FALSE),
+ ('551010000',1551010000,1551000000,4,1,'Павлодар қ.','г.Павлодар','g.Pavlodar',FALSE),
+ ('551610000',1551610000,1551600000,4,1,'Ақсу қ.','г.Аксу','g.Aksu',FALSE),
+ ('552210000',1552210000,1552200000,4,1,'Екібастұз қ.','г.Экибастуз','g.Ekibastuz',FALSE),
+ ('591010000',1591010000,1591000000,4,1,'Петропавл қ.','г.Петропавловск','g.Petropavlovsk',FALSE),
+ ('593620000',1593620000,1593600000,4,3,'Булаев қ.ә.','Булаевская г.а.','Bulaevskaya g.a.',FALSE),
+ ('595220000',1595220000,1595200000,4,1,'Мамлют қ.ә.','Мамлютская г.а.','Mamlyutskaya g.a.',FALSE),
+ ('595620000',1595620000,1595600000,4,1,'Сергеев қ.ә.','Сергеевская г.а.','Sergeevskaya g.a.',FALSE),
+ ('596020000',1596020000,1596000000,4,1,'Тайынша қ.ә.','Тайыншинская г.а.','Tayynshinskaya g.a.',FALSE),
+ ('611010000',1611010000,1611000000,4,1,'Түркістан қ.','г.Туркестан','g.Turkestan',FALSE),
+ ('611610000',1611610000,1611600000,4,1,'Арыс қ.','г.Арысь','g.Arys',FALSE),
+ ('612010000',1612010000,1612000000,4,1,'Кентау қ.','г.Кентау','g.Kentau',FALSE),
+ ('613820100',1613820100,1613800000,4,1,'Жетісай қ.','г.Жетысай','g.Zhetysay',FALSE),
+ ('615420100',1615420100,1615400000,4,1,'Сарыағаш қ.','г.Сарыагаш','g.Saryagash',FALSE),
+ ('615820100',1615820100,1615800000,4,1,'Леңгір қ.','г.Ленгер','g.Lenger',FALSE),
+ ('616420100',1616420100,1616400000,4,1,'Шардара қ.','г.Шардара','g.Shardara',FALSE),
+ ('621010000',1621010000,1621000000,4,1,'Жезқазған қ.','г.Жезказган','g.Zhezkazgan',FALSE),
+ ('621810000',1621810000,1621800000,4,1,'Қаражал қ.','г.Каражал','g.Karazhal',FALSE),
+ ('622010000',1622010000,1622000000,4,1,'Сәтбаев қ.','г.Сатпаев','g.Satpaev',FALSE),
+ ('631010000',1631010000,1631000000,4,1,'Өскемен қ.','г.Усть-Каменогорск','g.Ust-Kamenogorsk',FALSE),
+ ('632410000',1632410000,1632400000,4,1,'Риддер қ.','г.Риддер','g.Ridder',FALSE),
+ ('634620000',1634620000,1634600000,4,1,'Зайсан қ.ә.','Зайсанская г.а.','Zaysanskaya g.a.',FALSE),
+ ('634820000',1634820000,1634800000,4,3,'Алтай қ.ә.','г.а.Алтай','g.a.Altay',FALSE),
+ ('634821100',1634821100,1634800000,4,1,'Серебрянск қ.','г.Серебрянск','g.Serebryansk',FALSE),
+ ('636820000',1636820000,1636800000,4,1,'Шемонаиха қ.ә.','Шемонаихинская г.а.','Shemonaikhinskaya g.a.',FALSE),
+ ('103620100',1103620100,1103620000,5,1,'Аягөз қ.','г.Аягоз','g.Ayagoz',FALSE),
+ ('104221100',1104221100,1104221000,5,1,'Шар қ.','г.Шар','g.Shar',FALSE),
+ ('113220100',1113220100,1113220000,5,1,'Ақкөл қ.','г.Акколь','g.Akkol',FALSE),
+ ('114520100',1114520100,1114520000,5,1,'Степняк қ.','г.Степняк','g.Stepnyak',FALSE),
+ ('117020100',1117020100,1117020000,5,1,'Щучинск қ.','г.Щучинск','g.Shchuchinsk',FALSE),
+ ('153220100',1153220100,1153220000,5,1,'Алға қ.','г.Алга','g.Alga',FALSE),
+ ('154820100',1154820100,1154820000,5,1,'Қандыағаш қ.','г.Кандыагаш','g.Kandyagash',FALSE),
+ ('154823100',1154823100,1154823000,5,1,'Ембі қ.','г.Эмба','g.Emba',FALSE),
+ ('154825100',1154825100,1154825000,5,1,'Жем қ.','г.Жем','g.Zhem',FALSE),
+ ('155621100',1155621100,1155621000,5,1,'Темір қ.','г.Темир','g.Temir',FALSE),
+ ('156420100',1156420100,1156420000,5,1,'Шалқар қ.','г.Шалкар','g.Shalkar',FALSE),
+ ('194020100',1194020100,1194020000,5,1,'Есік қ.','г.Есик','g.Esik',FALSE),
+ ('195220100',1195220100,1195220000,5,1,'Қаскелең қ.','г.Каскелен','g.Kaskelen',FALSE),
+ ('196220100',1196220100,1196220000,5,1,'Талғар қ.','г.Талгар','g.Talgar',FALSE),
+ ('233620100',1233620100,1233620000,5,1,'Құлсары қ.','г.Кульсары','g.Kulsary',FALSE),
+ ('273620100',1273620100,1273620000,5,1,'Ақсай қ.','г.Аксай','g.Aksay',FALSE),
+ ('316621100',1316621100,1316621000,5,1,'Шу қ.','г.Шу','g.Shu',FALSE),
+ ('333420100',1333420100,1333420000,5,1,'Үшарал қ.','г.Ушарал','g.Usharal',FALSE),
+ ('334420100',1334420100,1334420000,5,1,'Үштөбе қ.','г.Уштобе','g.Ushtobe',FALSE),
+ ('334620100',1334620100,1334620000,5,1,'Жаркент қ.','г.Жаркент','g.Zharkent',FALSE),
+ ('334820100',1334820100,1334820000,5,1,'Сарқан қ.','г.Саркан','g.Sarkan',FALSE),
+ ('351011100',1351011100,1351011000,5,1,'Әлихан Бөкейхан ауданы','район Әлихан Бөкейхан','rayon Alikhan Bokeykhan',FALSE),
+ ('351013100',1351013100,1351013000,5,1,'Қазыбек би атын.ауданы','район им.Казыбек би','rayon im.Kazybek bi',FALSE),
+ ('353220100',1353220100,1353220000,5,1,'Абай қ.','г.Абай','g.Abay',FALSE),
+ ('395420100',1395420100,1395420000,5,1,'Тобыл қ.','г.Тобыл','g.Tobyl',FALSE),
+ ('434423100',1434423100,1434423000,5,1,'Қазалы қ.','г.Казалинск','g.Kazalinsk',FALSE),
+ ('593620100',1593620100,1593620000,5,1,'Булаев қ.','г.Булаево','g.Bulaevo',FALSE),
+ ('595220100',1595220100,1595220000,5,1,'Мамлют қ.','г.Мамлютка','g.Mamlyutka',FALSE),
+ ('595620100',1595620100,1595620000,5,1,'Сергеев қ.','г.Сергеевка','g.Sergeevka',FALSE),
+ ('596020100',1596020100,1596020000,5,1,'Тайынша қ.','г.Тайынша','g.Tayynsha',FALSE),
+ ('634620100',1634620100,1634620000,5,1,'Зайсан қ.','г.Зайсан','g.Zaysan',FALSE),
+ ('634820100',1634820100,1634820000,5,1,'Алтай қ.','г.Алтай','g.Altay',FALSE),
+ ('636820100',1636820100,1636820000,5,1,'Шемонайха қ.','г.Шемонаиха','g.Shemonaikha',FALSE);
+
+-- Existing city row had parent_source_id=9, absent from the seed. Keep its own source_id=10.
+UPDATE public.ref_kato_territory SET parent_source_id=1111800000 WHERE code='111810000' AND source_id=10 AND parent_source_id=9;
+
+-- Rollback only before the new codes have been used by business operations; existing FK may reject deletion.
+--rollback UPDATE public.ref_kato_territory SET parent_source_id=9 WHERE code='111810000' AND source_id=10 AND parent_source_id=1111800000;
+--rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1103620100,1104221100,1113220100,1114520100,1117020100,1153220100,1154820100,1154823100,1154825100,1155621100,1156420100,1194020100,1195220100,1196220100,1233620100,1273620100,1316621100,1333420100,1334420100,1334620100,1334820100,1351011100,1351013100,1353220100,1395420100,1434423100,1593620100,1595220100,1595620100,1596020100,1634620100,1634820100,1636820100);
+--rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1101010000,1101810000,1103620000,1104221000,1111010000,1111610000,1113220000,1113820100,1114020100,1114520000,1114620100,1114820100,1115420100,1117020000,1151010000,1151011100,1151013100,1153220000,1154820000,1154823000,1154825000,1155621000,1156020100,1156420000,1191010000,1191810000,1194020000,1195220000,1196220000,1231010000,1233620000,1271010000,1273620000,1311010000,1311011100,1311013100,1316020100,1316220100,1316621000,1331010000,1331810000,1333420000,1334420000,1334620000,1334820000,1351010000,1351011000,1351013000,1351610000,1352110000,1352210000,1352410000,1352810000,1353220000,1354820100,1391010000,1391610000,1392010000,1392410000,1394420100,1395420000,1434423000,1471010000,1471810000,1475220100,1551010000,1551610000,1552210000,1591010000,1593620000,1595220000,1595620000,1596020000,1611010000,1611610000,1612010000,1613820100,1615420100,1615820100,1616420100,1621010000,1621810000,1622010000,1631010000,1632410000,1634620000,1634820000,1634821100,1636820000);
+--rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1101000000,1101800000,1103200000,1103400000,1103600000,1103800000,1104000000,1104100000,1104200000,1104400000,1104500000,1104600000,1111000000,1111600000,1111800000,1113200000,1113400000,1113600000,1113800000,1114000000,1114400000,1114500000,1114600000,1114800000,1115200000,1115400000,1115600000,1116000000,1116400000,1116600000,1116800000,1117000000,1151000000,1153200000,1153400000,1153600000,1154000000,1154200000,1154600000,1154800000,1155200000,1155600000,1156000000,1156400000,1156800000,1191000000,1191800000,1193600000,1194000000,1194200000,1194400000,1195200000,1195800000,1196200000,1196600000,1196800000,1231000000,1233600000,1234000000,1234200000,1234600000,1234800000,1235200000,1235600000,1271000000,1273200000,1273600000,1274000000,1274200000,1274400000,1274800000,1275000000,1275400000,1275800000,1276000000,1276200000,1276600000,1311000000,1313600000,1314000000,1314200000,1314800000,1315000000,1315400000,1315600000,1316000000,1316200000,1316600000,1331000000,1331800000,1333200000,1333400000,1333600000,1334000000,1334200000,1334400000,1334600000,1334800000,1351000000,1351600000,1352100000,1352200000,1352400000,1352800000,1353200000,1353600000,1354000000,1354800000,1355200000,1355600000,1356400000,1391000000,1391600000,1392000000,1392400000,1393200000,1393400000,1393600000,1394000000,1394200000,1394400000,1394800000,1395000000,1395200000,1395400000,1395600000,1395800000,1396200000,1396400000,1396600000,1396800000,1433600000,1434000000,1434400000,1434600000,1434800000,1435200000,1471000000,1471800000,1473600000,1474200000,1474600000,1475000000,1475200000,1551000000,1551600000,1552200000,1553200000,1553600000,1554200000,1554600000,1554800000,1555200000,1555600000,1556000000,1556400000,1556800000,1591000000,1593200000,1593400000,1593600000,1594200000,1594600000,1595000000,1595200000,1595600000,1595800000,1596000000,1596200000,1596400000,1596600000,1611000000,1611600000,1612000000,1613600000,1613800000,1613900000,1614000000,1614400000,1614600000,1614800000,1615200000,1615400000,1615500000,1615600000,1615800000,1616000000,1616400000,1621000000,1621800000,1622000000,1623600000,1623800000,1631000000,1632400000,1634000000,1634600000,1634800000,1635200000,1635400000,1635500000,1635600000,1635800000,1636200000,1636300000,1636800000,1711110000,1711210000,1711310000,1711410000,1711510000,1711610000,1751110000,1751210000,1751310000,1751410000,1751510000,1751710000,1751810000,1751910000,1791110000,1791310000,1791510000,1791710000,1791910000);
+--rollback DELETE FROM public.ref_kato_territory WHERE source_id IN (1100000000,1150000000,1190000000,1230000000,1270000000,1310000000,1330000000,1350000000,1390000000,1470000000,1550000000,1590000000,1610000000,1620000000,1630000000,1710000000,1750000000,1790000000);
+
+
+--changeset rm:0199-int-coverage-revision-schema
+-- Revision zero is the migration baseline; earlier proofs have no fence and cannot route.
+CREATE TABLE crm.int_source_revision (
+ tenant_id UUID PRIMARY KEY REFERENCES public.iam_workspace(id),
+ revision BIGINT NOT NULL CHECK(revision>=0)
+);
+CREATE TABLE crm.int_projection_revision (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>=0),
+ PRIMARY KEY(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id)
+);
+CREATE TABLE crm.int_coverage_fence (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,proof_id UUID NOT NULL,
+ source_revision BIGINT NOT NULL CHECK(source_revision>=0),
+ projection_revision BIGINT NOT NULL CHECK(projection_revision>=0),
+ lifecycle_revision BIGINT NOT NULL CHECK(lifecycle_revision>=0),
+ PRIMARY KEY(tenant_id,generation_id,proof_id),
+ FOREIGN KEY(tenant_id,generation_id,proof_id)
+ REFERENCES crm.int_projection_coverage(tenant_id,generation_id,proof_id)
+);
+ALTER TABLE crm.int_projection_lifecycle ADD CONSTRAINT uq_int_lifecycle_state_identity
+ UNIQUE(tenant_id,generation_id,lifecycle_state);
+CREATE TABLE crm.int_active_generation (
+ tenant_id UUID NOT NULL,projection_code VARCHAR(24) NOT NULL CHECK(projection_code='L1'),
+ generation_id UUID NOT NULL,proof_id UUID NOT NULL,
+ lifecycle_state VARCHAR(16) NOT NULL CHECK(lifecycle_state='ACTIVE'),
+ PRIMARY KEY(tenant_id,projection_code),
+ FOREIGN KEY(tenant_id,generation_id,lifecycle_state)
+ REFERENCES crm.int_projection_lifecycle(tenant_id,generation_id,lifecycle_state),
+ FOREIGN KEY(tenant_id,generation_id,proof_id)
+ REFERENCES crm.int_coverage_fence(tenant_id,generation_id,proof_id)
+);
+--rollback DROP TABLE crm.int_active_generation;
+--rollback ALTER TABLE crm.int_projection_lifecycle DROP CONSTRAINT uq_int_lifecycle_state_identity;
+--rollback DROP TABLE crm.int_coverage_fence;
+--rollback DROP TABLE crm.int_projection_revision;
+--rollback DROP TABLE crm.int_source_revision;
+
+--changeset rm:0200-int-coverage-revision-triggers dbms:postgresql splitStatements:false
+-- Transactional counters, never a sequence/time watermark. Conservative tenant-wide
+-- source invalidation includes direct owner inserts before canonical delivery.
+CREATE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ INSERT INTO crm.int_source_revision(tenant_id,revision) VALUES(NEW.tenant_id,1)
+ ON CONFLICT(tenant_id) DO UPDATE SET revision=int_source_revision.revision+1;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_source_rev_0 AFTER INSERT ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_1 AFTER INSERT ON crm.sales_order_line
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_2 AFTER INSERT ON crm.inv_stock_movement
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_3 AFTER INSERT ON crm.int_canonical_fact
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_4 AFTER INSERT ON crm.int_sales_line_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE TRIGGER trg_int_source_rev_5 AFTER INSERT ON crm.int_movement_dimension
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_source_revision();
+CREATE FUNCTION crm.int_bump_projection_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE t UUID; g UUID;
+BEGIN
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE
+   t:=NEW.tenant_id; g:=NEW.generation_id;
+   IF TG_OP='UPDATE' THEN
+     IF OLD.tenant_id<>t OR OLD.generation_id<>g THEN
+       RAISE EXCEPTION 'INT_PROJECTION_REVISION_IDENTITY' USING ERRCODE='23514';
+     END IF;
+   END IF;
+ END IF;
+ INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(t,g,1)
+ ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_proj_rev_0 AFTER INSERT OR UPDATE OR DELETE ON crm.int_daily_bucket
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_projection_revision();
+CREATE TRIGGER trg_int_proj_truncate_0 BEFORE TRUNCATE ON crm.int_daily_bucket
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_proj_rev_1 AFTER INSERT OR UPDATE OR DELETE ON crm.int_l1_sales_contribution
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_projection_revision();
+CREATE TRIGGER trg_int_proj_truncate_1 BEFORE TRUNCATE ON crm.int_l1_sales_contribution
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_bump_projection_receipt_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE g UUID;
+BEGIN
+ SELECT generation_id INTO g FROM crm.int_projection_generation
+ WHERE tenant_id=NEW.tenant_id AND consumer_code=NEW.consumer_code;
+ IF FOUND THEN
+   INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(NEW.tenant_id,g,1)
+   ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_proj_receipt_rev AFTER INSERT ON crm.int_fact_consumer_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_bump_projection_receipt_revision();
+CREATE TRIGGER trg_int_coverage_fence_immutable BEFORE UPDATE OR DELETE ON crm.int_coverage_fence
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_coverage_fence_no_truncate BEFORE TRUNCATE ON crm.int_coverage_fence
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_coverage_fence_no_truncate ON crm.int_coverage_fence;
+--rollback DROP TRIGGER trg_int_coverage_fence_immutable ON crm.int_coverage_fence;
+--rollback DROP TRIGGER trg_int_proj_receipt_rev ON crm.int_fact_consumer_receipt;
+--rollback DROP FUNCTION crm.int_bump_projection_receipt_revision();
+--rollback DROP TRIGGER trg_int_proj_truncate_0 ON crm.int_daily_bucket;
+--rollback DROP TRIGGER trg_int_proj_rev_0 ON crm.int_daily_bucket;
+--rollback DROP TRIGGER trg_int_proj_truncate_1 ON crm.int_l1_sales_contribution;
+--rollback DROP TRIGGER trg_int_proj_rev_1 ON crm.int_l1_sales_contribution;
+--rollback DROP FUNCTION crm.int_bump_projection_revision();
+--rollback DROP TRIGGER trg_int_source_rev_0 ON crm.sales_order_status_event;
+--rollback DROP TRIGGER trg_int_source_rev_1 ON crm.sales_order_line;
+--rollback DROP TRIGGER trg_int_source_rev_2 ON crm.inv_stock_movement;
+--rollback DROP TRIGGER trg_int_source_rev_3 ON crm.int_canonical_fact;
+--rollback DROP TRIGGER trg_int_source_rev_4 ON crm.int_sales_line_dimension;
+--rollback DROP TRIGGER trg_int_source_rev_5 ON crm.int_movement_dimension;
+--rollback DROP FUNCTION crm.int_bump_source_revision();
+
+
+--changeset rm:0201-kato-semantic-administrative-types
+-- Explicit release mapping; level_no remains legacy structural depth, never a business type.
+ALTER TABLE public.ref_kato_territory ADD COLUMN territory_type VARCHAR(32) NOT NULL DEFAULT 'LEGACY_OTHER';
+ALTER TABLE public.ref_kato_territory ADD COLUMN semantic_release VARCHAR(10);
+UPDATE public.ref_kato_territory SET territory_type='OBLAST',semantic_release='2026-11-17'
+ WHERE code IN ('100000000','110000000','150000000','190000000','230000000','270000000','310000000','330000000','350000000','390000000','430000000','470000000','550000000','590000000','610000000','620000000','630000000');
+UPDATE public.ref_kato_territory SET territory_type='CITY',semantic_release='2026-11-17'
+ WHERE code IN ('101010000','101810000','103620100','104221100','111010000','111610000','111810000','113220100','113820100','114020100','114520100','114620100','114820100','115420100','117020100','151010000','153220100','154820100','154823100','154825100','155621100','156020100','156420100','191010000','191810000','194020100','195220100','196220100','231010000','233620100','271010000','273620100','311010000','316020100','316220100','316621100','331010000','331810000','333420100','334420100','334620100','334820100','351010000','351610000','352110000','352210000','352410000','352810000','353220100','354820100','391010000','391610000','392010000','392410000','394420100','395420100','431010000','431910000','433220100','434423100','471010000','471810000','475220100','551010000','551610000','552210000','591010000','593620100','595220100','595620100','596020100','611010000','611610000','612010000','613820100','615420100','615820100','616420100','621010000','621810000','622010000','631010000','632410000','634620100','634820100','634821100','636820100');
+UPDATE public.ref_kato_territory SET territory_type='CITY_ADMINISTRATION',semantic_release='2026-11-17'
+ WHERE code IN ('101000000','101800000','103620000','104221000','111000000','111600000','111800000','113220000','114520000','117020000','151000000','153220000','154820000','154823000','154825000','155621000','156420000','191000000','191800000','194020000','195220000','196220000','231000000','233620000','271000000','273620000','311000000','316621000','331000000','331800000','333420000','334420000','334620000','334820000','351000000','351600000','352100000','352200000','352400000','352800000','353220000','391000000','391600000','392000000','392400000','395420000','431000000','431900000','433220000','434423000','471000000','471800000','551000000','551600000','552200000','591000000','593620000','595220000','595620000','596020000','611000000','611600000','612000000','621000000','621800000','622000000','631000000','632400000','634620000','634820000','636820000');
+UPDATE public.ref_kato_territory SET territory_type='DISTRICT',semantic_release='2026-11-17'
+ WHERE code IN ('103200000','103400000','103600000','103800000','104000000','104100000','104200000','104400000','104500000','104600000','113200000','113400000','113600000','113800000','114000000','114400000','114500000','114600000','114800000','115200000','115400000','115600000','116000000','116400000','116600000','116800000','117000000','153200000','153400000','153600000','154000000','154200000','154600000','154800000','155200000','155600000','156000000','156400000','156800000','193600000','194000000','194200000','194400000','195200000','195800000','196200000','196600000','196800000','233600000','234000000','234200000','234600000','234800000','235200000','235600000','273200000','273600000','274000000','274200000','274400000','274800000','275000000','275400000','275800000','276000000','276200000','276600000','313600000','314000000','314200000','314800000','315000000','315400000','315600000','316000000','316200000','316600000','333200000','333400000','333600000','334000000','334200000','334400000','334600000','334800000','353200000','353600000','354000000','354800000','355200000','355600000','356400000','393200000','393400000','393600000','394000000','394200000','394400000','394800000','395000000','395200000','395400000','395600000','395800000','396200000','396400000','396600000','396800000','433200000','433600000','434000000','434400000','434600000','434800000','435200000','473600000','474200000','474600000','475000000','475200000','553200000','553600000','554200000','554600000','554800000','555200000','555600000','556000000','556400000','556800000','593200000','593400000','593600000','594200000','594600000','595000000','595200000','595600000','595800000','596000000','596200000','596400000','596600000','613600000','613800000','613900000','614000000','614400000','614600000','614800000','615200000','615400000','615500000','615600000','615800000','616000000','616400000','623600000','623800000','634000000','634600000','634800000','635200000','635400000','635500000','635600000','635800000','636200000','636300000','636800000');
+UPDATE public.ref_kato_territory SET territory_type='REPUBLICAN_CITY',semantic_release='2026-11-17'
+ WHERE code IN ('710000000','750000000','790000000');
+UPDATE public.ref_kato_territory SET territory_type='CITY_DISTRICT',semantic_release='2026-11-17'
+ WHERE code IN ('151011100','151013100','311011100','311013100','351011100','351013100','711110000','711210000','711310000','711410000','711510000','711610000','751110000','751210000','751310000','751410000','751510000','751710000','751810000','751910000','791110000','791310000','791510000','791710000','791910000');
+UPDATE public.ref_kato_territory SET territory_type='DISTRICT_ADMINISTRATION',semantic_release='2026-11-17'
+ WHERE code IN ('351011000','351013000');
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_code_format
+ CHECK(REGEXP_LIKE(code,'^[0-9]{9}$'));
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_semantic_type
+ CHECK(territory_type IN ('OBLAST','REPUBLICAN_CITY','DISTRICT','CITY','CITY_DISTRICT','CITY_ADMINISTRATION','DISTRICT_ADMINISTRATION','LEGACY_OTHER'));
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_semantic_release
+ CHECK((territory_type='LEGACY_OTHER' AND semantic_release IS NULL) OR
+       (territory_type<>'LEGACY_OTHER' AND semantic_release IS NOT NULL));
+ALTER TABLE public.ref_kato_territory ADD CONSTRAINT ck_kato_semantic_root
+ CHECK(territory_type='LEGACY_OTHER' OR
+       (territory_type IN ('OBLAST','REPUBLICAN_CITY') AND parent_source_id IS NULL) OR
+       (territory_type NOT IN ('OBLAST','REPUBLICAN_CITY') AND parent_source_id IS NOT NULL));
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_semantic_root;
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_semantic_release;
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_semantic_type;
+--rollback ALTER TABLE public.ref_kato_territory DROP CONSTRAINT ck_kato_code_format;
+--rollback ALTER TABLE public.ref_kato_territory DROP COLUMN semantic_release;
+--rollback ALTER TABLE public.ref_kato_territory DROP COLUMN territory_type;
+
+--changeset rm:0202-kato-semantic-region-admission dbms:postgresql splitStatements:false
+-- Use one explicit root type and the stored parent chain; no inferred parent from a prefix.
+CREATE FUNCTION crm.int_resolve_semantic_region(p_code VARCHAR) RETURNS VARCHAR LANGUAGE plpgsql STABLE AS $$
+DECLARE node RECORD; next_source BIGINT; previous_level INTEGER:=2147483647;
+ visited BIGINT[]:=ARRAY[]::BIGINT[];
+BEGIN
+ IF p_code IS NULL OR p_code !~ '^[0-9]{9}$' THEN RETURN NULL; END IF;
+ SELECT source_id,parent_source_id,code,level_no,is_deleted,territory_type INTO node
+ FROM public.ref_kato_territory WHERE code=p_code;
+ FOR depth IN 1..32 LOOP
+   EXIT WHEN node.source_id IS NULL OR node.is_deleted OR node.source_id=ANY(visited)
+      OR node.level_no>=previous_level OR left(node.code,2)<>left(p_code,2);
+   visited:=array_append(visited,node.source_id);
+   IF node.territory_type IN ('OBLAST','REPUBLICAN_CITY') THEN
+     IF node.parent_source_id IS NULL THEN RETURN node.code; END IF;
+     EXIT;
+   END IF;
+   EXIT WHEN node.parent_source_id IS NULL;
+   previous_level:=node.level_no;
+   next_source:=node.parent_source_id;
+   SELECT source_id,parent_source_id,code,level_no,is_deleted,territory_type INTO node
+   FROM public.ref_kato_territory WHERE source_id=next_source;
+ END LOOP;
+ RETURN NULL;
+END; $$;
+CREATE OR REPLACE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE actual_kato VARCHAR(16); expected_region VARCHAR(16);
+BEGIN
+ SELECT l.kato_code INTO actual_kato FROM public.org_location l
+ WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;
+ IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ expected_region:=crm.int_resolve_semantic_region(actual_kato);
+ IF expected_region IS DISTINCT FROM NEW.region_code OR
+    NEW.geo_quality IS DISTINCT FROM
+       (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN
+   RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+--rollback CREATE OR REPLACE FUNCTION crm.int_check_movement_dimension_geo() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE actual_kato VARCHAR(16); node RECORD; next_source BIGINT;  expected_region VARCHAR(16); visited BIGINT[] := ARRAY[]::BIGINT[]; BEGIN  SELECT l.kato_code INTO actual_kato FROM public.org_location l  WHERE l.workspace_id=NEW.tenant_id AND l.id=NEW.location_id FOR SHARE;  IF NOT FOUND OR actual_kato IS DISTINCT FROM NEW.kato_code THEN    RAISE EXCEPTION 'INT_MOVEMENT_DIM_KATO_MISMATCH' USING ERRCODE='23514';  END IF;  SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node  FROM public.ref_kato_territory WHERE code=actual_kato;  FOR depth IN 1..32 LOOP    EXIT WHEN node.source_id IS NULL;    EXIT WHEN node.is_deleted OR node.source_id=ANY(visited);    visited:=array_append(visited,node.source_id);    IF node.level_no=2 THEN expected_region:=node.code; EXIT; END IF;    EXIT WHEN node.level_no<2 OR node.parent_source_id IS NULL;    next_source:=node.parent_source_id;    SELECT source_id,parent_source_id,code,level_no,is_deleted INTO node    FROM public.ref_kato_territory WHERE source_id=next_source;  END LOOP;  IF expected_region IS DISTINCT FROM NEW.region_code OR     NEW.geo_quality IS DISTINCT FROM        (CASE WHEN expected_region IS NULL THEN 'UNKNOWN' ELSE 'RESOLVED' END) THEN    RAISE EXCEPTION 'INT_MOVEMENT_DIM_REGION_MISMATCH' USING ERRCODE='23514';  END IF;  RETURN NEW; END; $$;
+--rollback DROP FUNCTION crm.int_resolve_semantic_region(VARCHAR);
+
+
+--changeset rm:0203-int-source-revision-event-journal
+-- Independent source commits must not serialize on one tenant revision row.
+-- Identity is a unique journal key, NOT a freshness watermark.
+CREATE TABLE crm.int_source_revision_event (
+ tenant_id UUID NOT NULL REFERENCES public.iam_workspace(id),
+ event_id BIGINT GENERATED ALWAYS AS IDENTITY,
+ PRIMARY KEY(tenant_id,event_id)
+);
+--rollback DROP TABLE crm.int_source_revision_event;
+
+--changeset rm:0204-int-source-revision-append-only dbms:postgresql splitStatements:false
+-- Keep the old per-tenant revision as a frozen migration baseline. Every actual
+-- source insert writes an independent event in its owner transaction. Snapshot
+-- cardinality, not MAX(event_id), observes late commits and excludes rollbacks.
+CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_source_rev_baseline_immutable BEFORE INSERT OR UPDATE OR DELETE ON crm.int_source_revision
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_source_rev_baseline_no_truncate BEFORE TRUNCATE ON crm.int_source_revision
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_source_rev_event_immutable BEFORE UPDATE OR DELETE ON crm.int_source_revision_event
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_source_rev_event_no_truncate BEFORE TRUNCATE ON crm.int_source_revision_event
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+-- Rollback is deliberately blocked after journal writes; dropping committed
+-- revision events would make earlier proofs appear current again.
+--rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_source_revision_event) THEN RAISE EXCEPTION 'INT_SOURCE_REVISION_ROLLBACK_UNSAFE'; END IF; END; $$;
+--rollback DROP TRIGGER trg_int_source_rev_event_no_truncate ON crm.int_source_revision_event;
+--rollback DROP TRIGGER trg_int_source_rev_event_immutable ON crm.int_source_revision_event;
+--rollback DROP TRIGGER trg_int_source_rev_baseline_no_truncate ON crm.int_source_revision;
+--rollback DROP TRIGGER trg_int_source_rev_baseline_immutable ON crm.int_source_revision;
+--rollback CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO crm.int_source_revision(tenant_id,revision) VALUES(NEW.tenant_id,1) ON CONFLICT(tenant_id) DO UPDATE SET revision=int_source_revision.revision+1; RETURN NEW; END; $$;
+
+
+--changeset rm:0204b-int-source-revision-trigger-privilege dbms:postgresql splitStatements:false
+-- A restricted business writer can cause an actual journal event only through
+-- the already installed owner-source trigger. Do not grant it journal INSERT.
+CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_OP<>'INSERT' OR TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN
+ ('sales_order_status_event','sales_order_line','inv_stock_movement','int_canonical_fact',
+  'int_sales_line_dimension','int_movement_dimension') THEN
+   RAISE EXCEPTION 'INT_SOURCE_REVISION_TRIGGER_SCOPE' USING ERRCODE='23514';
+ END IF;
+ INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_bump_source_revision() FROM PUBLIC;
+--rollback GRANT EXECUTE ON FUNCTION crm.int_bump_source_revision() TO PUBLIC;
+--rollback CREATE OR REPLACE FUNCTION crm.int_bump_source_revision() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS $$ BEGIN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id); RETURN NEW; END; $$;
+--rollback ALTER FUNCTION crm.int_bump_source_revision() RESET search_path;
+
+
+--changeset rm:0205-int-projection-revision-trigger-privilege dbms:postgresql splitStatements:false
+-- Follow 0204b: internal revision maintenance without direct worker grants.
+CREATE OR REPLACE FUNCTION crm.int_bump_projection_receipt_revision() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE g UUID;
+BEGIN
+ IF TG_OP<>'INSERT' OR TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_fact_consumer_receipt' THEN
+   RAISE EXCEPTION 'INT_PROJECTION_REVISION_TRIGGER_SCOPE' USING ERRCODE='23514';
+ END IF;
+ SELECT generation_id INTO g FROM crm.int_projection_generation
+ WHERE tenant_id=NEW.tenant_id AND consumer_code=NEW.consumer_code;
+ IF FOUND THEN
+   INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(NEW.tenant_id,g,1)
+   ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_bump_projection_receipt_revision() FROM PUBLIC;
+CREATE OR REPLACE FUNCTION crm.int_bump_projection_revision() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t UUID; g UUID;
+BEGIN
+ IF TG_OP NOT IN ('INSERT','UPDATE','DELETE') OR TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN ('int_daily_bucket','int_l1_sales_contribution') THEN
+   RAISE EXCEPTION 'INT_PROJECTION_REVISION_TRIGGER_SCOPE' USING ERRCODE='23514';
+ END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE
+   t:=NEW.tenant_id; g:=NEW.generation_id;
+   IF TG_OP='UPDATE' THEN
+     IF OLD.tenant_id<>t OR OLD.generation_id<>g THEN
+       RAISE EXCEPTION 'INT_PROJECTION_REVISION_IDENTITY' USING ERRCODE='23514';
+     END IF;
+   END IF;
+ END IF;
+ INSERT INTO crm.int_projection_revision(tenant_id,generation_id,revision) VALUES(t,g,1)
+ ON CONFLICT(tenant_id,generation_id) DO UPDATE SET revision=int_projection_revision.revision+1;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_bump_projection_revision() FROM PUBLIC;
+--rollback ALTER FUNCTION crm.int_bump_projection_receipt_revision() SECURITY INVOKER;
+--rollback ALTER FUNCTION crm.int_bump_projection_receipt_revision() RESET search_path;
+--rollback GRANT EXECUTE ON FUNCTION crm.int_bump_projection_receipt_revision() TO PUBLIC;
+--rollback ALTER FUNCTION crm.int_bump_projection_revision() SECURITY INVOKER;
+--rollback ALTER FUNCTION crm.int_bump_projection_revision() RESET search_path;
+--rollback GRANT EXECUTE ON FUNCTION crm.int_bump_projection_revision() TO PUBLIC;
+
+
+--changeset rm:0206-int-l2-l3-storage
+-- Opt-in dimensional extension of an immutable generation scope. No active route.
+CREATE TABLE crm.int_dim_revision (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL,
+ dirty_revision BIGINT NOT NULL DEFAULT 0 CHECK(dirty_revision>=0),
+ PRIMARY KEY(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id)
+);
+CREATE TABLE crm.int_l2_contribution (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL,
+ stream_code VARCHAR(16) NOT NULL CHECK(stream_code IN ('BOOKED','FULFILLED','STOCK')),
+ source_id UUID NOT NULL, line_id UUID, movement_id UUID, order_id UUID,
+ local_day DATE NOT NULL, region_code VARCHAR(16), group_id UUID,
+ item_kind VARCHAR(20), warehouse_id UUID, sku_id UUID, currency VARCHAR(3),
+ amount NUMERIC NOT NULL DEFAULT 0 CHECK(amount>=0),
+ qty_in NUMERIC NOT NULL DEFAULT 0 CHECK(qty_in>=0),
+ qty_out NUMERIC NOT NULL DEFAULT 0 CHECK(qty_out>=0),
+ PRIMARY KEY(tenant_id,generation_id,stream_code,source_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_dim_revision(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,line_id) REFERENCES crm.sales_order_line(tenant_id,id),
+ FOREIGN KEY(tenant_id,movement_id) REFERENCES crm.inv_stock_movement(tenant_id,id),
+ FOREIGN KEY(tenant_id,order_id,line_id) REFERENCES crm.sales_order_line(tenant_id,order_id,id),
+ FOREIGN KEY(tenant_id,group_id,item_kind) REFERENCES crm.cat_group_node(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,warehouse_id) REFERENCES public.org_location(workspace_id,id),
+ FOREIGN KEY(tenant_id,sku_id) REFERENCES crm.cat_item(tenant_id,id),
+ CHECK(group_id IS NULL OR item_kind IS NOT NULL),
+ CHECK(item_kind IS NULL OR item_kind IN ('PRODUCT','SERVICE')),
+ CHECK((stream_code='BOOKED' AND line_id IS NOT NULL AND source_id=line_id AND order_id IS NOT NULL
+       AND movement_id IS NULL AND warehouse_id IS NULL AND region_code IS NULL AND currency IS NOT NULL
+       AND qty_in=0 AND qty_out=0)
+    OR (stream_code='FULFILLED' AND movement_id IS NOT NULL AND source_id=movement_id AND line_id IS NOT NULL
+       AND order_id IS NOT NULL AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NOT NULL
+       AND qty_in=0 AND qty_out=0)
+    OR (stream_code='STOCK' AND movement_id IS NOT NULL AND source_id=movement_id AND line_id IS NULL
+       AND order_id IS NULL AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NULL
+       AND amount=0 AND ((qty_in>0 AND qty_out=0) OR (qty_out>0 AND qty_in=0))))
+);
+CREATE INDEX idx_int_l2_scope_day ON crm.int_l2_contribution(tenant_id,generation_id,local_day,stream_code);
+-- L3 cells retain leaf identity and warehouse. DISTINCT counts are not additive.
+-- A period is visible only when its certified refresh revision matches dirty_revision.
+CREATE TABLE crm.int_l3_period (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL,
+ period_code VARCHAR(3) NOT NULL CHECK(period_code IN ('D','W','DEC','M','Q','H','Y')),
+ from_day DATE NOT NULL, until_day DATE NOT NULL CHECK(from_day<until_day),
+ refreshed_revision BIGINT NOT NULL CHECK(refreshed_revision>=0),
+ PRIMARY KEY(tenant_id,generation_id,period_code,from_day),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_dim_revision(tenant_id,generation_id)
+);
+CREATE TABLE crm.int_l3_cell (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL, period_code VARCHAR(3) NOT NULL,
+ from_day DATE NOT NULL, cell_id UUID NOT NULL,
+ stream_code VARCHAR(16) NOT NULL CHECK(stream_code IN ('BOOKED','FULFILLED','STOCK')),
+ region_code VARCHAR(16), group_id UUID, item_kind VARCHAR(20), warehouse_id UUID, sku_id UUID, currency VARCHAR(3),
+ amount NUMERIC NOT NULL CHECK(amount>=0), qty_in NUMERIC NOT NULL CHECK(qty_in>=0),
+ qty_out NUMERIC NOT NULL CHECK(qty_out>=0), distinct_orders BIGINT NOT NULL CHECK(distinct_orders>=0),
+ PRIMARY KEY(tenant_id,generation_id,period_code,from_day,cell_id),
+ FOREIGN KEY(tenant_id,generation_id,period_code,from_day)
+ REFERENCES crm.int_l3_period(tenant_id,generation_id,period_code,from_day),
+ FOREIGN KEY(tenant_id,group_id,item_kind) REFERENCES crm.cat_group_node(tenant_id,id,kind),
+ FOREIGN KEY(tenant_id,warehouse_id) REFERENCES public.org_location(workspace_id,id),
+ FOREIGN KEY(tenant_id,sku_id) REFERENCES crm.cat_item(tenant_id,id),
+ CHECK(group_id IS NULL OR item_kind IS NOT NULL),
+ CHECK((stream_code='BOOKED' AND warehouse_id IS NULL AND region_code IS NULL AND currency IS NOT NULL AND qty_in=0 AND qty_out=0)
+    OR (stream_code='FULFILLED' AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NOT NULL AND qty_in=0 AND qty_out=0)
+    OR (stream_code='STOCK' AND warehouse_id IS NOT NULL AND sku_id IS NOT NULL AND currency IS NULL AND amount=0 AND distinct_orders=0))
+);
+--rollback DROP TABLE crm.int_l3_cell;
+--rollback DROP TABLE crm.int_l3_period;
+--rollback DROP TABLE crm.int_l2_contribution;
+--rollback DROP TABLE crm.int_dim_revision;
+
+--changeset rm:0207-int-l2-l3-transactional-revision dbms:postgresql splitStatements:false
+CREATE UNIQUE INDEX uq_int_l3_cell_grain ON crm.int_l3_cell
+ (tenant_id,generation_id,period_code,from_day,stream_code,region_code,group_id,item_kind,warehouse_id,sku_id,currency)
+ NULLS NOT DISTINCT;
+-- All writers take lifecycle SHARE before the dimension revision row.
+-- A future refresh holds that same row FOR UPDATE until cells and period stamp commit.
+CREATE FUNCTION crm.int_dim_lock_building(p_t UUID,p_g UUID) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ PERFORM 1 FROM crm.int_projection_lifecycle WHERE tenant_id=p_t AND generation_id=p_g
+   AND lifecycle_state='BUILDING' FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_NOT_BUILDING' USING ERRCODE='23514'; END IF;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_lock_building(UUID,UUID) FROM PUBLIC;
+CREATE FUNCTION crm.int_l2_dirty() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t UUID; g UUID;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l2_contribution' OR TG_OP NOT IN ('INSERT','UPDATE','DELETE')
+ THEN RAISE EXCEPTION 'INT_DIM_TRIGGER_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; END IF;
+ IF TG_OP='UPDATE' AND (OLD.tenant_id,OLD.generation_id,OLD.stream_code,OLD.source_id)
+    IS DISTINCT FROM (NEW.tenant_id,NEW.generation_id,NEW.stream_code,NEW.source_id)
+ THEN RAISE EXCEPTION 'INT_DIM_IDENTITY' USING ERRCODE='23514'; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ IF TG_OP<>'DELETE' AND NOT EXISTS(SELECT 1 FROM crm.int_projection_generation s
+    WHERE s.tenant_id=t AND s.generation_id=g AND NEW.local_day>=s.from_day AND NEW.local_day<s.until_day)
+ THEN RAISE EXCEPTION 'INT_DIM_DAY_SCOPE' USING ERRCODE='23514'; END IF;
+ UPDATE crm.int_dim_revision SET dirty_revision=dirty_revision+1 WHERE tenant_id=t AND generation_id=g;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_REVISION_MISSING'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l2_dirty() FROM PUBLIC;
+-- AFTER avoids false increments on INSERT ... ON CONFLICT DO NOTHING.
+CREATE TRIGGER trg_int_l2_dirty AFTER INSERT OR UPDATE OR DELETE ON crm.int_l2_contribution
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l2_dirty();
+CREATE TRIGGER trg_int_l2_no_truncate BEFORE TRUNCATE ON crm.int_l2_contribution
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_l3_write_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t UUID; g UUID; r BIGINT;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN ('int_l3_period','int_l3_cell')
+    OR TG_OP NOT IN ('INSERT','UPDATE','DELETE') THEN RAISE EXCEPTION 'INT_DIM_TRIGGER_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; END IF;
+ IF TG_OP='UPDATE' AND (OLD.tenant_id,OLD.generation_id,OLD.period_code,OLD.from_day)
+    IS DISTINCT FROM (NEW.tenant_id,NEW.generation_id,NEW.period_code,NEW.from_day)
+ THEN RAISE EXCEPTION 'INT_DIM_IDENTITY' USING ERRCODE='23514'; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ SELECT dirty_revision INTO STRICT r FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g FOR UPDATE;
+ IF TG_TABLE_NAME='int_l3_period' AND TG_OP<>'DELETE' THEN
+   IF NEW.refreshed_revision<>r THEN RAISE EXCEPTION 'INT_DIM_STALE_REFRESH' USING ERRCODE='23514'; END IF;
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_write_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_period_guard BEFORE INSERT OR UPDATE OR DELETE ON crm.int_l3_period
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_write_guard();
+CREATE TRIGGER trg_int_l3_cell_guard BEFORE INSERT OR UPDATE OR DELETE ON crm.int_l3_cell
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_write_guard();
+CREATE TRIGGER trg_int_l3_period_no_truncate BEFORE TRUNCATE ON crm.int_l3_period
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l3_cell_no_truncate BEFORE TRUNCATE ON crm.int_l3_cell
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TRIGGER trg_int_l3_cell_no_truncate ON crm.int_l3_cell;
+--rollback DROP TRIGGER trg_int_l3_period_no_truncate ON crm.int_l3_period;
+--rollback DROP TRIGGER trg_int_l3_cell_guard ON crm.int_l3_cell;
+--rollback DROP TRIGGER trg_int_l3_period_guard ON crm.int_l3_period;
+--rollback DROP FUNCTION crm.int_l3_write_guard();
+--rollback DROP TRIGGER trg_int_l2_no_truncate ON crm.int_l2_contribution;
+--rollback DROP TRIGGER trg_int_l2_dirty ON crm.int_l2_contribution;
+--rollback DROP FUNCTION crm.int_l2_dirty();
+--rollback DROP FUNCTION crm.int_dim_lock_building(UUID,UUID);
+--rollback DROP INDEX crm.uq_int_l3_cell_grain;
+
+
+--changeset rm:0208-int-l2-consumer-binding
+-- Separate consumer identity, same immutable calendar/range and terminal lifecycle.
+CREATE TABLE crm.int_l2_consumer (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL, consumer_code VARCHAR(96) NOT NULL,
+ PRIMARY KEY(tenant_id,generation_id), UNIQUE(tenant_id,consumer_code),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_dim_revision(tenant_id,generation_id),
+ FOREIGN KEY(tenant_id,consumer_code) REFERENCES crm.int_fact_consumer(tenant_id,consumer_code)
+);
+CREATE INDEX idx_int_l2_order_reconcile ON crm.int_l2_contribution(tenant_id,generation_id,stream_code,order_id);
+ALTER TABLE crm.int_l2_contribution ADD CONSTRAINT fk_int_l2_movement_exact
+ FOREIGN KEY(tenant_id,movement_id,sku_id,warehouse_id)
+ REFERENCES crm.inv_stock_movement(tenant_id,id,item_id,location_id);
+ALTER TABLE crm.int_l3_period ALTER COLUMN refreshed_revision DROP NOT NULL;
+--rollback ALTER TABLE crm.int_l3_period ALTER COLUMN refreshed_revision SET NOT NULL;
+--rollback ALTER TABLE crm.int_l2_contribution DROP CONSTRAINT fk_int_l2_movement_exact;
+--rollback DROP INDEX crm.idx_int_l2_order_reconcile;
+--rollback DROP TABLE crm.int_l2_consumer;
+
+--changeset rm:0209-int-l2-provenance-and-rollup-fence dbms:postgresql splitStatements:false
+CREATE TRIGGER trg_int_l2_consumer_immutable BEFORE UPDATE OR DELETE ON crm.int_l2_consumer
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l2_consumer_no_truncate BEFORE TRUNCATE ON crm.int_l2_consumer
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_l2_binding_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.consumer_code <> 'l2:'||NEW.generation_id::text THEN
+   RAISE EXCEPTION 'INT_L2_CONSUMER_IDENTITY' USING ERRCODE='23514';
+ END IF;
+ PERFORM crm.int_dim_lock_building(NEW.tenant_id,NEW.generation_id);
+ RETURN NEW;
+END; $$;
+-- Guard executes in a narrowly scoped privileged context, not through a public helper grant.
+ALTER FUNCTION crm.int_l2_binding_guard() SECURITY DEFINER;
+ALTER FUNCTION crm.int_l2_binding_guard() SET search_path=pg_catalog,pg_temp;
+REVOKE ALL ON FUNCTION crm.int_l2_binding_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l2_binding_guard BEFORE INSERT ON crm.int_l2_consumer
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l2_binding_guard();
+
+-- Source-derived contributions, separate from the authorized L0 aggregation oracle.
+-- Keep exact leaf revision, UNKNOWN dimensions, and original booked price.
+CREATE VIEW crm.int_l2_expected_source AS
+WITH eligible AS (
+ SELECT tenant_id,order_id,event_type,min(occurred_at) AS event_at
+ FROM crm.sales_order_status_event WHERE event_type IN ('PLACED','COMPLETED')
+ GROUP BY tenant_id,order_id,event_type HAVING count(*)=1
+)
+SELECT l.tenant_id,'BOOKED'::varchar AS stream_code,l.id AS source_id,l.id AS line_id,
+ NULL::uuid AS movement_id,l.order_id,e.event_at,
+ NULL::varchar AS region_code,d.group_id,d.item_kind,NULL::uuid AS warehouse_id,
+ l.catalog_item_id_snapshot AS sku_id,trim(l.currency)::varchar AS currency,
+ (l.quantity*l.unit_price_snapshot)::numeric AS amount,0::numeric AS qty_in,0::numeric AS qty_out
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='PLACED'
+UNION ALL
+SELECT m.tenant_id,'FULFILLED',m.id,l.id,m.id,l.order_id,e.event_at,
+ md.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,trim(l.currency),
+ (-m.delta_quantity*l.unit_price_snapshot)::numeric,0::numeric,0::numeric
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+JOIN crm.inv_stock_reservation r ON r.tenant_id=l.tenant_id AND r.order_line_id=l.id AND r.order_id=l.order_id
+JOIN crm.inv_stock_movement m ON m.tenant_id=r.tenant_id AND m.reservation_id=r.id
+ AND m.location_id=r.location_id AND m.item_id=r.item_id AND m.movement_kind='FULFILLMENT'
+LEFT JOIN crm.int_movement_dimension md ON md.tenant_id=m.tenant_id AND md.movement_id=m.id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='COMPLETED'
+UNION ALL
+SELECT m.tenant_id,'STOCK',m.id,NULL::uuid,m.id,NULL::uuid,m.recorded_at,
+ d.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,NULL::varchar,
+ 0::numeric,greatest(m.delta_quantity,0),greatest(-m.delta_quantity,0)
+FROM crm.inv_stock_movement m
+LEFT JOIN crm.int_movement_dimension d ON d.tenant_id=m.tenant_id AND d.movement_id=m.id;
+
+CREATE FUNCTION crm.int_l2_provenance_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l2_contribution' OR TG_OP NOT IN ('INSERT','UPDATE')
+ THEN RAISE EXCEPTION 'INT_L2_TRIGGER_SCOPE'; END IF;
+ IF NOT EXISTS(
+   SELECT 1 FROM crm.int_l2_expected_source e
+   JOIN crm.int_projection_generation g ON g.tenant_id=e.tenant_id AND g.generation_id=NEW.generation_id
+   JOIN crm.int_calendar_policy p ON p.tenant_id=g.tenant_id AND p.version=g.calendar_version
+   WHERE e.tenant_id=NEW.tenant_id AND e.stream_code=NEW.stream_code AND e.source_id=NEW.source_id
+     AND (e.line_id,e.movement_id,e.order_id,(e.event_at AT TIME ZONE p.zone_id)::date,
+          e.region_code,e.group_id,e.item_kind,e.warehouse_id,e.sku_id,e.currency,e.amount,e.qty_in,e.qty_out)
+     IS NOT DISTINCT FROM
+         (NEW.line_id,NEW.movement_id,NEW.order_id,NEW.local_day,
+          NEW.region_code,NEW.group_id,NEW.item_kind,NEW.warehouse_id,NEW.sku_id,NEW.currency,NEW.amount,NEW.qty_in,NEW.qty_out)
+ ) THEN RAISE EXCEPTION 'INT_L2_SOURCE_MISMATCH' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l2_provenance_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l2_provenance BEFORE INSERT OR UPDATE ON crm.int_l2_contribution
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l2_provenance_guard();
+
+-- Any cell mutation invalidates the period stamp. A future refresh must stamp last.
+CREATE FUNCTION crm.int_l3_invalidate_stamp() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid; c varchar; f date;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l3_cell' OR TG_OP NOT IN ('INSERT','UPDATE','DELETE')
+ THEN RAISE EXCEPTION 'INT_L3_TRIGGER_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id; c:=OLD.period_code; f:=OLD.from_day;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; c:=NEW.period_code; f:=NEW.from_day; END IF;
+ UPDATE crm.int_l3_period SET refreshed_revision=NULL
+ WHERE tenant_id=t AND generation_id=g AND period_code=c AND from_day=f AND refreshed_revision IS NOT NULL;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_invalidate_stamp() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_invalidate_stamp AFTER INSERT OR UPDATE OR DELETE ON crm.int_l3_cell
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_invalidate_stamp();
+--rollback DROP TRIGGER trg_int_l3_invalidate_stamp ON crm.int_l3_cell;
+--rollback DROP FUNCTION crm.int_l3_invalidate_stamp();
+--rollback DROP TRIGGER trg_int_l2_provenance ON crm.int_l2_contribution;
+--rollback DROP FUNCTION crm.int_l2_provenance_guard();
+--rollback DROP VIEW crm.int_l2_expected_source;
+--rollback DROP TRIGGER trg_int_l2_binding_guard ON crm.int_l2_consumer;
+--rollback DROP FUNCTION crm.int_l2_binding_guard();
+--rollback DROP TRIGGER trg_int_l2_consumer_no_truncate ON crm.int_l2_consumer;
+--rollback DROP TRIGGER trg_int_l2_consumer_immutable ON crm.int_l2_consumer;
+
+
+--changeset rm:0210-int-l3-exact-order-membership
+CREATE TABLE crm.int_l3_cell_order (
+ tenant_id UUID NOT NULL, generation_id UUID NOT NULL, period_code VARCHAR(3) NOT NULL,
+ from_day DATE NOT NULL, cell_id UUID NOT NULL, order_id UUID NOT NULL,
+ PRIMARY KEY(tenant_id,generation_id,period_code,from_day,cell_id,order_id),
+ FOREIGN KEY(tenant_id,generation_id,period_code,from_day,cell_id)
+ REFERENCES crm.int_l3_cell(tenant_id,generation_id,period_code,from_day,cell_id),
+ FOREIGN KEY(tenant_id,order_id) REFERENCES crm.sales_order(tenant_id,id)
+);
+CREATE INDEX idx_int_l3_order_union ON crm.int_l3_cell_order(tenant_id,generation_id,period_code,from_day,order_id);
+--rollback DROP TABLE crm.int_l3_cell_order;
+
+--changeset rm:0211-int-l3-membership-guard dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_l3_membership_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid; c varchar; f date;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l3_cell_order' OR TG_OP NOT IN ('INSERT','DELETE')
+ THEN RAISE EXCEPTION 'INT_L3_MEMBERSHIP_SCOPE' USING ERRCODE='23514'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id; c:=OLD.period_code; f:=OLD.from_day;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; c:=NEW.period_code; f:=NEW.from_day; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ PERFORM 1 FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_REVISION_MISSING'; END IF;
+ IF TG_OP='INSERT' AND NOT EXISTS (
+   SELECT 1 FROM crm.int_l3_cell x
+   JOIN crm.int_l3_period p USING(tenant_id,generation_id,period_code,from_day)
+   JOIN crm.int_l2_contribution l ON l.tenant_id=x.tenant_id AND l.generation_id=x.generation_id
+     AND l.local_day>=p.from_day AND l.local_day<p.until_day
+     AND (l.stream_code,l.region_code,l.group_id,l.item_kind,l.warehouse_id,l.sku_id,l.currency)
+       IS NOT DISTINCT FROM (x.stream_code,x.region_code,x.group_id,x.item_kind,x.warehouse_id,x.sku_id,x.currency)
+   WHERE x.tenant_id=t AND x.generation_id=g AND x.period_code=c AND x.from_day=f
+     AND x.cell_id=NEW.cell_id AND l.order_id=NEW.order_id AND x.stream_code IN ('BOOKED','FULFILLED')
+ ) THEN RAISE EXCEPTION 'INT_L3_MEMBERSHIP_SOURCE' USING ERRCODE='23514'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_membership_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_membership_guard BEFORE INSERT OR DELETE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_membership_guard();
+CREATE TRIGGER trg_int_l3_membership_immutable BEFORE UPDATE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_l3_membership_no_truncate BEFORE TRUNCATE ON crm.int_l3_cell_order
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_l3_membership_invalidate() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid; c varchar; f date;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l3_cell_order' OR TG_OP NOT IN ('INSERT','DELETE')
+ THEN RAISE EXCEPTION 'INT_L3_MEMBERSHIP_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id; c:=OLD.period_code; f:=OLD.from_day;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; c:=NEW.period_code; f:=NEW.from_day; END IF;
+ UPDATE crm.int_l3_period SET refreshed_revision=NULL
+ WHERE tenant_id=t AND generation_id=g AND period_code=c AND from_day=f AND refreshed_revision IS NOT NULL;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l3_membership_invalidate() FROM PUBLIC;
+CREATE TRIGGER trg_int_l3_membership_invalidate AFTER INSERT OR DELETE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_l3_membership_invalidate();
+--rollback DROP TRIGGER trg_int_l3_membership_invalidate ON crm.int_l3_cell_order;
+--rollback DROP FUNCTION crm.int_l3_membership_invalidate();
+--rollback DROP TRIGGER trg_int_l3_membership_no_truncate ON crm.int_l3_cell_order;
+--rollback DROP TRIGGER trg_int_l3_membership_immutable ON crm.int_l3_cell_order;
+--rollback DROP TRIGGER trg_int_l3_membership_guard ON crm.int_l3_cell_order;
+--rollback DROP FUNCTION crm.int_l3_membership_guard();
+
+
+--changeset rm:0212-int-dim-proof-revisions
+ALTER TABLE crm.int_dim_revision ADD COLUMN receipt_revision BIGINT NOT NULL DEFAULT 0 CHECK(receipt_revision>=0);
+ALTER TABLE crm.int_dim_revision ADD COLUMN materialization_revision BIGINT NOT NULL DEFAULT 0 CHECK(materialization_revision>=0);
+CREATE TABLE crm.int_dim_coverage_proof (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,proof_id UUID NOT NULL,
+ observed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+ source_revision BIGINT NOT NULL CHECK(source_revision>=0),
+ dirty_revision BIGINT NOT NULL CHECK(dirty_revision>=0),
+ receipt_revision BIGINT NOT NULL CHECK(receipt_revision>=0),
+ materialization_revision BIGINT NOT NULL CHECK(materialization_revision>=0),
+ lifecycle_revision BIGINT NOT NULL CHECK(lifecycle_revision>=0),
+ delivery_mismatches BIGINT NOT NULL CHECK(delivery_mismatches>=0),
+ contribution_mismatches BIGINT NOT NULL CHECK(contribution_mismatches>=0),
+ period_mismatches BIGINT NOT NULL CHECK(period_mismatches>=0),
+ cell_mismatches BIGINT NOT NULL CHECK(cell_mismatches>=0),
+ membership_mismatches BIGINT NOT NULL CHECK(membership_mismatches>=0),
+ PRIMARY KEY(tenant_id,generation_id,proof_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_l2_consumer(tenant_id,generation_id)
+);
+--rollback DROP TABLE crm.int_dim_coverage_proof;
+--rollback ALTER TABLE crm.int_dim_revision DROP COLUMN materialization_revision;
+--rollback ALTER TABLE crm.int_dim_revision DROP COLUMN receipt_revision;
+
+--changeset rm:0213-int-dim-proof-fences dbms:postgresql splitStatements:false
+CREATE FUNCTION crm.int_dim_receipt_revision() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE g uuid;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_fact_consumer_receipt' OR TG_OP<>'INSERT'
+ THEN RAISE EXCEPTION 'INT_DIM_RECEIPT_SCOPE'; END IF;
+ SELECT generation_id INTO g FROM crm.int_l2_consumer
+ WHERE tenant_id=NEW.tenant_id AND consumer_code=NEW.consumer_code;
+ IF FOUND THEN
+   PERFORM crm.int_dim_lock_building(NEW.tenant_id,g);
+   UPDATE crm.int_dim_revision SET receipt_revision=receipt_revision+1
+   WHERE tenant_id=NEW.tenant_id AND generation_id=g;
+ END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_receipt_revision() FROM PUBLIC;
+CREATE TRIGGER trg_int_dim_receipt_revision AFTER INSERT ON crm.int_fact_consumer_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_receipt_revision();
+CREATE FUNCTION crm.int_dim_materialization_revision() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; g uuid;
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME NOT IN ('int_l3_period','int_l3_cell','int_l3_cell_order')
+ OR TG_OP NOT IN ('INSERT','UPDATE','DELETE') THEN RAISE EXCEPTION 'INT_DIM_MATERIALIZATION_SCOPE'; END IF;
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; g:=OLD.generation_id;
+ ELSE t:=NEW.tenant_id; g:=NEW.generation_id; END IF;
+ PERFORM crm.int_dim_lock_building(t,g);
+ UPDATE crm.int_dim_revision SET materialization_revision=materialization_revision+1
+ WHERE tenant_id=t AND generation_id=g;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_DIM_REVISION_MISSING'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_materialization_revision() FROM PUBLIC;
+CREATE TRIGGER trg_int_dim_period_revision AFTER INSERT OR UPDATE OR DELETE ON crm.int_l3_period
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_materialization_revision();
+CREATE TRIGGER trg_int_dim_cell_revision AFTER INSERT OR UPDATE OR DELETE ON crm.int_l3_cell
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_materialization_revision();
+CREATE TRIGGER trg_int_dim_member_revision AFTER INSERT OR DELETE ON crm.int_l3_cell_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_materialization_revision();
+CREATE TRIGGER trg_int_dim_proof_immutable BEFORE UPDATE OR DELETE ON crm.int_dim_coverage_proof
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_dim_proof_no_truncate BEFORE TRUNCATE ON crm.int_dim_coverage_proof
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+-- Reservation identity is analytically significant. Track actual changes without
+-- serializing unrelated source writes or invalidating for state-only transitions.
+CREATE FUNCTION crm.int_dim_reservation_revision() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'inv_stock_reservation' OR TG_OP NOT IN ('INSERT','UPDATE','DELETE')
+ THEN RAISE EXCEPTION 'INT_DIM_RESERVATION_SCOPE'; END IF;
+ IF TG_OP='UPDATE' THEN
+   IF (OLD.tenant_id,OLD.id,OLD.order_id,OLD.order_line_id,OLD.location_id,OLD.item_id)
+      IS NOT DISTINCT FROM (NEW.tenant_id,NEW.id,NEW.order_id,NEW.order_line_id,NEW.location_id,NEW.item_id)
+   THEN RETURN NEW; END IF;
+ END IF;
+ IF TG_OP<>'INSERT' THEN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(OLD.tenant_id); END IF;
+ IF TG_OP='INSERT' THEN INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ ELSIF TG_OP='UPDATE' AND OLD.tenant_id<>NEW.tenant_id THEN
+   INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(NEW.tenant_id);
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_dim_reservation_revision() FROM PUBLIC;
+CREATE TRIGGER trg_int_dim_reservation_revision AFTER INSERT OR UPDATE OR DELETE ON crm.inv_stock_reservation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_dim_reservation_revision();
+--rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_dim_coverage_proof) THEN RAISE EXCEPTION 'INT_DIM_PROOF_ROLLBACK_UNSAFE'; END IF; END; $$;
+--rollback DROP TRIGGER trg_int_dim_reservation_revision ON crm.inv_stock_reservation;
+--rollback DROP FUNCTION crm.int_dim_reservation_revision();
+--rollback DROP TRIGGER trg_int_dim_proof_no_truncate ON crm.int_dim_coverage_proof;
+--rollback DROP TRIGGER trg_int_dim_proof_immutable ON crm.int_dim_coverage_proof;
+--rollback DROP TRIGGER trg_int_dim_member_revision ON crm.int_l3_cell_order;
+--rollback DROP TRIGGER trg_int_dim_cell_revision ON crm.int_l3_cell;
+--rollback DROP TRIGGER trg_int_dim_period_revision ON crm.int_l3_period;
+--rollback DROP FUNCTION crm.int_dim_materialization_revision();
+--rollback DROP TRIGGER trg_int_dim_receipt_revision ON crm.int_fact_consumer_receipt;
+--rollback DROP FUNCTION crm.int_dim_receipt_revision();
+
+
+--changeset rm:0214-int-commercial-order-units dbms:postgresql splitStatements:false
+ALTER TABLE crm.int_l2_contribution ADD COLUMN product_order_units NUMERIC CHECK(product_order_units>=0 AND (product_order_units IS NULL OR (stream_code IN ('BOOKED','FULFILLED') AND item_kind='PRODUCT')));
+ALTER TABLE crm.int_l3_cell ADD COLUMN product_order_units NUMERIC CHECK(product_order_units>=0 AND (product_order_units IS NULL OR (stream_code IN ('BOOKED','FULFILLED') AND item_kind='PRODUCT')));
+CREATE OR REPLACE VIEW crm.int_l2_expected_source AS
+WITH eligible AS (
+ SELECT tenant_id,order_id,event_type,min(occurred_at) AS event_at
+ FROM crm.sales_order_status_event WHERE event_type IN ('PLACED','COMPLETED')
+ GROUP BY tenant_id,order_id,event_type HAVING count(*)=1
+)
+SELECT l.tenant_id,'BOOKED'::varchar AS stream_code,l.id AS source_id,l.id AS line_id,
+ NULL::uuid AS movement_id,l.order_id,e.event_at,
+ NULL::varchar AS region_code,d.group_id,d.item_kind,NULL::uuid AS warehouse_id,
+ l.catalog_item_id_snapshot AS sku_id,trim(l.currency)::varchar AS currency,
+ (l.quantity*l.unit_price_snapshot)::numeric AS amount,0::numeric AS qty_in,0::numeric AS qty_out,
+ CASE WHEN d.item_kind='PRODUCT' THEN l.quantity::numeric END AS product_order_units
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='PLACED'
+UNION ALL
+SELECT m.tenant_id,'FULFILLED',m.id,l.id,m.id,l.order_id,e.event_at,
+ md.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,trim(l.currency),
+ (-m.delta_quantity*l.unit_price_snapshot)::numeric,0::numeric,0::numeric,
+ CASE WHEN d.item_kind='PRODUCT' THEN -m.delta_quantity END
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+JOIN crm.inv_stock_reservation r ON r.tenant_id=l.tenant_id AND r.order_line_id=l.id AND r.order_id=l.order_id
+JOIN crm.inv_stock_movement m ON m.tenant_id=r.tenant_id AND m.reservation_id=r.id
+ AND m.location_id=r.location_id AND m.item_id=r.item_id AND m.movement_kind='FULFILLMENT'
+LEFT JOIN crm.int_movement_dimension md ON md.tenant_id=m.tenant_id AND md.movement_id=m.id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='COMPLETED'
+UNION ALL
+SELECT m.tenant_id,'STOCK',m.id,NULL::uuid,m.id,NULL::uuid,m.recorded_at,
+ d.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,NULL::varchar,
+ 0::numeric,greatest(m.delta_quantity,0),greatest(-m.delta_quantity,0),NULL::numeric
+FROM crm.inv_stock_movement m
+LEFT JOIN crm.int_movement_dimension d ON d.tenant_id=m.tenant_id AND d.movement_id=m.id;
+
+CREATE OR REPLACE FUNCTION crm.int_l2_provenance_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l2_contribution' OR TG_OP NOT IN ('INSERT','UPDATE')
+ THEN RAISE EXCEPTION 'INT_L2_TRIGGER_SCOPE'; END IF;
+ IF NOT EXISTS(
+   SELECT 1 FROM crm.int_l2_expected_source e
+   JOIN crm.int_projection_generation g ON g.tenant_id=e.tenant_id AND g.generation_id=NEW.generation_id
+   JOIN crm.int_calendar_policy p ON p.tenant_id=g.tenant_id AND p.version=g.calendar_version
+   WHERE e.tenant_id=NEW.tenant_id AND e.stream_code=NEW.stream_code AND e.source_id=NEW.source_id
+     AND (e.line_id,e.movement_id,e.order_id,(e.event_at AT TIME ZONE p.zone_id)::date,
+          e.region_code,e.group_id,e.item_kind,e.warehouse_id,e.sku_id,e.currency,e.amount,e.qty_in,e.qty_out,e.product_order_units)
+     IS NOT DISTINCT FROM
+         (NEW.line_id,NEW.movement_id,NEW.order_id,NEW.local_day,
+          NEW.region_code,NEW.group_id,NEW.item_kind,NEW.warehouse_id,NEW.sku_id,NEW.currency,NEW.amount,NEW.qty_in,NEW.qty_out,NEW.product_order_units)
+ ) THEN RAISE EXCEPTION 'INT_L2_SOURCE_MISMATCH' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l2_provenance_guard() FROM PUBLIC;
+-- Existing generations must pass the expanded independent proof; legacy rows are not silently backfilled.
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_COMMERCIAL_UNITS_REQUIRES_FORWARD_REBUILD'; END; $$;
+
+
+--changeset rm:0215-int-fact-availability-observation dbms:postgresql splitStatements:false
+-- First committed visibility is NOT the insert timestamp. This journal records
+-- observations made by a later reader, not an inferred historical commit time.
+CREATE TABLE crm.int_fact_availability_observation (
+ tenant_id UUID NOT NULL,owner_module VARCHAR(16) NOT NULL,source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,observation_id UUID NOT NULL DEFAULT gen_random_uuid(),
+ observed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(tenant_id,observation_id),
+ FOREIGN KEY(tenant_id,owner_module,source_kind,source_id)
+ REFERENCES crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id)
+);
+CREATE INDEX idx_int_fact_availability_lookup ON crm.int_fact_availability_observation
+ (tenant_id,owner_module,source_kind,source_id,observed_at);
+CREATE FUNCTION crm.int_availability_observation_stamp() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ NEW.observed_at:=clock_timestamp();
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_availability_stamp BEFORE INSERT ON crm.int_fact_availability_observation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_availability_observation_stamp();
+CREATE TRIGGER trg_int_availability_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_availability_observation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_availability_no_truncate BEFORE TRUNCATE ON crm.int_fact_availability_observation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TABLE crm.int_fact_availability_observation;
+--rollback DROP FUNCTION crm.int_availability_observation_stamp();
+
+--changeset rm:0216-int-feature-candidate-store dbms:postgresql splitStatements:false
+CREATE TABLE crm.int_feature_candidate (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,feature_id UUID NOT NULL,
+ contract_version INTEGER NOT NULL CHECK(contract_version>0),
+ numeric_policy_version INTEGER NOT NULL CHECK(numeric_policy_version>0),
+ method_version INTEGER NOT NULL CHECK(method_version>0),
+ observed_at TIMESTAMPTZ NOT NULL,
+ persisted_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ payload JSONB NOT NULL CHECK(jsonb_typeof(payload)='object'),
+ availability VARCHAR(48) NOT NULL CHECK(availability='CURRENT_SNAPSHOT_ONLY'),
+ PRIMARY KEY(tenant_id,feature_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ CHECK(observed_at<=persisted_at)
+);
+CREATE INDEX idx_int_feature_candidate_generation ON crm.int_feature_candidate(tenant_id,generation_id,observed_at);
+CREATE TRIGGER trg_int_feature_candidate_immutable BEFORE UPDATE OR DELETE ON crm.int_feature_candidate
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_feature_candidate_no_truncate BEFORE TRUNCATE ON crm.int_feature_candidate
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TABLE crm.int_feature_candidate;
+
+
+--changeset rm:0217-int-feature-evidence-hardening dbms:postgresql splitStatements:false
+-- Existing candidate rows remain legacy and cannot enter the new reader.
+ALTER TABLE crm.int_feature_candidate ADD COLUMN proof_id UUID,
+ ADD COLUMN source_revision BIGINT, ADD COLUMN dirty_revision BIGINT,
+ ADD COLUMN receipt_revision BIGINT, ADD COLUMN materialization_revision BIGINT,
+ ADD COLUMN lifecycle_revision BIGINT, ADD COLUMN activity_policy_version INTEGER,
+ ADD COLUMN activity VARCHAR(32), ADD COLUMN payload_sha256 VARCHAR(64),
+ ADD COLUMN request_key UUID, ADD COLUMN actor_id UUID;
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT fk_int_feature_proof
+ FOREIGN KEY(tenant_id,generation_id,proof_id) REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id);
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT uq_int_feature_request UNIQUE(tenant_id,request_key);
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_evidence CHECK (
+ request_key IS NULL OR (
+ proof_id IS NOT NULL AND actor_id IS NOT NULL AND source_revision IS NOT NULL AND source_revision>=0
+ AND dirty_revision IS NOT NULL AND dirty_revision>=0 AND receipt_revision IS NOT NULL AND receipt_revision>=0
+ AND materialization_revision IS NOT NULL AND materialization_revision>=0 AND lifecycle_revision IS NOT NULL AND lifecycle_revision>=0
+ AND activity_policy_version IS NOT NULL AND activity_policy_version>0
+ AND activity IS NOT NULL AND activity IN ('INSUFFICIENT_HISTORY','PERIOD_GAP','PARTIAL_COVERAGE','OPEN_PERIOD','STALE','INVALID','NOT_APPLICABLE','DISABLED')
+ AND payload_sha256 IS NOT NULL AND payload_sha256 ~ '^[0-9a-f]{64}$'));
+CREATE FUNCTION crm.int_feature_evidence_stamp() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ NEW.persisted_at:=clock_timestamp();
+ IF NEW.request_key IS NULL THEN RAISE EXCEPTION 'INT_FEATURE_EVIDENCE_REQUIRED'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM crm.int_dim_coverage_proof p
+ WHERE p.tenant_id=NEW.tenant_id AND p.generation_id=NEW.generation_id AND p.proof_id=NEW.proof_id
+ AND (p.source_revision,p.dirty_revision,p.receipt_revision,p.materialization_revision,p.lifecycle_revision)=
+ (NEW.source_revision,NEW.dirty_revision,NEW.receipt_revision,NEW.materialization_revision,NEW.lifecycle_revision)
+ AND p.delivery_mismatches=0 AND p.contribution_mismatches=0 AND p.period_mismatches=0 AND p.cell_mismatches=0 AND p.membership_mismatches=0)
+ THEN RAISE EXCEPTION 'INT_FEATURE_PROOF_MISMATCH'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_feature_evidence_stamp BEFORE INSERT ON crm.int_feature_candidate
+ FOR EACH ROW EXECUTE FUNCTION crm.int_feature_evidence_stamp();
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_FEATURE_EVIDENCE_FORWARD_ONLY'; END; $$;
+
+--changeset rm:0218-int-availability-idempotent-observer dbms:postgresql
+-- Preserve old observations, do not infer historic commit timestamps.
+CREATE INDEX idx_int_availability_source_lookup ON crm.int_fact_availability_observation(tenant_id,owner_module,source_kind,source_id);
+--rollback DROP INDEX crm.idx_int_availability_source_lookup;
+
+
+--changeset rm:0219-int-observation-unique-and-feature-hash dbms:postgresql splitStatements:false
+-- Fail rather than delete historical evidence if an earlier writer created duplicates.
+ALTER TABLE crm.int_fact_availability_observation ADD CONSTRAINT uq_int_availability_source
+ UNIQUE(tenant_id,owner_module,source_kind,source_id);
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_payload_hash
+ CHECK(request_key IS NULL OR payload_sha256=encode(sha256(convert_to(payload::text,'UTF8')),'hex'));
+REVOKE ALL ON crm.int_fact_availability_observation,crm.int_feature_candidate FROM PUBLIC;
+REVOKE ALL ON FUNCTION crm.int_availability_observation_stamp(),crm.int_feature_evidence_stamp() FROM PUBLIC;
+--rollback ALTER TABLE crm.int_feature_candidate DROP CONSTRAINT ck_int_feature_payload_hash;
+--rollback ALTER TABLE crm.int_fact_availability_observation DROP CONSTRAINT uq_int_availability_source;
+-- Privilege hardening is intentionally not reversed.
+
+
+--changeset rm:0220-int-feature-payload-binding dbms:postgresql splitStatements:false
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_payload_binding CHECK (
+ request_key IS NULL OR (
+ (payload #> '{request,generation}') IS NOT DISTINCT FROM to_jsonb(generation_id)
+ AND (payload #> '{request,proof}') IS NOT DISTINCT FROM to_jsonb(proof_id)
+ AND (payload #> '{request,contractVersion}') IS NOT DISTINCT FROM to_jsonb(contract_version)
+ AND (payload #> '{request,methodVersion}') IS NOT DISTINCT FROM to_jsonb(method_version)
+ AND (payload #> '{request,numericPolicyVersion}') IS NOT DISTINCT FROM to_jsonb(numeric_policy_version)
+ AND (payload #> '{request,activityPolicyVersion}') IS NOT DISTINCT FROM to_jsonb(activity_policy_version)
+ AND (payload->'sourceRevision') IS NOT DISTINCT FROM to_jsonb(source_revision)
+ AND (payload->'dirtyRevision') IS NOT DISTINCT FROM to_jsonb(dirty_revision)
+ AND (payload->'receiptRevision') IS NOT DISTINCT FROM to_jsonb(receipt_revision)
+ AND (payload->'materializationRevision') IS NOT DISTINCT FROM to_jsonb(materialization_revision)
+ AND (payload->'lifecycleRevision') IS NOT DISTINCT FROM to_jsonb(lifecycle_revision)
+ AND (payload->'activity') IS NOT DISTINCT FROM to_jsonb(activity)
+ AND (payload->'decisionEligibility') IS NOT DISTINCT FROM to_jsonb('BLOCKED'::text)
+ AND jsonb_typeof(payload->'inputs') IS NOT DISTINCT FROM 'array'
+ AND (payload->>'observedAt')::timestamptz IS NOT DISTINCT FROM observed_at
+ ));
+--rollback ALTER TABLE crm.int_feature_candidate DROP CONSTRAINT ck_int_feature_payload_binding;
+
+
+--changeset rm:0221-int-controlled-l3-activation dbms:postgresql splitStatements:false
+-- Frozen L3 generations; L1 routing remains disabled. No public API admission.
+ALTER TABLE crm.int_projection_lifecycle DROP CONSTRAINT int_projection_lifecycle_check;
+ALTER TABLE crm.int_projection_lifecycle ADD CONSTRAINT ck_int_lifecycle_transition CHECK(
+ (lifecycle_state='BUILDING' AND revision=0) OR
+ (lifecycle_state IN ('ABORTED','ACTIVE') AND revision=1) OR
+ (lifecycle_state='RETIRED' AND revision=2));
+CREATE UNIQUE INDEX uq_int_single_active_generation ON crm.int_projection_lifecycle(tenant_id)
+ WHERE lifecycle_state='ACTIVE';
+ALTER TABLE crm.int_active_generation DROP CONSTRAINT int_active_generation_projection_code_check;
+ALTER TABLE crm.int_active_generation ALTER COLUMN proof_id DROP NOT NULL;
+ALTER TABLE crm.int_active_generation ADD COLUMN dim_proof_id UUID, ADD COLUMN admission_proof_id UUID;
+ALTER TABLE crm.int_active_generation ADD CONSTRAINT ck_int_pointer_kind CHECK(
+ (projection_code='L1' AND proof_id IS NOT NULL AND dim_proof_id IS NULL AND admission_proof_id IS NULL) OR
+ (projection_code='L3' AND proof_id IS NULL AND dim_proof_id IS NOT NULL AND admission_proof_id IS NOT NULL));
+ALTER TABLE crm.int_active_generation ADD CONSTRAINT fk_int_pointer_dim_proof
+ FOREIGN KEY(tenant_id,generation_id,dim_proof_id) REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id);
+ALTER TABLE crm.int_active_generation ADD CONSTRAINT fk_int_pointer_admission_proof
+ FOREIGN KEY(tenant_id,generation_id,admission_proof_id) REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id);
+CREATE OR REPLACE FUNCTION crm.int_guard_generation_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.lifecycle_state='BUILDING' AND NEW.revision=0 THEN RETURN NEW; END IF;
+ ELSIF TG_OP='UPDATE' THEN
+   IF OLD.tenant_id=NEW.tenant_id AND OLD.generation_id=NEW.generation_id
+      AND NEW.changed_at>=OLD.changed_at AND NEW.revision=OLD.revision+1
+      AND ((OLD.lifecycle_state='BUILDING' AND NEW.lifecycle_state IN ('ABORTED','ACTIVE'))
+           OR (OLD.lifecycle_state='ACTIVE' AND NEW.lifecycle_state='RETIRED'))
+   THEN RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'INT_GENERATION_LIFECYCLE_TRANSITION' USING ERRCODE='23514';
+END; $$;
+-- At commit every ACTIVE generation must have the L3 pointer. L1 remains disabled.
+CREATE FUNCTION crm.int_assert_active_pointer() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid;
+BEGIN
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; ELSE t:=NEW.tenant_id; END IF;
+ IF EXISTS(SELECT 1 FROM crm.int_projection_lifecycle l
+   WHERE l.tenant_id=t AND l.lifecycle_state='ACTIVE' AND NOT EXISTS(
+     SELECT 1 FROM crm.int_active_generation a WHERE a.tenant_id=l.tenant_id
+       AND a.generation_id=l.generation_id AND a.projection_code='L3'))
+ OR EXISTS(SELECT 1 FROM crm.int_active_generation a WHERE a.tenant_id=t AND a.projection_code='L1')
+ THEN RAISE EXCEPTION 'INT_ACTIVE_POINTER_REQUIRED' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END; $$;
+CREATE CONSTRAINT TRIGGER trg_int_activation_lifecycle AFTER INSERT OR UPDATE OR DELETE ON crm.int_projection_lifecycle
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_assert_active_pointer();
+CREATE CONSTRAINT TRIGGER trg_int_activation_pointer AFTER INSERT OR UPDATE OR DELETE ON crm.int_active_generation
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_assert_active_pointer();
+REVOKE ALL ON FUNCTION crm.int_assert_active_pointer() FROM PUBLIC;
+REVOKE ALL ON crm.int_active_generation,crm.int_projection_lifecycle FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_ACTIVATION_FORWARD_ONLY'; END; $$;

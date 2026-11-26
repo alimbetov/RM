@@ -25,11 +25,13 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.*;
 
 class DomainModuleQualificationTest {
-    @Test void exactlyFifteenOwnedDomainsWithUniquePrefixesAndSnakeCaseTables() {
+    @Test void exactlySeventeenOwnedDomainsWithUniquePrefixesAndSnakeCaseTables() {
         DomainModule.validateRegistry();
-        assertThat(DomainModule.modules()).hasSize(15);
+        assertThat(DomainModule.INTELLIGENCE.table("calendar_policy")).isEqualTo("int_calendar_policy");
+        assertThat(DomainModule.EVT.table("rule")).isEqualTo("evt_rule");
+        assertThat(DomainModule.modules()).hasSize(17);
         assertThat(DomainModule.modules().stream().map(DomainModule::prefix).collect(Collectors.toSet()))
-                .hasSize(15);
+                .hasSize(17);
         assertThatThrownBy(()->DomainModule.FILES.table("file_object"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(DomainModule.FILES.table("object")).isEqualTo("file_object");
@@ -42,7 +44,7 @@ class DomainModuleQualificationTest {
     }
 
     @Test void everyDomainHasExplicitPrivacyRetentionAndPartitionPolicy() {
-        assertThat(DomainStandards.all()).hasSize(15);
+        assertThat(DomainStandards.all()).hasSize(17);
         for (DomainModule m:DomainModule.values()) {
             var p=DomainStandards.of(m);
             assertThat(p.module()).isEqualTo(m);

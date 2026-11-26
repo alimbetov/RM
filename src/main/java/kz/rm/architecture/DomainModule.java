@@ -26,7 +26,9 @@ public enum DomainModule {
     AUDIT("audit", "kz.rm.audit", "Sanitized immutable evidence"),
     KMS("kms", "kz.rm.security.kms", "Tenant encryption keys and fenced operations"),
     SUBSCRIPTION("sub", "kz.rm.subscription", "Plans and tenant entitlements"),
-    STOREFRONT("store", "kz.rm.storefront", "Public seller storefront settings");
+    STOREFRONT("store", "kz.rm.storefront", "Public seller storefront settings"),
+    INTELLIGENCE("int", "kz.rm.intelligence", "Metric contracts and derived analytics"),
+    EVT("evt", "kz.rm.evt", "Event rules and durable notification delivery");
 
     private final String prefix;
     private final String javaPackage;

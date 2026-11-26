@@ -1,0 +1,79 @@
+{
+  "schema": "RM-B2.1R/producer-inventory/v1",
+  "scope": "Nine admitted literal INSERT sites in eight owner Java classes; conservative alternate producer detection across src/main Java, SQL and XML; test fixtures excluded",
+  "producers": [
+    {
+      "path": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "table": "sales_order_status_event",
+      "sites": 2,
+      "method": "checkoutInternal / negotiated checkout",
+      "canonical": "ORDER_PLACED, one per accepted order",
+      "integration": "B2.2A.1: mandatory append after both owner event INSERT sites; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+      "table": "sales_order_status_event",
+      "sites": 1,
+      "method": "appendEvent",
+      "canonical": "ORDER_CONFIRMED, ORDER_COMPLETED, ORDER_CANCELLED",
+      "integration": "B2.2A.2: mandatory append after shared owner event INSERT for CONFIRMED/CANCELLED/COMPLETED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+      "table": "sales_order_status_event",
+      "sites": 1,
+      "method": "handover",
+      "canonical": "ORDER_COMPLETED",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED"
+    },
+    {
+      "path": "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+      "table": "sales_order_status_event",
+      "sites": 1,
+      "method": "preparation transition",
+      "canonical": "EXCLUDED: PREPARING, READY_FOR_PICKUP (not current canonical kinds)",
+      "integration": "EXCLUDED by canonical kind contract"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "adjust",
+      "canonical": "STOCK_MOVEMENT, includes return restock via delegation",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "transition",
+      "canonical": "STOCK_MOVEMENT per fulfillment; release excluded",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "postLeg",
+      "canonical": "STOCK_MOVEMENT × 2 per transfer",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
+    },
+    {
+      "path": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+      "table": "inv_stock_movement",
+      "sites": 1,
+      "method": "post",
+      "canonical": "STOCK_MOVEMENT per nonzero stocktake adjustment",
+      "integration": "P1: mandatory canonical append at owner journal INSERT, new source requires INSERTED; B4 dimension foundation: appendLive captures immutable dimensions on new PLACED / STOCK_MOVEMENT only"
+    }
+  ],
+  "delegates": [
+    "ReturnInventoryPostingPort.restock -> InventoryMovementService.adjust",
+    "SalesReturnPhysicalService and SalesReturnQuarantineResolutionService -> ReturnInventoryPostingPort"
+  ],
+  "limitations": [
+    "Manifest gate fails on new or missing literal insert sites",
+    "Additional static checks cover quoted SQL identifiers, adjacent Java literals, ORM mappings, MERGE/COPY and SQL/XML inserts; not a proof for arbitrary generated SQL, external writers or database procedures",
+    "All eight admitted physical INSERT sites wired; one preparation-transition site excluded. Historical sources are not repaired by replay. Quarantine is separate ledger."
+  ]
+}
