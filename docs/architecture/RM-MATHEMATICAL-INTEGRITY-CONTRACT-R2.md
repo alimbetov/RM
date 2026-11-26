@@ -23,3 +23,6 @@ Series carries actual transaction observation time, anchor and period code. Cand
 
 ## B4.5E.7C — set-based period extraction and PostgreSQL EMA
 Single bound SQL statement extracts the complete requested period set for one metric/dimensional filter; no per-period query. Requested calendar rows drive left joins, preserving missing/stale observations. Exact identities are grouped by target period, additive sums remain independent of membership. Multiple dimensional filters in a single extraction remain open. Recursive numeric EMA uses the finite-window seed and alpha=2/(n+1), now included in parity checks. PostgreSQL precision and workload remain unqualified; no tests changed.
+
+## B4.5E.7C — persistence foundation
+Changesets 0215/0216 introduce append-only fact availability observations and versioned candidate feature storage. Observation timestamps are database-generated; they are not proof of first committed visibility and cannot reconstruct past knowledge. No backfill, no promotion of historical training or inference, no public reads. Feature payload is internal candidate evidence, not authoritative admission. Trusted post-commit observer, writer, payload validation, privileges, historical evidence completeness and backtesting remain open. No tests modified.

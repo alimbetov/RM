@@ -6854,3 +6854,53 @@ END; $$;
 REVOKE ALL ON FUNCTION crm.int_l2_provenance_guard() FROM PUBLIC;
 -- Existing generations must pass the expanded independent proof; legacy rows are not silently backfilled.
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_COMMERCIAL_UNITS_REQUIRES_FORWARD_REBUILD'; END; $$;
+
+
+--changeset rm:0215-int-fact-availability-observation dbms:postgresql splitStatements:false
+-- First committed visibility is NOT the insert timestamp. This journal records
+-- observations made by a later reader, not an inferred historical commit time.
+CREATE TABLE crm.int_fact_availability_observation (
+ tenant_id UUID NOT NULL,owner_module VARCHAR(16) NOT NULL,source_kind VARCHAR(32) NOT NULL,
+ source_id UUID NOT NULL,observation_id UUID NOT NULL DEFAULT gen_random_uuid(),
+ observed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(tenant_id,observation_id),
+ FOREIGN KEY(tenant_id,owner_module,source_kind,source_id)
+ REFERENCES crm.int_canonical_fact(tenant_id,owner_module,source_kind,source_id)
+);
+CREATE INDEX idx_int_fact_availability_lookup ON crm.int_fact_availability_observation
+ (tenant_id,owner_module,source_kind,source_id,observed_at);
+CREATE FUNCTION crm.int_availability_observation_stamp() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ NEW.observed_at:=clock_timestamp();
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_availability_stamp BEFORE INSERT ON crm.int_fact_availability_observation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_availability_observation_stamp();
+CREATE TRIGGER trg_int_availability_immutable BEFORE UPDATE OR DELETE ON crm.int_fact_availability_observation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_availability_no_truncate BEFORE TRUNCATE ON crm.int_fact_availability_observation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TABLE crm.int_fact_availability_observation;
+--rollback DROP FUNCTION crm.int_availability_observation_stamp();
+
+--changeset rm:0216-int-feature-candidate-store dbms:postgresql splitStatements:false
+CREATE TABLE crm.int_feature_candidate (
+ tenant_id UUID NOT NULL,generation_id UUID NOT NULL,feature_id UUID NOT NULL,
+ contract_version INTEGER NOT NULL CHECK(contract_version>0),
+ numeric_policy_version INTEGER NOT NULL CHECK(numeric_policy_version>0),
+ method_version INTEGER NOT NULL CHECK(method_version>0),
+ observed_at TIMESTAMPTZ NOT NULL,
+ persisted_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ payload JSONB NOT NULL CHECK(jsonb_typeof(payload)='object'),
+ availability VARCHAR(48) NOT NULL CHECK(availability='CURRENT_SNAPSHOT_ONLY'),
+ PRIMARY KEY(tenant_id,feature_id),
+ FOREIGN KEY(tenant_id,generation_id) REFERENCES crm.int_projection_generation(tenant_id,generation_id),
+ CHECK(observed_at<=persisted_at)
+);
+CREATE INDEX idx_int_feature_candidate_generation ON crm.int_feature_candidate(tenant_id,generation_id,observed_at);
+CREATE TRIGGER trg_int_feature_candidate_immutable BEFORE UPDATE OR DELETE ON crm.int_feature_candidate
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_feature_candidate_no_truncate BEFORE TRUNCATE ON crm.int_feature_candidate
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+--rollback DROP TABLE crm.int_feature_candidate;
