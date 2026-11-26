@@ -59,12 +59,15 @@ public class WarehouseStaffScopeService {
         // Same location -> scope order as assign(), including existing assignments.
         String location=jdbc.query(locationLockSql,
                 rs->rs.next()?rs.getString(1):null,tenant,warehouse);
-        if(!"ACTIVE".equals(location))
-            throw new SecurityException("WAREHOUSE_INACTIVE");
         String status=jdbc.query(scopeLockSql,rs->rs.next()?rs.getString(1):null,
                 tenant,warehouse,actor);
+        // Acquire locks in location -> scope order, but preserve admission
+        // precedence: callers without an active assignment must not learn
+        // whether the requested warehouse exists or is active.
         if(!"ACTIVE".equals(status))
             throw new SecurityException("WAREHOUSE_SCOPE_REQUIRED");
+        if(!"ACTIVE".equals(location))
+            throw new SecurityException("WAREHOUSE_INACTIVE");
     }
 
     @Transactional

@@ -13,8 +13,10 @@
     {
       "path": "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java",
       "designBlob": "77d5cdd92d826e69c22478a8af13a2bf0661fc39",
-      "baselineBlob": "77d5cdd92d826e69c22478a8af13a2bf0661fc39",
-      "status": "UNCHANGED"
+      "baselineBlob": "a024d13b8b3fe31cd0c252a5d58ffa134a452345",
+      "status": "DRIFT",
+      "priorBaselineBlob": "77d5cdd92d826e69c22478a8af13a2bf0661fc39",
+      "intermediateObservedBlob": "d879d4f8c82119b58e90debfa38174d657ffdb74"
     },
     {
       "path": "src/main/java/kz/rm/iam/TenantAuthorization.java",
@@ -775,6 +777,6 @@
   ],
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
-  "lastObservedChangeset": "0221-int-controlled-l3-activation",
-  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded; B4.0 inventory qualification fixture repair at 7d818c62: reject booked PRODUCT retyping and separately exercise genuine SERVICE reservation admission; prior blob preserved; B4.1A exact source FK and PostgreSQL insert guards; previous migration blob retained; B4.1B/C generation lifecycle and KATO audit; prior blob retained; B4.1B KATO administrative release 2026-11-17; append-only migration, legacy source IDs retained; B4.2/B4.3 transactional revision fences and inactive pointer; prior blob retained; DEC-B4-GEO-02 explicit administrative semantics and regional admission; B4.3R append-only source revision events to preserve independent late commits; B4.3R2 least-privilege journal trigger repair; B4.3R3 restricted projection receipt and bucket revision triggers, prior migration blob retained; runtime qualification pending; B4.4A/B4.5 storage and dirty revision foundation; previous migration blob retained; runtime pending; B4.4B dedicated consumer binding, source provenance and L3 stamp invalidation; runtime pending; B4.5A/B exact order membership and transactional L3 rollup; runtime pending; B4.5C independent proof and materialization/receipt fences; runtime pending; B4.5D/B4.5E append-only 0214–0220: product units, observation journal, immutable feature candidates, evidence metadata, uniqueness, SHA-256 and payload binding; prior baseline retained; runtime qualification pending; B4.6 append-only controlled L3 activation; source fingerprint updated; runtime pending"
+  "lastObservedChangeset": "d298bcd10de93fa9cf23605fd69ecaaefb4cf616",
+  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded; B4.0 inventory qualification fixture repair at 7d818c62: reject booked PRODUCT retyping and separately exercise genuine SERVICE reservation admission; prior blob preserved; B4.1A exact source FK and PostgreSQL insert guards; previous migration blob retained; B4.1B/C generation lifecycle and KATO audit; prior blob retained; B4.1B KATO administrative release 2026-11-17; append-only migration, legacy source IDs retained; B4.2/B4.3 transactional revision fences and inactive pointer; prior blob retained; DEC-B4-GEO-02 explicit administrative semantics and regional admission; B4.3R append-only source revision events to preserve independent late commits; B4.3R2 least-privilege journal trigger repair; B4.3R3 restricted projection receipt and bucket revision triggers, prior migration blob retained; runtime qualification pending; B4.4A/B4.5 storage and dirty revision foundation; previous migration blob retained; runtime pending; B4.4B dedicated consumer binding, source provenance and L3 stamp invalidation; runtime pending; B4.5A/B exact order membership and transactional L3 rollup; runtime pending; B4.5C independent proof and materialization/receipt fences; runtime pending; B4.5D/B4.5E append-only 0214–0220: product units, observation journal, immutable feature candidates, evidence metadata, uniqueness, SHA-256 and payload binding; prior baseline retained; runtime qualification pending; B4.6 append-only controlled L3 activation; source fingerprint updated; runtime pending; B4.8 warehouse location-before-scope lock order with original authorization error precedence; previous baseline and intermediate observed blob retained; runtime pending"
 }
