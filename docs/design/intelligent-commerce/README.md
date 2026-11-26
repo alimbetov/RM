@@ -1,9 +1,9 @@
 # RM Intelligent Commerce R2 — Design Charter
-Дата: 2026-11-25. Статус: DESIGN ONLY / DRAFT / PRODUCTION HOLD.
-Ветка: design/intelligent-commerce-r2. Исходный SHA: 271c5a9a57dd969a806bfd36f95ee9bde29559fc.
+Дата создания: 2026-11-25; актуализация: 2026-11-26. Статус: PRODUCT CONCEPT FROZEN / DESIGN ONLY / GLOBAL D08 ADMISSION OPEN / PRODUCTION HOLD.
+Ветка: design/intelligent-commerce-r2. Исходный исторический SHA: 271c5a9a57dd969a806bfd36f95ee9bde29559fc. Актуальный reviewed source baseline: base_dev a6bf99107aa64f4eb255b4997ef9417748b05607; main 956e1f9c44a58d2951f7c53b853f4dffadf2b64f (same tree at audit).
 
 ## 1. Назначение
-Расширенное итеративное проектирование пяти контуров параллельно стабилизации ядра в base_dev. Не изменять код, DDL, зависимости, CI, тесты, branch protection или PR #9 из этой ветки. Не считать проектирование разрешением реализации. R1.1 master и действующие доменные контракты остаются нормативной базой; R2 — предложения до явного согласования. Не расширять фактический MVP без CR.
+Расширенное итеративное проектирование пяти контуров параллельно стабилизации ядра в base_dev. Не изменять код, DDL, зависимости, CI, тесты, branch protection или PR #9 из этой ветки. Не считать проектирование разрешением реализации. R1.1 master и действующие доменные контракты остаются нормативной базой; R2 — согласованная продуктовая концепция D06A–D06E.4; методики и implementation admission по отдельным slices остаются gated. Не расширять фактический MVP без CR.
 
 ## 2. Исходные документы
 - [Master R1.1](../../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md)
@@ -60,23 +60,23 @@ Before implementation: verified PR #9 core merge and mandatory exact-SHA CI, rec
 - D-07 final branch integration target after PR #9.
 All are design questions, not approved decisions.
 
-Next: review the detailed R2.0-draft package below, resolve slice decisions, then after Q1 execute IE-00B/A3. D00/D01 source/design drafts now exist; runtime admission remains OPEN.
+Current handoff: B5.5 NEXT; D06E.2 S1–S6 and D06E.4 catalog qualification follow existing gates. D00/D01 and the Q1/IE-00B/A3 handoff below describe the original design baseline, not a restart of completed B4/B5 stages. Runtime admission remains OPEN.
 
 
-## 8. Detailed R2.0-draft — current-project alignment, 2026-11-25
+## 8. Historical R2.0-draft — original source alignment, 2026-11-25
 Source review pinned to base_dev `d9242e539a07ef1843c0e72aba9c651204bf42ae`; design parent `f5c86672e36dabb1445265c9276195d844e1a1f9`. User requested detailed elaboration and alignment with current project. All artifacts below are design proposals/source review, not implementation approval or tests PASS.
 
 | Iteration | Document | Main result |
 |---|---|---|
 | D00 | [Project alignment](D00-PROJECT-ALIGNMENT-R2.md) | 14 source findings, branch drift and current gate snapshot |
 | D01 | [Shared contracts](D01-SEMANTIC-SECURITY-EVENT-CONTRACTS-R2.md) | Grain/time/quality, IAM, event identity, replay and retention |
-| D02 | [Metric passports and oracles](D02-METRIC-CATALOG-AND-ORACLES-R2.md) | 8 metrics, SQL sketches, numeric business fixture, L1/L2 |
+| D02 | [Metric passports and oracles](D02-METRIC-CATALOG-AND-ORACLES-R2.md) | 8 original owner metric passports, SQL sketches, numeric business fixture, L1/L2 |
 | D03/D04 | [Customer and Warehouse 360](D03-D04-CUSTOMER-WAREHOUSE-R2.md) | Scoped read cases, stock reconciliation, ABC/XYZ methods |
 | D05 | [Event Builder](D05-EVENT-BUILDER-DELIVERY-R2.md) | Policy revisions, occurrence binding, audience, lease/fencing/crash |
 | D06 | [Future Radar](D06-RADAR-FUTURE-CONTRACTS-R2.md) | Signal identity, explanation, partial top-K and resumption boundaries |
 | D07 | [Scenario qualification](D07-SCENARIOS-QUALIFICATION-R2.md) | 40 detailed scenario rows, 11 owner-test reuse references |
 | D08 | [Decisions and admission](D08-DECISIONS-AND-ADMISSION-R2.md) | 15 concrete OPEN recommendations, staged handoff |
-| Registry | [Traceability JSON](TRACEABILITY-R2.json) | 22 sources / 8 metrics / 88 original families; source blob SHAs |
+| Registry | [Traceability JSON](TRACEABILITY-R2.json) | Historical baseline: 22 sources / 8 owner metrics / 88 original families; source blob SHAs |
 
 The original 88 acceptance families remain 32 IE-Q + 48 BV + 8 MC. The 40 detailed rows overlap these families and are not 40 new passed tests. Existing RAD/CAL/F2R/BSR obligations remain independent normative dependencies. New R2 parameters are PROPOSED, see D08. Master R1.1 and execution DAG remain operative; synchronize canonical documents after design decisions are approved, not by silently replacing them with a draft.
 
@@ -175,16 +175,19 @@ RM должна помогать ответить: что происходит, 
 
 
 ## D06E.1 — Synthetic history and Metric Code / Hint (2026-11-26)
-[Обязательное уточнение контракта представления и тестовых данных](D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md): 4 synthetic tenants (25/15/10/6 closed months), all 12 existing analytical metrics at eligible grain, English geography fixture labels, chart title/legend/header use Metric Code; localized purpose as Hint (static in PDF). Reuse existing registry and payload. DESIGN ONLY, no runtime admission or change to B4 FREEZE/DAG.
+[Обязательное уточнение контракта представления и тестовых данных](D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md): 4 synthetic tenants (25/15/10/6 closed months), 12 B4.8 pilot analytical metrics at eligible grain (not a catalog ceiling), English geography fixture labels, chart title/legend/header use Metric Code; localized purpose as Hint (static in PDF). Reuse existing registry and payload. DESIGN ONLY, no runtime admission or change to B4 FREEZE/DAG.
 
 
 ## D06E.3 — Analytical Presentation & Progressive Business Insights (2026-11-26)
-[Согласованное владельцем дополнение](D06E.3-ANALYTICAL-PRESENTATION-PROGRESSIVE-INSIGHTS-R2.md) фиксирует восемь переиспользуемых композиций: Morning Brief, Business Pulse, Heatmap, Top Winners & Losers, Drill-Down, Contribution Analysis, Historical Range Selector, What Changed. Один qualified payload, Metric Code + Hint, без новых движков/доменов/шаблонов на каждый вариант. D06E.2 и финальная сверка D08/traceability остаются открытыми. DESIGN ONLY / B4 FREEZE / PRODUCTION HOLD.
+[Согласованное владельцем дополнение](D06E.3-ANALYTICAL-PRESENTATION-PROGRESSIVE-INSIGHTS-R2.md) фиксирует восемь переиспользуемых композиций: Morning Brief, Business Pulse, Heatmap, Top Winners & Losers, Drill-Down, Contribution Analysis, Historical Range Selector, What Changed. Один qualified payload, Metric Code + Hint, без новых движков/доменов/шаблонов на каждый вариант. D06E.2 сохранён; qualification trace сформирован; D08 global admission и runtime qualification остаются OPEN. DESIGN ONLY / B4 FREEZE / PRODUCTION HOLD.
 
 
 ## D06E.2 — Minimal Code Contracts & PRODUCT CONCEPT DESIGN FREEZE (2026-11-26)
-[Итоговый контракт CC-01–12](D06E.2-MINIMAL-CODE-CONTRACTS-QUALIFICATION-R2.md) и [qualification trace](D06E-QUALIFICATION-TRACE-R2.json) фиксируют согласованную продуктовую концепцию D06A–D06E.3, минимальные code contracts, 12 metric passports, synthetic profiles и handoff S0–S6. PRODUCT CONCEPT FROZEN; further functional expansion requires explicit change control. D08 global admission checklist/DEC decisions, source completeness, semantic/city/owner/runtime qualification remain OPEN by slice; no claim of full DESIGN APPROVED or implementation/production admission. Earlier statements that D06E.2 is outstanding are superseded by this section. Existing normative DAG, B4 FREEZE, MIC and Radar resumption unchanged. Next technical priority B5.5.
+[Итоговый контракт CC-01–12](D06E.2-MINIMAL-CODE-CONTRACTS-QUALIFICATION-R2.md) и [qualification trace](D06E-QUALIFICATION-TRACE-R2.json) фиксируют согласованную продуктовую концепцию D06A–D06E.3, минимальные code contracts, 12 pilot metric passports (extended catalog D06E.4), synthetic profiles и handoff S0–S6. PRODUCT CONCEPT FROZEN; further functional expansion requires explicit change control. D08 global admission checklist/DEC decisions, source completeness, semantic/city/owner/runtime qualification remain OPEN by slice; no claim of full DESIGN APPROVED or implementation/production admission. Existing normative DAG, B4 FREEZE, MIC and Radar resumption unchanged. Next technical priority B5.5.
 
 
 ## D06E.4 — Aggregate Capability Inventory (2026-11-26)
 [Source audit and metric registration](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.md) / [machine-readable inventory](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json): 12 B4.8 pilot codes, 8 owner registry codes (7 materialized L1), 11 existing numerical operator codes, 22 proposed aggregate-derived candidates. 20 literal base codes are not 20 certified unique metrics. 12 is a pilot, not ceiling; no new runtime scope or automatic admission. Historical completeness, city, semantic crosswalk and bulk qualification remain OPEN. Product concept/B4 FREEZE, DAG, MIC, separate Radar admission and Production HOLD unchanged.
+
+## Current metric baseline — D06E.4 reconciliation (2026-11-26)
+[Audited inventory](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.md) / [JSON](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json) is the current aggregate capability catalog: 12 B4.8 pilot codes, 8 owner registry codes (7 L1 materialized, 1 live), 11 numerical operator codes, 22 unadmitted candidates; 53 catalog entries, not 53 unique business metrics. Pilot is not a ceiling. Additional registered capabilities are admitted individually after semantic, source, applicability, authorization and independent oracle qualification. No new architecture or automatic runtime admission. Reuse existing L3DerivedSeriesService.readPeriods set-based extraction within a qualified authorized bulk contract; existing 12-anchor/3-metric factor path remains unchanged. Product concept and B4 FROZEN; D08 global admission OPEN; B5.5 NEXT; Radar and production HOLD.

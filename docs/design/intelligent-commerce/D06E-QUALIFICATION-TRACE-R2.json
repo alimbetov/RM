@@ -167,5 +167,29 @@
     "owner worker/file/Radar admission",
     "thresholds and budgets"
   ],
-  "freeze": "Product concept only; global D08 and runtime gates remain open"
+  "freeze": "Product concept only; global D08 and runtime gates remain open",
+  "aggregate_inventory": {
+    "document": "D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.md",
+    "catalog": "D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json",
+    "source_sha": "a6bf99107aa64f4eb255b4997ef9417748b05607",
+    "counts": {
+      "pilot": 12,
+      "owner": 8,
+      "l1_materialized": 7,
+      "operators": 11,
+      "candidates": 22,
+      "catalog_entries": 53,
+      "unique_semantic_metrics": null
+    },
+    "contracts": [
+      "CC-01",
+      "CC-02",
+      "CC-03",
+      "CC-04",
+      "CC-05",
+      "CC-09",
+      "CC-12"
+    ],
+    "status": "SOURCE_AUDITED_NOT_RUNTIME_QUALIFIED"
+  }
 }

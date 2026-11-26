@@ -2,7 +2,7 @@
 R2.0-draft · SPECIFIED / NOT EXECUTED · Source SHA d9242e539a07ef1843c0e72aba9c651204bf42ae.
 Владелец: аналитическая методика + SALES/INVENTORY owners. Источники [IE-00A](../../reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md); общие правила [D01](D01-SEMANTIC-SECURITY-EVENT-CONTRACTS-R2.md). Утверждение точных методик — A2/A3; код — B1 после admission.
 
-## 1. Восемь основных паспортов
+## 1. Восемь исходных owner-паспортов (не предел каталога)
 Общие dimensions: tenant, approved subject scope, period/calendarVersion, methodVersion; currency либо SKU/unit обязательны по типу. Permission применяется до агрегирования. Базовые случаи в [D07](D07-SCENARIOS-QUALIFICATION-R2.md); точные связи в JSON.
 
 | ID / code | Источник, grain, формула | Время / aggregation | Admission / quality |
@@ -110,3 +110,6 @@ Exit: все 8 паспортов admitted либо явно BLOCKED с прич
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Order status counts аддитивны по непересекающимся периодам только при доказанной уникальности события; по категориям, складам и областям — EXACT_DISTINCT. SKU identity = tenant_id + catalog_item_id; price, label, group, warehouse и offer не создают новый SKU. CATALOG/ACTIVE/IN_STOCK/BOOKED/FULFILLED/OUT_OF_STOCK/DEAD_STOCK SKU counts — разные cohorts, не взаимозаменяемые. PRODUCT/SERVICE разделены; неизвестный SKU не выдумывать. Расширение scope требует admission.
+
+## Current metric baseline — D06E.4 reconciliation (2026-11-26)
+[Audited inventory](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.md) / [JSON](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json) is the current aggregate capability catalog: 12 B4.8 pilot codes, 8 owner registry codes (7 L1 materialized, 1 live), 11 numerical operator codes, 22 unadmitted candidates; 53 catalog entries, not 53 unique business metrics. Pilot is not a ceiling. Additional registered capabilities are admitted individually after semantic, source, applicability, authorization and independent oracle qualification. No new architecture or automatic runtime admission. Reuse existing L3DerivedSeriesService.readPeriods set-based extraction within a qualified authorized bulk contract; existing 12-anchor/3-metric factor path remains unchanged. Product concept and B4 FROZEN; D08 global admission OPEN; B5.5 NEXT; Radar and production HOLD.
