@@ -45,40 +45,109 @@ final class ConclusionConcurrencyEvidence {
         }catch(Exception e){throw new AssertionError("B55_REVOKE_FIRST",e);}
         finally{release.countDown();pool.shutdownNow();restore.run();}
     }
+    // Use an already reserved monitor connection, with a per-statement deadline.
+    // A blocked application connection must not prevent observation of its lock.
+    private static JdbcTemplate monitor(java.sql.Connection connection) throws java.sql.SQLException {
+        connection.setAutoCommit(true);
+        var monitor=new JdbcTemplate(new org.springframework.jdbc.datasource.SingleConnectionDataSource(connection,true));
+        monitor.setQueryTimeout(5);
+        return monitor;
+    }
+    private static int awaitSnapshotWait(JdbcTemplate monitor,int fencePid,Future<?> reading) throws Exception {
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
+        while(System.nanoTime()<deadline){
+            if(reading.isDone()){reading.get();throw new AssertionError("B55_READ_FINISHED_BEFORE_FENCE");}
+            Integer pid=monitor.query("""
+                SELECT l.pid FROM pg_locks l
+                WHERE l.locktype='relation' AND l.relation='crm.int_calendar_policy'::regclass
+                  AND l.mode='AccessShareLock' AND NOT l.granted AND ? = ANY(pg_blocking_pids(l.pid))
+                ORDER BY l.pid LIMIT 1
+                """,rs->rs.next()?rs.getInt(1):null,fencePid);
+            if(pid!=null)return pid;
+            Thread.sleep(25);
+        }
+        throw new AssertionError("B55_SNAPSHOT_WAIT_NOT_OBSERVED fencePid="+fencePid);
+    }
+    private static void awaitScopeWait(JdbcTemplate monitor,int revokerPid,int fencePid,int snapshotPid,
+            Future<?> reading,Future<?> revoker) throws Exception {
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
+        while(System.nanoTime()<deadline){
+            if(reading.isDone()){reading.get();throw new AssertionError("B55_READ_FINISHED_BEFORE_RELEASE");}
+            if(revoker.isDone()){revoker.get();throw new AssertionError("B55_REVOKE_COMMITTED_BEFORE_READ_RELEASE");}
+            Integer admissionPid=monitor.query("""
+                SELECT b.pid FROM unnest(pg_blocking_pids(?)) AS b(pid)
+                JOIN pg_locks l ON l.pid=b.pid
+                WHERE b.pid<>? AND b.pid<>? AND l.locktype='relation'
+                  AND l.relation='public.iam_warehouse_staff_scope'::regclass
+                  AND l.mode='RowShareLock' AND l.granted
+                ORDER BY b.pid LIMIT 1
+                """,rs->rs.next()?rs.getInt(1):null,revokerPid,fencePid,snapshotPid);
+            if(admissionPid!=null){
+                System.out.printf("B55_READ_FIRST_LOCK_PROOF fence=%d snapshot=%d admission=%d revoker=%d%n",
+                    fencePid,snapshotPid,admissionPid,revokerPid);
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("B55_REVOKE_WAITS_ON_SCOPE_NOT_OBSERVED revokerPid="+revokerPid);
+    }
     static void readBeforeRevoke(JdbcTemplate jdbc,PlatformTransactionManager manager,BusinessConclusionService service,
             VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query q,List<LocalDate> dates,Runnable revoke,Runnable restore){
-        var pool=Executors.newFixedThreadPool(3);var held=new CountDownLatch(1);var release=new CountDownLatch(1);
-        var pid=new java.util.concurrent.atomic.AtomicInteger();
-        try{
-            // Pause the nested snapshot before its first business SELECT, after IAM admission.
-            var fence=pool.submit(()->new TransactionTemplate(manager).executeWithoutResult(s->{
-                jdbc.execute("LOCK TABLE crm.int_calendar_policy IN ACCESS EXCLUSIVE MODE");
-                pid.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));held.countDown();await(release);
-            }));
-            await(held);
-            var reading=pool.submit(()->read(service,actor,tenant,q,dates));
+        var pool=Executors.newFixedThreadPool(2);
+        var revokerPid=new CompletableFuture<Integer>();
+        var ds=Objects.requireNonNull(jdbc.getDataSource());
+        // The test thread owns the fence, so it cannot expire a separate latch
+        // while that same thread is waiting for evidence or acquiring a connection.
+        // Reserve both JDBC connections BEFORE taking any lock.
+        try(var probeConnection=ds.getConnection();var fenceConnection=ds.getConnection()){
+            var probe=monitor(probeConnection);
+            fenceConnection.setAutoCommit(false);
             try{
-                blockedBy(jdbc,pid.get());
-                var revoker=pool.submit(revoke);
-                // Verify a lock chain: snapshot waits on calendar, revoker on another
-                // backend (the outer admission transaction), not on the calendar lock.
-                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);boolean observed=false;
-                while(System.nanoTime()<deadline){
-                    observed=Boolean.TRUE.equals(jdbc.queryForObject("""
-                        SELECT EXISTS(SELECT 1 FROM pg_stat_activity
-                        WHERE cardinality(pg_blocking_pids(pid))>0 AND query LIKE '%UPDATE public.iam_warehouse_staff_scope%')
-                        """,Boolean.class));
-                    if(observed)break;
-                    Thread.sleep(25);
+                int fencePid;
+                try(var statement=fenceConnection.createStatement()){
+                    statement.setQueryTimeout(5);
+                    statement.execute("LOCK TABLE crm.int_calendar_policy IN ACCESS EXCLUSIVE MODE");
+                    try(var rs=statement.executeQuery("SELECT pg_backend_pid()")){
+                        if(!rs.next())throw new AssertionError("B55_FENCE_PID_MISSING");
+                        fencePid=rs.getInt(1);
+                    }
                 }
-                assertThat(observed).as("B55_REVOKE_WAITS_ON_SCOPE").isTrue();
-                release.countDown();fence.get(30,TimeUnit.SECONDS);
-                assertThat(reading.get(30,TimeUnit.SECONDS).tenant()).isEqualTo(tenant);
+                var reading=pool.submit(()->read(service,actor,tenant,q,dates));
+                int snapshotPid=awaitSnapshotWait(probe,fencePid,reading);
+                var revoker=pool.submit(()->new TransactionTemplate(manager).executeWithoutResult(status->{
+                    revokerPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                    revoke.run();
+                }));
+                int revoking=revokerPid.get(20,TimeUnit.SECONDS);
+                awaitScopeWait(probe,revoking,fencePid,snapshotPid,reading,revoker);
+                assertThat(reading.isDone()).isFalse();
+                assertThat(revoker.isDone()).isFalse();
+                fenceConnection.commit();
+                var result=reading.get(30,TimeUnit.SECONDS);
+                assertThat(result.tenant()).isEqualTo(tenant);
+                assertThat(result.actor()).isEqualTo(actor.userId());
+                assertThat(result.evidence().getFirst().points()).hasSize(dates.size());
+                assertThat(result.evidence().getFirst().points().stream()
+                    .map(AuthorizedAnalyticalReadService.Result::observedAt).distinct().count()).isEqualTo(1);
+                assertThat(result.decisionEligibility()).isEqualTo(BusinessConclusionService.DecisionEligibility.BLOCKED);
                 revoker.get(30,TimeUnit.SECONDS);
                 assertThatThrownBy(()->read(service,actor,tenant,q,dates)).isInstanceOf(SecurityException.class);
-            }finally{release.countDown();}
+            }finally{
+                // Release the database fence even if an assertion, query or worker fails.
+                fenceConnection.rollback();
+            }
         }catch(Exception e){throw new AssertionError("B55_READ_FIRST",e);}
-        finally{release.countDown();pool.shutdownNow();restore.run();}
+        finally{
+            pool.shutdown();
+            try{
+                if(!pool.awaitTermination(60,TimeUnit.SECONDS)){
+                    pool.shutdownNow();
+                    throw new AssertionError("B55_WORKERS_NOT_TERMINATED");
+                }
+            }catch(InterruptedException e){
+                pool.shutdownNow();Thread.currentThread().interrupt();throw new AssertionError(e);
+            }finally{restore.run();}
+        }
     }
     static void boundedWindow(BusinessConclusionService service,VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query q){
         var dates=java.util.stream.IntStream.rangeClosed(0,11).mapToObj(i->q.anchor().minusDays(11-i)).toList();
