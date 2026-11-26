@@ -212,6 +212,38 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(stillEmpty.counts().owners()).isZero();
             assertThat(stillEmpty.counts().facts()).isZero();
             assertThat(stillEmpty.ownerCompletenessProven()).isFalse();
+            // Split at high's timestamp: the left half owns low, the right half high.
+            UUID left=UUID.randomUUID(),right=UUID.randomUUID();
+            Instant split=START.plusSeconds(2);
+            service.openBackfill(slice(tenant,left,START,split));
+            service.openBackfill(slice(tenant,right,split,END));
+            assertThat(service.backfillBatch(tenant,left,10)).hasSize(1);
+            assertThat(service.backfillBatch(tenant,right,10)).hasSize(1);
+            var composed=reconciliation.inspectComposition(staff,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(right,left));
+            assertThat(composed.exactReconciledPartition()).isTrue();
+            assertThat(composed.reconciledObservedOrders()).isEqualTo(2L);
+            assertThat(composed.boundary()).isEqualTo(kz.rm.intelligence.BookedHistoryComposition.Boundary.IMPORTED_PRE_TENANT_AUTHORITY_REQUIRED);
+            assertThat(composed.ownerCompletenessProven()).isFalse();
+            assertThat(composed.slices()).allSatisfy(e->{
+                assertThat(e.asOf()).isEqualTo(composed.snapshot().asOf());
+                assertThat(e.sourceRevision()).isEqualTo(composed.snapshot().sourceRevision());
+                assertThat(e.receiptRevision()).isEqualTo(1);
+            });
+            var nativeHistory=reconciliation.inspectComposition(staff,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.NATIVE_HISTORY,START,END,List.of(left,right));
+            assertThat(nativeHistory.reconciledObservedOrders()).isNull();
+            assertThat(nativeHistory.boundary()).isEqualTo(kz.rm.intelligence.BookedHistoryComposition.Boundary.NATIVE_BEFORE_TENANT_CREATION);
+            var overlap=reconciliation.inspectComposition(staff,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,run));
+            assertThat(overlap.issues()).contains(kz.rm.intelligence.BookedHistoryComposition.Issue.OVERLAP);
+            assertThat(overlap.reconciledObservedOrders()).isNull();
+            assertThatThrownBy(()->reconciliation.inspectComposition(otherReader,otherTenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,right)))
+                .hasMessage("S1_BOOKED_RUN_NOT_FOUND");
+            assertThatThrownBy(()->reconciliation.inspectComposition(otherReader,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,right)))
+                .isInstanceOf(SecurityException.class);
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER)).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
 

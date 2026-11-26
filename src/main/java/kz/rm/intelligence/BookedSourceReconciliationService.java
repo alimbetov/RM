@@ -64,7 +64,35 @@ public class BookedSourceReconciliationService {
     /** Reconcile one existing SALES/ORDER_PLACED/OCCURRED run in an authorized snapshot.
      * No writes, caller supplied evidence, generic owner permission or runtime qualification. */
     public Evidence inspect(VerifiedActor actor,UUID tenant,UUID runId){
-        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);Objects.requireNonNull(runId);
+        Objects.requireNonNull(runId);
+        return authorizedSnapshot(actor,tenant,user->reconcile(tenant,user,runId));
+    }
+    /** Inspect a bounded exact interval partition within ONE authorized RR snapshot.
+     * No caller-supplied evidence, no proof issuance. */
+    public BookedHistoryComposition.Assessment inspectComposition(VerifiedActor actor,UUID tenant,
+            BookedHistoryComposition.Mode mode,Instant from,Instant until,List<UUID> runIds){
+        Objects.requireNonNull(mode);
+        var requested=BookedHistoryComposition.request(from,until);
+        var ids=List.copyOf(runIds);
+        if(ids.size()>BookedHistoryComposition.MAX_RUNS||new HashSet<>(ids).size()!=ids.size())
+            throw new IllegalArgumentException("S1_COMPOSITION_RUNS");
+        return authorizedSnapshot(actor,tenant,user->{
+            requirePostgres();
+            var manifest=jdbc.query("""
+                SELECT w.created_at,transaction_timestamp(),
+                  coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=w.id),0)
+                   +(SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=w.id)
+                FROM public.iam_workspace w WHERE w.id=?
+                """,rs->rs.next()?new BookedHistoryComposition.Snapshot(tenant,user,rs.getTimestamp(1).toInstant(),
+                    rs.getLong(3),rs.getTimestamp(2).toInstant()):null,tenant);
+            if(manifest==null)throw new IllegalArgumentException("S1_TENANT_NOT_FOUND");
+            var slices=new ArrayList<Evidence>();
+            for(UUID id:ids)slices.add(reconcile(tenant,user,id));
+            return BookedHistoryComposition.assess(manifest,mode,requested,slices);
+        });
+    }
+    private <T> T authorizedSnapshot(VerifiedActor actor,UUID tenant,java.util.function.Function<UUID,T> action){
+        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("S1_REQUIRES_OWN_TRANSACTION");
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
@@ -75,14 +103,17 @@ public class BookedSourceReconciliationService {
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             snapshot.setReadOnly(true);snapshot.setTimeout(120);
-            var result=snapshot.execute(inner->reconcile(tenant,user,runId));
+            var result=snapshot.execute(inner->action.apply(user));
             actor.userId();return result;
         });
     }
-    private Evidence reconcile(UUID tenant,UUID actor,UUID runId){
+    private void requirePostgres(){
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>)c->
             c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
             throw new IllegalStateException("S1_POSTGRESQL_REQUIRED");
+    }
+    private Evidence reconcile(UUID tenant,UUID actor,UUID runId){
+        requirePostgres();
         var run=jdbc.query("""
             SELECT r.range_start,r.range_end,
               coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=r.tenant_id),0)

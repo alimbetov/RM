@@ -312,6 +312,30 @@
     {
       "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
       "name": "futureIssuanceAndUncoveredIntervalCannotMatch"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
+      "name": "adjacentHalfOpenIntervalsComposeWithoutDoubleCounting"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
+      "name": "gapsAndOverlapsNeverProduceTotals"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
+      "name": "outOfRangeAndEmptyHistoryAreExplicit"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
+      "name": "nativeAndImportedBoundariesAreDifferentButNeitherAdmitted"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
+      "name": "crossSnapshotAndDuplicateRunCannotCompose"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
+      "name": "openOrUnreconciledIntervalsNeverYieldTotals"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
