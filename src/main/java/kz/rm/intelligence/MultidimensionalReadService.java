@@ -20,8 +20,13 @@ import java.util.UUID;
 public class MultidimensionalReadService {
     public record Group(UUID id,String code,Long revision,String kind){}
     // NULL group or region explicitly denotes UNKNOWN, never today's master data.
-    public record Booked(Group group,String currency,BigDecimal amount,long distinctOrders){}
-    public record Fulfilled(String region,Group group,String currency,BigDecimal amount,long distinctOrders){}
+    // Commercial source order units, not a conversion between physical units of measure.
+    // Null means product quantity is not applicable or the item kind is unknown.
+    // Distinct counts are valid only at the returned grain, never additive across rows.
+    public record Booked(Group group,String currency,BigDecimal amount,long distinctOrders,
+                         long distinctLines,long distinctSkus,BigDecimal productOrderUnits){}
+    public record Fulfilled(String region,Group group,String currency,BigDecimal amount,long distinctOrders,
+                            long distinctLines,long distinctSkus,BigDecimal productOrderUnits){}
     public record Stock(String region,Group group,UUID sku,BigDecimal in,BigDecimal out){}
     public record StockCoverage(long sourceMovements,long missingSnapshots,long unknownRegion,long resolvedRegion){
         public boolean allClassified(){return missingSnapshots==0&&unknownRegion==0;}
@@ -93,14 +98,16 @@ public class MultidimensionalReadService {
                 WHERE tenant_id=? AND event_type='PLACED' GROUP BY order_id HAVING COUNT(*)=1
             )
             SELECT g.id,g.group_code,g.revision,d.item_kind,l.currency,
-                SUM(l.quantity*l.unit_price_snapshot),COUNT(DISTINCT l.order_id)
+                SUM(l.quantity*l.unit_price_snapshot),COUNT(DISTINCT l.order_id),
+                COUNT(DISTINCT l.id),COUNT(DISTINCT l.catalog_item_id_snapshot),
+                SUM(CASE WHEN d.item_kind='PRODUCT' THEN l.quantity ELSE NULL END)
             FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=? AND l.order_id=e.order_id
             LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
             LEFT JOIN group_choice g ON g.leaf=d.group_id
             WHERE e.event_at>=? AND e.event_at<?
             GROUP BY g.id,g.group_code,g.revision,d.item_kind,l.currency
             ORDER BY g.group_code,g.revision,d.item_kind,l.currency
-            """,(rs,n)->new Booked(group(rs,1),rs.getString(5).trim(),rs.getBigDecimal(6),rs.getLong(7)),
+            """,(rs,n)->new Booked(group(rs,1),rs.getString(5).trim(),rs.getBigDecimal(6),rs.getLong(7),rs.getLong(8),rs.getLong(9),rs.getBigDecimal(10)),
             tenant,tenant,ancestorSteps,tenant,tenant,tenant,Timestamp.from(from),Timestamp.from(until));
     }
     @Transactional
@@ -118,7 +125,9 @@ public class MultidimensionalReadService {
                 WHERE tenant_id=? AND event_type='COMPLETED' GROUP BY order_id HAVING COUNT(*)=1
             )
             SELECT md.region_code,g.id,g.group_code,g.revision,d.item_kind,l.currency,
-                SUM((-m.delta_quantity)*l.unit_price_snapshot),COUNT(DISTINCT l.order_id)
+                SUM((-m.delta_quantity)*l.unit_price_snapshot),COUNT(DISTINCT l.order_id),
+                COUNT(DISTINCT l.id),COUNT(DISTINCT m.item_id),
+                SUM(CASE WHEN d.item_kind='PRODUCT' THEN -m.delta_quantity ELSE NULL END)
             FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=? AND l.order_id=e.order_id
             JOIN crm.inv_stock_reservation r ON r.tenant_id=l.tenant_id AND r.order_line_id=l.id AND r.order_id=l.order_id
             JOIN crm.inv_stock_movement m ON m.tenant_id=r.tenant_id AND m.reservation_id=r.id
@@ -130,7 +139,7 @@ public class MultidimensionalReadService {
             )
             GROUP BY md.region_code,g.id,g.group_code,g.revision,d.item_kind,l.currency
             ORDER BY md.region_code,g.group_code,g.revision,d.item_kind,l.currency
-            """,(rs,n)->new Fulfilled(rs.getString(1),group(rs,2),rs.getString(6).trim(),rs.getBigDecimal(7),rs.getLong(8)),args.toArray());
+            """,(rs,n)->new Fulfilled(rs.getString(1),group(rs,2),rs.getString(6).trim(),rs.getBigDecimal(7),rs.getLong(8),rs.getLong(9),rs.getLong(10),rs.getBigDecimal(11)),args.toArray());
     }
     @Transactional
     public List<Stock> stock(VerifiedActor actor,UUID tenant,List<UUID> warehouseIds,Instant from,Instant until,int ancestorSteps){
