@@ -527,13 +527,14 @@ CREATE ROLE rm_s1_read_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLIC
 GRANT USAGE ON SCHEMA public,crm TO rm_s1_read_gate;
 GRANT SELECT ON public.iam_workspace,crm.sales_order,crm.sales_order_line,crm.sales_order_status_event,
     crm.int_canonical_fact,crm.int_fact_backfill_run,crm.int_fact_backfill_receipt,
-    crm.int_source_revision,crm.int_source_revision_event TO rm_s1_read_gate;
+    crm.int_source_revision,crm.int_source_revision_event,crm.int_booked_owner_declaration,crm.int_booked_owner_revocation TO rm_s1_read_gate;
 SET LOCAL ROLE rm_s1_read_gate;
-DO $
+DO $$
 DECLARE rel text; t uuid; r uuid; a timestamptz; b timestamptz; receipts bigint; facts bigint;
 BEGIN
  FOREACH rel IN ARRAY ARRAY['public.iam_workspace','crm.sales_order','crm.sales_order_line','crm.sales_order_status_event',
-    'crm.int_canonical_fact','crm.int_fact_backfill_run','crm.int_fact_backfill_receipt','crm.int_source_revision','crm.int_source_revision_event'] LOOP
+    'crm.int_canonical_fact','crm.int_fact_backfill_run','crm.int_fact_backfill_receipt','crm.int_source_revision','crm.int_source_revision_event',
+    'crm.int_booked_owner_declaration','crm.int_booked_owner_revocation'] LOOP
   IF NOT has_table_privilege(current_user,rel,'SELECT')
      OR has_table_privilege(current_user,rel,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
      OR has_any_column_privilege(current_user,rel,'INSERT,UPDATE')
@@ -561,7 +562,9 @@ BEGIN
    RAISE EXCEPTION 'S1_READ_ROLE_JOURNAL_WRITE_ALLOWED';
  EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
+ PERFORM count(*) FROM crm.int_booked_owner_declaration d LEFT JOIN crm.int_booked_owner_revocation v
+   ON v.tenant_id=d.tenant_id AND v.proof_id=d.proof_id WHERE d.tenant_id=t;
  RAISE NOTICE 'S1_READ_ROLE_PASS facts=% receipts=%',facts,receipts;
-END $;
+END $$;
 RESET ROLE;
 ROLLBACK;

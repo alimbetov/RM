@@ -7035,3 +7035,49 @@ CREATE CONSTRAINT TRIGGER trg_int_activation_pointer AFTER INSERT OR UPDATE OR D
 REVOKE ALL ON FUNCTION crm.int_assert_active_pointer() FROM PUBLIC;
 REVOKE ALL ON crm.int_active_generation,crm.int_projection_lifecycle FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_ACTIVATION_FORWARD_ONLY'; END; $$;
+
+--changeset rm:0222-s1-booked-owner-declaration dbms:postgresql splitStatements:false
+-- Owner declarations are candidates, NOT admitted historical completeness proofs.
+-- Narrow storage gap: existing backfill runs/receipts have no issuer or external provenance.
+CREATE TABLE crm.int_booked_owner_declaration (
+ tenant_id UUID NOT NULL,
+ proof_id UUID NOT NULL,
+ run_id UUID NOT NULL,
+ owner_module VARCHAR(16) NOT NULL DEFAULT 'SALES' CHECK(owner_module='SALES'),
+ source_kind VARCHAR(32) NOT NULL DEFAULT 'ORDER_PLACED' CHECK(source_kind='ORDER_PLACED'),
+ issuer_id UUID NOT NULL REFERENCES public.iam_user_account(id),
+ authority_version INTEGER NOT NULL CHECK(authority_version=1),
+ history_mode VARCHAR(24) NOT NULL CHECK(history_mode IN ('NATIVE_HISTORY','IMPORTED_HISTORY')),
+ provenance_ref VARCHAR(256) NOT NULL CHECK(length(trim(provenance_ref))>0),
+ provenance_digest CHAR(64) NOT NULL CHECK(provenance_digest ~ '^[0-9a-f]{64}$'),
+ source_from TIMESTAMPTZ NOT NULL,
+ source_until TIMESTAMPTZ NOT NULL,
+ issued_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+ source_revision BIGINT NOT NULL CHECK(source_revision>=0),
+ receipt_revision BIGINT NOT NULL CHECK(receipt_revision>=0),
+ expected_orders BIGINT NOT NULL CHECK(expected_orders>=0),
+ expected_population_digest CHAR(64) NOT NULL CHECK(expected_population_digest ~ '^[0-9a-f]{64}$'),
+ PRIMARY KEY(tenant_id,proof_id),
+ FOREIGN KEY(tenant_id,run_id,owner_module,source_kind)
+   REFERENCES crm.int_fact_backfill_run(tenant_id,run_id,owner_module,source_kind),
+ CHECK(source_from<source_until AND source_until<=issued_at)
+);
+CREATE TABLE crm.int_booked_owner_revocation (
+ tenant_id UUID NOT NULL,
+ proof_id UUID NOT NULL,
+ revoked_by UUID NOT NULL REFERENCES public.iam_user_account(id),
+ revoked_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+ PRIMARY KEY(tenant_id,proof_id),
+ FOREIGN KEY(tenant_id,proof_id) REFERENCES crm.int_booked_owner_declaration(tenant_id,proof_id)
+);
+CREATE TRIGGER trg_int_booked_declaration_immutable BEFORE UPDATE OR DELETE ON crm.int_booked_owner_declaration
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_booked_declaration_no_truncate BEFORE TRUNCATE ON crm.int_booked_owner_declaration
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_booked_revocation_immutable BEFORE UPDATE OR DELETE ON crm.int_booked_owner_revocation
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_booked_revocation_no_truncate BEFORE TRUNCATE ON crm.int_booked_owner_revocation
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+REVOKE ALL ON crm.int_booked_owner_declaration,crm.int_booked_owner_revocation FROM PUBLIC;
+--rollback DROP TABLE crm.int_booked_owner_revocation;
+--rollback DROP TABLE crm.int_booked_owner_declaration;

@@ -67,6 +67,17 @@ public class BookedSourceReconciliationService {
         Objects.requireNonNull(runId);
         return authorizedSnapshot(actor,tenant,user->reconcile(tenant,user,runId));
     }
+    /** Read durable owner declaration and fresh reconciliation in the same authorized RR snapshot.
+     * Snapshot status is diagnostic only, never an authorization to publish history. */
+    public BookedOwnerDeclarationService.Inspection inspectAuthority(VerifiedActor actor,UUID tenant,UUID proofId){
+        Objects.requireNonNull(proofId);
+        return authorizedSnapshot(actor,tenant,user->{
+            requirePostgres();
+            var stored=BookedOwnerDeclarationService.load(jdbc,tenant,proofId);
+            if(stored==null)throw new IllegalArgumentException("S1_DECLARATION_NOT_FOUND");
+            return BookedOwnerDeclarationService.inspect(stored,reconcile(tenant,user,stored.draft().runId()));
+        });
+    }
     /** Inspect a bounded exact interval partition within ONE authorized RR snapshot.
      * No caller-supplied evidence, no proof issuance. */
     public BookedHistoryComposition.Assessment inspectComposition(VerifiedActor actor,UUID tenant,

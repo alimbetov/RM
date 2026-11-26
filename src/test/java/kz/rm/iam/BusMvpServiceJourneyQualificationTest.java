@@ -551,7 +551,8 @@ class BusMvpServiceJourneyQualificationTest {
             roles.enable(otherOwner,otherTenant);
             CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
                 tenant,otherTenant,orderId,applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
-                staff,otherOwner,reconciliationReader,
+                staff,otherOwner,reconciliationReader,owner,
+                applicationContext.getBean(kz.rm.intelligence.BookedOwnerDeclarationService.class),
                 ()->roles.revoke(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
                 ()->roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ));
             return;
