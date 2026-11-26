@@ -45,10 +45,11 @@ final class ConclusionConcurrencyEvidence {
         }catch(Exception e){throw new AssertionError("B55_REVOKE_FIRST",e);}
         finally{release.countDown();pool.shutdownNow();restore.run();}
     }
-    // Use an already reserved monitor connection, with a per-statement deadline.
-    // A blocked application connection must not prevent observation of its lock.
+    // pg_locks and pg_blocking_pids expose current lock-manager state, not a
+    // historical MVCC snapshot. Probe from the fence transaction itself.
+    // SingleConnectionDataSource suppresses close but never commits the fence.
     private static JdbcTemplate monitor(java.sql.Connection connection) throws java.sql.SQLException {
-        connection.setAutoCommit(true);
+        if(connection.getAutoCommit())throw new IllegalStateException("B55_FENCE_TRANSACTION_REQUIRED");
         var monitor=new JdbcTemplate(new org.springframework.jdbc.datasource.SingleConnectionDataSource(connection,true));
         monitor.setQueryTimeout(5);
         return monitor;
@@ -96,12 +97,12 @@ final class ConclusionConcurrencyEvidence {
         var pool=Executors.newFixedThreadPool(2);
         var revokerPid=new CompletableFuture<Integer>();
         var ds=Objects.requireNonNull(jdbc.getDataSource());
-        // The test thread owns the fence, so it cannot expire a separate latch
-        // while that same thread is waiting for evidence or acquiring a connection.
-        // Reserve both JDBC connections BEFORE taking any lock.
-        try(var probeConnection=ds.getConnection();var fenceConnection=ds.getConnection()){
-            var probe=monitor(probeConnection);
+        // Exact budget with Domain Security Hikari max=4:
+        // fence+probe (1), admission (1), REQUIRES_NEW snapshot (1), revoke (1).
+        // Do not reserve a fifth connection for monitoring.
+        try(var fenceConnection=ds.getConnection()){
             fenceConnection.setAutoCommit(false);
+            var probe=monitor(fenceConnection);
             try{
                 int fencePid;
                 try(var statement=fenceConnection.createStatement()){
@@ -118,8 +119,15 @@ final class ConclusionConcurrencyEvidence {
                     revokerPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
                     revoke.run();
                 }));
-                int revoking=revokerPid.get(20,TimeUnit.SECONDS);
+                // Do not hide a connection-admission failure in a bare future timeout.
+                int revoking;
+                try{revoking=revokerPid.get(20,TimeUnit.SECONDS);}
+                catch(TimeoutException failure){
+                    if(revoker.isDone())revoker.get();
+                    throw new AssertionError("B55_REVOKER_CONNECTION_NOT_ADMITTED "+poolState(ds),failure);
+                }
                 awaitScopeWait(probe,revoking,fencePid,snapshotPid,reading,revoker);
+                System.out.println("B55_READ_FIRST_POOL "+poolState(ds));
                 assertThat(reading.isDone()).isFalse();
                 assertThat(revoker.isDone()).isFalse();
                 fenceConnection.commit();
@@ -148,6 +156,14 @@ final class ConclusionConcurrencyEvidence {
                 pool.shutdownNow();Thread.currentThread().interrupt();throw new AssertionError(e);
             }finally{restore.run();}
         }
+    }
+    private static String poolState(javax.sql.DataSource ds){
+        if(ds instanceof com.zaxxer.hikari.HikariDataSource hikari){
+            var pool=hikari.getHikariPoolMXBean();
+            if(pool!=null)return "max="+hikari.getMaximumPoolSize()+" active="+pool.getActiveConnections()
+                +" idle="+pool.getIdleConnections()+" pending="+pool.getThreadsAwaitingConnection();
+        }
+        return "pool_metrics_unavailable";
     }
     static void boundedWindow(BusinessConclusionService service,VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query q){
         var dates=java.util.stream.IntStream.rangeClosed(0,11).mapToObj(i->q.anchor().minusDays(11-i)).toList();

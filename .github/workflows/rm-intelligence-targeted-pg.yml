@@ -41,6 +41,10 @@ jobs:
           --health-retries 12
     env:
       SPRING_PROFILES_ACTIVE: test
+      # Match Domain Security's constrained pool: the read/revoke fixture must
+      # fit in four connections, including its test-owned fence/monitor.
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 4
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       RM_TEST_DB_URL: jdbc:postgresql://localhost:5432/rm_test
       RM_TEST_DB_USERNAME: rm
       RM_TEST_DB_PASSWORD: rm_ci_only
