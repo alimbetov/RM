@@ -372,6 +372,18 @@
     {
       "classname": "kz.rm.intelligence.BookedMonthlyAuthorityQualificationTest",
       "name": "proofBudgetAndExactRequiredSetAreEnforced"
+    },
+    {
+      "classname": "kz.rm.intelligence.NativeBookedClosureQualificationTest",
+      "name": "closedMonthPositiveAndZeroAreDistinctShadowResults"
+    },
+    {
+      "classname": "kz.rm.intelligence.NativeBookedClosureQualificationTest",
+      "name": "missingOrLateBoundaryAndDisabledGuardsDoNotQualify"
+    },
+    {
+      "classname": "kz.rm.intelligence.NativeBookedClosureQualificationTest",
+      "name": "headerAndMonthlyOraclesMustAgree"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

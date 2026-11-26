@@ -558,6 +558,12 @@ class BusMvpServiceJourneyQualificationTest {
                 ()->roles.revoke(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
                 ()->roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
                 applicationContext.getBean(TenantOwnershipTransferService.class),monthlyCalendar,otherMonthlyCalendar);
+            NativeBookedCaptureJourneyEvidence.qualify(jdbc,canonicalTransactions,
+                applicationContext.getBean(kz.rm.intelligence.NativeBookedCaptureService.class),
+                applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
+                canonicalDelivery,owner,staff,tenant,monthlyCalendar,orderId,canonicalFacts,
+                ()->checkout.checkout(store.slug(),"bus-native-"+UUID.randomUUID()+"@example.kz",
+                    "bus-native-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
             return;
         }
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);

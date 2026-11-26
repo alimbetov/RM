@@ -7081,3 +7081,153 @@ CREATE TRIGGER trg_int_booked_revocation_no_truncate BEFORE TRUNCATE ON crm.int_
 REVOKE ALL ON crm.int_booked_owner_declaration,crm.int_booked_owner_revocation FROM PUBLIC;
 --rollback DROP TABLE crm.int_booked_owner_revocation;
 --rollback DROP TABLE crm.int_booked_owner_declaration;
+
+--changeset rm:0223-s1-native-booked-capture dbms:postgresql splitStatements:false
+-- Prospective, opt-in system-of-record boundary for committed native RM orders only.
+-- A single guard row per workspace, not an order/event/coverage ledger.
+CREATE TABLE crm.int_native_booked_capture (
+ tenant_id UUID PRIMARY KEY REFERENCES public.iam_workspace(id),
+ started_at TIMESTAMPTZ,
+ activated_by UUID REFERENCES public.iam_user_account(id),
+ policy_version INTEGER NOT NULL DEFAULT 1 CHECK(policy_version=1),
+ CHECK((started_at IS NULL)=(activated_by IS NULL))
+);
+-- Prevent a workspace INSERT in the gap between seeding and installing its trigger.
+LOCK TABLE public.iam_workspace IN SHARE ROW EXCLUSIVE MODE;
+INSERT INTO crm.int_native_booked_capture(tenant_id) SELECT id FROM public.iam_workspace;
+CREATE FUNCTION crm.int_native_capture_init() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ INSERT INTO crm.int_native_booked_capture(tenant_id) VALUES(NEW.id);
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_native_capture_init AFTER INSERT ON public.iam_workspace
+ FOR EACH ROW EXECUTE FUNCTION crm.int_native_capture_init();
+CREATE FUNCTION crm.int_native_capture_transition() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_OP<>'UPDATE' THEN RAISE EXCEPTION 'S1_NATIVE_CAPTURE_IMMUTABLE'; END IF;
+ IF OLD.started_at IS NOT NULL OR NEW.tenant_id<>OLD.tenant_id OR
+    NEW.policy_version<>OLD.policy_version OR NEW.activated_by IS NULL
+ THEN RAISE EXCEPTION 'S1_NATIVE_CAPTURE_IMMUTABLE'; END IF;
+ -- UPDATE holds the exclusive row fence. All source inserts hold FOR SHARE.
+ NEW.started_at:=clock_timestamp();
+ IF EXISTS(SELECT 1 FROM crm.sales_order o WHERE o.tenant_id=NEW.tenant_id AND o.created_at>=NEW.started_at)
+ OR EXISTS(SELECT 1 FROM crm.sales_order_status_event e WHERE e.tenant_id=NEW.tenant_id
+    AND e.event_type='PLACED' AND e.occurred_at>=NEW.started_at)
+ THEN RAISE EXCEPTION 'S1_NATIVE_EXISTING_FUTURE_SOURCE'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_native_capture_transition BEFORE UPDATE OR DELETE ON crm.int_native_booked_capture
+ FOR EACH ROW EXECUTE FUNCTION crm.int_native_capture_transition();
+CREATE TRIGGER trg_int_native_capture_no_truncate BEFORE TRUNCATE ON crm.int_native_booked_capture
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE FUNCTION crm.int_native_capture_fence() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE boundary timestamptz; header_time timestamptz;
+BEGIN
+ IF TG_TABLE_NAME='sales_order_status_event' THEN
+   IF NEW.event_type<>'PLACED' THEN RETURN NEW; END IF;
+ END IF;
+ -- Row exists from workspace creation; FOR SHARE detects concurrent activation
+ -- even under RR (serialization failure rather than an obsolete inactive policy).
+ SELECT started_at INTO STRICT boundary FROM crm.int_native_booked_capture WHERE tenant_id=NEW.tenant_id FOR SHARE;
+ IF boundary IS NULL THEN RETURN NEW; END IF;
+ IF TG_TABLE_NAME='sales_order' THEN
+   IF NEW.created_at<boundary OR NEW.created_at>clock_timestamp()+interval '5 minutes' OR NEW.status<>'PLACED'
+   THEN RAISE EXCEPTION 'S1_NATIVE_ORDER_BOUNDARY'; END IF;
+ ELSE
+   SELECT created_at INTO STRICT header_time FROM crm.sales_order WHERE tenant_id=NEW.tenant_id AND id=NEW.order_id FOR UPDATE;
+   IF header_time<boundary OR NEW.occurred_at<>header_time
+      OR EXISTS(SELECT 1 FROM crm.sales_order_status_event WHERE tenant_id=NEW.tenant_id AND order_id=NEW.order_id AND event_type='PLACED')
+   THEN RAISE EXCEPTION 'S1_NATIVE_PLACED_IDENTITY'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_native_order_fence BEFORE INSERT ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_native_capture_fence();
+CREATE TRIGGER trg_int_native_event_fence BEFORE INSERT ON crm.sales_order_status_event
+ FOR EACH ROW EXECUTE FUNCTION crm.int_native_capture_fence();
+-- Protect both the old and new tenant against moving an old row into an active
+-- capture range. Lock guard rows in canonical tenant order.
+CREATE FUNCTION crm.int_native_header_guard() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE target uuid; boundary timestamptz;
+BEGIN
+ target:=OLD.tenant_id;
+ IF TG_OP='UPDATE' THEN
+   IF NEW.tenant_id=OLD.tenant_id AND NEW.id=OLD.id AND NEW.created_at=OLD.created_at THEN RETURN NEW; END IF;
+   target:=NEW.tenant_id;
+ END IF;
+ FOR boundary IN SELECT started_at FROM crm.int_native_booked_capture
+    WHERE tenant_id IN (OLD.tenant_id,target) ORDER BY tenant_id FOR SHARE LOOP
+   IF boundary IS NOT NULL THEN RAISE EXCEPTION 'S1_NATIVE_HEADER_IDENTITY'; END IF;
+ END LOOP;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_native_header_guard BEFORE UPDATE OF tenant_id,id,created_at OR DELETE ON crm.sales_order
+ FOR EACH ROW EXECUTE FUNCTION crm.int_native_header_guard();
+CREATE TRIGGER trg_int_native_header_no_truncate BEFORE TRUNCATE ON crm.sales_order
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+-- Checkout receipts are durable evidence in the activated tenant. Existing
+-- inactive tenant row mutations are not newly forbidden; global TRUNCATE is unsafe.
+CREATE FUNCTION crm.int_native_checkout_receipt_guard() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE target uuid; boundary timestamptz;
+BEGIN
+ target:=OLD.tenant_id;
+ IF TG_OP='UPDATE' THEN target:=NEW.tenant_id; END IF;
+ FOR boundary IN SELECT started_at FROM crm.int_native_booked_capture
+    WHERE tenant_id IN (OLD.tenant_id,target) ORDER BY tenant_id FOR SHARE LOOP
+   IF boundary IS NOT NULL THEN RAISE EXCEPTION 'S1_NATIVE_CHECKOUT_RECEIPT_IMMUTABLE'; END IF;
+ END LOOP;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_native_checkout_receipt_guard BEFORE UPDATE OR DELETE ON crm.sales_checkout_receipt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_native_checkout_receipt_guard();
+CREATE TRIGGER trg_int_native_checkout_receipt_no_truncate BEFORE TRUNCATE ON crm.sales_checkout_receipt
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE INDEX idx_int_native_checkout_receipt_order ON crm.sales_checkout_receipt(tenant_id,order_id);
+CREATE FUNCTION crm.int_native_order_complete() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE boundary timestamptz;
+BEGIN
+ SELECT started_at INTO STRICT boundary FROM crm.int_native_booked_capture WHERE tenant_id=NEW.tenant_id FOR SHARE;
+ IF boundary IS NULL THEN RETURN NULL; END IF;
+ IF NOT EXISTS(SELECT 1 FROM crm.sales_order o WHERE o.tenant_id=NEW.tenant_id AND o.id=NEW.id AND o.booked_snapshot_sealed)
+ OR NOT EXISTS(SELECT 1 FROM crm.sales_order_line l WHERE l.tenant_id=NEW.tenant_id AND l.order_id=NEW.id)
+ OR (SELECT count(*) FROM crm.sales_order_status_event e WHERE e.tenant_id=NEW.tenant_id AND e.order_id=NEW.id AND e.event_type='PLACED')<>1
+ OR NOT EXISTS(SELECT 1 FROM crm.sales_order_status_event e JOIN crm.int_canonical_fact f
+   ON f.tenant_id=e.tenant_id AND f.source_id=e.id AND f.subject_id=e.order_id AND f.owner_module='SALES'
+      AND f.source_kind='ORDER_PLACED' AND f.occurred_at=e.occurred_at AND f.recorded_at IS NULL
+      AND f.source_version IS NULL AND f.schema_version=2
+   WHERE e.tenant_id=NEW.tenant_id AND e.order_id=NEW.id AND e.event_type='PLACED' AND e.occurred_at=NEW.created_at)
+ OR NOT EXISTS(SELECT 1 FROM crm.sales_checkout_receipt r WHERE r.tenant_id=NEW.tenant_id AND r.order_id=NEW.id)
+ THEN RAISE EXCEPTION 'S1_NATIVE_ORDER_TRANSACTION_INCOMPLETE'; END IF;
+ RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER trg_int_native_order_complete AFTER INSERT ON crm.sales_order
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_native_order_complete();
+REVOKE ALL ON crm.int_native_booked_capture FROM PUBLIC;
+REVOKE ALL ON FUNCTION crm.int_native_capture_init(),crm.int_native_capture_transition(),crm.int_native_capture_fence(),
+ crm.int_native_header_guard(),crm.int_native_order_complete(),crm.int_native_checkout_receipt_guard() FROM PUBLIC;
+--rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_native_booked_capture WHERE started_at IS NOT NULL) THEN RAISE EXCEPTION 'S1_NATIVE_CAPTURE_ROLLBACK_UNSAFE'; END IF; END; $$;
+--rollback DROP TRIGGER trg_int_native_order_complete ON crm.sales_order;
+--rollback DROP FUNCTION crm.int_native_order_complete();
+--rollback DROP INDEX crm.idx_int_native_checkout_receipt_order;
+--rollback DROP TRIGGER trg_int_native_checkout_receipt_no_truncate ON crm.sales_checkout_receipt;
+--rollback DROP TRIGGER trg_int_native_checkout_receipt_guard ON crm.sales_checkout_receipt;
+--rollback DROP FUNCTION crm.int_native_checkout_receipt_guard();
+--rollback DROP TRIGGER trg_int_native_header_no_truncate ON crm.sales_order;
+--rollback DROP TRIGGER trg_int_native_header_guard ON crm.sales_order;
+--rollback DROP FUNCTION crm.int_native_header_guard();
+--rollback DROP TRIGGER trg_int_native_event_fence ON crm.sales_order_status_event;
+--rollback DROP TRIGGER trg_int_native_order_fence ON crm.sales_order;
+--rollback DROP FUNCTION crm.int_native_capture_fence();
+--rollback DROP TRIGGER trg_int_native_capture_init ON public.iam_workspace;
+--rollback DROP FUNCTION crm.int_native_capture_init();
+--rollback DROP TABLE crm.int_native_booked_capture;
+--rollback DROP FUNCTION crm.int_native_capture_transition();

@@ -613,4 +613,32 @@ BEGIN
  RAISE NOTICE 'S1_WRITER_ROLE_PASS';
 END $$;
 RESET ROLE;
+
+-- Native snapshot probe, not deployment of a login nor continuity certification.
+CREATE ROLE rm_s1_native_read_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA public,crm TO rm_s1_native_read_gate;
+GRANT SELECT ON crm.int_native_booked_capture,crm.sales_checkout_receipt TO rm_s1_native_read_gate;
+SET LOCAL ROLE rm_s1_native_read_gate;
+DO $$
+DECLARE t uuid; rel text;
+BEGIN
+ SELECT tenant_id INTO STRICT t FROM crm.int_native_booked_capture WHERE started_at IS NOT NULL ORDER BY tenant_id LIMIT 1;
+ FOREACH rel IN ARRAY ARRAY['crm.int_native_booked_capture','crm.sales_checkout_receipt'] LOOP
+  IF NOT has_table_privilege(current_user,rel,'SELECT') OR has_table_privilege(current_user,rel,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+     OR has_any_column_privilege(current_user,rel,'INSERT,UPDATE') THEN RAISE EXCEPTION 'S1_NATIVE_READER_PRIVILEGE: %',rel; END IF;
+ END LOOP;
+ PERFORM count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=t;
+ BEGIN
+  ALTER TABLE crm.sales_order DISABLE TRIGGER trg_int_native_order_complete;
+  RAISE EXCEPTION 'S1_NATIVE_GUARD_DISABLE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+  UPDATE crm.int_native_booked_capture SET started_at=clock_timestamp() WHERE tenant_id=t;
+  RAISE EXCEPTION 'S1_NATIVE_GUARD_WRITE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ RAISE NOTICE 'S1_NATIVE_READER_ROLE_PASS';
+END $$;
+RESET ROLE;
 ROLLBACK;

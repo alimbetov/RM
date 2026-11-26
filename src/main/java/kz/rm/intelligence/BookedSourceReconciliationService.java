@@ -103,6 +103,74 @@ public class BookedSourceReconciliationService {
             return BookedMonthlyAuthorityAssessment.assess(history,byMonth);
         });
     }
+    /** Prospective native short-range shadow qualification, using a fresh real run. */
+    public NativeBookedClosure.Result inspectNativeRange(VerifiedActor actor,UUID tenant,UUID runId){
+        Objects.requireNonNull(runId);
+        return authorizedSnapshot(actor,tenant,true,user->{
+            var e=reconcile(tenant,user,runId);
+            var snapshot=nativeSnapshot(tenant,user);
+            return nativeClosure(snapshot,new BookedHistoryComposition.Interval(e.from(),e.until()),null,null,List.of(e),null);
+        });
+    }
+    /** Real calendar boundaries, independently counted, with up to four exact run slices. */
+    public NativeBookedClosure.Result inspectNativeMonth(VerifiedActor actor,UUID tenant,long calendarVersion,YearMonth month,List<UUID> runIds){
+        Objects.requireNonNull(month);
+        if(calendarVersion<1)throw new IllegalArgumentException("S1_CALENDAR");
+        var ids=List.copyOf(runIds);
+        if(ids.size()>BookedHistoryComposition.MAX_RUNS||new HashSet<>(ids).size()!=ids.size())
+            throw new IllegalArgumentException("S1_COMPOSITION_RUNS");
+        return authorizedSnapshot(actor,tenant,true,user->{
+            var history=HistoricalCoverageService.inspectSnapshot(jdbc,tenant,user,calendarVersion,
+                List.of(new HistoricalCoverageService.RequiredMonth(month,HistoricalCoverageService.Role.TARGET)));
+            var m=history.manifest();var row=history.intervals().getFirst();
+            var snapshot=new BookedHistoryComposition.Snapshot(tenant,user,m.tenantCreatedAt(),m.sourceRevision(),m.asOf());
+            var slices=new ArrayList<Evidence>();
+            for(UUID id:ids)slices.add(reconcile(tenant,user,id));
+            return nativeClosure(snapshot,new BookedHistoryComposition.Interval(row.interval().startInclusive(),row.interval().endExclusive()),
+                calendarVersion,month,slices,row.source());
+        });
+    }
+    private BookedHistoryComposition.Snapshot nativeSnapshot(UUID tenant,UUID actor){
+        return Objects.requireNonNull(jdbc.query("""
+            SELECT w.created_at,transaction_timestamp(),
+              coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=w.id),0)
+              +(SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=w.id)
+            FROM public.iam_workspace w WHERE w.id=?
+            """,rs->rs.next()?new BookedHistoryComposition.Snapshot(tenant,actor,rs.getTimestamp(1).toInstant(),
+                rs.getLong(3),rs.getTimestamp(2).toInstant()):null,tenant));
+    }
+    private NativeBookedClosure.Result nativeClosure(BookedHistoryComposition.Snapshot snapshot,BookedHistoryComposition.Interval interval,
+            Long calendarVersion,YearMonth month,List<Evidence> slices,HistoricalCoverageService.SourceCounts monthly){
+        var boundary=NativeBookedCaptureService.read(jdbc,snapshot.tenant());
+        // Check the installed guard profile; production privilege qualification remains separate.
+        boolean guards=Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT count(*)=22 AND current_setting('session_replication_role')='origin' FROM pg_catalog.pg_trigger t
+            WHERE NOT t.tgisinternal AND t.tgenabled IN ('O','A') AND (
+              (t.tgrelid='public.iam_workspace'::regclass AND t.tgname='trg_int_native_capture_init') OR
+              (t.tgrelid='crm.int_native_booked_capture'::regclass AND t.tgname IN ('trg_int_native_capture_transition','trg_int_native_capture_no_truncate')) OR
+              (t.tgrelid='crm.sales_order'::regclass AND t.tgname IN ('trg_int_native_order_fence','trg_int_native_header_guard',
+                'trg_int_native_order_complete','trg_int_native_header_no_truncate','trg_sales_booked_header_immutable','trg_sales_snapshot_no_unseal')) OR
+              (t.tgrelid='crm.sales_order_status_event'::regclass AND t.tgname IN ('trg_int_native_event_fence',
+                'trg_sales_status_event_immutable','trg_sales_status_event_no_truncate','trg_sales_snapshot_seal','trg_int_source_rev_0')) OR
+              (t.tgrelid='crm.sales_checkout_receipt'::regclass AND t.tgname IN ('trg_int_native_checkout_receipt_guard','trg_int_native_checkout_receipt_no_truncate')) OR
+              (t.tgrelid='crm.sales_order_line'::regclass AND t.tgname IN ('trg_sales_line_immutable','trg_sales_line_no_truncate',
+                'trg_sales_line_no_late_insert','trg_int_source_rev_1')) OR
+              (t.tgrelid='crm.int_canonical_fact'::regclass AND t.tgname IN ('trg_int_fact_immutable','trg_int_fact_no_truncate')))
+            """,Boolean.class));
+        // Independent header population: catches committed orders with no PLACED event.
+        // Checkout receipts and canonical facts have separate identity checks.
+        var headers=jdbc.queryForObject("""
+            SELECT count(*),count(*) FILTER(WHERE NOT o.booked_snapshot_sealed OR
+              NOT EXISTS(SELECT 1 FROM crm.sales_order_line l WHERE l.tenant_id=o.tenant_id AND l.order_id=o.id) OR
+              (SELECT count(*) FROM crm.sales_order_status_event e WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id AND e.event_type='PLACED')<>1 OR
+              NOT EXISTS(SELECT 1 FROM crm.sales_order_status_event e WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id
+                AND e.event_type='PLACED' AND e.occurred_at=o.created_at) OR
+              NOT EXISTS(SELECT 1 FROM crm.sales_checkout_receipt r WHERE r.tenant_id=o.tenant_id AND r.order_id=o.id))
+            FROM crm.sales_order o WHERE o.tenant_id=? AND o.created_at>=? AND o.created_at<?
+            """,(rs,n)->new NativeBookedClosure.HeaderCounts(rs.getLong(1),rs.getLong(2)),snapshot.tenant(),
+                Timestamp.from(interval.from()),Timestamp.from(interval.until()));
+        return NativeBookedClosure.assess(snapshot,boundary,interval,calendarVersion,month,guards,Objects.requireNonNull(headers),slices,monthly);
+    }
     /** Inspect a bounded exact interval partition within ONE authorized RR snapshot.
      * No caller-supplied evidence, no proof issuance. */
     public BookedHistoryComposition.Assessment inspectComposition(VerifiedActor actor,UUID tenant,
@@ -128,6 +196,9 @@ public class BookedSourceReconciliationService {
         });
     }
     private <T> T authorizedSnapshot(VerifiedActor actor,UUID tenant,java.util.function.Function<UUID,T> action){
+        return authorizedSnapshot(actor,tenant,false,action);
+    }
+    private <T> T authorizedSnapshot(VerifiedActor actor,UUID tenant,boolean nativeFence,java.util.function.Function<UUID,T> action){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("S1_REQUIRES_OWN_TRANSACTION");
         var admission=new TransactionTemplate(manager);
@@ -135,6 +206,16 @@ public class BookedSourceReconciliationService {
         return admission.execute(outer->{
             UUID user=actor.userId();
             authorization.requireForCommand(user,tenant,DomainPermission.SALES_ORDER_READ);
+            if(nativeFence){
+                requirePostgres();
+                // Lock after IAM workspace admission, BEFORE acquiring the inner RR snapshot.
+                // Writers hold FOR SHARE through commit; a read cannot observe a false empty
+                // slice while an admitted native source transaction is still in flight.
+                // Only the outer RC transaction takes this lock; the RR reader never does.
+                var locked=jdbc.query("SELECT tenant_id FROM crm.int_native_booked_capture WHERE tenant_id=? FOR UPDATE",
+                    rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
+                if(!tenant.equals(locked))throw new IllegalStateException("S1_CAPTURE_GUARD_MISSING");
+            }
             var snapshot=new TransactionTemplate(manager);
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
