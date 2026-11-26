@@ -335,6 +335,9 @@ final class L1ProjectionJourneyEvidence {
         assertThat(l1.lifecycle(tenant,gen)).isEqualTo(new L1ProjectionService.Lifecycle("ACTIVE",1));
         assertThat(l1.route(tenant,calendarVersion,1,from,until).materialized()).isFalse();
         assertThatThrownBy(()->l3.refresh(tenant,gen,PeriodResolver.Code.D,from)).hasMessage("L3_GENERATION_NOT_BUILDING");
+        long otherCalendar=context.getBean(CalendarPolicyService.class).append(foreign,otherTenant,"Etc/UTC",0).version();
+        ActivationJourneyEvidence.qualify(jdbc,manager,l1,l2,l3,dimProof,appender,tenant,otherTenant,
+            gen,activated,calendarVersion,otherCalendar,from,until,g.zone(),order);
         selectorPlans(jdbc,manager,tenant);
     }
     /** Bounded selector-only experiment, not end-to-end apply throughput. */

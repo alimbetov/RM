@@ -484,4 +484,32 @@ BEGIN
  END;
 END $$;
 RESET ROLE;
+
+-- B4.6: no existing runtime, worker, proof, observer or feature role may change activation.
+DO $$
+DECLARE role_name text; relation_name text;
+BEGIN
+ FOREACH role_name IN ARRAY ARRAY['rm_runtime_gate','rm_int_worker_gate','rm_dim_proof_gate','rm_observer_gate','rm_feature_store_gate'] LOOP
+  FOREACH relation_name IN ARRAY ARRAY['crm.int_active_generation','crm.int_projection_lifecycle'] LOOP
+   IF has_table_privilege(role_name,relation_name,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+    OR has_any_column_privilege(role_name,relation_name,'INSERT,UPDATE')
+   THEN RAISE EXCEPTION 'ACTIVATION_ROLE_EXCESSIVE_PRIVILEGE: % %',role_name,relation_name; END IF;
+  END LOOP;
+ END LOOP;
+END $$;
+SET LOCAL ROLE rm_runtime_gate;
+DO $$
+BEGIN
+ BEGIN
+  UPDATE crm.int_projection_lifecycle SET lifecycle_state='ACTIVE',revision=1;
+  RAISE EXCEPTION 'RUNTIME_ACTIVATION_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM crm.int_active_generation;
+  RAISE EXCEPTION 'RUNTIME_POINTER_DELETE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $$;
+RESET ROLE;
 ROLLBACK;

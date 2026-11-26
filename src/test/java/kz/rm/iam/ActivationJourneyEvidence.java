@@ -1,0 +1,138 @@
+package kz.rm.iam;
+
+import kz.rm.intelligence.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.time.*;
+import java.sql.Timestamp;
+import java.util.*;
+import java.util.concurrent.*;
+import static org.assertj.core.api.Assertions.*;
+
+final class ActivationJourneyEvidence {
+    private static MultidimensionalCoverageService.Proof prepare(L1ProjectionService l1,L2ProjectionService l2,
+            L3RollupService l3,MultidimensionalCoverageService coverage,UUID t,UUID g,long calendar,
+            LocalDate from,LocalDate until,ZoneId zone){
+        l1.open(t,g,calendar,from,until);
+        l1.advance(t,g,500);l2.open(t,g);l2.advance(t,g,500);
+        for(var code:PeriodResolver.Code.values()){
+            LocalDate cursor=from;
+            while(cursor.isBefore(until)){
+                var period=PeriodResolver.resolve(code,cursor,new PeriodResolver.Policy(zone,calendar));
+                LocalDate a=period.startInclusive().atZone(zone).toLocalDate(),b=period.endExclusive().atZone(zone).toLocalDate();
+                if(!a.isBefore(from)&&!b.isAfter(until))l3.refresh(t,g,code,cursor);
+                cursor=b;
+            }
+        }
+        var proof=coverage.prove(t,g);assertThat(proof.parity()).isTrue();return proof;
+    }
+    private static UUID pointer(JdbcTemplate jdbc,UUID tenant){
+        return jdbc.query("SELECT generation_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",
+            rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
+    }
+    private static long cells(JdbcTemplate jdbc,UUID tenant,UUID gen){
+        return jdbc.queryForObject("SELECT count(*) FROM crm.int_l3_cell WHERE tenant_id=? AND generation_id=?",Long.class,tenant,gen);
+    }
+    private static void await(CountDownLatch l){
+        try{if(!l.await(20,TimeUnit.SECONDS))throw new AssertionError("ACTIVATION_LATCH_TIMEOUT");}
+        catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+    }
+    static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,L1ProjectionService l1,L2ProjectionService l2,
+            L3RollupService l3,MultidimensionalCoverageService coverage,CanonicalFactAppender appender,
+            UUID tenant,UUID otherTenant,UUID first,MultidimensionalCoverageService.Activation firstActivation,
+            long calendar,long otherCalendar,LocalDate from,LocalDate until,ZoneId zone,UUID order){
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID(),foreign=UUID.randomUUID();
+        var pa=prepare(l1,l2,l3,coverage,tenant,a,calendar,from,until,zone);
+        var pb=prepare(l1,l2,l3,coverage,tenant,b,calendar,from,until,zone);
+        var pf=prepare(l1,l2,l3,coverage,otherTenant,foreign,otherCalendar,from,until,ZoneId.of("Etc/UTC"));
+        long originalCells=cells(jdbc,tenant,first);
+        // Fail after lifecycle switch and proof insertion, before pointer commit.
+        String fault="activation_fault_"+a.toString().replace("-","");
+        jdbc.execute("CREATE FUNCTION crm."+fault+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='"
+            +tenant+"'::uuid AND NEW.generation_id='"+a+"'::uuid THEN RAISE EXCEPTION 'ACTIVATION_TEST_FAULT'; END IF; RETURN NEW; END; $$");
+        jdbc.execute("CREATE TRIGGER "+fault+" BEFORE INSERT ON crm.int_active_generation FOR EACH ROW EXECUTE FUNCTION crm."+fault+"()");
+        try{
+            assertThatThrownBy(()->coverage.activate(tenant,a,pa.id(),first)).isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasStackTraceContaining("ACTIVATION_TEST_FAULT");
+            assertThat(pointer(jdbc,tenant)).isEqualTo(first);
+            assertThat(l1.lifecycle(tenant,first)).isEqualTo(new L1ProjectionService.Lifecycle("ACTIVE",1));
+            assertThat(l1.lifecycle(tenant,a)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+            assertThat(coverage.status(tenant,a,pa.id())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_dim_coverage_proof WHERE tenant_id=? AND generation_id=? AND lifecycle_revision=1",Long.class,tenant,a)).isZero();
+        }finally{
+            jdbc.execute("DROP TRIGGER "+fault+" ON crm.int_active_generation");
+            jdbc.execute("DROP FUNCTION crm."+fault+"()");
+        }
+        var pool=Executors.newFixedThreadPool(3);
+        try{
+            // Hold tenant A lock while B activates; B must finish before A releases.
+            var held=new CountDownLatch(1);var release=new CountDownLatch(1);
+            var lock=pool.submit(()->new TransactionTemplate(manager).executeWithoutResult(s->{
+                jdbc.queryForObject("SELECT id FROM public.iam_workspace WHERE id=? FOR UPDATE",UUID.class,tenant);
+                held.countDown();await(release);
+            }));
+            try{
+                await(held);
+                var independent=pool.submit(()->coverage.activate(otherTenant,foreign,pf.id(),null));
+                assertThat(independent.get(15,TimeUnit.SECONDS).generation()).isEqualTo(foreign);
+            }finally{release.countDown();}
+            lock.get(30,TimeUnit.SECONDS);
+            assertThat(pointer(jdbc,tenant)).isEqualTo(first);
+            assertThat(pointer(jdbc,otherTenant)).isEqualTo(foreign);
+            // Two qualified replacements with the SAME expected predecessor: one winner.
+            var start=new CyclicBarrier(2);
+            var x=pool.submit(()->{start.await(15,TimeUnit.SECONDS);return compete(coverage,tenant,a,pa.id(),first);});
+            var y=pool.submit(()->{start.await(15,TimeUnit.SECONDS);return compete(coverage,tenant,b,pb.id(),first);});
+            var results=List.of(x.get(120,TimeUnit.SECONDS),y.get(120,TimeUnit.SECONDS));
+            assertThat(results).containsExactlyInAnyOrder("ACTIVE","INT_ACTIVATION_POINTER_CONFLICT");
+            UUID winner=pointer(jdbc,tenant),loser=winner.equals(a)?b:a;
+            assertThat(winner).isIn(a,b);
+            assertThat(l1.lifecycle(tenant,first)).isEqualTo(new L1ProjectionService.Lifecycle("RETIRED",2));
+            assertThat(l1.lifecycle(tenant,loser)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+            assertThat(cells(jdbc,tenant,first)).isEqualTo(originalCells);
+            assertThat(pointer(jdbc,otherTenant)).isEqualTo(foreign);
+            // Late owner event holds FK key-share until commit. Activation must see
+            // the newly committed revision, not the proof from before this event.
+            var sourceWritten=new CountDownLatch(1);var commitSource=new CountDownLatch(1);
+            UUID late=UUID.randomUUID();
+            var source=pool.submit(()->new TransactionTemplate(manager).executeWithoutResult(s->{
+                jdbc.update("INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at) VALUES (?,?,?,'PLACED',?)",
+                    tenant,late,order,Timestamp.from(from.minusDays(5).atStartOfDay(ZoneOffset.UTC).toInstant()));
+                appender.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,late));
+                sourceWritten.countDown();await(commitSource);
+            }));
+            try{
+                await(sourceWritten);
+                UUID proof=loser.equals(a)?pa.id():pb.id();
+                var attempt=pool.submit(()->compete(coverage,tenant,loser,proof,winner));
+                // Observe an actual PostgreSQL lock wait, not a sleep-based assumption.
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+                boolean blocked=false;
+                while(System.nanoTime()<deadline){
+                    blocked=Boolean.TRUE.equals(jdbc.queryForObject("""
+                        SELECT EXISTS(SELECT 1 FROM pg_stat_activity
+                        WHERE pid<>pg_backend_pid() AND wait_event_type='Lock'
+                          AND query LIKE '%iam_workspace%' AND query LIKE '%FOR UPDATE%'
+                          AND cardinality(pg_blocking_pids(pid))>0)
+                        """,Boolean.class));
+                    if(blocked)break;
+                    Thread.sleep(25);
+                }
+                assertThat(blocked).as("activation waits behind committed-source fence").isTrue();
+                commitSource.countDown();source.get(30,TimeUnit.SECONDS);
+                assertThat(attempt.get(120,TimeUnit.SECONDS)).isEqualTo("INT_ACTIVATION_PROOF_NOT_CURRENT");
+                assertThat(pointer(jdbc,tenant)).isEqualTo(winner);
+                assertThat(l1.lifecycle(tenant,loser)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+                UUID activeProof=jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,tenant);
+                assertThat(coverage.status(tenant,winner,activeProof)).isEqualTo(MultidimensionalCoverageService.Status.STALE);
+                assertThat(coverage.status(otherTenant,foreign,jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,otherTenant))).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+            }finally{commitSource.countDown();}
+        }catch(Exception e){throw new AssertionError("B4_ACTIVATION_JOURNEY",e);}
+        finally{pool.shutdownNow();}
+    }
+    private static String compete(MultidimensionalCoverageService coverage,UUID t,UUID g,UUID p,UUID previous){
+        try{coverage.activate(t,g,p,previous);return "ACTIVE";}
+        catch(IllegalStateException e){return e.getMessage();}
+    }
+}
