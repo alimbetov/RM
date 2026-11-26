@@ -433,6 +433,32 @@ class BusMvpServiceJourneyQualificationTest {
                 kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,otherB55Calendar,
                 kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,null,List.of(),null);
             ConclusionConcurrencyEvidence.twoTenants(b55,staff,tenant,qA,otherStaff,otherTenant,qB,days);
+            var history=applicationContext.getBean(kz.rm.intelligence.HistoricalCoverageService.class);
+            var month=java.time.YearMonth.from(jdbc.queryForObject("SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED'",java.sql.Timestamp.class,tenant,orderId).toInstant().atZone(java.time.ZoneOffset.UTC));
+            var required=List.of(new kz.rm.intelligence.HistoricalCoverageService.RequiredMonth(month.minusMonths(1),
+                kz.rm.intelligence.HistoricalCoverageService.Role.BASELINE),
+                new kz.rm.intelligence.HistoricalCoverageService.RequiredMonth(month,kz.rm.intelligence.HistoricalCoverageService.Role.TARGET));
+            var historyA=history.inspectBookedOrders(staff,tenant,b55Calendar,required);
+            var historyB=history.inspectBookedOrders(otherStaff,otherTenant,otherB55Calendar,required);
+            assertThat(historyA.manifest().tenant()).isEqualTo(tenant);
+            assertThat(historyB.manifest().tenant()).isEqualTo(otherTenant);
+            assertThat(historyA.qualified()).isZero();assertThat(historyB.qualified()).isZero();
+            assertThat(historyA.intervals().getLast().source().distinctValidOrders()).isEqualTo(2);
+            assertThat(historyA.intervals().getLast().source().missingFacts()).isZero();
+            assertThat(historyA.intervals().getLast().value()).isEqualByComparingTo("2");
+            assertThat(historyA.intervals().getLast().quality()).isEqualTo(kz.rm.intelligence.DataQuality.PARTIAL);
+            assertThat(historyB.intervals()).allSatisfy(e->{assertThat(e.source().ownerEvents()).isZero();assertThat(e.value()).isNull();});
+            var longHistory=java.util.stream.IntStream.range(0,25).mapToObj(i->
+                new kz.rm.intelligence.HistoricalCoverageService.RequiredMonth(month.minusMonths(i),
+                    i<12?kz.rm.intelligence.HistoricalCoverageService.Role.TARGET:kz.rm.intelligence.HistoricalCoverageService.Role.BASELINE)).toList();
+            var bounded=history.inspectBookedOrders(staff,tenant,b55Calendar,longHistory);
+            assertThat(bounded.required()).isEqualTo(25);assertThat(bounded.qualified()).isZero();
+            assertThat(bounded.intervals().getFirst().value()).isNull();
+            assertThat(history.inspectBookedOrders(staff,tenant,b55Calendar,List.of()).coverageRatio()).isNull();
+            assertThatThrownBy(()->history.inspectBookedOrders(otherStaff,tenant,b55Calendar,required)).isInstanceOf(SecurityException.class);
+            roles.revoke(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
+            try{assertThatThrownBy(()->history.inspectBookedOrders(staff,tenant,b55Calendar,required)).isInstanceOf(SecurityException.class);}
+            finally{roles.grant(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);}
             assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))
                 .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
             assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))

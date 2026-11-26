@@ -248,6 +248,30 @@
     {
       "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
       "name": "missingAndOpenPeriodHaveExplicitReasons"
+    },
+    {
+      "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
+      "name": "fourHistoricalProfilesHaveExactRequiredCoverage"
+    },
+    {
+      "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
+      "name": "emptySourceIsNotZeroWithoutOwnerAuthority"
+    },
+    {
+      "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
+      "name": "sourceParityAloneCannotPromoteReady"
+    },
+    {
+      "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
+      "name": "lateRevisionAndForeignProofAreNeverReusable"
+    },
+    {
+      "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
+      "name": "requiredGapAndOptionalMonthAreDistinct"
+    },
+    {
+      "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
+      "name": "boundaryAndOpenPeriodRemainUnqualified"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
