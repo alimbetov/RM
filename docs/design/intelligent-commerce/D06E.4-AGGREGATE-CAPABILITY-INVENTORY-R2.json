@@ -1,0 +1,348 @@
+{
+  "schema": "RM-AGGREGATE-CAPABILITY-INVENTORY/v1",
+  "source_sha": "a6bf99107aa64f4eb255b4997ef9417748b05607",
+  "design_parent_sha": "cd0d6e186b2078f828b9b175b6d105ae6cf38e09",
+  "status": "SOURCE_AUDIT_DESIGN_ONLY",
+  "runtime_tests_executed": false,
+  "implementation_admission": false,
+  "counts": {
+    "authorized_analytical_codes": 12,
+    "owner_registry_codes": 8,
+    "l1_materialized_codes": 7,
+    "literal_base_codes": 20,
+    "operator_codes": 11,
+    "aggregate_candidates": 22,
+    "unique_semantic_metrics": null
+  },
+  "analytical": [
+    {
+      "code": "BOOKED_ORDERS",
+      "route": "L3+membership",
+      "formula": "BOOKED order_id distinct",
+      "unit": "COUNT",
+      "scope": "T/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "FULFILLED_PRODUCT_ORDERS",
+      "route": "L3+membership",
+      "formula": "FULFILLED PRODUCT order_id distinct",
+      "unit": "COUNT",
+      "scope": "T/R/W/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "BOOKED_SKUS",
+      "route": "L3",
+      "formula": "BOOKED sku_id distinct; no null identities",
+      "unit": "COUNT",
+      "scope": "T/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "BOOKED_LINES",
+      "route": "L3+L2",
+      "formula": "BOOKED line_id distinct",
+      "unit": "COUNT",
+      "scope": "T/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "FULFILLED_LINES",
+      "route": "L3+L2",
+      "formula": "FULFILLED line_id distinct",
+      "unit": "COUNT",
+      "scope": "T/R/W/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "FULFILLED_SKUS",
+      "route": "L3",
+      "formula": "FULFILLED sku_id distinct",
+      "unit": "COUNT",
+      "scope": "T/R/W/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "BOOKED_AMOUNT",
+      "route": "L3",
+      "formula": "BOOKED sum(amount): line quantity × snapshot price",
+      "unit": "CURRENCY",
+      "scope": "T/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "FULFILLED_AMOUNT",
+      "route": "L3",
+      "formula": "FULFILLED sum(amount): fulfillment movement quantity × snapshot price",
+      "unit": "CURRENCY",
+      "scope": "T/R/W/G/K",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "BOOKED_PRODUCT_UNITS",
+      "route": "L3",
+      "formula": "BOOKED PRODUCT sum(product_order_units)",
+      "unit": "ORDER_UNITS",
+      "scope": "T/G/K compatible UOM",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "FULFILLED_PRODUCT_UNITS",
+      "route": "L3",
+      "formula": "FULFILLED PRODUCT sum(product_order_units)",
+      "unit": "ORDER_UNITS",
+      "scope": "T/R/W/G/K compatible UOM",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "STOCK_IN",
+      "route": "L3",
+      "formula": "STOCK sum(qty_in)",
+      "unit": "SKU_QUANTITY",
+      "scope": "T/R/W/G/K; K mandatory",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "STOCK_OUT",
+      "route": "L3",
+      "formula": "STOCK sum(qty_out)",
+      "unit": "SKU_QUANTITY",
+      "scope": "T/R/W/G/K; K mandatory",
+      "status": "SOURCE_IMPLEMENTED_HISTORICAL_PARTIAL"
+    }
+  ],
+  "owner": [
+    {
+      "code": "PLACED_ORDERS",
+      "formula": "distinct eligible PLACED order identity",
+      "scope": "T",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "CONFIRMED_ORDERS",
+      "formula": "distinct eligible CONFIRMED order identity",
+      "scope": "T",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "FULFILLED_ORDERS",
+      "formula": "distinct eligible COMPLETED order identity; not product-only",
+      "scope": "T",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "CANCELLED_ORDERS",
+      "formula": "distinct eligible CANCELLED order identity",
+      "scope": "T",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "BOOKED_ORDER_AMOUNT",
+      "formula": "PLACED order-header total_amount by currency",
+      "scope": "T/currency",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "STOCK_IN_QTY",
+      "formula": "positive recorded stock movement sum",
+      "scope": "W/K",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "STOCK_OUT_QTY",
+      "formula": "absolute negative recorded stock movement sum",
+      "scope": "W/K",
+      "status": "L1_MATERIALIZED_OWNER_READ_HISTORICAL_PARTIAL"
+    },
+    {
+      "code": "CURRENT_AVAILABLE",
+      "formula": "on_hand-reserved",
+      "scope": "W/K",
+      "status": "LIVE_OWNER_READ_ONLY"
+    }
+  ],
+  "operators": [
+    {
+      "code": "AVG",
+      "formula": "arithmetic mean",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "SMA",
+      "formula": "arithmetic mean of selected window",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "PERIOD_CHANGE",
+      "formula": "last minus penultimate",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "PERIOD_GROWTH",
+      "formula": "change / positive penultimate",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "TREND",
+      "formula": "OLS slope per period ordinal",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "STDDEV_POP",
+      "formula": "population standard deviation",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "CV",
+      "formula": "population SD / positive mean",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "MIN",
+      "formula": "minimum",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "MAX",
+      "formula": "maximum",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "EMA",
+      "formula": "alpha=2/(n+1), first value seed",
+      "status": "IMPLEMENTED_KERNEL_QUALIFIED_INPUT_REQUIRED"
+    },
+    {
+      "code": "FORECAST_NEXT",
+      "formula": "mean alias in kernel; forecast publication HOLD",
+      "status": "IMPLEMENTED_KERNEL_PUBLICATION_HOLD"
+    }
+  ],
+  "candidates": [
+    {
+      "code": "MOM_RATIO",
+      "formula": "PERIOD_GROWTH on adjacent qualified months",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "YOY_RATIO",
+      "formula": "(target-prior-year)/positive prior-year; sparse interval gate",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "YOY_DELTA_ABS",
+      "formula": "target-prior-year; sparse interval gate",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "SHARE",
+      "formula": "child amount / positive compatible parent amount; additive partition",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "SHARE_DELTA_PP",
+      "formula": "100 × change in qualified share",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "CONTRIBUTION",
+      "formula": "child current-prior additive delta; reconciled partition",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "NET_STOCK_MOVEMENT",
+      "formula": "STOCK_IN-STOCK_OUT; compatible SKU/UOM; not balance",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "GROSS_STOCK_MOVEMENT",
+      "formula": "STOCK_IN+STOCK_OUT; compatible SKU/UOM",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "BOOKED_AMOUNT_PER_ORDER",
+      "formula": "booked line amount / distinct orders in same scope and currency; not header average by default",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "FULFILLED_AMOUNT_PER_PRODUCT_ORDER",
+      "formula": "only PRODUCT-filtered amount / fulfilled product order count; current amount code may include different population; requires matching numerator",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "BOOKED_LINES_PER_ORDER",
+      "formula": "same booked scope distinct lines / distinct orders",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "FULFILLED_LINES_PER_ORDER",
+      "formula": "same PRODUCT-filtered population if using product order denominator; otherwise compatible denominator required",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "BOOKED_UNIT_PRICE_WEIGHTED",
+      "formula": "PRODUCT-filtered booked amount / compatible SKU quantity, same currency and population",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "FULFILLED_UNIT_PRICE_WEIGHTED",
+      "formula": "PRODUCT-filtered fulfilled amount / compatible SKU quantity, same currency and population",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "STOCK_MOVEMENT_COUNT",
+      "formula": "L2 distinct movement_id on STOCK; new bounded authorized read, not L3 count",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "STOCK_IN_MOVEMENT_COUNT",
+      "formula": "L2 distinct movement_id with qty_in>0",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "STOCK_OUT_MOVEMENT_COUNT",
+      "formula": "L2 distinct movement_id with qty_out>0",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "ACTIVE_STOCK_SKUS",
+      "formula": "L3 distinct SKU on STOCK; movement activity not available assortment",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "ACTIVE_WAREHOUSES",
+      "formula": "L3 distinct warehouse_id within eligible stream and scope; activity not directory count",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "ORDER_STATUS_PERIOD_RATIO",
+      "formula": "L1 event-period counts ratio; label throughput only, not cohort conversion",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "ORDER_COHORT_STATUS_RATIO",
+      "formula": "L1 sales contribution identity intersection with explicit cohort and cutoff; separate method qualification",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    },
+    {
+      "code": "ORDER_STATUS_ELAPSED",
+      "formula": "L1 dates only day-grain difference on matching order; precise duration requires owner timestamps",
+      "status": "DESIGN_CANDIDATE_NOT_ADMITTED"
+    }
+  ],
+  "trace": [
+    "CC-01",
+    "CC-02",
+    "CC-03",
+    "CC-04",
+    "CC-05",
+    "CC-09",
+    "CC-12",
+    "UAP-02",
+    "UAP-03",
+    "UAP-06",
+    "UAP-10"
+  ],
+  "freeze": "unchanged"
+}

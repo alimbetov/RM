@@ -184,3 +184,7 @@ RM должна помогать ответить: что происходит, 
 
 ## D06E.2 — Minimal Code Contracts & PRODUCT CONCEPT DESIGN FREEZE (2026-11-26)
 [Итоговый контракт CC-01–12](D06E.2-MINIMAL-CODE-CONTRACTS-QUALIFICATION-R2.md) и [qualification trace](D06E-QUALIFICATION-TRACE-R2.json) фиксируют согласованную продуктовую концепцию D06A–D06E.3, минимальные code contracts, 12 metric passports, synthetic profiles и handoff S0–S6. PRODUCT CONCEPT FROZEN; further functional expansion requires explicit change control. D08 global admission checklist/DEC decisions, source completeness, semantic/city/owner/runtime qualification remain OPEN by slice; no claim of full DESIGN APPROVED or implementation/production admission. Earlier statements that D06E.2 is outstanding are superseded by this section. Existing normative DAG, B4 FREEZE, MIC and Radar resumption unchanged. Next technical priority B5.5.
+
+
+## D06E.4 — Aggregate Capability Inventory (2026-11-26)
+[Source audit and metric registration](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.md) / [machine-readable inventory](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json): 12 B4.8 pilot codes, 8 owner registry codes (7 materialized L1), 11 existing numerical operator codes, 22 proposed aggregate-derived candidates. 20 literal base codes are not 20 certified unique metrics. 12 is a pilot, not ceiling; no new runtime scope or automatic admission. Historical completeness, city, semantic crosswalk and bulk qualification remain OPEN. Product concept/B4 FREEZE, DAG, MIC, separate Radar admission and Production HOLD unchanged.
