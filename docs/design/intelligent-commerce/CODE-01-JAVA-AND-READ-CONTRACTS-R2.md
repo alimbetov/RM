@@ -5,7 +5,7 @@ R2.1 · 2026-11-25 · проект для согласования. Исходн
 ## 1. Пакеты и владение зависимостями
 | Этап | Предлагаемый Java-код | Граница ответственности |
 |---|---|---|
-| B1 | kz.rm.intelligence: MetricQueryService, MetricRegistry, PeriodResolver, MetricCalculator. Подпакет dto для неизменяемых контрактов | Реестр, типизированный расчёт, метаданные. A2 решает владение и префикс. Полномочия определяет источник |
+| B1 | kz.rm.intelligence: MetricQueryService, MetricRegistry, PeriodResolver, MetricCalculator. Подпакет dto для неизменяемых контрактов | Реестр, типизированный расчёт, метаданные. INTELLIGENCE registered, int_ prefix; reuse actual types. Полномочия определяет источник |
 | B1, C1 | kz.rm.sales: SalesIntelligenceReadPort. kz.rm.crm: Customer360QueryService, CustomerSalesAttributionReader | SALES владеет SQL заказа. CRM владеет проверкой актуальной связи. Композиция получает уже отфильтрованные секции |
 | B1, W1–W3 | kz.rm.inventory: InventoryIntelligenceReadPort, Warehouse360QueryService, InventoryHistoryReconciliation. Pure ABC/XYZ в аналитическом пакете | Остаток и движения читает INVENTORY. Классификация принимает квалифицированные факты и не выполняет SQL |
 | C1 | kz.rm.tasks: CustomerFollowupReadPort | TASK возвращает только видимые задачи и использует текущую семантику timing |
@@ -179,3 +179,6 @@ interface SignalProvider {
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Registry обязан явно задавать aggregation strategy, fact identity, grain, cohort и единицу. Неизвестные комбинации отклонять. SKU count — exact identity union; не count offer_id или warehouse position.
+
+## Final technical reconciliation — 2026-11-26
+Actual base_dev types authoritative: MetricRegistry.Code/Definition; DataQuality READY/PARTIAL/MISSING/STALE/NOT_MEASURABLE; MetricResult(code, methodVersion, basis, evaluatedAt, period, quality, cells, reasons, Coverage); PeriodResolver.Period half-open Instant bounds, zoneId, calendarVersion; AuthorizedAnalyticalReadService.Query/Result and UUID generation/proof. Historical DTO sketches (including OptionalLong generation) superseded, not instructions to duplicate registry/enums. Extend only proven gaps; NOT_APPLICABLE and ticket validity distinct from DataQuality.

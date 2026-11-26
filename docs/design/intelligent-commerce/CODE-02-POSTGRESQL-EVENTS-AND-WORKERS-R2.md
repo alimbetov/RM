@@ -1,5 +1,5 @@
 # CODE-02 · PostgreSQL, проекции и доставка
-R2.1 · 2026-11-25 · проект для согласования. Источники закреплены на [base_dev](https://github.com/alimbetov/RM/tree/f7910269df73564a6b1bf7d8f45bcc2766cc1b32). Документ уточняет D01, D02 и D05. Префиксы int_, evt_ и имя источника очереди ниже условные до согласования DomainModule и ownership на A2.
+R2.1 · 2026-11-25 · проект для согласования. Источники закреплены на [base_dev](https://github.com/alimbetov/RM/tree/f7910269df73564a6b1bf7d8f45bcc2766cc1b32). Документ уточняет D01, D02 и D05. Префиксы int_, evt_ подтверждены DomainModule/A2; worker grants и очередь требуют допуска.
 
 ## 1. Canonical producer B2
 ~~~java
@@ -151,3 +151,6 @@ ScheduleOccurrence содержит tenant, type, subject, ownerRevision, rule r
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Scalar daily counts недостаточны для EXACT_DISTINCT по пересекающимся измерениям. Хранить membership либо эквивалентное точное mergeable состояние; additive measures агрегировать отдельно от membership joins. Независимый proof, revision fence и повторная квалификация обязательны.
+
+## Final technical reconciliation — 2026-11-26
+DomainModule and A2 confirm int_/evt_ prefixes. Actual CanonicalFactAppender/Key/Repository/DeliveryService and int_* L1/L2/L3 DDL take precedence over historical examples. No duplicate feed/ledger/projection. Report DDL int_ prefix; EVT worker permissions remain pending. B4 defect-driven freeze.

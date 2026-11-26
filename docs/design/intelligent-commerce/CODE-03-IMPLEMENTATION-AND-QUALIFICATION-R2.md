@@ -44,3 +44,6 @@ B1 можно опубликовать как pure PeriodResolver + MetricRegist
 
 ## RM-IC-R2 source alignment and roadmap (2026-11-26)
 [Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.
+
+## Final technical reconciliation — 2026-11-26
+B5.4 current baseline. B1–B4 proposed diffs are historical, not restart. S0/B5.5 next: reuse BusinessInterpretationEngine and B5.1–4; evidence binding and safe abstention, S1–S6 per roadmap. Per-slice actual classes/migration IDs/test methods before implementation; no invented PASS.

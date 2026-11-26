@@ -81,3 +81,6 @@ Exit E1 — безопасный preview/permissions/closed DSL; E2 — B2 sourc
 
 ## D06B cross-reference
 [Ночные микроотчёты и оперативные FX-триггеры](D06B-NIGHT-REPORTS-OPERATIONAL-TRIGGERS-R2.md) используют существующий EVT после квалификации; не вводят второй event bus и не разрешают автоматические команды в обход owner gates.
+
+## Final technical reconciliation — 2026-11-26
+A2 approved PLACED first, typed DSL, PG outbox, in-app/mock, immutable rule revision; versioned deadline invalidation, expired-window no-send. Catch-up and real external delivery gated. EVT registered; management grants/worker identity/lock order/quotas/dedup retention need actual evidence.

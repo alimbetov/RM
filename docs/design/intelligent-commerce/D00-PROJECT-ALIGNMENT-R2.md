@@ -15,7 +15,7 @@
 ## 2. Иерархия документов
 [Charter](README.md), [Master R1.1](../../spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md), [DAG R1.1](../../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md), Platform Standard и доменные контракты остаются нормативными. R2 конкретизирует проект и содержит предложения; не заменяет утверждённые контракты. Новые числовые параметры, схема хранения, grants и методики не становятся утверждёнными от публикации текста.
 
-Сохраняются 22 SRC-группы, 8 основных кандидатов метрик, 32 IE-Q + 48 BV + 8 MC = 88 семейств плановой приёмки, DAG 32 nodes / 48 edges. Это не число выполненных тестов. RAD/CAL, F2R, BSR и owner regressions не прибавляются к 88.
+Сохраняются 22 SRC-группы, 8 основных кандидатов метрик, 32 IE-Q + 48 BV + 8 MC = 88 семейств плановой приёмки, historical DAG R1.1 32 nodes / 48 edges (current R1.2: 33/54). Это не число выполненных тестов. RAD/CAL, F2R, BSR и owner regressions не прибавляются к 88.
 
 ## 3. Проверенные связи с кодом
 Все ссылки ниже закреплены за проверенным base_dev SHA.
@@ -59,3 +59,6 @@ Q0/Q1 не закрыты этим документом. Условие verified
 ## 6. Повторная сверка перед сохранением
 Во время проектирования base_dev продвинулся до `d1019e6acdb04a5c9a03da79d0f9232649723ead` ещё на два коммита. Проверен compare от `d9242e539a07ef1843c0e72aba9c651204bf42ae`: изменены RET04 E6C verifier/self-tests/global verifier, CORE evidence JSON, VerifiedBuyerEmailFixture, QrWarehouseHandoverQualificationTest; добавлен [CORE-RET-04 E7A review](https://github.com/alimbetov/RM/blob/d1019e6acdb04a5c9a03da79d0f9232649723ead/docs/reviews/RM-BSR-CORE-RET-04-E7A-NORMATIVE-REVIEW.md). Изменений src/main и производственного DDL в этом delta нет.
 Поэтому семантический анализ сохраняет закреплённый source SHA; test reuse ссылки указывают именно на него. Новые E7A доказательства не объявляются выполненными этим R2. Review отдельно оставляет OPEN asymmetric A/B/AB grants, inactive workspace и variant manifest/independent sign-off. Эти варианты обязательны в R2-S14/S16/S37. CI snapshot §1 относится только к старому SHA и не описывает статус нового HEAD. Перед runtime admission снова проверить актуальный HEAD/CI.
+
+## Final technical reconciliation — 2026-11-26
+Current implementation authority exclusively base_dev @ a6bf99107aa64f4eb255b4997ef9417748b05607. Earlier links and test observations are historical, not current gaps. DomainModule registers 17 contexts including INTELLIGENCE/int/kz.rm.intelligence and EVT/evt/kz.rm.evt. DomainPermission lacks specialized INT/EVT management grants. A2 all 15 original decisions owner-approved, A3-DEV approved, A3-QUAL pending. Operative DAG R1.2 33 nodes/54 edges, S0–S6 roadmap, no restart B1–B4.

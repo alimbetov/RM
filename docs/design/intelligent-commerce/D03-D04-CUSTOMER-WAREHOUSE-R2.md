@@ -79,3 +79,6 @@ C1 после B1: direct Customer reads; W1 после B1: live Warehouse. C2/W2
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Customer/order/SKU counts — exact union. Warehouse position = tenant + warehouse + SKU; ассортимент не равен количеству позиций или единиц. ABC/XYZ пересчитываются из исходной статистики; booked/fulfilled/stock quantities разделены.
+
+## Final technical reconciliation — 2026-11-26
+A2 approved W3 methods: tenant+one currency booked line snapshots, no warehouse attribution; ABC 80/95/100 cumulativeBefore stable key; XYZ population CV on 12 completed weekly fulfilled-quantity buckets, X ≤10%, Y ≤25%, Z >25%, UNKNOWN incomplete/zero mean. Not W3 runtime PASS; alternative methodology versioned change control.

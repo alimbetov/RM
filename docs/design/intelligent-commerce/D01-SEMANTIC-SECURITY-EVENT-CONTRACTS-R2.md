@@ -9,8 +9,8 @@ R2.0-draft · 2026-11-25 · SPECIFIED / PROPOSED. Source SHA: d9242e539a07ef1843
 | Остаток, резерв, движение, карантин | INVENTORY | Оперативный read и воспроизводимый исторический расчёт |
 | CRM-клиент, связь покупателя, взаимодействие, договор | CRM + IAM для аккаунта | Current-link attribution, разрешённые секции |
 | Timing задачи | TASK | Авторитетный timing projection и доступность задачи |
-| Методика и производные проекции | Analytical ownership ADR OPEN | Изолированное хранение производных данных, rebuild |
-| Правило, intent, delivery receipt | EVT ownership ADR OPEN | Уведомление без business command |
+| Методика и производные проекции | INTELLIGENCE registered (int); runtime grant admission pending | Изолированное хранение производных данных, rebuild |
+| Правило, intent, delivery receipt | EVT registered (evt); runtime grant admission pending | Уведомление без business command |
 
 Derived storage не пишет напрямую в таблицы других владельцев. Любое будущее действие проходит их сервис и актуальную проверку состояния. PostgreSQL — authority для durable events/receipts. Redis, дополнительные сервисы, FIN runtime и partitioning не вводятся данным ТЗ.
 
@@ -82,3 +82,6 @@ Current-link Customer 360 не заявляет историческую при�
 Rebuild: новая generation → bounded backfill/live catch-up → independent parity → атомарный switch активной generation. Reader не смешивает поколения; cursor закрепляет generation либо отклоняется. Старое поколение сохраняется на утверждённое окно rollback; возврат допустим только при доказанной актуальности либо с STALE, не скрытой потерей late facts.
 
 PII не включать в generic envelope, logs или шаблоны. Retention задаётся отдельно для фактов, derived rows, receipts, schedules, audit. Удаление dedup receipts до конца replay horizon создаёт повторы: сроки должны быть совместно доказаны; физическое удаление или бессрочное хранение здесь не утверждены.
+
+## Final technical reconciliation — 2026-11-26
+A2 source approval [15 decisions](https://github.com/alimbetov/RM/blob/a6bf99107aa64f4eb255b4997ef9417748b05607/docs/reviews/RM-IE-00B-R2-A2-CONTRACTS.json). Current confirmed buyer link, independent CRM_READ and SALES_ORDER_READ, active warehouse assignment; manager exception DEFERRED. No worker may mint VerifiedActor. Report/EVT grants and service identity separately admitted. Domain registration not runtime authorization.

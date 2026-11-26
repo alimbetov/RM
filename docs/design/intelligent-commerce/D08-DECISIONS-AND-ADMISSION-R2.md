@@ -12,19 +12,19 @@ PRODUCT CONCEPT FROZEN · GLOBAL DESIGN/IMPLEMENTATION ADMISSION OPEN · PRODUCT
 | DEC-R2-02 / D-01 | Версионированная tenant IANA zone, запрет system default, новая версия при смене | Ограничить первый tenant явно выбранной zone, не объявлять universal policy | A2/B1 |
 | DEC-R2-03 / D-01 | 8 исходных owner-паспортов D02; актуальный каталог D06E.4, 12 pilot codes не предел; monetary refunds/paid/margin заблокированы | Расширение после qualified finance source и CR | A2/A3 |
 | DEC-R2-04 / D-02 | Current-link attribution; current fence перед aggregate/detail | Historical identity model требует отдельного consent/privacy contract | A2/C1 |
-| DEC-R2-05 / D-02,D-06 | Assigned warehouse read и explicit manager scope, отдельная policy | Tenant-wide read нельзя молча раздать всем warehouse workers | A2/W1 |
+| DEC-R2-05 / D-02,D-06 | Assigned warehouse read; manager exception DEFERRED | Tenant-wide read нельзя молча раздать всем warehouse workers | A2/W1 |
 | DEC-R2-06 / D-03 | Первый ABC tenant+currency по booked line snapshots; warehouse dimension пока blocked | Fulfilled-warehouse ABC требует отдельного basis/attribution | A2/W3 |
-| DEC-R2-07 / D-03 | ABC candidate 80/95 по cumulativeBefore, stable-key tie break | Group ties меняет boundary; нужны иные expected results | W3 до qualification |
-| DEC-R2-08 / D-03 | XYZ population CV по fulfilled quantity, completed weekly buckets; candidate 12,10%,25% | Booked demand, иной horizon/seasonality дают другую методику | W3 до implementation |
+| DEC-R2-07 / D-03 | ABC approved 80/95/100 по cumulativeBefore, stable-key tie break | Group ties меняет boundary; нужны иные expected results | W3 до qualification |
+| DEC-R2-08 / D-03 | XYZ population CV по fulfilled quantity, completed weekly buckets; approved 12 weekly buckets, X ≤10%, Y ≤25%, Z >25% | Booked demand, иной horizon/seasonality дают другую методику | W3 до implementation |
 | DEC-R2-09 / D-04 | PLACED first, in-app, closed DSL, occurrence binding фиксирует rule revision | Historical redelivery при изменении rule — отдельный scope | A2/E1/E2 |
 | DEC-R2-10 / D-04 | Deadline invalidation + expired-window no-send, versioned schedule | Catch-up dispatch требует окна/лимита и отдельного approval | E3 |
 | DEC-R2-11 / D-04,D-06 | Узкий EVT owner/prefix/grants/service identity ADR; переиспользовать IAM fences | Общий admin grant или повторный event bus неприемлемы | A2/B2/E1 |
 | DEC-R2-12 / D-06 | Сначала профили нагрузки, затем budgets; bounded queries/workers | Новые SLO без измерений не заявлять | A2/X1 |
 | DEC-R2-13 / D-02,D-04 | Retention payload/derived/dedup согласовать с replay horizon | Удаление receipts раньше horizon нарушает идемпотентность | A2/E2/B4 |
 | DEC-R2-14 / D-05 | Future Radar один Sales provider, объяснимый rank, abstention при unknown | Multi-domain/ML отдельно после источников и resumption | R-02 |
-| DEC-R2-15 / D-07 | После Q1 определить integration target и сверить drift, сохранить master R1.1 normative до review | Нельзя автоматически merge design по устаревшему baseline | D08/Q1 |
+| DEC-R2-15 / D-07 | base_dev implementation only; design branch not merged; preserve main | Нельзя автоматически merge design по устаревшему baseline | D08/Q1 |
 
-Все DEC-R2-xx OPEN/PROPOSED. Обязательные логические инварианты (no double debit, permission enforcement, no false zero) не являются факультативными бизнес-настройками. Значения ABC/XYZ и новые budgets — именно варианты для согласования.
+Исходные 15 DEC-R2 подтверждены A2 OWNER_APPROVED; runtime и новые расширения отдельно. Обязательные логические инварианты (no double debit, permission enforcement, no false zero) не являются факультативными бизнес-настройками. Значения ABC/XYZ и новые budgets — именно варианты для согласования.
 
 ## 3. Выход проектных итераций
 | Итерация | Артефакт текущего прохода | Что ещё открыто |
@@ -47,7 +47,7 @@ P0 → Q0 exact-SHA required gates → Q1 verified core merge/reconciliation.
 - C1/W1 после B1 и A3; C2/W2 после B4; W3 после W2/B4.
 - E2 после B2/E1; E3 после E2 и deadline decisions.
 - X1 после C2/W3/E3/B4; G1 после X1/P0; далее G2 → G3 → G4.
-Конкретные зависимости всегда [DAG JSON](../../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json), 32 nodes/48 edges; текст не ослабляет внешние gates.
+Конкретные зависимости всегда [DAG JSON](../../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json), R1.2: 33 nodes/54 edges; текст не ослабляет внешние gates.
 Разрешено логическое пересечение независимых работ, не обещание параллельных агентов/новых веток.
 
 ## 5. Design admission checklist
@@ -109,3 +109,24 @@ Design findings P0-01–04 are reconciled in D06E.2/D06E.3/D06E.5/D06E.5.1/D06C 
 
 ## RM-IC-R2 source alignment and roadmap (2026-11-26)
 [Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.
+
+## Final technical reconciliation — 2026-11-26
+Authoritative [A2 source JSON](https://github.com/alimbetov/RM/blob/a6bf99107aa64f4eb255b4997ef9417748b05607/docs/reviews/RM-IE-00B-R2-A2-CONTRACTS.json), approval 2026-11-25; original 15 decisions OWNER_APPROVED, not new R2 reporting or runtime admission. Decision 13 numeric retention candidates, source cleanup deferred; separately approved report staging cleanup does not alter source retention. Decision 15 implementation base_dev, design edits only design/intelligent-commerce-r2. A3-DEV approved; A3-QUAL/G1–G4 pending, global new R2 admission OPEN, Radar/production HOLD.
+
+| Decision | A2 approval | Exact source contract |
+|---|---|---|
+| DEC-R2-01 | OWNER_APPROVED | Sales status occurred_at; stock movement recorded_at; live position gauge |
+| DEC-R2-02 | OWNER_APPROVED | Explicit versioned tenant IANA zone; no implicit default; half-open intervals |
+| DEC-R2-03 | OWNER_APPROVED | Eight D02 metrics; typed Native SQL registry; no paid revenue, margin or monetary refunds |
+| DEC-R2-04 | OWNER_APPROVED | Current confirmed buyer link; CRM_READ and SALES_ORDER_READ independently |
+| DEC-R2-05 | OWNER_APPROVED | INVENTORY_STOCK_READ plus active warehouse assignment; manager exception deferred |
+| DEC-R2-06 | OWNER_APPROVED | ABC booked line snapshots per tenant/currency; warehouse attribution blocked |
+| DEC-R2-07 | OWNER_APPROVED | ABC 80/95/100 using cumulativeBefore and stable key tie break |
+| DEC-R2-08 | OWNER_APPROVED | XYZ population CV on 12 completed weekly fulfilled quantity buckets; X <=10%, Y <=25%, Z >25%; unknown for incomplete/zero mean |
+| DEC-R2-09 | OWNER_APPROVED | PLACED first; typed DSL, PostgreSQL outbox, in-app/mock, immutable rule revision |
+| DEC-R2-10 | OWNER_APPROVED | Versioned deadline schedule, invalidation and expired-window no-send |
+| DEC-R2-11 | OWNER_APPROVED | INT/EVT modular monolith, int_/evt_ prefixes; explicit grants and worker identity review |
+| DEC-R2-12 | OWNER_APPROVED | L0 native SQL then L1 daily and L2 rollups; measured workloads before budgets |
+| DEC-R2-13 | OWNER_APPROVED | Separate retention; daily 36 months, monthly 60 months, notification/log 90 days and retired generation 7 days candidate values; dedup >= replay horizon; automatic cleanup deferred |
+| DEC-R2-14 | OWNER_APPROVED | Radar SignalProvider contract; implementation deferred until separate admission |
+| DEC-R2-15 | OWNER_APPROVED | base_dev only; no design branch merge; preserve main |
