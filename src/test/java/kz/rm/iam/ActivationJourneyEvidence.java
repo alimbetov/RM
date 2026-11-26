@@ -41,7 +41,12 @@ final class ActivationJourneyEvidence {
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,L1ProjectionService l1,L2ProjectionService l2,
             L3RollupService l3,MultidimensionalCoverageService coverage,CanonicalFactAppender appender,
             UUID tenant,UUID otherTenant,UUID first,MultidimensionalCoverageService.Activation firstActivation,
-            long calendar,long otherCalendar,LocalDate from,LocalDate until,ZoneId zone,UUID order){
+            long calendar,long otherCalendar,LocalDate from,LocalDate until,ZoneId zone,UUID order,
+            AuthorizedAnalyticalReadService reader,VerifiedActor staff,AuthorizedAnalyticalReadService.Query stockQuery){
+        // Select a definitely closed daily interval within the generation.
+        var readQuery=new AuthorizedAnalyticalReadService.Query(stockQuery.metric(),calendar,PeriodResolver.Code.D,
+            from,stockQuery.region(),stockQuery.group(),stockQuery.sku(),stockQuery.warehouses(),stockQuery.currency());
+        assertThat(reader.read(staff,tenant,readQuery).route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),foreign=UUID.randomUUID();
         var pa=prepare(l1,l2,l3,coverage,tenant,a,calendar,from,until,zone);
         var pb=prepare(l1,l2,l3,coverage,tenant,b,calendar,from,until,zone);
@@ -127,6 +132,10 @@ final class ActivationJourneyEvidence {
                 UUID activeProof=jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,tenant);
                 assertThat(coverage.status(tenant,winner,activeProof)).isEqualTo(MultidimensionalCoverageService.Status.STALE);
                 assertThat(coverage.status(otherTenant,foreign,jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,otherTenant))).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+                var fallback=reader.read(staff,tenant,readQuery);
+                assertThat(fallback.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
+                assertThat(fallback.reason()).isEqualTo("PROOF_STALE");
+                assertThat(fallback.generation()).isNull();assertThat(fallback.proof()).isNull();
                 // B4.7: rebuild from a fresh generation, interrupt after a committed
                 // bounded step, then resume with a new service instance.
                 UUID rebuild=UUID.randomUUID();
@@ -217,7 +226,25 @@ final class ActivationJourneyEvidence {
                 System.out.printf("B4.7 rebuild fixture elapsedMs=%.3f facts=%d cells=%d%n",
                     (System.nanoTime()-rebuildStarted)/1_000_000.0,
                     delivery.consumerCoverage(tenant,"l2:"+rebuild).facts(),cells(jdbc,tenant,rebuild));
-                var recovered=coverage.activate(tenant,rebuild,replay.proof(),winner);
+                var beforeSwitch=reader.read(staff,tenant,readQuery);
+                assertThat(beforeSwitch.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
+                var switchBarrier=new CyclicBarrier(2);
+                var switching=pool.submit(()->{switchBarrier.await(15,TimeUnit.SECONDS);return coverage.activate(tenant,rebuild,replay.proof(),winner);});
+                var reading=pool.submit(()->{switchBarrier.await(15,TimeUnit.SECONDS);return reader.read(staff,tenant,readQuery);});
+                var recovered=switching.get(120,TimeUnit.SECONDS);
+                var concurrentRead=reading.get(120,TimeUnit.SECONDS);
+                if(concurrentRead.route()==AuthorizedAnalyticalReadService.Route.L3){
+                    assertThat(concurrentRead.generation()).isEqualTo(rebuild);
+                    assertThat(concurrentRead.proof()).isEqualTo(recovered.activeProof());
+                }else assertThat(concurrentRead.generation()).isNull();
+                var afterSwitch=reader.read(staff,tenant,readQuery);
+                assertThat(afterSwitch.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
+                assertThat(afterSwitch.generation()).isEqualTo(rebuild);
+                assertThat(afterSwitch.proof()).isEqualTo(recovered.activeProof());
+                for(var value:List.of(concurrentRead,afterSwitch)){
+                    if(beforeSwitch.value()==null)assertThat(value.value()).isNull();
+                    else assertThat(value.value()).isEqualByComparingTo(beforeSwitch.value());
+                }
                 assertThat(pointer(jdbc,tenant)).isEqualTo(rebuild);
                 assertThat(l1.lifecycle(tenant,winner)).isEqualTo(new L1ProjectionService.Lifecycle("RETIRED",2));
                 assertThat(coverage.status(tenant,rebuild,recovered.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);

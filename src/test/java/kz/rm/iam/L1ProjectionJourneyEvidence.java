@@ -338,13 +338,32 @@ final class L1ProjectionJourneyEvidence {
                 from.plusDays(1),null,null,stock?sku:null,booked?List.of():List.of(warehouse),
                 metric.name().endsWith("AMOUNT")?jdbc.queryForObject("SELECT trim(currency) FROM crm.sales_order WHERE tenant_id=? AND id=?",String.class,tenant,order):null));
         }
+        // Historical region/group filters use actual captured keys, never current catalog labels.
+        for(var dim:jdbc.query("""
+            SELECT DISTINCT region_code,group_id,sku_id,warehouse_id FROM crm.int_l2_contribution
+            WHERE tenant_id=? AND generation_id=? AND stream_code='STOCK'
+              AND region_code IS NOT NULL AND group_id IS NOT NULL AND sku_id IS NOT NULL AND warehouse_id=?
+            """,(rs,n)->new Object[]{rs.getString(1),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),rs.getObject(4,UUID.class)},tenant,gen,warehouse)){
+            for(var code:PeriodResolver.Code.values())
+                queries.add(new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.STOCK_IN,
+                    calendarVersion,code,from,(String)dim[0],(UUID)dim[1],(UUID)dim[2],List.of((UUID)dim[3]),null));
+        }
+        // Always exercise all calendar types, even when no classified stock exists.
+        for(var code:PeriodResolver.Code.values())
+            queries.add(new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,
+                calendarVersion,code,from,null,null,null,List.of(),null));
+        long l0Start=System.nanoTime();
         var baseline=queries.stream().map(q->reader.read(staff,tenant,q)).toList();
+        long l0Elapsed=System.nanoTime()-l0Start;
         assertThat(baseline).allSatisfy(r->assertThat(r.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0));
         var activated=dimProof.activate(tenant,gen,activationProof.id(),null);
+        long l3Start=System.nanoTime();
         for(int i=0;i<queries.size();i++){
             var actual=reader.read(staff,tenant,queries.get(i));
             var expected=baseline.get(i);
-            if(actual.period().endExclusive().isAfter(actual.observedAt())){
+            if(actual.period().endExclusive().isAfter(actual.observedAt())
+                ||actual.period().startInclusive().atZone(g.zone()).toLocalDate().isBefore(from)
+                ||actual.period().endExclusive().atZone(g.zone()).toLocalDate().isAfter(until)){
                 assertThat(actual.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
             }else{
                 assertThat(actual.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
@@ -353,7 +372,9 @@ final class L1ProjectionJourneyEvidence {
             if(expected.value()==null)assertThat(actual.value()).isNull();
             else assertThat(actual.value()).isEqualByComparingTo(expected.value());
             assertThat(actual.quality()).isEqualTo(expected.quality());
+            assertThat(actual.qualityReason()).isEqualTo(expected.qualityReason());
         }
+        System.out.printf("B4.8 fixture queries=%d L0ms=%.3f mixedRouteMs=%.3f%n",queries.size(),l0Elapsed/1e6,(System.nanoTime()-l3Start)/1e6);
         assertThatThrownBy(()->reader.read(foreign,tenant,queries.getFirst())).isInstanceOf(SecurityException.class);
         var stockQuery=queries.stream().filter(q->q.metric()==AuthorizedAnalyticalReadService.Metric.STOCK_IN).findFirst().orElseThrow();
         revoke.run();
@@ -368,7 +389,7 @@ final class L1ProjectionJourneyEvidence {
         assertThatThrownBy(()->l3.refresh(tenant,gen,PeriodResolver.Code.D,from)).hasMessage("L3_GENERATION_NOT_BUILDING");
         long otherCalendar=context.getBean(CalendarPolicyService.class).append(foreign,otherTenant,"Etc/UTC",0).version();
         ActivationJourneyEvidence.qualify(jdbc,manager,l1,l2,l3,dimProof,appender,tenant,otherTenant,
-            gen,activated,calendarVersion,otherCalendar,from,until,g.zone(),order);
+            gen,activated,calendarVersion,otherCalendar,from,until,g.zone(),order,reader,staff,stockQuery);
         selectorPlans(jdbc,manager,tenant);
     }
     /** Bounded selector-only experiment, not end-to-end apply throughput. */

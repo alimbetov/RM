@@ -43,7 +43,7 @@ public class AuthorizedAnalyticalReadService {
         }
     }
     public record Result(Metric metric,int methodVersion,PeriodResolver.Period period,BigDecimal value,
-                         DataQuality quality,Route route,String reason,String unit,String currency,
+                         DataQuality quality,Route route,String reason,String qualityReason,String unit,String currency,
                          UUID generation,UUID proof,long sourceRevision,Instant observedAt){}
     private record Pointer(UUID generation,UUID proof,L3DerivedSeriesService.Snapshot snapshot){}
     private final JdbcTemplate jdbc;
@@ -108,7 +108,7 @@ public class AuthorizedAnalyticalReadService {
                 new L3DerivedSeriesService.Snapshot(rs.getObject(3,LocalDate.class),rs.getObject(4,LocalDate.class),
                     policy,new L3DerivedSeriesService.Revision(revision,rs.getLong(5),rs.getLong(6),rs.getLong(7),rs.getLong(8)))):null,
             tenant,q.calendarVersion());
-        String reason="NO_MATCHING_ACTIVE_GENERATION";
+        String reason=period.endExclusive().isAfter(now)?"OPEN_PERIOD":"NO_MATCHING_ACTIVE_GENERATION";
         LocalDate from=period.startInclusive().atZone(policy.zone()).toLocalDate();
         LocalDate until=period.endExclusive().atZone(policy.zone()).toLocalDate();
         if(pointer!=null){
@@ -135,8 +135,10 @@ public class AuthorizedAnalyticalReadService {
     private static Result result(Query q,L3DerivedSeriesService.Metric m,PeriodResolver.Period period,
             BigDecimal value,Route route,String reason,UUID gen,UUID proof,long revision,Instant now){
         // Source parity is not historical completeness; preserve the existing PARTIAL contract.
+        String qualityReason=value==null?"NO_QUALIFIED_OBSERVATION":
+            period.endExclusive().isAfter(now)?"PERIOD_NOT_CLOSED":"HISTORICAL_COVERAGE_UNQUALIFIED";
         return new Result(q.metric(),1,period,value,value==null?DataQuality.MISSING:DataQuality.PARTIAL,
-            route,reason,m.unit,q.currency(),gen,proof,revision,now);
+            route,reason,qualityReason,m.unit,q.currency(),gen,proof,revision,now);
     }
     private BigDecimal ownerValue(UUID tenant,L3DerivedSeriesService.Metric m,L3DerivedSeriesService.Filter f,
             PeriodResolver.Period period,Instant now){
