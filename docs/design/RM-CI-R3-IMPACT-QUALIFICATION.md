@@ -1,0 +1,16 @@
+# RM-CI-R3.1 — Impact qualification shadow pilot
+Status: proposed candidate; no admission or execution policy changes. All twelve existing Exact-SHA workflows remain mandatory. The classifier is advisory only and must never be consumed as release evidence.
+
+## Initial inventory
+39 workflow files at baseline 25f26ffb, 12 mandatory in rm-exact-sha-admission.yml. Domain Security runs three Maven clean verify invocations; A1 runs source contract checks, schema tests, populated upgrade. Exact-SHA checks current push SHA, run attempt, required jobs and artifacts. Path filtering alone breaks admission.
+
+## Pilot
+Compare actual push before SHA to exact checked-out head, all changes including deletions and rename endpoints; missing history, force-push/non-ancestor, invalid SHA, empty diff and unknown paths select FULL. Exact allowlist only: scenario specification is a FAST_DOC candidate; known L1 journey / SQL role probe is a targeted PG candidate with Domain Security, Intelligence A1 and MVP W2-W5. These are hypotheses, not verified dependency closures. Architecture decision alone, production Java, build, migrations, shared fixtures and CI changes select FULL. All twelve workflows still execute. New shadow workflow publishes advisory report with original and target SHA; no skip, reuse or admission is granted.
+
+## Next gates
+R3.2 build reviewed transitive dependency inventory per mandatory workflow, including tests, fixtures, verifier scripts, generated sources, Maven lock/resolution, PostgreSQL image digest, JDK, runner and environment. R3.3 compare shadow reports with full outcomes across representative changes; unknown paths force full. R3.4 extract targeted PG test workflow (including role SQL gate independently of all-domain Maven runs) and prove executed test identity. R3.5 evidence fingerprint and immutable provenance from last fully qualified baseline, not just previous push. R3.6 introduce separate development admission; existing full Exact-SHA contract unchanged for release checkpoints. Reuse must be marked REUSED_VERIFIED, never executed on new SHA. Expired/missing/ambiguous evidence, dependency or policy drift forces full. R3.7 adversarial tests for deletion, rename, multi-commit push, force-push, skipped/failed artifacts, stale baseline and policy manipulation. R3.8 measure wall time and runner minutes; no savings claimed until activation and measurement.
+
+B4.5C/B4.4 and production gates unchanged. No new branch or merge.
+
+## R3.2A / R3.4A diagnostic implementation
+Targeted workflow executes eight existing named PostgreSQL canonical/delivery/projection/dimension cases and the existing SQL role gate on populated fixtures, without full-domain Maven verify. Strict XML checker validates class+method exactly once, no skip, fail, error or unexpected case. Registry conservatively records full Spring context and build/test dependency scope; unresolved transitive closure means no evidence reuse yet. Push path filters are diagnostic triggers only, not proof of unaffected dependencies. Manual dispatch permits any commit. Existing mandatory workflows unchanged. Measure targeted workflow versus full qualification before switching policy. Future dataset and interpretation cases require separate registry entries and capabilities.

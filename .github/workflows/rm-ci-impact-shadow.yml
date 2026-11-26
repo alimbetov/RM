@@ -1,0 +1,29 @@
+name: RM CI Impact Shadow
+on:
+  push:
+    branches: [base_dev]
+permissions:
+  contents: read
+jobs:
+  impact-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify impact classifier
+        run: node --test .github/scripts/test_rm_ci_impact_shadow.cjs
+      - name: Generate advisory impact report
+        env:
+          BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: node .github/scripts/rm_ci_impact_shadow.cjs "$BEFORE" "$HEAD_SHA" rm-ci-impact-shadow.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rm-ci-impact-shadow-${{ github.sha }}
+          path: rm-ci-impact-shadow.json
+          if-no-files-found: error

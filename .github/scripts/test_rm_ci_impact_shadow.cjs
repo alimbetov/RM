@@ -1,0 +1,15 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {mkdtempSync,writeFileSync,rmSync}=require('node:fs');
+const {tmpdir}=require('node:os');
+const {join}=require('node:path');
+const {execFileSync}=require('node:child_process');
+const {classify,inspect,GATES,BANK,JOURNEY,ROLE,DEC}=require('./rm_ci_impact_shadow.cjs');
+test('known scenario spec is diagnostic candidate only',()=>{const r=classify([BANK]);assert.equal(r.mode,'FAST_DOC_CANDIDATE');assert.equal(r.deferCandidates.length,12);});
+test('role probe and journey select PG candidates',()=>{const r=classify([JOURNEY,ROLE,DEC]);assert.equal(r.mode,'TARGETED_PG_CANDIDATE');assert.equal(r.candidateGates.length,3);assert.equal(r.deferCandidates.length,9);});
+test('unknown paths fail closed even with known files',()=>{for(const p of ['pom.xml','src/main/resources/db/changelog/db.changelog-master.sql','src/main/java/kz/rm/intelligence/L2ProjectionService.java','.github/workflows/rm-exact-sha-admission.yml','docs/operations/unknown.md','src/test/java/shared/Fixture.java']){assert.equal(classify([BANK,p]).mode,'FULL');}});
+test('architecture document alone is not assumed inert',()=>assert.equal(classify([DEC]).mode,'FULL'));
+test('unreliable and empty diff fail closed',()=>{assert.equal(classify([BANK],false).mode,'FULL');assert.equal(classify([]).mode,'FULL');});
+test('candidate partition is disjoint and complete',()=>{for(const paths of [[BANK],[ROLE],[JOURNEY,DEC],['unknown']]){const r=classify(paths);assert.deepEqual([...r.candidateGates,...r.deferCandidates].sort(),[...GATES].sort());assert.equal(new Set([...r.candidateGates,...r.deferCandidates]).size,GATES.length);}});
+test('real git multi-commit diff and invalid baseline',()=>{const cwd=mkdtempSync(join(tmpdir(),'rm-impact-'));const git=(...args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();try{git('init');git('config','user.email','ci@example.invalid');git('config','user.name','CI');writeFileSync(join(cwd,'a'),'1');git('add','.');git('commit','-m','base');const before=git('rev-parse','HEAD');writeFileSync(join(cwd,'a'),'2');git('add','.');git('commit','-m','change');writeFileSync(join(cwd,'b'),'3');git('add','.');git('commit','-m','second');const head=git('rev-parse','HEAD');const r=inspect(before,head,cwd);assert.deepEqual(r.paths,['a','b']);assert.equal(r.mode,'FULL');assert.equal(r.shadowOnly,true);assert.deepEqual(r.requiredExecutedGates,GATES);assert.equal(inspect('0'.repeat(40),head,cwd).mode,'FULL');assert.equal(inspect(before,before,cwd).detail,'DIFF_UNAVAILABLE_OR_NON_ANCESTOR');}finally{rmSync(cwd,{recursive:true,force:true});}});

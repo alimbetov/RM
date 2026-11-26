@@ -1,0 +1,58 @@
+{
+  "schema": "RM-INT-TARGETED/v1",
+  "admission": "DIAGNOSTIC_ONLY",
+  "dependencies": {
+    "runtime": "src/main/java/** (full Spring application context and transitive service dependencies; not yet narrowed)",
+    "resources": "src/main/resources/**",
+    "tests": "src/test/java/** (compiled; selected methods executed)",
+    "build": [
+      "pom.xml"
+    ],
+    "securityProbe": "docs/operations/RM-FINAL-SEC-GATE-DB-ROLE-QUALIFICATION.sql",
+    "environment": [
+      "PostgreSQL 17 (tag, not immutable digest)",
+      "Temurin 21 (major, not pinned patch)",
+      "ubuntu-latest"
+    ],
+    "unresolved": [
+      "Maven effective dependency graph",
+      "transitive test fixture graph",
+      "runner and container immutable fingerprints"
+    ]
+  },
+  "requiredCases": [
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalSalesAndInventoryDigestOraclePg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalSourceAdmissionAndOwnerRollbackPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalConcurrentReplayAndRollbackPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalSourceSealingLockOrdersPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "canonicalTenantSourceCollisionPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "p2CanonicalDurableDiscoveryReplayAndBackfillPg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "p3L1ProjectionParityAndLateDuplicatePg"
+    },
+    {
+      "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
+      "name": "b4RegionAndNomenclatureSnapshotsPg"
+    }
+  ],
+  "securityGate": "REQUIRED_AFTER_JUNIT"
+}
