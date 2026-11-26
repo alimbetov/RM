@@ -191,5 +191,621 @@
       "CC-12"
     ],
     "status": "SOURCE_AUDITED_NOT_RUNTIME_QUALIFIED"
+  },
+  "dynamic_visualization": {
+    "document": "D06E.5-DYNAMIC-ANALYTICAL-CONTRACTS-VISUALIZATION-R2.md",
+    "ranked_distribution_document": "D06E.5.1-ADAPTIVE-RANKED-DISTRIBUTION-R2.md",
+    "status": "PLANNED_NOT_EXECUTED",
+    "mapping_semantics": "Report dependencies and applicable DC IDs are separate eligibility sets, not Cartesian bindings. Per-binding metric applicability and owner admission still required. No new test families.",
+    "contracts": [
+      {
+        "id": "DC-01",
+        "name": "Absolute Value",
+        "visualizations": "KPI, bar, detail table",
+        "code_contracts": [
+          "CC-01",
+          "CC-02",
+          "CC-03",
+          "CC-04",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-03",
+          "UAP-09"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-02",
+        "name": "Historical Dynamics",
+        "visualizations": "line, sparkline, grouped bars",
+        "code_contracts": [
+          "CC-01",
+          "CC-02",
+          "CC-03",
+          "CC-05",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-01",
+          "UAP-09",
+          "TPL-03"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-03",
+        "name": "Comparative Dynamics",
+        "visualizations": "paired bars, two lines",
+        "code_contracts": [
+          "CC-01",
+          "CC-02",
+          "CC-03",
+          "CC-05",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-01",
+          "UAP-02",
+          "UAP-09"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-04",
+        "name": "Relative Dynamics",
+        "visualizations": "diverging bar, line, KPI delta",
+        "code_contracts": [
+          "CC-01",
+          "CC-03",
+          "CC-05",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-06",
+          "TPL-05"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-05",
+        "name": "Structural Distribution",
+        "visualizations": "sorted bar, stacked bar, donut",
+        "code_contracts": [
+          "CC-02",
+          "CC-03",
+          "CC-04",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-03",
+          "UAP-09"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-06",
+        "name": "Structural Migration",
+        "visualizations": "100% stacked bars, diverging pp bars",
+        "code_contracts": [
+          "CC-01",
+          "CC-03",
+          "CC-04",
+          "CC-05",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-01",
+          "UAP-02",
+          "UAP-03",
+          "UAP-09"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-07",
+        "name": "Contribution Analysis",
+        "visualizations": "waterfall, diverging contribution bars",
+        "code_contracts": [
+          "CC-02",
+          "CC-03",
+          "CC-04",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-03",
+          "TPL-05"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-08",
+        "name": "Concentration Analysis",
+        "visualizations": "Pareto, sorted bars",
+        "code_contracts": [
+          "CC-02",
+          "CC-03",
+          "CC-04",
+          "CC-09",
+          "CC-10",
+          "CC-12"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-03",
+          "UAP-09",
+          "UAP-10"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-09",
+        "name": "Multidimensional Matrix",
+        "visualizations": "heatmap, matrix, detail table",
+        "code_contracts": [
+          "CC-02",
+          "CC-04",
+          "CC-09",
+          "CC-10",
+          "CC-12"
+        ],
+        "qualification_cases": [
+          "UAP-03",
+          "UAP-08",
+          "UAP-09",
+          "UAP-10"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-10",
+        "name": "Portfolio Positioning",
+        "visualizations": "scatter, bubble, ranked table",
+        "code_contracts": [
+          "CC-01",
+          "CC-03",
+          "CC-04",
+          "CC-05",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-03",
+          "UAP-06",
+          "UAP-09"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-11",
+        "name": "Statistical Deviation",
+        "visualizations": "line with baseline/band, anomaly marker",
+        "code_contracts": [
+          "CC-01",
+          "CC-05",
+          "CC-06",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-01",
+          "UAP-06",
+          "TPL-05"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "DC-12",
+        "name": "Combined Evidence",
+        "visualizations": "paired bars, small multiples, evidence table",
+        "code_contracts": [
+          "CC-01",
+          "CC-03",
+          "CC-04",
+          "CC-05",
+          "CC-06",
+          "CC-09",
+          "CC-10"
+        ],
+        "qualification_cases": [
+          "UAP-02",
+          "UAP-06",
+          "TPL-05"
+        ],
+        "status": "PLANNED_NOT_EXECUTED"
+      }
+    ],
+    "reports": [
+      {
+        "report_code": "RM-R01",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-07",
+          "DC-09",
+          "DC-11"
+        ],
+        "ui_compositions": [
+          "UI-P01",
+          "UI-P02",
+          "UI-P04",
+          "UI-P08"
+        ],
+        "metric_dependencies": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_AMOUNT",
+          "BOOKED_ORDERS",
+          "CANCELLED_ORDERS"
+        ],
+        "dependency_notes": "BOOKED_AMOUNT; FULFILLED_AMOUNT; BOOKED_ORDERS; CANCELLED_ORDERS",
+        "scope": "T; eligible F regional/group views separately",
+        "gate": "historical coverage + ticket lifecycle",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R02",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-05",
+          "DC-06",
+          "DC-07",
+          "DC-08",
+          "DC-10"
+        ],
+        "ui_compositions": [
+          "UI-P02",
+          "UI-P04",
+          "UI-P05",
+          "UI-P06",
+          "UI-P07"
+        ],
+        "metric_dependencies": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_AMOUNT",
+          "BOOKED_ORDERS",
+          "FULFILLED_PRODUCT_ORDERS",
+          "BOOKED_AMOUNT_PER_ORDER",
+          "FULFILLED_AMOUNT_PER_PRODUCT_ORDER"
+        ],
+        "dependency_notes": "BOOKED_AMOUNT; FULFILLED_AMOUNT; BOOKED_ORDERS; FULFILLED_PRODUCT_ORDERS; candidate average/order only matching populations",
+        "scope": "T/G/K for booked; F adds R/W",
+        "gate": "pilot; amounts not revenue; comparison is not conversion",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R03",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-12"
+        ],
+        "ui_compositions": [
+          "UI-P02",
+          "UI-P04",
+          "UI-P05",
+          "UI-P07"
+        ],
+        "metric_dependencies": [
+          "PLACED_ORDERS",
+          "CONFIRMED_ORDERS",
+          "FULFILLED_ORDERS",
+          "CANCELLED_ORDERS",
+          "BOOKED_LINES",
+          "ORDER_COHORT_STATUS_RATIO"
+        ],
+        "dependency_notes": "PLACED_ORDERS; CONFIRMED_ORDERS; FULFILLED_ORDERS; CANCELLED_ORDERS; BOOKED_LINES; candidate cohort ratios",
+        "scope": "L1 status tenant only; L3 lines eligible scope",
+        "gate": "status period counts not funnel; cohort separate",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R04",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-04",
+          "DC-05",
+          "DC-06",
+          "DC-07",
+          "DC-08",
+          "DC-09",
+          "DC-10"
+        ],
+        "ui_compositions": [
+          "UI-P03",
+          "UI-P04",
+          "UI-P05",
+          "UI-P06"
+        ],
+        "metric_dependencies": [
+          "FULFILLED_AMOUNT",
+          "BOOKED_AMOUNT",
+          "FULFILLED_LINES",
+          "BOOKED_SKUS",
+          "FULFILLED_SKUS"
+        ],
+        "dependency_notes": "FULFILLED_AMOUNT; BOOKED_AMOUNT; FULFILLED_LINES; BOOKED_SKUS; FULFILLED_SKUS",
+        "scope": "G/subgroup/K; eligible F R/W intersections",
+        "gate": "historical group proof; exact distinct not share by default",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R05",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-05",
+          "DC-06",
+          "DC-07",
+          "DC-09",
+          "DC-10"
+        ],
+        "ui_compositions": [
+          "UI-P03",
+          "UI-P04",
+          "UI-P05",
+          "UI-P06"
+        ],
+        "metric_dependencies": [
+          "FULFILLED_AMOUNT",
+          "FULFILLED_PRODUCT_ORDERS",
+          "STOCK_IN"
+        ],
+        "dependency_notes": "FULFILLED_AMOUNT; FULFILLED_PRODUCT_ORDERS; STOCK_IN/OUT with K",
+        "scope": "R/W and G cross-filter; city HOLD; booked excluded",
+        "gate": "historical geo + current assignments",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R06",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-05"
+        ],
+        "ui_compositions": [
+          "UI-P02",
+          "UI-P05"
+        ],
+        "metric_dependencies": [
+          "CURRENT_AVAILABLE"
+        ],
+        "dependency_notes": "CURRENT_AVAILABLE; owner on_hand/reserved candidate fields",
+        "scope": "W/K live only",
+        "gate": "W1/W2 admission; history unavailable absent qualified balance; P07 only future qualified history",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R07",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-09",
+          "DC-11",
+          "DC-12"
+        ],
+        "ui_compositions": [
+          "UI-P02",
+          "UI-P04",
+          "UI-P05",
+          "UI-P07"
+        ],
+        "metric_dependencies": [
+          "STOCK_IN",
+          "STOCK_OUT",
+          "GROSS_STOCK_MOVEMENT",
+          "STOCK_MOVEMENT_COUNT",
+          "STOCK_IN_MOVEMENT_COUNT",
+          "STOCK_OUT_MOVEMENT_COUNT"
+        ],
+        "dependency_notes": "STOCK_IN; STOCK_OUT; NET/GROSS_STOCK_MOVEMENT; movement-count candidates",
+        "scope": "W/R/T visible subset + K mandatory for quantities; counts separately",
+        "gate": "same UOM; flow not balance",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R08",
+        "dynamic_contracts": [
+          "DC-05",
+          "DC-08",
+          "DC-09",
+          "DC-10",
+          "DC-11"
+        ],
+        "ui_compositions": [
+          "UI-P03",
+          "UI-P04",
+          "UI-P05"
+        ],
+        "metric_dependencies": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_PRODUCT_UNITS",
+          "CV"
+        ],
+        "dependency_notes": "BOOKED_AMOUNT candidate ABC basis; FULFILLED_PRODUCT_UNITS + CV candidate XYZ basis",
+        "scope": "T/currency for ABC; qualified SKU/unit for XYZ",
+        "gate": "W3 approved method; no generic quadrant classification",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R09",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-10"
+        ],
+        "ui_compositions": [
+          "UI-P02",
+          "UI-P04",
+          "UI-P05",
+          "UI-P07"
+        ],
+        "metric_dependencies": [],
+        "dependency_notes": "existing Customer 360 owner source candidates only; no invented active metric code",
+        "scope": "authorized current-link customer scope",
+        "gate": "C1/C2 owner + PII; no customer identity in L2/L3",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R10",
+        "dynamic_contracts": [
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-09",
+          "DC-11"
+        ],
+        "ui_compositions": [
+          "UI-P01",
+          "UI-P02",
+          "UI-P05",
+          "UI-P07",
+          "UI-P08"
+        ],
+        "metric_dependencies": [
+          "SMA",
+          "EMA",
+          "STDDEV_POP",
+          "CV",
+          "TREND"
+        ],
+        "dependency_notes": "eligible base metric; SMA/EMA/STDDEV_POP/CV/TREND",
+        "scope": "eligible scope of underlying metric",
+        "gate": "preceding baseline; historical qualification; intraday gated",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R11",
+        "dynamic_contracts": [
+          "DC-03",
+          "DC-04",
+          "DC-11",
+          "DC-12"
+        ],
+        "ui_compositions": [
+          "UI-P02",
+          "UI-P05",
+          "UI-P07"
+        ],
+        "metric_dependencies": [
+          "FULFILLED_PRODUCT_UNITS",
+          "STOCK_IN",
+          "STOCK_OUT"
+        ],
+        "dependency_notes": "FULFILLED_PRODUCT_UNITS; STOCK_IN; STOCK_OUT",
+        "scope": "same W/K/UOM",
+        "gate": "B5.4 exact role/period binding; no cause; B5.5 eligibility",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "report_code": "RM-R12",
+        "dynamic_contracts": [
+          "DC-01",
+          "DC-02",
+          "DC-03",
+          "DC-04",
+          "DC-12"
+        ],
+        "ui_compositions": [
+          "UI-P01",
+          "UI-P02",
+          "UI-P07",
+          "UI-P08"
+        ],
+        "metric_dependencies": [],
+        "dependency_notes": "owner rate revision, current price, suggestedKzt candidate; not registered B4 metric codes",
+        "scope": "currency pair/nominal/SKU owner scope",
+        "gate": "CUR-R2C; actual vs candidate; no auto execution",
+        "status": "PLANNED_NOT_EXECUTED"
+      }
+    ],
+    "ranked_distribution": {
+      "dynamic_contracts": [
+        "DC-05",
+        "DC-06",
+        "DC-08",
+        "DC-09"
+      ],
+      "code_contracts": [
+        "CC-02",
+        "CC-03",
+        "CC-04",
+        "CC-09",
+        "CC-10",
+        "CC-12"
+      ],
+      "qualification_cases": [
+        "UAP-02",
+        "UAP-03",
+        "UAP-04",
+        "UAP-07",
+        "UAP-08",
+        "UAP-09",
+        "UAP-10",
+        "TPL-05"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    "p0_findings": [
+      {
+        "id": "P0-01",
+        "status": "DESIGN_RECONCILED",
+        "cases": [
+          "UAP-02",
+          "UAP-03",
+          "UAP-10"
+        ]
+      },
+      {
+        "id": "P0-02",
+        "status": "DESIGN_RECONCILED",
+        "cases": [
+          "UAP-06",
+          "UAP-07"
+        ]
+      },
+      {
+        "id": "P0-03",
+        "status": "DESIGN_RECONCILED",
+        "cases": [
+          "UAP-04",
+          "UAP-08",
+          "UAP-09",
+          "SEC-02"
+        ]
+      },
+      {
+        "id": "P0-04",
+        "status": "DESIGN_RECONCILED",
+        "cases": [
+          "TPL-01",
+          "UAP-09"
+        ]
+      }
+    ]
   }
 }

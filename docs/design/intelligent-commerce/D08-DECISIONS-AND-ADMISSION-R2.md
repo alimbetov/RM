@@ -93,3 +93,7 @@ D08 можно закрывать только когда:
 
 ## D06E.5.1 — Adaptive Ranked Distribution (2026-11-26)
 [Owner-agreed grouping contract](D06E.5.1-ADAPTIVE-RANKED-DISTRIBUTION-R2.md): direct display ≤5, otherwise up to seven bands with 15% step; COUNT_PERCENTILE default / CUMULATIVE_VALUE_SHARE alternative, FIXED/DYNAMIC comparison, deterministic ranking, exact additive reconciliation and authorized drill-down. Reuse DC-05/06/08/09 and existing payload/templates; no new engine or metric admission. Product concept/B4 FREEZE, B5.5 NEXT, D08 OPEN, Radar/production HOLD.
+
+
+## Final P0 reconciliation (2026-11-26)
+Design findings P0-01–04 are reconciled in D06E.2/D06E.3/D06E.5/D06E.5.1/D06C and the existing [qualification trace](D06E-QUALIFICATION-TRACE-R2.json). Full distribution precedes materiality; presentation bands never determine business ticket identity; historical drill-down fails closed unless exact retained evidence and current authorization agree; latest data is a separate explicit query. Trace maps all 12 reports, 12 DC contracts, 8 UI compositions and registered metric dependencies with separately identified gated owner fields to existing qualification cases. Design closure only; implementation and runtime evidence remain pending. Product concept/B4 FROZEN, B5.5 NEXT, global D08 OPEN, Radar/production HOLD. No new architecture, metric admission or family counts.
