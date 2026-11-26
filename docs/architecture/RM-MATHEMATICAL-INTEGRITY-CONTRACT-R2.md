@@ -35,3 +35,6 @@ Explicit internal observer polls committed canonical facts in its own RC transac
 
 ## E7D repair: database uniqueness and payload integrity
 0219 adds source-key uniqueness without deleting legacy evidence, atomic observer replay and a database SHA-256 check over PostgreSQL JSONB textual representation. Public grants removed; explicit deployment role grants and trusted direct-SQL boundaries still required. Migration fails on duplicate or mismatched existing evidence; investigate rather than silently repair. No test changes.
+
+## E7D.3–4 candidate runtime
+FeatureCandidateStore accepts typed requests and VerifiedActor, not externally authored payload. Current actor/tenant and explicit warehouse permissions fenced in outer RC transaction; analytical snapshot in separate RR. Immutable JSONB contains request, input observations, result and revisions; SHA-256 computed and checked by PostgreSQL. Request key retries are actor-bound and request/version-bound; conflict denied. Read reauthorizes and recomputes activity; revision mismatch yields STALE. All returned payloads are historical candidates, never decision permits. No public API. Current proof persistence fence is existing 0217 trigger; independent proof must also be checked at computation. Dedicated DB identities, payload metadata constraints and runtime qualification remain open. No tests changed.

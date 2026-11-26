@@ -73,13 +73,24 @@ class L3DerivedSeriesService {
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(status->{
-            if(!metric.stream.equals("STOCK"))authorization.requireForCommand(actor.userId(),tenant,DomainPermission.SALES_ORDER_READ);
-            if(!metric.stream.equals("BOOKED")){
-                authorization.requireForCommand(actor.userId(),tenant,DomainPermission.INVENTORY_STOCK_READ);
-                for(UUID warehouse:filter.warehouses().stream().sorted().toList())warehouseScope.requireAssigned(actor.userId(),tenant,warehouse);
-            }
+            admit(actor,tenant,metric,filter);
             return readSnapshot(tenant,generation,metric,filter,code,anchor,window,proofId,actor.userId().toString());
         });
+    }
+    void admit(VerifiedActor actor,UUID tenant,Metric metric,Filter filter){
+        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);Objects.requireNonNull(metric);Objects.requireNonNull(filter);
+        if(!TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("DERIVED_AUTH_TRANSACTION_REQUIRED");
+        if(!metric.stream.equals("STOCK"))authorization.requireForCommand(actor.userId(),tenant,DomainPermission.SALES_ORDER_READ);
+        if(!metric.stream.equals("BOOKED")){
+            authorization.requireForCommand(actor.userId(),tenant,DomainPermission.INVENTORY_STOCK_READ);
+            for(UUID warehouse:filter.warehouses().stream().sorted().toList())warehouseScope.requireAssigned(actor.userId(),tenant,warehouse);
+        }
+    }
+    Series readAdmitted(VerifiedActor actor,UUID tenant,UUID generation,UUID proofId,Metric metric,Filter filter,
+                        PeriodResolver.Code code,LocalDate anchor,int window){
+        Objects.requireNonNull(proofId);
+        admit(actor,tenant,metric,filter);
+        return readSnapshot(tenant,generation,metric,filter,code,anchor,window,proofId,actor.userId().toString());
     }
     Series read(UUID tenant,UUID generation,Metric metric,Filter filter,PeriodResolver.Code code,LocalDate anchor,int window){
         if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("DERIVED_REQUIRES_OWN_TRANSACTION");
