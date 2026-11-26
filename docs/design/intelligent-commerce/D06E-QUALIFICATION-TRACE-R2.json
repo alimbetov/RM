@@ -1086,5 +1086,76 @@
       "UAP-09"
     ],
     "implementation_admission": false
+  },
+  "project_alignment": {
+    "document": "RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md",
+    "source_branch": "base_dev",
+    "source_sha": "a6bf99107aa64f4eb255b4997ef9417748b05607",
+    "design_parent_sha": "bee7024a23b454d28e9cb59988d655b2cbfbf490",
+    "operative_dag": {
+      "revision": "R1.2",
+      "nodes": 33,
+      "edges": 54
+    },
+    "observed_workflow_runs": {
+      "completed_success": 26,
+      "distinct_names": 24,
+      "exact_sha_run": 45806840379,
+      "targeted_pg_run": 45806840702
+    },
+    "slices": [
+      {
+        "id": "S0 / B5.5",
+        "objective": "NEXT — bounded development slice after relevant gate",
+        "status": "NEXT"
+      },
+      {
+        "id": "S1",
+        "objective": "Coverage qualification",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "S2",
+        "objective": "Authorized bulk dataset",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "S3",
+        "objective": "Patterns and information tickets",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "S4",
+        "objective": "Template and staging pilot",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "S5",
+        "objective": "Integration",
+        "status": "PLANNED_NOT_EXECUTED"
+      },
+      {
+        "id": "S6",
+        "objective": "Expansion and industrial qualification",
+        "status": "PLANNED_NOT_EXECUTED"
+      }
+    ],
+    "runtime_tests_executed": false,
+    "implementation_admission": false
+  },
+  "metric_presentation": {
+    "version": "MPC-1",
+    "document": "D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md",
+    "inventory": "D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json",
+    "assigned_entries": 53,
+    "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED",
+    "qualification_cases": [
+      "UAP-02",
+      "UAP-09",
+      "TPL-01",
+      "TPL-03",
+      "TPL-04",
+      "TPL-05"
+    ]
   }
 }

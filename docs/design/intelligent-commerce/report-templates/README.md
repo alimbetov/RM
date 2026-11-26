@@ -23,3 +23,5 @@ Design-only companion files for D06C, D06E.2, D06E.5/5.1/5.2/5.3. Owner-approved
 - This is a visual mockup version, not final trusted production workbook binary or full typed binding manifest. Before admission define named range/slot capacity and exact payload bindings, clear all fixture data/caches, validate formulas and charts in supported Excel clients/POI, verify print/PDF fidelity, independent oracle and authorization/file owner. Do not use these fixture binaries directly for tenant publication.
 - [Machine-readable catalog](manifest.json) pins exact file digests, sheets, native chart/table counts and applicable design dependencies. Reuse existing TPL/UAP cases, no new test families; local file checks are not runtime qualification.
 Implementation order remains RM-R02 → RM-R10 → RM-R11; B5.5 NEXT, B4 FREEZE, D08 OPEN, production and Radar HOLD.
+
+MPC-1 in [D06E.1](../D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md) governs future template binding. Current manifest and binaries remain MOCK-0.1; no MOCK-0.2 upload claimed. [Roadmap](../RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md).

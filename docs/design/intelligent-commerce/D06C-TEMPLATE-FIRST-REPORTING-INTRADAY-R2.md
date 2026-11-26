@@ -200,3 +200,6 @@ For ranked Groups/Details, FULL_DISTRIBUTION uses the entire authorized metric-a
 
 ## Report mockup artifacts — MOCK-0.1 (2026-11-26)
 [12 synthetic XLSX visual mockups](report-templates/README.md) and [manifest](report-templates/manifest.json) register actual design binary artifacts (14 native charts, tables, Metadata, 24M history in R01/R02, 500 SKU/7 rank bands in R04). Local OOXML and chart cache parity checks only; no production template binding, actual tenant data, PDF/Excel/POI runtime qualification or source/ACL admission. Existing R02→R10→R11 pilot, B5.5 NEXT, B4 FREEZE, D08 OPEN, Radar/production HOLD.
+
+## RM-IC-R2 source alignment and roadmap (2026-11-26)
+[Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.

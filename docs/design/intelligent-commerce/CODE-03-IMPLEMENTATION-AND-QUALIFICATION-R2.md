@@ -41,3 +41,6 @@ B1 можно опубликовать как pure PeriodResolver + MetricRegist
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). MIC-Q01–Q10 обязательны по применимости; при mismatch исправлять production Java/DDL, а не expected values. Exact-SHA admission сохраняется.
+
+## RM-IC-R2 source alignment and roadmap (2026-11-26)
+[Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.

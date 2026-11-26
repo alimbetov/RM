@@ -170,3 +170,10 @@ Next: R2.0 source/contract inventory on latest base_dev; classify existing and m
 ## 11. Limitations
 
 Draft based on existing design charter, historic TCRUD evidence, MVP six-package spec and selective Java method inspection. Not a full source audit, no runtime tests, no current CI qualification claim, no exhaustive operation counts. Proposed family names, package names and persona examples are non-normative until review. No Java, DDL, CI or runtime change authorized.
+
+
+## Report lifecycle operations (RQ-03)
+Within DI-05 existing family: list/preview/download under current tenant+audience+entire actual scope+file ACL; authorized audience grant/revoke audited; regenerate new immutable report under fresh auth/revision; delete/expire only admitted owner retention policy; no destructive action implied merely by CRUD coverage. File owner binding gap tracked in D06E.5.2; no new family.
+
+## RM-IC-R2 source alignment and roadmap (2026-11-26)
+[Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.

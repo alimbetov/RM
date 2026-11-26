@@ -344,5 +344,131 @@
     "UAP-06",
     "UAP-10"
   ],
-  "freeze": "unchanged"
+  "freeze": "unchanged",
+  "presentation_contract": {
+    "version": "MPC-1",
+    "status": "DESIGN_DEFAULTS_NOT_RUNTIME_ADMITTED",
+    "rules_document": "D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md",
+    "profiles": {
+      "COUNT": {
+        "precision": 0,
+        "unit": "count",
+        "format": "#,##0"
+      },
+      "MONEY": {
+        "precision": 2,
+        "unit": "actual currency; per denominator where applicable",
+        "format": "#,##0.00"
+      },
+      "QUANTITY": {
+        "precision": "UOM passport; proposed fallback max 3 decimals for display only",
+        "unit": "actual compatible UOM",
+        "format": "#,##0.###"
+      },
+      "SIGNED_QUANTITY": {
+        "precision": "UOM passport",
+        "unit": "actual compatible UOM",
+        "format": "+#,##0.###;-#,##0.###;0"
+      },
+      "RATIO": {
+        "precision": 1,
+        "unit": "percent",
+        "format": "0.0%",
+        "signed_format": "+0.0%;-0.0%;0.0%"
+      },
+      "PP": {
+        "precision": 1,
+        "unit": "percentage points",
+        "format": "+0.0\" pp\";-0.0\" pp\";0.0\" pp\""
+      },
+      "INHERITED_DECIMAL": {
+        "precision": "operand precision; at least 2 for count mean/SD",
+        "unit": "operand"
+      },
+      "INHERITED_SIGNED": {
+        "precision": "operand precision",
+        "unit": "operand",
+        "format": "signed operand"
+      },
+      "INHERITED_EXTREME": {
+        "precision": "operand precision",
+        "unit": "operand"
+      },
+      "SLOPE": {
+        "precision": "operand decimal precision; at least 2 for count",
+        "unit": "operand per period ordinal"
+      },
+      "DECIMAL_COUNT": {
+        "precision": 2,
+        "unit": "lines/order",
+        "format": "0.00"
+      },
+      "DAYS": {
+        "precision": 0,
+        "unit": "calendar days",
+        "format": "#,##0"
+      }
+    },
+    "metric_profiles": {
+      "BOOKED_ORDERS": "COUNT",
+      "FULFILLED_PRODUCT_ORDERS": "COUNT",
+      "BOOKED_SKUS": "COUNT",
+      "BOOKED_LINES": "COUNT",
+      "FULFILLED_LINES": "COUNT",
+      "FULFILLED_SKUS": "COUNT",
+      "PLACED_ORDERS": "COUNT",
+      "CONFIRMED_ORDERS": "COUNT",
+      "FULFILLED_ORDERS": "COUNT",
+      "CANCELLED_ORDERS": "COUNT",
+      "STOCK_MOVEMENT_COUNT": "COUNT",
+      "STOCK_IN_MOVEMENT_COUNT": "COUNT",
+      "STOCK_OUT_MOVEMENT_COUNT": "COUNT",
+      "ACTIVE_STOCK_SKUS": "COUNT",
+      "ACTIVE_WAREHOUSES": "COUNT",
+      "BOOKED_AMOUNT": "MONEY",
+      "FULFILLED_AMOUNT": "MONEY",
+      "BOOKED_ORDER_AMOUNT": "MONEY",
+      "BOOKED_AMOUNT_PER_ORDER": "MONEY",
+      "FULFILLED_AMOUNT_PER_PRODUCT_ORDER": "MONEY",
+      "BOOKED_UNIT_PRICE_WEIGHTED": "MONEY",
+      "FULFILLED_UNIT_PRICE_WEIGHTED": "MONEY",
+      "BOOKED_PRODUCT_UNITS": "QUANTITY",
+      "FULFILLED_PRODUCT_UNITS": "QUANTITY",
+      "STOCK_IN": "QUANTITY",
+      "STOCK_OUT": "QUANTITY",
+      "STOCK_IN_QTY": "QUANTITY",
+      "STOCK_OUT_QTY": "QUANTITY",
+      "CURRENT_AVAILABLE": "QUANTITY",
+      "GROSS_STOCK_MOVEMENT": "QUANTITY",
+      "NET_STOCK_MOVEMENT": "SIGNED_QUANTITY",
+      "PERIOD_GROWTH": "RATIO",
+      "MOM_RATIO": "RATIO",
+      "YOY_RATIO": "RATIO",
+      "SHARE": "RATIO",
+      "CV": "RATIO",
+      "ORDER_STATUS_PERIOD_RATIO": "RATIO",
+      "ORDER_COHORT_STATUS_RATIO": "RATIO",
+      "SHARE_DELTA_PP": "PP",
+      "AVG": "INHERITED_DECIMAL",
+      "SMA": "INHERITED_DECIMAL",
+      "EMA": "INHERITED_DECIMAL",
+      "STDDEV_POP": "INHERITED_DECIMAL",
+      "FORECAST_NEXT": "INHERITED_DECIMAL",
+      "PERIOD_CHANGE": "INHERITED_SIGNED",
+      "YOY_DELTA_ABS": "INHERITED_SIGNED",
+      "CONTRIBUTION": "INHERITED_SIGNED",
+      "MIN": "INHERITED_EXTREME",
+      "MAX": "INHERITED_EXTREME",
+      "TREND": "SLOPE",
+      "BOOKED_LINES_PER_ORDER": "DECIMAL_COUNT",
+      "FULFILLED_LINES_PER_ORDER": "DECIMAL_COUNT",
+      "ORDER_STATUS_ELAPSED": "DAYS"
+    },
+    "coverage": {
+      "catalog_entries": 53,
+      "assigned": 53
+    },
+    "forecast_publication": "HOLD",
+    "owner_fields": "separate owner semantic admission required"
+  }
 }
