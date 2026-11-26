@@ -4,6 +4,7 @@ import kz.rm.intelligence.CanonicalFactAppender;
 import kz.rm.intelligence.CanonicalFactDeliveryService;
 import kz.rm.intelligence.CanonicalFactDeliveryService.*;
 import kz.rm.intelligence.CanonicalFactKey;
+import kz.rm.intelligence.BookedSourceReconciliationService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -82,7 +83,8 @@ final class CanonicalDeliveryJourneyEvidence {
         return service.consumeBatch(tenant,code,500,h);
     }
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
-                        CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template){
+                        CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template,
+                        BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner){
         var tx=new TransactionTemplate(manager);
         String table="p2_test_effect_"+UUID.randomUUID().toString().replace("-","");
         jdbc.execute("CREATE TABLE crm."+table+" (tenant_id UUID NOT NULL,consumer_code VARCHAR(96) NOT NULL,"
@@ -99,6 +101,11 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThatThrownBy(()->service.backfillNext(otherTenant,run)).hasMessage("BACKFILL_RUN_NOT_FOUND");
             service.openBackfill(slice(otherTenant,run,START,END));
             assertThat(service.coverage(otherTenant,run).sources()).isZero();
+            var empty=reconciliation.inspect(otherOwner,otherTenant,run);
+            assertThat(empty.counts().owners()).isZero();
+            assertThat(empty.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
+            assertThat(empty.ownerCompletenessProven()).isFalse();
+            assertThatThrownBy(()->reconciliation.inspect(otherOwner,tenant,run)).isInstanceOf(SecurityException.class);
             service.openConsumer(tenant,CONSUMER);
             service.openConsumer(otherTenant,CONSUMER);
             assertThat(service.consumeNext(otherTenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
@@ -136,6 +143,12 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(afterHigh).isEqualTo(revisionBefore+3);
             assertThat(service.backfillBatch(tenant,run,10)).extracting(Step::key).containsExactly(key(tenant,high));
             assertThat(service.coverage(tenant,run).complete()).isTrue();
+            var beforeLate=reconciliation.inspect(staff,tenant,run);
+            assertThat(beforeLate.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
+            assertThat(beforeLate.digest().checked()).isEqualTo(1);
+            assertThat(beforeLate.counts().distinctValidOrders()).isEqualTo(1);
+            assertThat(beforeLate.counts().invalidOwnerEvents()).isZero();
+            assertThat(beforeLate.ownerCompletenessProven()).isFalse();
             drain(service,tenant,CONSUMER,handler(jdbc,table,CONSUMER));
             assertThat(service.consumerCoverage(tenant,CONSUMER).caughtUp()).isTrue();
             assertThat(count(jdbc,"SELECT count(*) FROM crm."+table+" WHERE tenant_id=? AND source_id=?",tenant,low)).isZero();
@@ -161,8 +174,15 @@ final class CanonicalDeliveryJourneyEvidence {
             // Simulate a fresh process using durable database state, no in-memory cursor.
             var restarted=new CanonicalFactDeliveryService(jdbc,manager,appender);
             assertThat(restarted.coverage(tenant,run).unprocessed()).isEqualTo(1);
+            var afterLate=reconciliation.inspect(staff,tenant,run);
+            assertThat(afterLate.sourceRevision()).isGreaterThan(beforeLate.sourceRevision());
+            assertThat(afterLate.counts().unprocessed()).isEqualTo(1);
+            assertThat(afterLate.counts().distinctValidOrders()).isEqualTo(2);
+            assertThat(afterLate.state()).isEqualTo(BookedSourceReconciliationService.State.INCOMPLETE);
             assertThat(restarted.backfillNext(tenant,run).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.coverage(tenant,run).complete()).isTrue();
+            assertThat(reconciliation.inspect(staff,tenant,run).state())
+                .isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER)).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
 
@@ -193,6 +213,14 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(coverage.orphanFacts()).isEqualTo(1);
             assertThat(coverage.receiptMismatches()).isZero();
             assertThat(coverage.complete()).isFalse();
+            var corrupted=reconciliation.inspect(staff,tenant,run);
+            assertThat(corrupted.state()).isEqualTo(BookedSourceReconciliationService.State.CONFLICT);
+            assertThat(corrupted.digest().mismatches()).isEqualTo(2);
+            assertThat(corrupted.digest().legacy()).isEqualTo(3);
+            assertThat(corrupted.counts().missing()).isEqualTo(1);
+            assertThat(corrupted.counts().extra()).isEqualTo(1);
+            assertThat(corrupted.counts().rejected()).isEqualTo(2);
+            assertThat(corrupted.ownerCompletenessProven()).isFalse();
             assertThat(count(jdbc,"SELECT count(*) FROM crm.int_fact_backfill_receipt WHERE tenant_id=? AND run_id=?",tenant,run)).isEqualTo(7);
             assertThat(jdbc.queryForObject("SELECT error_code FROM crm.int_fact_backfill_receipt WHERE tenant_id=? AND run_id=? AND source_id=?",
                 String.class,tenant,run,invalid)).isEqualTo("CANONICAL_SNAPSHOT_AMOUNT_MISMATCH");

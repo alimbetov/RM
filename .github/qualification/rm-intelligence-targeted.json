@@ -272,6 +272,26 @@
     {
       "classname": "kz.rm.intelligence.HistoricalCoverageQualificationTest",
       "name": "boundaryAndOpenPeriodRemainUnqualified"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedSourceReconciliationQualificationTest",
+      "name": "identityAndDigestParityDoNotProveCompleteness"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedSourceReconciliationQualificationTest",
+      "name": "missingReceiptAndOpenRangeDoNotReconcile"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedSourceReconciliationQualificationTest",
+      "name": "digestBudgetAndLegacyAreExplicit"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedSourceReconciliationQualificationTest",
+      "name": "identityReceiptAndDigestFailuresRemainConflict"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedSourceReconciliationQualificationTest",
+      "name": "matchingEventIdentitiesCannotHideInvalidOrderPopulation"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

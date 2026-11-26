@@ -27,6 +27,24 @@ final class IndependentCanonicalDigestVerifier {
         for(var f:facts)if(!matches(tenant,f))bad++;
         return bad;
     }
+    /** Bounded diagnostic extension; existing B4 whole-tenant verifier is unchanged. */
+    record SliceDigest(long checked,long mismatches,long legacy,boolean budgetExceeded){}
+    SliceDigest bookedSlice(UUID tenant,Instant from,Instant until,int limit){
+        if(limit<1||limit>CanonicalFactDeliveryService.MAX_BATCH||!from.isBefore(until))
+            throw new IllegalArgumentException("S1_DIGEST_BUDGET");
+        var facts=jdbc.query("""
+            SELECT owner_module,source_kind,source_id,subject_id,occurred_at,recorded_at,source_version,schema_version,digest
+            FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'
+              AND occurred_at>=? AND occurred_at<? ORDER BY occurred_at,source_id LIMIT ?
+            """,(rs,n)->new Fact(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getObject(4,UUID.class),
+                rs.getTimestamp(5).toInstant(),rs.getTimestamp(6)==null?null:rs.getTimestamp(6).toInstant(),
+                rs.getObject(7,Long.class),rs.getInt(8),rs.getString(9)),tenant,
+                java.sql.Timestamp.from(from),java.sql.Timestamp.from(until),limit+1);
+        if(facts.size()>limit)return new SliceDigest(0,0,0,true);
+        long bad=0,legacy=0;
+        for(var f:facts){if(!matches(tenant,f))bad++;if(f.schema()==1)legacy++;}
+        return new SliceDigest(facts.size(),bad,legacy,false);
+    }
     private boolean matches(UUID tenant,Fact f){
         String payload,extended;
         Long sourceVersion=null;

@@ -540,7 +540,8 @@ class BusMvpServiceJourneyQualificationTest {
         }
         if(scenario==CanonicalCase.DELIVERY){
             CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
-                tenant,otherTenant,orderId);
+                tenant,otherTenant,orderId,applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
+                staff,otherOwner);
             return;
         }
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
