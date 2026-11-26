@@ -1,0 +1,15 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {mkdtempSync,writeFileSync,rmSync}=require('node:fs');
+const {tmpdir}=require('node:os');
+const {join}=require('node:path');
+const {execFileSync}=require('node:child_process');
+const {groups,fingerprint,compare}=require('./rm_ci_fingerprint.cjs');
+const row=(path,id='a'.repeat(40),mode='100644')=>({path,id,mode});
+test('domain and intelligence separate, IAM also security',()=>{assert.deepEqual(groups('src/main/java/kz/rm/intelligence/L2.java'),['INTELLIGENCE']);assert.deepEqual(groups('src/main/java/kz/rm/iam/A.java'),['DOMAIN','SECURITY']);});
+test('unknown tracked paths are never ignored',()=>assert.deepEqual(groups('unknown.txt'),['OTHER']));
+test('schema changes affect schema and full tree',()=>{const a=fingerprint([row('src/main/resources/db.sql')]),b=fingerprint([row('src/main/resources/db.sql','b'.repeat(40))]);assert.notEqual(a.groups.SCHEMA.hash,b.groups.SCHEMA.hash);assert.equal(a.groups.DOMAIN.hash,b.groups.DOMAIN.hash);assert.notEqual(a.repositoryHash,b.repositoryHash);});
+test('deletion and rename change full tree',()=>{const a=fingerprint([row('a'),row('b')]);assert.notEqual(a.repositoryHash,fingerprint([row('a')]).repositoryHash);assert.notEqual(a.repositoryHash,fingerprint([row('a'),row('c')]).repositoryHash);});
+test('executable mode is included',()=>assert.notEqual(fingerprint([row('a')]).repositoryHash,fingerprint([row('a','a'.repeat(40),'100755')]).repositoryHash));
+test('actual ancestor diff remains execution required',()=>{const cwd=mkdtempSync(join(tmpdir(),'rm-fp-'));const git=(...args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();try{git('init');git('config','user.email','ci@example.invalid');git('config','user.name','CI');writeFileSync(join(cwd,'a'),'a');git('add','.');git('commit','-m','base');const before=git('rev-parse','HEAD');git('commit','--allow-empty','-m','same');const head=git('rev-parse','HEAD');const r=compare(before,head,cwd);assert.equal(r.repositoryEqual,true);assert.equal(r.reuse,'EXECUTE_REQUIRED');assert.equal(r.admission,'UNCHANGED_FULL_REQUIRED');assert.equal(compare('0'.repeat(40),head,cwd).sourceComparison,'UNVERIFIED');assert.equal(compare(head,before,cwd).sourceComparison,'UNVERIFIED');}finally{rmSync(cwd,{recursive:true,force:true});}});

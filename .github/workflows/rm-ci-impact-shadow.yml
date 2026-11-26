@@ -22,8 +22,17 @@ jobs:
           BEFORE: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: node .github/scripts/rm_ci_impact_shadow.cjs "$BEFORE" "$HEAD_SHA" rm-ci-impact-shadow.json
+      - name: Verify repository fingerprint contracts
+        run: node --test .github/scripts/test_rm_ci_fingerprint.cjs
+      - name: Generate advisory fingerprint comparison
+        env:
+          BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: node .github/scripts/rm_ci_fingerprint.cjs "$BEFORE" "$HEAD_SHA" rm-ci-fingerprint.json
       - uses: actions/upload-artifact@v4
         with:
           name: rm-ci-impact-shadow-${{ github.sha }}
-          path: rm-ci-impact-shadow.json
+          path: |
+            rm-ci-impact-shadow.json
+            rm-ci-fingerprint.json
           if-no-files-found: error
