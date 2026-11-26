@@ -549,13 +549,15 @@ class BusMvpServiceJourneyQualificationTest {
             roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ);
             roles.assign(otherOwner,otherTenant,reconciliationReaderId,reconciliationRole.id());
             roles.enable(otherOwner,otherTenant);
+            long monthlyCalendar=calendar.append(owner,tenant,"Etc/UTC",0).version();
+            long otherMonthlyCalendar=calendar.append(otherOwner,otherTenant,"Etc/UTC",0).version();
             CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
                 tenant,otherTenant,orderId,applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
                 staff,otherOwner,reconciliationReader,owner,
                 applicationContext.getBean(kz.rm.intelligence.BookedOwnerDeclarationService.class),
                 ()->roles.revoke(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
                 ()->roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
-                applicationContext.getBean(TenantOwnershipTransferService.class));
+                applicationContext.getBean(TenantOwnershipTransferService.class),monthlyCalendar,otherMonthlyCalendar);
             return;
         }
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);

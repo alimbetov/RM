@@ -78,6 +78,31 @@ public class BookedSourceReconciliationService {
             return BookedOwnerDeclarationService.inspect(stored,reconcile(tenant,user,stored.draft().runId()));
         });
     }
+    /** Compare persisted declarations against exact calendar months and independent owner counts.
+     * Up to 25 requested months and four proof IDs total; no caller-provided proof content.
+     * Returns diagnostics only, including when a zero observation exactly matches declarations. */
+    public BookedMonthlyAuthorityAssessment.Result inspectMonthlyAuthority(VerifiedActor actor,UUID tenant,long calendarVersion,
+            List<HistoricalCoverageService.RequiredMonth> months,Map<YearMonth,List<UUID>> proofIds){
+        if(calendarVersion<1)throw new IllegalArgumentException("S1_CALENDAR");
+        var required=HistoricalCoverageService.normalize(months);
+        var selection=BookedMonthlyAuthorityAssessment.request(required,proofIds);
+        return authorizedSnapshot(actor,tenant,user->{
+            var history=HistoricalCoverageService.inspectSnapshot(jdbc,tenant,user,calendarVersion,required);
+            var byMonth=new HashMap<YearMonth,List<BookedMonthlyAuthorityAssessment.Slice>>();
+            var reconciled=new HashMap<UUID,Evidence>();
+            for(var month:required){
+                var slices=new ArrayList<BookedMonthlyAuthorityAssessment.Slice>();
+                for(UUID proof:selection.getOrDefault(month.month(),List.of())){
+                    var stored=BookedOwnerDeclarationService.load(jdbc,tenant,proof);
+                    if(stored==null)throw new IllegalArgumentException("S1_DECLARATION_NOT_FOUND");
+                    var current=reconciled.computeIfAbsent(stored.draft().runId(),id->reconcile(tenant,user,id));
+                    slices.add(new BookedMonthlyAuthorityAssessment.Slice(current,BookedOwnerDeclarationService.inspect(stored,current)));
+                }
+                byMonth.put(month.month(),List.copyOf(slices));
+            }
+            return BookedMonthlyAuthorityAssessment.assess(history,byMonth);
+        });
+    }
     /** Inspect a bounded exact interval partition within ONE authorized RR snapshot.
      * No caller-supplied evidence, no proof issuance. */
     public BookedHistoryComposition.Assessment inspectComposition(VerifiedActor actor,UUID tenant,

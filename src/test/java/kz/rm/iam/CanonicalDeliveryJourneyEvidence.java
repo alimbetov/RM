@@ -86,7 +86,8 @@ final class CanonicalDeliveryJourneyEvidence {
                         CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template,
                         BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner,
                         VerifiedActor otherReader,VerifiedActor owner,kz.rm.intelligence.BookedOwnerDeclarationService declarations,
-                        Runnable revokeReader,Runnable restoreReader,TenantOwnershipTransferService transfer){
+                        Runnable revokeReader,Runnable restoreReader,TenantOwnershipTransferService transfer,
+                        long monthlyCalendar,long otherMonthlyCalendar){
         var tx=new TransactionTemplate(manager);
         String table="p2_test_effect_"+UUID.randomUUID().toString().replace("-","");
         jdbc.execute("CREATE TABLE crm."+table+" (tenant_id UUID NOT NULL,consumer_code VARCHAR(96) NOT NULL,"
@@ -279,6 +280,8 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(composed.boundary()).isEqualTo(kz.rm.intelligence.BookedHistoryComposition.Boundary.IMPORTED_PRE_TENANT_AUTHORITY_REQUIRED);
             assertThat(composed.ownerCompletenessProven()).isFalse();
             kz.rm.intelligence.BookedDigestPgEvidence.parity(jdbc,manager,tenant,START,END,2,0,0);
+            BookedMonthlyJourneyEvidence.qualify(service,reconciliation,declarations,owner,staff,tenant,monthlyCalendar,
+                otherOwner,otherReader,otherTenant,otherMonthlyCalendar,START,run);
             BookedConcurrencyEvidence.qualify(jdbc,manager,reconciliation,otherReader,otherTenant,START,END,
                 List.of(run),revokeReader,restoreReader);
             var barrier=new CyclicBarrier(2);

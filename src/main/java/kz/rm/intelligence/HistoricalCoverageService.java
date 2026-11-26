@@ -94,12 +94,17 @@ public class HistoricalCoverageService {
             var snapshot=new TransactionTemplate(manager);
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);snapshot.setReadOnly(true);snapshot.setTimeout(120);
-            var result=snapshot.execute(inner->inspectSnapshot(tenant,user,calendarVersion,required));
+            var result=snapshot.execute(inner->inspectSnapshot(jdbc,tenant,user,calendarVersion,required));
             actor.userId();
             return result;
         });
     }
-    private Assessment inspectSnapshot(UUID tenant,UUID actor,long calendarVersion,List<RequiredMonth> required){
+    // Internal snapshot reader shared by the authenticated monthly diagnostic.
+    // Both entry points hold the existing SALES admission fence outside this RR transaction.
+    static Assessment inspectSnapshot(JdbcTemplate jdbc,UUID tenant,UUID actor,long calendarVersion,List<RequiredMonth> required){
+        if(!TransactionSynchronizationManager.isActualTransactionActive()||
+            !TransactionSynchronizationManager.isCurrentTransactionReadOnly())
+            throw new IllegalStateException("S1_READ_SNAPSHOT_REQUIRED");
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>)c->
             c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
             throw new IllegalStateException("S1_POSTGRESQL_REQUIRED");
@@ -112,13 +117,13 @@ public class HistoricalCoverageService {
             """,rs->rs.next()?new Manifest(tenant,actor,calendarVersion,rs.getString(1),rs.getLong(4),
                 rs.getTimestamp(3).toInstant(),rs.getTimestamp(2).toInstant()):null,tenant,calendarVersion);
         if(manifest==null)throw new IllegalArgumentException("CALENDAR_VERSION_NOT_FOUND");
-        var counts=required.isEmpty()?Map.<YearMonth,SourceCounts>of():sourceCounts(manifest,required);
+        var counts=required.isEmpty()?Map.<YearMonth,SourceCounts>of():sourceCounts(jdbc,manifest,required);
         // No admitted owner completeness authority exists in the audited baseline.
         return assess(manifest,required,counts,Map.of());
     }
     /** Independent source identity audit. Not the projection view, not a digest verifier,
      * not a claim of completeness of imports or owner source retention. */
-    private Map<YearMonth,SourceCounts> sourceCounts(Manifest m,List<RequiredMonth> required){
+    private static Map<YearMonth,SourceCounts> sourceCounts(JdbcTemplate jdbc,Manifest m,List<RequiredMonth> required){
         var args=new ArrayList<Object>();
         for(int i=0;i<required.size();i++){
             var p=period(m,required.get(i).month());

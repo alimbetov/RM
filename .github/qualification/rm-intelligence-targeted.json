@@ -356,6 +356,22 @@
     {
       "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
       "name": "importedManifestCannotSubstituteForeignOrDifferentPopulation"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedMonthlyAuthorityQualificationTest",
+      "name": "exactPositiveAndZeroRemainUnqualified"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedMonthlyAuthorityQualificationTest",
+      "name": "adjacentPartitionMustAgreeWithIndependentMonthlyOracle"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedMonthlyAuthorityQualificationTest",
+      "name": "gapRevocationAndMixedModeAreExplicit"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedMonthlyAuthorityQualificationTest",
+      "name": "proofBudgetAndExactRequiredSetAreEnforced"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
