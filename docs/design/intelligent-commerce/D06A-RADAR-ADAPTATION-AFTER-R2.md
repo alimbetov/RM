@@ -86,3 +86,6 @@ Vision A1–A6 относятся к **отдельному провайдеру
 [Реестр адаптации](RADAR-ADAPTATION-TRACE-R2.json) связывает 21 сигнал с этапами и 48 семейств BV с предлагаемыми проверками. R2-S40 остаётся зонтичной записью. Для первого SALES среза выбираются применимые проверки, включая BV-13 и общие identity, security, performance. MC-06 связывает Radar с квалифицированными источниками. MC-07 относится к отдельному допуску доставки/Advisor. MC-08 сохраняет базовые MVP journeys и опциональную ветвь BUS-RADAR-I2. Runtime verdict определяется артефактами на candidate SHA.
 
 [Оговорка C3](../../reviews/RM-RADAR-C3-TEMPORARY-MERGE-DEFERRAL-R1.md) · [Execution DAG](../../spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json) · [PostgreSQL 17 Read Committed](https://www.postgresql.org/docs/17/transaction-iso.html#XACT-READ-COMMITTED)
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Radar использует MIC-compliant metric results; сохранять cohort, scope, UOM, quality и denominator. Не суммировать distinct SKU counts.

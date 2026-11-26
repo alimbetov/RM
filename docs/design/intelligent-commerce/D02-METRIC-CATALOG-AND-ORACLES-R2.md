@@ -107,3 +107,6 @@ Backfill/rebuild obey D01; additionally validate counts, amounts, cohort members
 ## 7. Производительность и exit B1/B3/B4
 Подготовить EXPLAIN plans, rows scanned/returned, temp spill/IO, p50/p95/p99 и allocation/GC на PostgreSQL 17 с 1k/10k/100k sources, dense/sparse/tenant skew. Нагрузочные бюджеты утверждаются до замеров; лимиты batch/window/cardinality обязательны, конкретные значения OPEN.
 Exit: все 8 паспортов admitted либо явно BLOCKED с причиной, signed identity fixtures, source validity, independent hand+SQL oracle, затем L1/L2 parity и recovery. Наличие этого документа не закрывает ни один runtime gate.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Order status counts аддитивны по непересекающимся периодам только при доказанной уникальности события; по категориям, складам и областям — EXACT_DISTINCT. SKU identity = tenant_id + catalog_item_id; price, label, group, warehouse и offer не создают новый SKU. CATALOG/ACTIVE/IN_STOCK/BOOKED/FULFILLED/OUT_OF_STOCK/DEAD_STOCK SKU counts — разные cohorts, не взаимозаменяемые. PRODUCT/SERVICE разделены; неизвестный SKU не выдумывать. Расширение scope требует admission.

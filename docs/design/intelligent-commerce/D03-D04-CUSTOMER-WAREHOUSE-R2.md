@@ -76,3 +76,6 @@ ABC×XYZ matrix включает отдельные UNKNOWN/NO_ACTIVITY кате
 ## 5. Приёмка и зависимости
 C1 после B1: direct Customer reads; W1 после B1: live Warehouse. C2/W2 после B4: reconciliation с проекциями. W3 после W2/B4 и утверждения методики. Ранний direct read не закрывает весь BUS-MVP-I1.
 Основные семьи: IE-Q11…19, MC-01/02/04; возвращаемся к source owner тестам из D07. Сервисные сценарии проектируются сейчас, REST/UI отложены до G2.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Customer/order/SKU counts — exact union. Warehouse position = tenant + warehouse + SKU; ассортимент не равен количеству позиций или единиц. ABC/XYZ пересчитываются из исходной статистики; booked/fulfilled/stock quantities разделены.

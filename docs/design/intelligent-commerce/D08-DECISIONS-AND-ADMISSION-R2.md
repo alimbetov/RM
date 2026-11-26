@@ -61,3 +61,6 @@ D08 можно закрывать только когда:
 7. Явно записаны baseline SHA, accepted design revision, ограничения и следующий gate.
 
 Текущий результат — подробный пакет для такого review. Он не утверждает IE-00B/A3/G1, merge PR #9 или production. Дизайн-ветка содержит только документы; код, DDL, CI и существующие тесты не меняются.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). MIC-R1 утверждён как обязательный архитектурный контракт; methodology и implementation admission остаются отдельными.
