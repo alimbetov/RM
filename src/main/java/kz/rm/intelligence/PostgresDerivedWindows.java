@@ -25,7 +25,15 @@ final class PostgresDerivedWindows {
         }
         String tuples=String.join(",",Collections.nCopies(args.size()/3,"(CAST(? AS text),CAST(? AS numeric),CAST(? AS numeric))"));
         String query="""
-            WITH input(series_key,i,v) AS (VALUES %s), stats AS (
+            WITH RECURSIVE input(series_key,i,v) AS (VALUES %s), sizes AS (
+              SELECT series_key,count(*)::numeric AS n FROM input GROUP BY series_key
+            ), ema(series_key,i,value) AS (
+              SELECT series_key,i,v FROM input WHERE i=0
+              UNION ALL
+              SELECT x.series_key,x.i,(2::numeric/(z.n+1))*x.v+(1-2::numeric/(z.n+1))*e.value
+              FROM ema e JOIN input x ON x.series_key=e.series_key AND x.i=e.i+1
+              JOIN sizes z ON z.series_key=x.series_key
+            ), stats AS (
               SELECT series_key,i,v,lag(v) OVER (PARTITION BY series_key ORDER BY i) AS previous,
                 count(*) OVER w AS n,sum(v) OVER w AS sy,sum(v*v) OVER w AS syy,
                 sum(i) OVER w AS sx,sum(i*i) OVER w AS sxx,sum(i*v) OVER w AS sxy,
@@ -35,9 +43,9 @@ final class PostgresDerivedWindows {
               SELECT DISTINCT ON (series_key) *,sy/n AS mean,sqrt((n*syy-sy*sy)/(n::numeric*n)) AS sd
               FROM stats WHERE n>=2 ORDER BY series_key,i DESC
             )
-            SELECT series_key,mean,v-previous,CASE WHEN previous>0 THEN (v-previous)/previous END,
-              (n*sxy-sx*sy)/(n*sxx-sx*sx),sd,CASE WHEN mean>0 THEN sd/mean END,lo,hi
-            FROM last_row
+            SELECT l.series_key,mean,v-previous,CASE WHEN previous>0 THEN (v-previous)/previous END,
+              (n*sxy-sx*sy)/(n*sxx-sx*sx),sd,CASE WHEN mean>0 THEN sd/mean END,lo,hi,e.value
+            FROM last_row l JOIN ema e ON e.series_key=l.series_key AND e.i=l.i
             """.formatted(tuples);
         return jdbc.query(query,rs->{
             var batch=new HashMap<String,Map<DerivedMetricEngine.Operator,BigDecimal>>();
@@ -45,7 +53,7 @@ final class PostgresDerivedWindows {
             var result=new EnumMap<DerivedMetricEngine.Operator,BigDecimal>(DerivedMetricEngine.Operator.class);
             var ops=new DerivedMetricEngine.Operator[]{DerivedMetricEngine.Operator.AVG,DerivedMetricEngine.Operator.PERIOD_CHANGE,
                 DerivedMetricEngine.Operator.PERIOD_GROWTH,DerivedMetricEngine.Operator.TREND,DerivedMetricEngine.Operator.STDDEV_POP,
-                DerivedMetricEngine.Operator.CV,DerivedMetricEngine.Operator.MIN,DerivedMetricEngine.Operator.MAX};
+                DerivedMetricEngine.Operator.CV,DerivedMetricEngine.Operator.MIN,DerivedMetricEngine.Operator.MAX,DerivedMetricEngine.Operator.EMA};
             for(int i=0;i<ops.length;i++){var v=rs.getBigDecimal(i+2);if(v!=null)result.put(ops[i],v);}
             result.put(DerivedMetricEngine.Operator.SMA,result.get(DerivedMetricEngine.Operator.AVG));
             result.put(DerivedMetricEngine.Operator.FORECAST_NEXT,result.get(DerivedMetricEngine.Operator.AVG));

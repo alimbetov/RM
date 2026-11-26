@@ -20,3 +20,6 @@ Native PostgreSQL batch calculator partitions bound numerical inputs by series k
 
 ## Predictive candidate envelope v1
 Series carries actual transaction observation time, anchor and period code. Candidate envelope binds input observations, tenant, generation, dimensional filter, revisions, derived method and numeric policy version. Current snapshot only; historical training and production inference explicitly denied. No immutable historical event-availability ledger or persistence of feature envelopes yet. Do not interpret observation time as historical knowledge time. No test changes.
+
+## B4.5E.7C — set-based period extraction and PostgreSQL EMA
+Single bound SQL statement extracts the complete requested period set for one metric/dimensional filter; no per-period query. Requested calendar rows drive left joins, preserving missing/stale observations. Exact identities are grouped by target period, additive sums remain independent of membership. Multiple dimensional filters in a single extraction remain open. Recursive numeric EMA uses the finite-window seed and alpha=2/(n+1), now included in parity checks. PostgreSQL precision and workload remain unqualified; no tests changed.

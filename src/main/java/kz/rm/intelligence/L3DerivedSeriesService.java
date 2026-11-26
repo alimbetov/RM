@@ -121,19 +121,11 @@ class L3DerivedSeriesService {
             var scope=new DerivedMetricEngine.Scope(tenant,generation,metric.name(),1,filter.toString(),
                 actorKey,metric.unit,Objects.toString(filter.currency(),"NONE"),code,snapshot.calendar(),snapshot.revision().source());
             var periods=DerivedMetricEngine.closedWindow(scope,anchor,now,window);
-            var observations=new ArrayList<Observation>();
+            var observations=readPeriods(tenant,generation,metric,filter,code,periods,snapshot);
             var points=new ArrayList<DerivedMetricEngine.Point>();
-            for(var period:periods){
-                LocalDate from=period.startInclusive().atZone(snapshot.calendar().zone()).toLocalDate();
-                LocalDate until=period.endExclusive().atZone(snapshot.calendar().zone()).toLocalDate();
-                Observation o;
-                if(from.isBefore(snapshot.from())||until.isAfter(snapshot.until()))
-                    o=new Observation(period,null,DataQuality.MISSING,"OUTSIDE_GENERATION");
-                else o=readPeriod(tenant,generation,metric,filter,code,period,from,until,snapshot.revision().dirty());
-                observations.add(o);
-                // Source parity permits candidate arithmetic, not a historical completeness or activation claim.
+            for(var o:observations){
                 var arithmeticQuality=parity && o.quality()==DataQuality.PARTIAL && o.value()!=null ? DataQuality.READY:o.quality();
-                points.add(new DerivedMetricEngine.Point(scope,period,o.value(),arithmeticQuality,now));
+                points.add(new DerivedMetricEngine.Point(scope,o.period(),o.value(),arithmeticQuality,now));
             }
             var derived=new EnumMap<DerivedMetricEngine.Operator,DerivedMetricEngine.Result>(DerivedMetricEngine.Operator.class);
             for(var op:DerivedMetricEngine.Operator.values()){
@@ -148,7 +140,6 @@ class L3DerivedSeriesService {
                 :Map.<DerivedMetricEngine.Operator,BigDecimal>of();
             if(!sqlCandidates.isEmpty()){
                 for(var op:DerivedMetricEngine.Operator.values()){
-                    if(op==DerivedMetricEngine.Operator.EMA)continue;
                     if(!DerivedNumericParity.equivalent(op,derived.get(op).value(),sqlCandidates.get(op)))
                         throw new IllegalStateException("DERIVED_NUMERIC_PARITY_MISMATCH:"+op);
                 }
@@ -156,18 +147,26 @@ class L3DerivedSeriesService {
             return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates,code,anchor,now);
         });
     }
-    private Observation readPeriod(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,
-                                   PeriodResolver.Period period,LocalDate from,LocalDate until,long dirty){
-        Long stamp=jdbc.query("""
-            SELECT refreshed_revision FROM crm.int_l3_period
-            WHERE tenant_id=? AND generation_id=? AND period_code=? AND from_day=? AND until_day=?
-            """,rs->rs.next()?rs.getObject(1,Long.class):null,tenant,gen,code.name(),from,until);
-        if(stamp==null||stamp!=dirty)return new Observation(period,null,DataQuality.STALE,"L3_PERIOD_NOT_CURRENT");
-        var args=new ArrayList<Object>(List.of(tenant,gen,code.name(),from,metric.stream));
+    // One set-based extraction for all requested calendar periods. Missing periods stay explicit.
+    private List<Observation> readPeriods(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,
+                                          List<PeriodResolver.Period> periods,Snapshot snapshot){
+        var args=new ArrayList<Object>();
+        for(var period:periods){
+            args.add(period.startInclusive().atZone(snapshot.calendar().zone()).toLocalDate());
+            args.add(period.endExclusive().atZone(snapshot.calendar().zone()).toLocalDate());
+        }
+        String tuples=String.join(",",Collections.nCopies(periods.size(),"(CAST(? AS date),CAST(? AS date))"));
         StringBuilder sql=new StringBuilder("""
-            WITH selected AS (
-              SELECT * FROM crm.int_l3_cell WHERE tenant_id=? AND generation_id=? AND period_code=? AND from_day=? AND stream_code=?
-            """);
+            WITH requested(from_day,until_day) AS (VALUES %s),
+            valid AS (
+              SELECT p.* FROM requested r JOIN crm.int_l3_period p
+                ON p.from_day=r.from_day AND p.until_day=r.until_day
+              WHERE p.tenant_id=? AND p.generation_id=? AND p.period_code=? AND p.refreshed_revision=?
+            ), selected AS (
+              SELECT x.* FROM crm.int_l3_cell x JOIN valid p USING(tenant_id,generation_id,period_code,from_day)
+              WHERE x.stream_code=?
+            """.formatted(tuples));
+        args.addAll(List.of(tenant,gen,code.name(),snapshot.revision().dirty(),metric.stream));
         if(f.region()!=null){sql.append(" AND region_code=?");args.add(f.region());}
         if(f.group()!=null){
             sql.append("""
@@ -189,30 +188,53 @@ class L3DerivedSeriesService {
             args.addAll(f.warehouses());
         }
         if(metric==Metric.FULFILLED_PRODUCT_ORDERS || metric.operation.equals("PRODUCT_UNITS"))sql.append(" AND item_kind='PRODUCT'");
-        sql.append(") ");
+        sql.append("), aggregated AS (");
         sql.append(switch(metric.operation){
             case "ORDER" -> """
-                SELECT count(DISTINCT o.order_id)::numeric FROM selected s JOIN crm.int_l3_cell_order o
-                  USING(tenant_id,generation_id,period_code,from_day,cell_id) HAVING count(*)>0
+                SELECT s.from_day,count(DISTINCT o.order_id)::numeric AS value FROM selected s
+                JOIN crm.int_l3_cell_order o USING(tenant_id,generation_id,period_code,from_day,cell_id)
+                GROUP BY s.from_day
                 """;
-            case "SKU" -> "SELECT count(DISTINCT sku_id)::numeric FROM selected HAVING count(*)>0 AND count(sku_id)=count(*)";
+            case "SKU" -> "SELECT from_day,count(DISTINCT sku_id)::numeric AS value FROM selected GROUP BY from_day HAVING count(sku_id)=count(*)";
             case "LINE" -> """
-                SELECT count(DISTINCT l.line_id)::numeric FROM selected s
-                JOIN crm.int_l3_period p USING(tenant_id,generation_id,period_code,from_day)
+                SELECT s.from_day,count(DISTINCT l.line_id)::numeric AS value FROM selected s
+                JOIN valid p USING(tenant_id,generation_id,period_code,from_day)
                 JOIN crm.int_l2_contribution l ON l.tenant_id=s.tenant_id AND l.generation_id=s.generation_id
                   AND l.local_day>=p.from_day AND l.local_day<p.until_day
                   AND (l.stream_code,l.region_code,l.group_id,l.item_kind,l.warehouse_id,l.sku_id,l.currency)
                     IS NOT DISTINCT FROM (s.stream_code,s.region_code,s.group_id,s.item_kind,s.warehouse_id,s.sku_id,s.currency)
-                HAVING count(*)>0 AND count(l.line_id)=count(*)
+                GROUP BY s.from_day HAVING count(l.line_id)=count(*)
                 """;
-            case "AMOUNT" -> "SELECT sum(amount) FROM selected";
-            case "PRODUCT_UNITS" -> "SELECT CASE WHEN count(*)=count(product_order_units) THEN sum(product_order_units) END FROM selected";
-            case "QTY_IN" -> "SELECT sum(qty_in) FROM selected";
-            case "QTY_OUT" -> "SELECT sum(qty_out) FROM selected";
+            case "AMOUNT" -> "SELECT from_day,sum(amount) AS value FROM selected GROUP BY from_day";
+            case "PRODUCT_UNITS" -> "SELECT from_day,CASE WHEN count(*)=count(product_order_units) THEN sum(product_order_units) END AS value FROM selected GROUP BY from_day";
+            case "QTY_IN" -> "SELECT from_day,sum(qty_in) AS value FROM selected GROUP BY from_day";
+            case "QTY_OUT" -> "SELECT from_day,sum(qty_out) AS value FROM selected GROUP BY from_day";
             default -> throw new IllegalArgumentException("DERIVED_METRIC");
         });
-        BigDecimal value=jdbc.query(sql.toString(),rs->rs.next()?rs.getBigDecimal(1):null,args.toArray());
-        return new Observation(period,value,value==null?DataQuality.MISSING:DataQuality.PARTIAL,
-            value==null?"NO_QUALIFIED_VALUE":"SHADOW_L3_SOURCE_ADMISSION_REQUIRED");
+        sql.append("""
+            ) SELECT r.from_day,v.from_day IS NOT NULL,a.value FROM requested r
+              LEFT JOIN valid v ON v.from_day=r.from_day
+              LEFT JOIN aggregated a ON a.from_day=r.from_day ORDER BY r.from_day
+            """);
+        record Row(boolean current,BigDecimal value){}
+        var rows=jdbc.query(sql.toString(),rs->{
+            var result=new HashMap<LocalDate,Row>();
+            while(rs.next())if(result.put(rs.getObject(1,LocalDate.class),new Row(rs.getBoolean(2),rs.getBigDecimal(3)))!=null)
+                throw new IllegalStateException("DERIVED_DUPLICATE_PERIOD");
+            return result;
+        },args.toArray());
+        var result=new ArrayList<Observation>();
+        for(var period:periods){
+            LocalDate from=period.startInclusive().atZone(snapshot.calendar().zone()).toLocalDate();
+            LocalDate until=period.endExclusive().atZone(snapshot.calendar().zone()).toLocalDate();
+            Row row=rows.get(from);
+            if(row==null)throw new IllegalStateException("DERIVED_PERIOD_MISSING");
+            if(from.isBefore(snapshot.from())||until.isAfter(snapshot.until()))
+                result.add(new Observation(period,null,DataQuality.MISSING,"OUTSIDE_GENERATION"));
+            else if(!row.current())result.add(new Observation(period,null,DataQuality.STALE,"L3_PERIOD_NOT_CURRENT"));
+            else result.add(new Observation(period,row.value(),row.value()==null?DataQuality.MISSING:DataQuality.PARTIAL,
+                row.value()==null?"NO_QUALIFIED_VALUE":"SHADOW_L3_SOURCE_ADMISSION_REQUIRED"));
+        }
+        return List.copyOf(result);
     }
 }
