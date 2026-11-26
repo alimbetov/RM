@@ -52,7 +52,8 @@ class L3DerivedSeriesService {
     record Observation(PeriodResolver.Period period,BigDecimal value,DataQuality quality,String reason){}
     record Series(UUID tenant,UUID generation,Metric metric,Filter filter,Revision revision,
                   List<Observation> facts,Map<DerivedMetricEngine.Operator,DerivedMetricEngine.Result> derived,
-                  Map<DerivedMetricEngine.Operator,BigDecimal> sqlCandidates){}
+                  Map<DerivedMetricEngine.Operator,BigDecimal> sqlCandidates,
+                  PeriodResolver.Code periodCode,LocalDate anchor,Instant observedAt){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final MultidimensionalCoverageService coverage;
@@ -152,7 +153,7 @@ class L3DerivedSeriesService {
                         throw new IllegalStateException("DERIVED_NUMERIC_PARITY_MISMATCH:"+op);
                 }
             }
-            return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates);
+            return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates,code,anchor,now);
         });
     }
     private Observation readPeriod(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,
