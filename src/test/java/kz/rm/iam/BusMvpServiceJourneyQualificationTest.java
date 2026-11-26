@@ -376,6 +376,15 @@ class BusMvpServiceJourneyQualificationTest {
                 "Second regional warehouse",childKato==null?secondKato:childKato,"Second warehouse");
             assertThatThrownBy(()->dimensions.stock(staff,tenant,List.of(warehouse.id(),second.id()),from,until,31))
                 .isInstanceOf(SecurityException.class);
+            var b55=applicationContext.getBean(kz.rm.intelligence.BusinessConclusionService.class);
+            var endDay=java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+            var days=List.of(endDay.minusDays(1),endDay);
+            long b55Calendar=calendar.append(owner,tenant,"Etc/UTC",0).version();
+            var mixedWarehouses=new kz.rm.intelligence.AuthorizedAnalyticalReadService.Query(
+                kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.STOCK_IN,b55Calendar,
+                kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,published.id(),List.of(warehouse.id(),second.id()),null);
+            assertThatThrownBy(()->b55.concludePattern(staff,tenant,mixedWarehouses,days,1,BigDecimal.ONE,BigDecimal.ZERO,
+                1,new BigDecimal("3"),new BigDecimal("0.5"))).isInstanceOf(SecurityException.class);
             warehouseScope.assign(owner,tenant,second.id(),staffId);
             stock.receive(staff,tenant,second.id(),published.id(),"b4-second-region-"+UUID.randomUUID(),new BigDecimal("5"));
             var regions=dimensions.stock(staff,tenant,List.of(warehouse.id(),second.id()),from,until,31);
@@ -407,6 +416,23 @@ class BusMvpServiceJourneyQualificationTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("CAT_ASSIGNMENT_GROUP_NOT_FOUND");
             var otherGroup=groups.appendNode(otherStaff,otherTenant,CatalogItem.Kind.PRODUCT,"01","Other tenant group",null,0);
             assertThat(groups.assign(otherStaff,otherTenant,otherItem.id(),otherGroup.id(),0).groupId()).isEqualTo(otherGroup.id());
+            var foreignSku=new kz.rm.intelligence.AuthorizedAnalyticalReadService.Query(
+                kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.STOCK_IN,b55Calendar,
+                kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,otherItem.id(),List.of(warehouse.id()),null);
+            var foreignGroup=new kz.rm.intelligence.AuthorizedAnalyticalReadService.Query(
+                kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.STOCK_IN,b55Calendar,
+                kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,otherGroup.id(),published.id(),List.of(warehouse.id()),null);
+            for(var invalidScope:List.of(foreignSku,foreignGroup))
+                assertThatThrownBy(()->b55.concludePattern(staff,tenant,invalidScope,days,1,BigDecimal.ONE,BigDecimal.ZERO,
+                    1,new BigDecimal("3"),new BigDecimal("0.5"))).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("NOT_FOUND");
+            long otherB55Calendar=calendar.append(otherOwner,otherTenant,"Etc/UTC",0).version();
+            var qA=new kz.rm.intelligence.AuthorizedAnalyticalReadService.Query(
+                kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,b55Calendar,
+                kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,null,List.of(),null);
+            var qB=new kz.rm.intelligence.AuthorizedAnalyticalReadService.Query(
+                kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,otherB55Calendar,
+                kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,null,List.of(),null);
+            ConclusionConcurrencyEvidence.twoTenants(b55,staff,tenant,qA,otherStaff,otherTenant,qB,days);
             assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))
                 .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
             assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))

@@ -12,6 +12,7 @@ on:
       - 'pom.xml'
       - 'src/test/java/kz/rm/intelligence/**'
       - 'src/test/java/kz/rm/iam/L1ProjectionJourneyEvidence.java'
+      - 'src/test/java/kz/rm/iam/ConclusionConcurrencyEvidence.java'
       - 'src/test/java/kz/rm/iam/ActivationJourneyEvidence.java'
       - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
       - 'src/test/java/kz/rm/iam/CanonicalFactJourneyEvidence.java'

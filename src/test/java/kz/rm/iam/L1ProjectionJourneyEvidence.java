@@ -435,6 +435,9 @@ final class L1ProjectionJourneyEvidence {
             assertThatThrownBy(()->observation.observe(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
         }finally{restore.run();}
 
+        ConclusionConcurrencyEvidence.boundedWindow(conclusions,staff,tenant,stockQuery);
+        ConclusionConcurrencyEvidence.revokeBeforeRead(jdbc,manager,conclusions,staff,tenant,stockQuery,dates,revoke,restore);
+        ConclusionConcurrencyEvidence.readBeforeRevoke(jdbc,manager,conclusions,staff,tenant,stockQuery,dates,revoke,restore);
         assertThat(activated.replay()).isFalse();
         assertThat(dimProof.status(tenant,gen,activated.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
         assertThat(dimProof.activate(tenant,gen,activationProof.id(),null).activeProof()).isEqualTo(activated.activeProof());
@@ -443,7 +446,7 @@ final class L1ProjectionJourneyEvidence {
         assertThatThrownBy(()->l3.refresh(tenant,gen,PeriodResolver.Code.D,from)).hasMessage("L3_GENERATION_NOT_BUILDING");
         long otherCalendar=context.getBean(CalendarPolicyService.class).append(foreign,otherTenant,"Etc/UTC",0).version();
         ActivationJourneyEvidence.qualify(jdbc,manager,l1,l2,l3,dimProof,appender,tenant,otherTenant,
-            gen,activated,calendarVersion,otherCalendar,from,until,g.zone(),order,reader,staff,stockQuery);
+            gen,activated,calendarVersion,otherCalendar,from,until,g.zone(),order,reader,staff,stockQuery,conclusions);
         selectorPlans(jdbc,manager,tenant);
     }
     /** Bounded selector-only experiment, not end-to-end apply throughput. */

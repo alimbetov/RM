@@ -224,6 +224,30 @@
     {
       "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
       "name": "deniedReadPropagatesWithoutConclusion"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "mixedRouteAndGenerationMismatchAbstain"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "heterogeneousUnitsAndWrongMetadataFailClosed"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "optionalHistoryCannotBlockQualifiedNarrowObservation"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "independentThresholdAndGrowthOracle"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "factorMixedRoutesNeverProduceQualifiedHypotheses"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "missingAndOpenPeriodHaveExplicitReasons"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

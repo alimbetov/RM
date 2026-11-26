@@ -42,7 +42,7 @@ final class ActivationJourneyEvidence {
             L3RollupService l3,MultidimensionalCoverageService coverage,CanonicalFactAppender appender,
             UUID tenant,UUID otherTenant,UUID first,MultidimensionalCoverageService.Activation firstActivation,
             long calendar,long otherCalendar,LocalDate from,LocalDate until,ZoneId zone,UUID order,
-            AuthorizedAnalyticalReadService reader,VerifiedActor staff,AuthorizedAnalyticalReadService.Query stockQuery){
+            AuthorizedAnalyticalReadService reader,VerifiedActor staff,AuthorizedAnalyticalReadService.Query stockQuery,BusinessConclusionService conclusions){
         // Select a definitely closed daily interval within the generation.
         var readQuery=new AuthorizedAnalyticalReadService.Query(stockQuery.metric(),calendar,PeriodResolver.Code.D,
             from,stockQuery.region(),stockQuery.group(),stockQuery.sku(),stockQuery.warehouses(),stockQuery.currency());
@@ -230,9 +230,22 @@ final class ActivationJourneyEvidence {
                 assertThat(beforeSwitch.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
                 var switchBarrier=new CyclicBarrier(2);
                 var switching=pool.submit(()->{switchBarrier.await(15,TimeUnit.SECONDS);return coverage.activate(tenant,rebuild,replay.proof(),winner);});
-                var reading=pool.submit(()->{switchBarrier.await(15,TimeUnit.SECONDS);return reader.read(staff,tenant,readQuery);});
+                var end=from.plusDays(1);
+                var conclusionQuery=new AuthorizedAnalyticalReadService.Query(readQuery.metric(),calendar,PeriodResolver.Code.D,
+                    end,readQuery.region(),readQuery.group(),readQuery.sku(),readQuery.warehouses(),readQuery.currency());
+                var reading=pool.submit(()->{switchBarrier.await(15,TimeUnit.SECONDS);return conclusions.concludePattern(staff,tenant,
+                    conclusionQuery,List.of(from,end),1,java.math.BigDecimal.ONE,java.math.BigDecimal.ZERO,1,new java.math.BigDecimal("3"),new java.math.BigDecimal("0.5"));});
                 var recovered=switching.get(120,TimeUnit.SECONDS);
-                var concurrentRead=reading.get(120,TimeUnit.SECONDS);
+                var envelope=reading.get(120,TimeUnit.SECONDS);
+                assertThat(envelope.tenant()).isEqualTo(tenant);
+                var observations=envelope.evidence().getFirst().points();
+                assertThat(observations).hasSize(2);
+                assertThat(observations.stream().map(AuthorizedAnalyticalReadService.Result::observedAt).distinct().count()).isEqualTo(1);
+                assertThat(observations.stream().map(AuthorizedAnalyticalReadService.Result::sourceRevision).distinct().count()).isEqualTo(1);
+                var materialized=observations.stream().filter(e->e.route()==AuthorizedAnalyticalReadService.Route.L3).toList();
+                assertThat(materialized).allSatisfy(e->{assertThat(e.generation()).isEqualTo(rebuild);assertThat(e.proof()).isEqualTo(recovered.activeProof());});
+                assertThat(envelope.findings()).allSatisfy(f->assertThat(f.disposition()).isEqualTo(BusinessConclusionService.Disposition.ABSTAINED));
+                var concurrentRead=observations.getFirst();
                 if(concurrentRead.route()==AuthorizedAnalyticalReadService.Route.L3){
                     assertThat(concurrentRead.generation()).isEqualTo(rebuild);
                     assertThat(concurrentRead.proof()).isEqualTo(recovered.activeProof());
