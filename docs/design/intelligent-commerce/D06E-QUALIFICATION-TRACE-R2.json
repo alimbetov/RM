@@ -1032,5 +1032,35 @@
       "JOB-01",
       "PERF-02"
     ]
+  },
+  "partitioned_report_staging": {
+    "document": "D06E.5.3-PARTITIONED-REPORT-STAGING-ARTIFACT-LIFECYCLE-R2.md",
+    "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED",
+    "partition_key": "staging_date",
+    "partition_calendar": "UTC",
+    "partition_grain": "DAY_RANGE",
+    "auto_create": true,
+    "lookahead_days_proposed": 2,
+    "minimum_success_retention_hours": 24,
+    "cleanup": "WHOLE_ELIGIBLE_SEALED_PARTITION",
+    "code_contracts": [
+      "CC-02",
+      "CC-10",
+      "CC-11",
+      "CC-12"
+    ],
+    "qualification_cases": [
+      "UAP-04",
+      "UAP-08",
+      "UAP-09",
+      "UAP-10",
+      "JOB-01",
+      "JOB-02",
+      "SEC-02",
+      "PERF-02",
+      "TPL-02",
+      "TPL-05"
+    ],
+    "implementation_admission": false
   }
 }
