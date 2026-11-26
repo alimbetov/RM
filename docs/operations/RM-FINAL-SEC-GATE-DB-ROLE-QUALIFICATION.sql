@@ -641,4 +641,39 @@ BEGIN
  RAISE NOTICE 'S1_NATIVE_READER_ROLE_PASS';
 END $$;
 RESET ROLE;
+
+-- A SELECT-only snapshot reader cannot lock a row with FOR UPDATE.
+-- The dedicated lock candidate has UPDATE on only the immutable policy column.
+-- A no-op write is rejected by the transition trigger; this is a qualification
+-- role, not deployment of the application connection identity.
+CREATE ROLE rm_s1_native_lock_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA crm TO rm_s1_native_lock_gate;
+GRANT SELECT ON crm.int_native_booked_capture TO rm_s1_native_lock_gate;
+GRANT UPDATE(policy_version) ON crm.int_native_booked_capture TO rm_s1_native_lock_gate;
+SET LOCAL ROLE rm_s1_native_lock_gate;
+DO $$
+DECLARE t uuid; locked uuid;
+BEGIN
+ SELECT tenant_id INTO STRICT t FROM crm.int_native_booked_capture WHERE started_at IS NOT NULL ORDER BY tenant_id LIMIT 1;
+ SELECT tenant_id INTO STRICT locked FROM crm.int_native_booked_capture WHERE tenant_id=t FOR UPDATE;
+ IF locked<>t OR NOT has_column_privilege(current_user,'crm.int_native_booked_capture','policy_version','UPDATE')
+   OR has_column_privilege(current_user,'crm.int_native_booked_capture','started_at','UPDATE')
+   OR has_column_privilege(current_user,'crm.int_native_booked_capture','activated_by','UPDATE')
+   OR has_column_privilege(current_user,'crm.int_native_booked_capture','tenant_id','UPDATE')
+   OR has_table_privilege(current_user,'crm.int_native_booked_capture','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+ THEN RAISE EXCEPTION 'S1_NATIVE_LOCK_PRIVILEGE'; END IF;
+ BEGIN
+  UPDATE crm.int_native_booked_capture SET policy_version=policy_version WHERE tenant_id=t;
+  RAISE EXCEPTION 'S1_NATIVE_LOCK_MUTATION_ALLOWED';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM<>'S1_NATIVE_CAPTURE_IMMUTABLE' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE crm.int_native_booked_capture SET activated_by=NULL WHERE tenant_id=t;
+  RAISE EXCEPTION 'S1_NATIVE_LOCK_ACTIVATION_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ RAISE NOTICE 'S1_NATIVE_LOCK_ROLE_PASS';
+END $$;
+RESET ROLE;
 ROLLBACK;
