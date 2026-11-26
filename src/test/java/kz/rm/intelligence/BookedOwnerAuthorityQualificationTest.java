@@ -61,4 +61,30 @@ class BookedOwnerAuthorityQualificationTest {
         var open=classify(T,A,R,FROM,UNTIL,7,2,UNTIL.minusSeconds(1),e.counts(),e.digest());
         assertThat(evaluate(open,c).status()).isEqualTo(Status.OPEN_INTERVAL);
     }
+
+    private BookedOwnerDeclarationService.Stored stored(UUID tenant,UUID run,int version,boolean revoked){
+        var draft=new BookedOwnerDeclarationService.Draft(new UUID(0,4),run,BookedHistoryComposition.Mode.IMPORTED_HISTORY,
+            "SYNTHETIC_MANIFEST","b".repeat(64),7,2,2,DIGEST);
+        return new BookedOwnerDeclarationService.Stored(tenant,A,version,draft,FROM,UNTIL,UNTIL,revoked);
+    }
+    @Test void persistedTenantAndRunCannotBeRelabelledEvenWhenRevoked(){
+        var e=evidence(T,7,2,2,false);
+        for(boolean revoked:List.of(false,true)){
+            var foreign=stored(new UUID(0,9),R,AUTHORITY_VERSION,revoked);
+            var wrongRun=stored(T,new UUID(0,9),AUTHORITY_VERSION,revoked);
+            for(var row:List.of(foreign,wrongRun))
+                assertThatThrownBy(()->BookedOwnerDeclarationService.inspect(row,e))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessage("S1_DECLARATION_SCOPE");
+        }
+    }
+    @Test void persistedAuthorityVersionCannotBeReplacedByCurrentVersion(){
+        var e=evidence(T,7,2,2,false);
+        var result=BookedOwnerDeclarationService.inspect(stored(T,R,AUTHORITY_VERSION+1,false),e);
+        assertThat(result.state()).isEqualTo(BookedOwnerDeclarationService.State.INVALID_PROVENANCE);
+        assertThat(result.admitted()).isFalse();
+        assertThat(result.eligibility()).isEqualTo(HistoricalCoverageService.Eligibility.BLOCKED);
+        var match=BookedOwnerDeclarationService.inspect(stored(T,R,AUTHORITY_VERSION,false),e);
+        assertThat(match.state()).isEqualTo(BookedOwnerDeclarationService.State.MATCHED_CONTRACT_NOT_ADMITTED);
+        assertThat(match.admitted()).isFalse();
+    }
 }

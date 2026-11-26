@@ -36,9 +36,15 @@ public class BookedOwnerDeclarationService {
                              HistoricalCoverageService.Eligibility eligibility){
         public boolean admitted(){return false;}
     }
-    record Stored(UUID issuer,Draft draft,Instant from,Instant until,Instant issuedAt,boolean revoked){
-        BookedOwnerAuthorityContract.Claim claim(UUID tenant){
-            return new BookedOwnerAuthorityContract.Claim(draft.proofId(),BookedOwnerAuthorityContract.AUTHORITY_VERSION,
+    record Stored(UUID tenant,UUID issuer,int authorityVersion,Draft draft,Instant from,Instant until,Instant issuedAt,boolean revoked){
+        Stored {
+            Objects.requireNonNull(tenant);Objects.requireNonNull(issuer);Objects.requireNonNull(draft);
+            Objects.requireNonNull(from);Objects.requireNonNull(until);Objects.requireNonNull(issuedAt);
+            if(!from.isBefore(until)||until.isAfter(issuedAt))
+                throw new IllegalArgumentException("S1_STORED_DECLARATION_RANGE");
+        }
+        BookedOwnerAuthorityContract.Claim claim(){
+            return new BookedOwnerAuthorityContract.Claim(draft.proofId(),authorityVersion,
                 BookedOwnerAuthorityContract.Mode.valueOf(draft.mode().name()),"TENANT_OWNER:"+issuer,draft.provenanceRef(),
                 draft.provenanceDigest(),new BookedSourceReconciliationService.RevisionBinding(tenant,draft.runId(),from,until,
                     draft.sourceRevision(),draft.receiptRevision()),from,until,issuedAt,draft.expectedOrders(),draft.expectedPopulationDigest());
@@ -58,7 +64,7 @@ public class BookedOwnerDeclarationService {
         Objects.requireNonNull(draft);
         return ownerTransaction(owner,tenant,user->{
             var existing=load(jdbc,tenant,draft.proofId());
-            if(existing!=null)return idempotent(existing,user,draft);
+            if(existing!=null)return idempotent(existing,tenant,user,draft);
             var run=jdbc.query("""
                 SELECT r.range_start,r.range_end,w.created_at,transaction_timestamp(),
                   coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=r.tenant_id),0)
@@ -86,11 +92,12 @@ public class BookedOwnerDeclarationService {
                 """,tenant,draft.proofId(),draft.runId(),user,draft.mode().name(),draft.provenanceRef(),draft.provenanceDigest(),
                 Timestamp.from(run.from()),Timestamp.from(run.until()),draft.sourceRevision(),draft.receiptRevision(),
                 draft.expectedOrders(),draft.expectedPopulationDigest());
-            return idempotent(Objects.requireNonNull(load(jdbc,tenant,draft.proofId())),user,draft);
+            return idempotent(Objects.requireNonNull(load(jdbc,tenant,draft.proofId())),tenant,user,draft);
         });
     }
-    private static UUID idempotent(Stored existing,UUID issuer,Draft draft){
-        if(!existing.issuer().equals(issuer)||!existing.draft().equals(draft))
+    private static UUID idempotent(Stored existing,UUID tenant,UUID issuer,Draft draft){
+        if(!existing.tenant().equals(tenant)||!existing.issuer().equals(issuer)||
+            existing.authorityVersion()!=BookedOwnerAuthorityContract.AUTHORITY_VERSION||!existing.draft().equals(draft))
             throw new IllegalArgumentException("S1_DECLARATION_ID_CONFLICT");
         return draft.proofId();
     }
@@ -114,7 +121,11 @@ public class BookedOwnerDeclarationService {
         tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);tx.setTimeout(60);
         return tx.execute(st->{
             UUID user=owner.userId();
-            authorization.requireForCommand(user,tenant,DomainPermission.TENANT_RBAC_MANAGE);
+            var decision=authorization.requireForCommand(user,tenant,DomainPermission.TENANT_RBAC_MANAGE);
+            if(!decision.validForCurrentTransaction()||!user.equals(decision.actorId())||!tenant.equals(decision.tenantId())||
+                decision.role()!=kz.rm.iam.OrganizationMembershipEntity.Role.OWNER||
+                decision.permission()!=DomainPermission.TENANT_RBAC_MANAGE)
+                throw new SecurityException("S1_OWNER_ADMISSION_REQUIRED");
             if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>)c->
                 c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
                 throw new IllegalStateException("S1_POSTGRESQL_REQUIRED");
@@ -125,17 +136,24 @@ public class BookedOwnerDeclarationService {
     static Stored load(JdbcTemplate jdbc,UUID tenant,UUID proofId){
         return jdbc.query("""
             SELECT d.issuer_id,d.run_id,d.history_mode,d.provenance_ref,d.provenance_digest,d.source_revision,d.receipt_revision,
-              d.expected_orders,d.expected_population_digest,d.source_from,d.source_until,d.issued_at,(v.proof_id IS NOT NULL)
+              d.expected_orders,d.expected_population_digest,d.source_from,d.source_until,d.issued_at,(v.proof_id IS NOT NULL),
+              d.tenant_id,d.authority_version
             FROM crm.int_booked_owner_declaration d LEFT JOIN crm.int_booked_owner_revocation v
               ON v.tenant_id=d.tenant_id AND v.proof_id=d.proof_id
             WHERE d.tenant_id=? AND d.proof_id=? AND d.authority_version=1
-            """,rs->rs.next()?new Stored(rs.getObject(1,UUID.class),new Draft(proofId,rs.getObject(2,UUID.class),
+            """,rs->rs.next()?new Stored(rs.getObject(14,UUID.class),rs.getObject(1,UUID.class),rs.getInt(15),
+                new Draft(proofId,rs.getObject(2,UUID.class),
                 BookedHistoryComposition.Mode.valueOf(rs.getString(3)),rs.getString(4),rs.getString(5).trim(),rs.getLong(6),
                 rs.getLong(7),rs.getLong(8),rs.getString(9).trim()),rs.getTimestamp(10).toInstant(),rs.getTimestamp(11).toInstant(),
                 rs.getTimestamp(12).toInstant(),rs.getBoolean(13)):null,tenant,proofId);
     }
     static Inspection inspect(Stored stored,BookedSourceReconciliationService.Evidence current){
-        var state=stored.revoked()?State.REVOKED:State.valueOf(BookedOwnerAuthorityContract.evaluate(current,stored.claim(current.tenant())).status().name());
+        Objects.requireNonNull(stored);Objects.requireNonNull(current);
+        // Reject before any output, including revoked status. Do not relabel a
+        // persisted declaration with the tenant or run of the current snapshot.
+        if(!stored.tenant().equals(current.tenant())||!stored.draft().runId().equals(current.runId()))
+            throw new IllegalArgumentException("S1_DECLARATION_SCOPE");
+        var state=stored.revoked()?State.REVOKED:State.valueOf(BookedOwnerAuthorityContract.evaluate(current,stored.claim()).status().name());
         return new Inspection(current.tenant(),current.actor(),stored.draft().proofId(),current.runId(),stored.draft().mode(),
             state,current.sourceRevision(),current.receiptRevision(),current.asOf(),HistoricalCoverageService.Eligibility.BLOCKED);
     }

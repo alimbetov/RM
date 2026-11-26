@@ -336,6 +336,14 @@
     {
       "classname": "kz.rm.intelligence.BookedHistoryCompositionQualificationTest",
       "name": "openOrUnreconciledIntervalsNeverYieldTotals"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "persistedTenantAndRunCannotBeRelabelledEvenWhenRevoked"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "persistedAuthorityVersionCannotBeReplacedByCurrentVersion"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
