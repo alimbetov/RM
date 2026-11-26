@@ -37,3 +37,6 @@ F01 AR, F02 margin, F05 cashflow BLOCKED_DEPENDENCY без финансовог�
 ## 5. Приёмка будущего этапа
 BV-01…48, MC-06/07 и Radar часть MC-08 остаются DEFERRED. Existing TASK Radar обязательные проверки продолжают действовать сейчас; они не откладываются под видом будущего D06.
 Возобновление требует R0.1D, C3 push+PASS по прежним 200ms/10%, qualified source contract и отдельное решение владельца. G1 Intelligent Commerce не является автоматическим разрешением Radar, financial runtime, ML, внешней доставки или production.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Сигналы Radar используют квалифицированные MIC-compliant показатели; booked/fulfilled/stock и distinct SKU cohorts разделены.

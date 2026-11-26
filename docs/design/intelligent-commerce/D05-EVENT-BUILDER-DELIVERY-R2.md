@@ -74,3 +74,6 @@ Missed-window/catch-up policy OPEN: предложено не отправлят
 Метрики: pending/retry/dead/cancelled counts в разрешённом tenant scope, oldest eligible age, attempts, stale-lease rejects, processing lag и classified errors. Counts не обходят domain privacy. Max batch/concurrency/retry/TTL/backoff/recipient fanout и quotas OPEN; должны быть положительными bounded policies, approved до квалификации.
 Retention для payload, receipts и occurrence bindings согласуется с source replay horizon. Нельзя удалить дедупликацию, оставив возможность replay с прежним ключом. Диагностика без bearer/email/phone/QR secret.
 Exit E1 — безопасный preview/permissions/closed DSL; E2 — B2 source atomicity + concurrent PG workers + crash/revoke proof; E3 — отдельно clock/schedule cancellation. IE-Q20…28, MC-03/04/05, existing owner regressions.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Предикаты метрик используют methodVersion, cohort, UOM, scope и quality. MISSING не равен zero; distinct counts не суммируются.

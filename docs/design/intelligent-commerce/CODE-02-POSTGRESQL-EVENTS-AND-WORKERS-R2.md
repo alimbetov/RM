@@ -148,3 +148,6 @@ Final transaction inserts notification и receipt с одинаковым logica
 ## 7. E3 сроки и эксплуатация
 ScheduleOccurrence содержит tenant, type, subject, ownerRevision, rule revision, activation epoch, windowStart/end, due, calendarVersion, expiresAt, state. DeadlineWorker выбирает due bounded rows и проверяет текущее owner состояние. ContractExpiryPolicy сохраняет inclusive endsOn, TASK использует TASK due contract. Уведомление о просроченном/изменённом окне получает явный disposition. Restart, tenant stop, повтор lease и late clock фиксируются в operational evidence.
 В алертах и audit допускаются code/status/event refs и безопасные counters. Retention contract связывает rule occurrences, notification receipts, projection receipts и фактический replay horizon. Monitor lag отдельно по каждому потребителю. DDL, SQL, retention и worker topology входят в A2/B2/E2 review с approved workload budgets.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Scalar daily counts недостаточны для EXACT_DISTINCT по пересекающимся измерениям. Хранить membership либо эквивалентное точное mergeable состояние; additive measures агрегировать отдельно от membership joins. Независимый proof, revision fence и повторная квалификация обязательны.

@@ -38,3 +38,6 @@ G1 manifest связывает requirement ID, suite/test case, engine/version, 
 B1 можно опубликовать как pure PeriodResolver + MetricRegistry, authorized direct reads в SALES/INVENTORY и независимые проверки покрытий. Это минимальный срез аналитики, который даёт проверяемый результат по восьми метрикам. После B1 идут C1/W1, а B3 требует ещё B2. B2 и E1 имеют свои самостоятельные diffs после A3.
 
 При сверке base_dev на `f7910269df73564a6b1bf7d8f45bcc2766cc1b32` изменения относительно последнего снимка D00 затронули отчёт W6 в CI verifier и его тесты. Сверка diff подтвердила прежние Java producer paths и схему. PR #9 оставался открыт. Проект продолжает действующие Q0/Q1 → IE-00B/A3. PostgreSQL evidence и фактические номера миграций относятся к этапам реализации.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). MIC-Q01–Q10 обязательны по применимости; при mismatch исправлять production Java/DDL, а не expected values. Exact-SHA admission сохраняется.

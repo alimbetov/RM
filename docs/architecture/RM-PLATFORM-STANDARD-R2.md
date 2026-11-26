@@ -778,3 +778,6 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
 - Сами legacy-колонки физически сохраняются пустыми до отдельного доказуемого refactoring всех SQL legacy-queries и безопасного `DROP COLUMN`. Старые резервные копии/логи требуют собственной процедуры retention. Глобальный `external_subject` также остаётся сознательным нешифрованным lookup под отдельной политикой.
 
 **Релизные критерии:** для внутреннего candidate нужны exact-SHA GREEN трёх заданий (`h2-smoke`, `postgres-integration`, `postgres-pii-populated`). Для production обязательны миграция **реальной авторизованной копии** наполненной БД, evidence snapshot/restore и seal, DB least privilege, независимое security-review, управление глобальными ключами, SMTP и OIDC/BFF. Без этого **PRODUCTION HOLD**; `main` не менять до отдельного решения.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Все аналитические ТЗ обязаны включать MIC-R1 и применимые критерии MIC-Q.

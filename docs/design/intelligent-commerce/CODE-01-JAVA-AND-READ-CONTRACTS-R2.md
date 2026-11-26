@@ -176,3 +176,6 @@ interface SignalProvider {
 
 ## 7. Контракты безопасности на уровне кода
 Существующие Authenticated…Queries задают pattern verified entrypoint, а TenantAuthorization.requireForCommand используется в нескольких текущих fenced reads. Общий интерфейс R2 для fenced read утверждает IAM на A2. Он повторно проверяет active actor/member/workspace и domain grant с транзакционной свежестью. Не расширять DomainPermission или DomainModule «для удобства». Clock фиксируется один раз для периодов и evaluation metadata, но VerifiedActor expiry проверяется на текущем времени. Блокирующая postgres-транзакция должна позволять row locks. H2 проверяет совместимость, PostgreSQL определяет поведение блокировок.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Registry обязан явно задавать aggregation strategy, fact identity, grain, cohort и единицу. Неизвестные комбинации отклонять. SKU count — exact identity union; не count offer_id или warehouse position.
