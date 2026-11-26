@@ -82,3 +82,6 @@ Exact-SHA 9d7867f failed only after the PostgreSQL Maven phase (1036 tests, zero
 
 ## B4.5C.7B.1 — dedicated proof-writer role probe and matched-digest corruption
 Synthetic NOLOGIN proof role reads source/projection tables and inserts immutable proofs, but cannot mutate counters, canonical facts, receipts, cells or activation state. Positive persistence and negative counter/proof writes exercised inside rollback-only SQL gate. This is a trusted writer fixture, not production deployment or row-level tenant authorization. PG journey intentionally disables two immutable triggers only as fixture administrator in transactional DDL, corrupts matching fact/L2 receipt digests, re-enables guards, verifies independent source digest rejection, restores original values in finally. No runtime privileges or schema changes. Full dedicated L2/L3 writer qualification, V1 negative vectors, dimension-only reconciliation and performance remain open.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). REV-B4-04: exact union order/line/SKU/customer identities; commercial units отдельно от stock movements. Применить MIC-Q01–Q10 в B4.5D.

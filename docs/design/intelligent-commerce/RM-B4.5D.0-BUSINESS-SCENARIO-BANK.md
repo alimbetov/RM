@@ -183,3 +183,6 @@ A: sales units 100 to 60; availability 100%; traffic and conversion fall, no mis
 ### 8.6 Roadmap extension
 
 B4.5D.0B includes this versioned 112-family taxonomy and contrast generator. B4.5D.0C includes independent interpretation oracle schema and golden anchors; B4.5D.0D includes contrast, metamorphic and missing-evidence tests; B4.5D.0E records capability, identifiability, rejected assertions and evidence trace. Current B4.5D executes only implemented math/data/transaction capabilities (including freshness, historical classification and currency separation); future Intelligence/Radar/Forecast/Procurement releases own behavioral qualification of their respective interpretation contracts. No new runtime module, ML library, production route or autonomous action is approved. B4.5C.7B/B4.4B.3 prerequisites and B4.6/production HOLD unchanged.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Дополнительные обязательные cross-cutting критерии MIC-Q01–Q10; они не заменяют существующие семейства и не считаются выполненными.

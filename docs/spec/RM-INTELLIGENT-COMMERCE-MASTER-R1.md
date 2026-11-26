@@ -500,3 +500,6 @@ R1.0 — 2026-11-25: consolidated full INT/EVT and Radar Vision source text, 80 
 R1.1 — 2026-11-25: synchronize full revised child specs R1.1/R1.2, IE-00A delta and DAG Q0/Q1, PostgreSQL Outbox-first/Redis-deferred, no change to 32 IE-Q +48 BV +8 MC families; no implementation or release evidence beyond cited source SHA.
 
 R1.1 addendum — temporary C3 manual-only core merge exception; C2 retained, no Radar/production qualification waiver.
+
+## Обязательное дополнение MIC-R1 (2026-11-26)
+[RM Mathematical Integrity Contract R1](../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). MIC-R1 обязателен для Intelligence, Customer 360, Warehouse 360, EVT и Radar; scope admission сохраняется.
