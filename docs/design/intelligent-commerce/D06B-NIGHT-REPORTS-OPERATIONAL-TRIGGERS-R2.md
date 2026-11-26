@@ -45,4 +45,35 @@ PDF: компактный вывод, период, значения/едини�
 Связать с действующими D07/traceability и 112-bank после method inventory; не прибавлять к 88/112 как новые семейства и не считать тесты исполненными. Existing exact-SHA gates и Radar resumption остаются. Не менять DAG или CI в design branch.
 
 ## 7. Handoff
-После B5 и соответствующих owner gates: inventory actual service/worker/file/radar contracts → минимальная gap matrix → интеграция в имеющиеся owners → independent service/PG/security/replay/performance evidence → отдельный UAT/admission. Никаких новых архитектурных контуров. Не прерывать текущий B5. Открытые решения: формат/библиотеки, schedule и limits, report audience/retention, supported service-price scope, existing publication/worker identity; не утверждать их автоматически.
+После B5 и соответствующих owner gates: inventory actual service/worker/file/radar contracts → минимальная gap matrix → интеграция в имеющиеся owners → independent service/PG/security/replay/performance evidence → отдельный UAT/admission. Никаких новых архитектурных контуров. Не прерывать текущий B5. Открытые решения: версии и совместимость выбранных библиотек (§8), конкретные шаблоны и форматные профили, schedule и limits, report audience/retention, supported service-price scope, existing publication/worker identity; не утверждать их автоматически.
+
+
+## 8. Технологический стек — решение владельца, 2026-11-26
+Статус: TECHNOLOGY SELECTION CONFIRMED / DESIGN ONLY. Выбор библиотек согласован владельцем; версии, dependency admission, реализация и production qualification остаются отдельными. P0/P1 относятся к приоритету интеграции микроотчётов после необходимых gates, а не к изменению текущего roadmap B5.
+
+| Технология | Назначение | Статус |
+|---|---|---|
+| Spring Boot / Java | Существующий backend | Существующая |
+| PostgreSQL | Существующие агрегаты, данные и механизмы обработки | Существующая |
+| RM Intelligence B4/B5 | Расчёты, интерпретации, выводы и рекомендации | Существующая |
+| RustFS / File Service | Хранение и авторизованная выдача артефактов | Переиспользовать |
+| RM Radar | Краткий вывод, приоритет, ссылка на отчёт | Переиспользовать |
+| React | Визуальное представление единого payload | Визуальное представление |
+| Apache ECharts | Интерактивные диаграммы React и печатное представление | P0 |
+| Playwright Java | Chromium: формирование PDF из подготовленного HTML | P0 |
+| Apache POI | XLSX: таблицы, формулы, нативные диаграммы | P0 |
+| Spring Batch | Массовая ночная генерация, checkpoint/restart | P1 — после оценки необходимости |
+
+### 8.1. Единый контракт представления
+Один неизменяемый MicroReportPayload (рабочее имя, не утверждённое имя Java-типа) из квалифицированных результатов B5 и owner evidence: показатели, единицы, периоды, качество, scope, графические ряды, выводы, допустимые рекомендации, provenance и версии. React/ECharts, PDF и XLSX используют одинаковый payload, не пересчитывают бизнес-метрики независимо. Формулы в Excel допустимы как проверяемое представление, а не новый источник истины. Оперативный триггер использует тот же контракт после соответствующего owner gate; FX proposed/approved/executed не смешиваются.
+
+### 8.2. Требования к реализациям P0
+- Apache ECharts: единые chart specifications для React и печатного режима; line/bar/heatmap и другие виды только по допущенной методике и grain. Для PDF предпочтителен SVG, фиксированный layout, отключённая анимация. MISSING не изображается как zero; легенды, оси, единицы и периоды должны совпадать с payload.
+- Playwright Java: локально подготовленный доверенный HTML/React, Chromium PDF, A4/print CSS, готовность диаграмм и шрифтов, русский/казахский текст, bounded workers и timeout. Изолированный BrowserContext на задание; не делить Playwright-объекты между потоками без соблюдения его модели. Запрет произвольных внешних URL, внешних скриптов и передачи tenant payload в чужой context. Контролируемый lifecycle браузера, очистка при ошибках. Не запускать renderer внутри долгой DB-транзакции. Browser binaries/fonts/container resources подлежат отдельной проверке.
+- Apache POI: XSSFWorkbook и XDDF для компактных XLSX; SXSSFWorkbook для больших выгрузок только после проверки диаграмм и memory/disk budget. Сложные диаграммы могут использовать изображения с сохранением исходных рядов. Проверить отображение чисел/точность, формулы, Unicode, форматирование и отсутствие внешних ссылок или недоверенных формул; закрытие workbook и очистка временных файлов.
+
+### 8.3. Условный P1
+Сначала использовать существующий scheduler/worker и его idempotency/retry/ownership. Spring Batch добавлять только при измеренной потребности в массовой обработке, checkpoint/restart, chunk execution или управлении заданиями, которую не покрывает существующий механизм. Не вводить второй scheduler, очередь, event bus или дублирующий orchestration lifecycle. Batch metadata/schema и dependencies потребуют отдельного admission; до него P1 не подключается. Оперативный FX-триггер не должен ждать ночного Batch.
+
+### 8.4. Квалификация перед подключением
+Сверить actual pom.xml/frontend package manifest, Java/Spring compatibility, dependency/security/license checks, версии Chromium и runtime resources; не фиксировать непроверенные версии. Для NIGHT-02 дополнительно сравнить React/PDF/XLSX с независимым oracle и единым payload (числа, диаграммы, качество, locale, pagination, читаемость); для NIGHT-03 и SEC-01 проверить concurrent tenant render, retry/crash, ACL и публикацию только доступного файла; для PERF-01 измерить heap/native memory, disk, CPU, throughput, backlog и p95/p99 при совместной ночной/оперативной нагрузке. Не считать эти критерии новыми семействами тестов и не заявлять PASS до runtime evidence. B4 FREEZE, roadmap B5, Radar resumption, CUR-R2C execution gate, production HOLD и запрет новых доменов B6/B7 сохраняются.
