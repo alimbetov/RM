@@ -53,7 +53,8 @@ class L3DerivedSeriesService {
     record Series(UUID tenant,UUID generation,Metric metric,Filter filter,Revision revision,
                   List<Observation> facts,Map<DerivedMetricEngine.Operator,DerivedMetricEngine.Result> derived,
                   Map<DerivedMetricEngine.Operator,BigDecimal> sqlCandidates,
-                  PeriodResolver.Code periodCode,LocalDate anchor,Instant observedAt){}
+                  PeriodResolver.Code periodCode,LocalDate anchor,Instant observedAt,
+                  Map<DerivedMetricEngine.Operator,MetricActivityGate.Assessment> activity){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final MultidimensionalCoverageService coverage;
@@ -144,7 +145,10 @@ class L3DerivedSeriesService {
                         throw new IllegalStateException("DERIVED_NUMERIC_PARITY_MISMATCH:"+op);
                 }
             }
-            return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates,code,anchor,now);
+            var activity=new EnumMap<DerivedMetricEngine.Operator,MetricActivityGate.Assessment>(DerivedMetricEngine.Operator.class);
+            for(var op:DerivedMetricEngine.Operator.values())
+                activity.put(op,MetricActivityGate.assess(code,anchor,now,observations,derived.get(op)));
+            return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates,code,anchor,now,Map.copyOf(activity));
         });
     }
     // One set-based extraction for all requested calendar periods. Missing periods stay explicit.
