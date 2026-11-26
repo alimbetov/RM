@@ -100,7 +100,7 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
-    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1, DIMENSIONS }
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1, DIMENSIONS, NATIVE_ACTIVATION_FIRST }
 
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
         runBusJourney(CanonicalCase.FULL);
@@ -128,6 +128,7 @@ class BusMvpServiceJourneyQualificationTest {
 
     @Test void p2CanonicalDurableDiscoveryReplayAndBackfillPg() {
         runNamedPostgresCase(CanonicalCase.DELIVERY);
+        runNamedPostgresCase(CanonicalCase.NATIVE_ACTIVATION_FIRST);
     }
 
     @Test void p3L1ProjectionParityAndLateDuplicatePg() {
@@ -232,6 +233,13 @@ class BusMvpServiceJourneyQualificationTest {
         }
         stock.receive(staff,tenant,warehouse.id(),published.id(),
                 "bus-receipt-"+UUID.randomUUID(),new BigDecimal("10"));
+        if(scenario==CanonicalCase.NATIVE_ACTIVATION_FIRST){
+            NativeBookedCaptureJourneyEvidence.activationFirst(jdbc,canonicalTransactions,
+                applicationContext.getBean(kz.rm.intelligence.NativeBookedCaptureService.class),owner,tenant,
+                ()->checkout.checkout(store.slug(),"bus-native-first-"+UUID.randomUUID()+"@example.kz",
+                    "bus-native-first-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+            return;
+        }
         String checkoutEmail="bus-buyer-"+UUID.randomUUID()+"@example.kz";
         String checkoutKey="bus-order-"+UUID.randomUUID();
         var checkoutLines=List.of(new AutoOrderService.Line(offer.id(),3));
