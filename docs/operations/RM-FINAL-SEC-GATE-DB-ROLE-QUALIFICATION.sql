@@ -289,7 +289,7 @@ BEGIN
 END
 $$;
 -- B4.5C.7: synthetic untrusted runtime/worker roles cannot forge proof or revision rows.
-DO $
+DO $dim_gate$
 DECLARE role_name text;
 BEGIN
  FOREACH role_name IN ARRAY ARRAY['rm_runtime_gate','rm_int_worker_gate'] LOOP
@@ -302,9 +302,9 @@ BEGIN
       OR has_function_privilege(role_name,'crm.int_dim_reservation_revision()','EXECUTE')
    THEN RAISE EXCEPTION 'INT_DIM_UNTRUSTED_ROLE_PRIVILEGES: %',role_name; END IF;
  END LOOP;
-END $;
+END $dim_gate$;
 SET LOCAL ROLE rm_int_worker_gate;
-DO $
+DO $dim_gate$
 BEGIN
  BEGIN
    INSERT INTO crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id,observed_at,
@@ -321,6 +321,6 @@ BEGIN
    RAISE EXCEPTION 'INT_DIM_COUNTER_RESET_ACCEPTED';
  EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
-END $;
+END $dim_gate$;
 RESET ROLE;
 ROLLBACK;

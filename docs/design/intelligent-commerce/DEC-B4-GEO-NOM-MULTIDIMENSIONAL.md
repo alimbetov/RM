@@ -74,3 +74,7 @@ IndependentCanonicalDigestVerifier reads exact owner snapshots and separately re
 
 ## B4.5D.0 — Synthetic Dataset & Business Scenario Bank (planned)
 Approved concept: deterministic synthetic business timelines, independent oracles, baseline/shock/recovery crisis families and exact-SHA evidence. Detailed normative planning document: [RM-B4.5D.0-BUSINESS-SCENARIO-BANK.md](RM-B4.5D.0-BUSINESS-SCENARIO-BANK.md). Current qualification is restricted to implemented source/math/transaction contracts; future economic forecasting and decision scenarios are capability-gated. B4.5C.7B and B4.4B.3 remain prerequisites; B4.6 and production HOLD. Documentation only.
+
+
+## B4.5C.7A-R1 — SQL role probe delimiter repair
+Exact-SHA 9d7867f failed only after the PostgreSQL Maven phase (1036 tests, zero failures/errors, 24 skipped). psql rejected two newly added DO blocks because dollar delimiters had been collapsed to a single dollar during text replacement. Use explicit paired $dim_gate$ delimiters; preserve every privilege check and negative DML probe. No production code, grants, or admission changes. New exact-SHA runtime qualification required.
