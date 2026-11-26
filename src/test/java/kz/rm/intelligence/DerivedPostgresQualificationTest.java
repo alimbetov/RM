@@ -37,4 +37,25 @@ class DerivedPostgresQualificationTest {
             }
         }
     }
+    @Test void boundedBatchWorkload(){
+        for(int[] shape:new int[][]{{1,3},{100,12},{1000,12},{100,120}}){
+            var batch=new LinkedHashMap<String,List<BigDecimal>>();
+            for(int i=0;i<shape[0];i++){
+                final int seed=i;
+                batch.put("s"+i,java.util.stream.IntStream.range(0,shape[1])
+                    .mapToObj(n->BigDecimal.valueOf(seed+n+1)).toList());
+            }
+            long start=System.nanoTime();
+            var result=PostgresDerivedWindows.batch(jdbc(),batch);
+            long elapsed=System.nanoTime()-start;
+            assertEquals(batch.keySet(),result.keySet());
+            for(var entry:batch.entrySet()){
+                var values=entry.getValue();
+                var expected=values.getFirst().add(values.getLast()).divide(BigDecimal.valueOf(2));
+                assertTrue(DerivedNumericParity.equivalent(DerivedMetricEngine.Operator.SMA,expected,
+                    result.get(entry.getKey()).get(DerivedMetricEngine.Operator.SMA)));
+            }
+            System.out.printf("B4 batch rows=%d periods=%d elapsedMs=%.3f%n",shape[0],shape[1],elapsed/1_000_000.0);
+        }
+    }
 }

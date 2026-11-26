@@ -378,4 +378,27 @@ BEGIN
  END;
 END $proof_role$;
 RESET ROLE;
+
+-- Synthetic ordinary runtime must not write feature evidence.
+SET LOCAL ROLE rm_runtime_gate;
+DO $$
+DECLARE t text;
+BEGIN
+ FOREACH t IN ARRAY ARRAY['crm.int_fact_availability_observation','crm.int_feature_candidate'] LOOP
+  IF has_table_privilege(current_user,t,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+     OR has_any_column_privilege(current_user,t,'INSERT,UPDATE')
+  THEN RAISE EXCEPTION 'FEATURE_RUNTIME_EXCESSIVE_PRIVILEGE: %',t; END IF;
+ END LOOP;
+ BEGIN
+  INSERT INTO crm.int_feature_candidate DEFAULT VALUES;
+  RAISE EXCEPTION 'FEATURE_RUNTIME_INSERT_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+  INSERT INTO crm.int_fact_availability_observation DEFAULT VALUES;
+  RAISE EXCEPTION 'OBSERVATION_RUNTIME_INSERT_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $$;
+RESET ROLE;
 ROLLBACK;

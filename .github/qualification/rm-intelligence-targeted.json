@@ -72,6 +72,10 @@
     {
       "classname": "kz.rm.intelligence.DerivedPostgresQualificationTest",
       "name": "allOperatorsAgainstJavaAcrossBatch"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedPostgresQualificationTest",
+      "name": "boundedBatchWorkload"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

@@ -24,8 +24,9 @@ public final class FeatureStoreJourneyEvidence {
         var request=new FeatureCandidateStore.Request(generation,proof,L3DerivedSeriesService.Metric.STOCK_IN,
             filter,PeriodResolver.Code.D,anchor,2,DerivedMetricEngine.Operator.SMA);
         try{
-            var a=pool.submit(()->observer.observe(tenant,1000));
-            var b=pool.submit(()->observer.observe(tenant,1000));
+            var observerStart=new CyclicBarrier(2);
+            var a=pool.submit(()->{observerStart.await(15,TimeUnit.SECONDS);return observer.observe(tenant,1000);});
+            var b=pool.submit(()->{observerStart.await(15,TimeUnit.SECONDS);return observer.observe(tenant,1000);});
             long count=jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE tenant_id=?",Long.class,tenant);
             assertEquals(count,(long)a.get(60,TimeUnit.SECONDS)+b.get(60,TimeUnit.SECONDS));
             assertEquals(0,observer.observe(tenant,1000));
@@ -33,8 +34,8 @@ public final class FeatureStoreJourneyEvidence {
             // The trigger raises after a real insert; PostgreSQL must roll back the entire writer.
             UUID retryKey=UUID.randomUUID();
             String fault="feature_fault_"+retryKey.toString().replace("-","");
-            jdbc.execute("CREATE FUNCTION crm."+fault+"() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN IF NEW.tenant_id='"
-                +tenant+"'::uuid AND NEW.request_key='"+retryKey+"'::uuid THEN RAISE EXCEPTION 'FEATURE_TEST_FAULT'; END IF; RETURN NEW; END; $");
+            jdbc.execute("CREATE FUNCTION crm."+fault+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='"
+                +tenant+"'::uuid AND NEW.request_key='"+retryKey+"'::uuid THEN RAISE EXCEPTION 'FEATURE_TEST_FAULT'; END IF; RETURN NEW; END; $$");
             jdbc.execute("CREATE TRIGGER "+fault+" AFTER INSERT ON crm.int_feature_candidate FOR EACH ROW EXECUTE FUNCTION crm."+fault+"()");
             try{
                 var error=assertThrows(org.springframework.dao.DataAccessException.class,()->store.write(actor,tenant,retryKey,request));
@@ -50,8 +51,9 @@ public final class FeatureStoreJourneyEvidence {
             assertFalse(recovered.replay());
             assertEquals(recovered.id(),store.write(actor,tenant,retryKey,request).id());
 
-            var x=pool.submit(()->store.write(actor,tenant,key,request));
-            var y=pool.submit(()->store.write(actor,tenant,key,request));
+            var writerStart=new CyclicBarrier(2);
+            var x=pool.submit(()->{writerStart.await(15,TimeUnit.SECONDS);return store.write(actor,tenant,key,request);});
+            var y=pool.submit(()->{writerStart.await(15,TimeUnit.SECONDS);return store.write(actor,tenant,key,request);});
             var first=x.get(120,TimeUnit.SECONDS);var second=y.get(120,TimeUnit.SECONDS);
             assertEquals(first.id(),second.id());assertNotEquals(first.replay(),second.replay());
             assertEquals(1L,jdbc.queryForObject("SELECT count(*) FROM crm.int_feature_candidate WHERE tenant_id=? AND request_key=?",Long.class,tenant,key).longValue());
