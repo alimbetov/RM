@@ -20,6 +20,11 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
+import com.zaxxer.hikari.HikariDataSource;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -272,6 +277,97 @@ class QrNegotiatedCheckoutQualificationTest {
         assertThat(result.admitted()).isFalse();
         assertThat(reconciliation.inspectNativeRange(b.seller(),b.tenant(),runB).shadowValue()).isEqualTo(1L);
         System.out.println("S1_NATIVE_NEGOTIATED_CROSS_TENANT_PASS");
+    }
+
+    private record PerfSample(String phase,int operations,double p50,double p95,double p99,
+                              double ordersPerSecond,int peakActive,int peakAwaiting){}
+    private static double percentile(List<Long> sorted,double quantile){
+        return sorted.get((int)Math.ceil(quantile*sorted.size())-1)/1_000_000.0;
+    }
+    private PerfSample measureCheckout(Fixture f,String phase,int count,Runnable concurrentRead) throws Exception{
+        var hikari=dataSource.unwrap(HikariDataSource.class);
+        var pool=hikari.getHikariPoolMXBean();
+        assertThat(pool).isNotNull();
+        var active=new AtomicInteger();var awaiting=new AtomicInteger();
+        var sampler=Executors.newSingleThreadScheduledExecutor();
+        var workers=Executors.newFixedThreadPool(concurrentRead==null?2:3);
+        var samples=Collections.synchronizedList(new ArrayList<Long>());
+        var start=new CountDownLatch(1);
+        try{
+            sampler.scheduleAtFixedRate(()->{
+                active.accumulateAndGet(pool.getActiveConnections(),Math::max);
+                awaiting.accumulateAndGet(pool.getThreadsAwaitingConnection(),Math::max);
+            },0,5,TimeUnit.MILLISECONDS);
+            var jobs=new ArrayList<java.util.concurrent.Future<?>>();
+            for(int worker=0;worker<2;worker++){
+                final int index=worker;
+                jobs.add(workers.submit(()->{
+                    start.await(10,TimeUnit.SECONDS);
+                    for(int i=index;i<count;i+=2){
+                        long before=System.nanoTime();
+                        var placed=checkout.checkout(f.slug(),f.buyer().email(),key(),
+                            List.of(new AutoOrderService.Line(f.offer(),1)));
+                        samples.add(System.nanoTime()-before);
+                        assertThat(placed.order().orderId()).isNotNull();
+                    }
+                    return null;
+                }));
+            }
+            if(concurrentRead!=null)jobs.add(workers.submit(()->{
+                start.await(10,TimeUnit.SECONDS);
+                concurrentRead.run();return null;
+            }));
+            long begin=System.nanoTime();
+            start.countDown();
+            for(var job:jobs)job.get(120,TimeUnit.SECONDS);
+            double seconds=(System.nanoTime()-begin)/1_000_000_000.0;
+            var sorted=samples.stream().sorted().toList();
+            assertThat(sorted).hasSize(count);
+            var result=new PerfSample(phase,count,percentile(sorted,.50),percentile(sorted,.95),
+                percentile(sorted,.99),count/seconds,active.get(),awaiting.get());
+            System.out.printf(Locale.ROOT,
+                "S1_NATIVE_PERF phase=%s n=%d p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f phase_orders_per_sec=%.3f pool_max=%d peak_active=%d peak_awaiting=%d%n",
+                result.phase(),result.operations(),result.p50(),result.p95(),result.p99(),
+                result.ordersPerSecond(),hikari.getMaximumPoolSize(),result.peakActive(),result.peakAwaiting());
+            return result;
+        }finally{
+            start.countDown();workers.shutdownNow();sampler.shutdownNow();
+            assertThat(workers.awaitTermination(60,TimeUnit.SECONDS)).isTrue();
+            assertThat(sampler.awaitTermination(10,TimeUnit.SECONDS)).isTrue();
+        }
+    }
+    @Test void nativeCheckoutPerformanceBudgetPg() throws Exception{
+        requirePostgres();
+        var f=setup(true);
+        int count=100;
+        measureCheckout(f,"warmup",10,null);
+        int initial=orders(f);
+        var baseline=measureCheckout(f,"before_capture",count,null);
+        var boundary=nativeCapture.activate(f.owner(),f.tenant());
+        var captured=measureCheckout(f,"after_capture",count,null);
+        Instant end=nativeClock();
+        UUID run=UUID.randomUUID();
+        delivery.openBackfill(new CanonicalFactDeliveryService.Slice(f.tenant(),run,CanonicalFactKey.Owner.SALES,
+            CanonicalFactKey.Kind.ORDER_PLACED,boundary.startedAt(),end));
+        assertThat(delivery.backfillBatch(f.tenant(),run,count)).hasSize(count);
+        var mixed=measureCheckout(f,"capture_with_reconciliation",count,()->{
+            for(int i=0;i<10;i++){
+                long start=System.nanoTime();
+                var result=reconciliation.inspectNativeRange(f.seller(),f.tenant(),run);
+                assertThat(result.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_VALUE);
+                assertThat(result.shadowValue()).isEqualTo((long)count);
+                assertThat(result.admitted()).isFalse();
+                System.out.printf(Locale.ROOT,"S1_NATIVE_PERF_RECONCILIATION elapsed_ms=%.3f%n",
+                    (System.nanoTime()-start)/1_000_000.0);
+            }
+        });
+        assertThat(orders(f)).isEqualTo(initial+3*count);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?",Long.class,f.tenant())).isEqualTo((long)initial+3*count);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND event_type='PLACED'",Long.class,f.tenant())).isEqualTo((long)initial+3*count);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'",Long.class,f.tenant())).isEqualTo((long)initial+3*count);
+        System.out.printf(Locale.ROOT,"S1_NATIVE_PERF_RATIO capture_p95=%.3f mixed_p95=%.3f capture_phase_tps=%.3f mixed_phase_tps=%.3f%n",
+            captured.p95()/baseline.p95(),mixed.p95()/baseline.p95(),
+            captured.ordersPerSecond()/baseline.ordersPerSecond(),mixed.ordersPerSecond()/baseline.ordersPerSecond());
     }
 
     @Test void qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents(){

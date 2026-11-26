@@ -388,6 +388,10 @@
     {
       "classname": "kz.rm.sales.QrNegotiatedCheckoutQualificationTest",
       "name": "nativeNegotiatedCaptureAndCrossTenantRollbackPg"
+    },
+    {
+      "classname": "kz.rm.sales.QrNegotiatedCheckoutQualificationTest",
+      "name": "nativeCheckoutPerformanceBudgetPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

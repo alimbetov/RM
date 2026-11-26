@@ -14,6 +14,9 @@ import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ConcurrentHashMap;
+import com.zaxxer.hikari.HikariDataSource;
+import java.sql.SQLException;
 
 /** S1.2B diagnostic only. A reconciled backfill is NOT an owner completeness authority. */
 @Service
@@ -59,10 +62,27 @@ public class BookedSourceReconciliationService {
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final TenantAuthorization authorization;
-    // Each admission holds one connection while its RR snapshot borrows another.
-    // Bound this service to one such pair per JVM, before any connection is acquired.
-    // This does not reserve pool capacity against unrelated services or other JVMs.
-    private final Semaphore snapshotAdmission=new Semaphore(1);
+    // A pair consumes two connections. Preserve independent tenant concurrency
+    // on a four-connection pool, but never admit more than two pairs per JVM.
+    // This is an admission ceiling, not a reservation against unrelated users.
+    private Semaphore snapshotAdmission;
+    private int snapshotPairs;
+    private final Set<UUID> nativeInFlight=ConcurrentHashMap.newKeySet();
+
+    private synchronized Semaphore snapshotBudget(){
+        try{
+            var pool=Objects.requireNonNull(jdbc.getDataSource()).unwrap(HikariDataSource.class);
+            int capacity=pool.getMaximumPoolSize();
+            if(capacity<2)throw new IllegalStateException("S1_SNAPSHOT_POOL_CAPACITY");
+            if(snapshotAdmission==null){
+                snapshotPairs=Math.min(2,capacity/2);
+                snapshotAdmission=new Semaphore(snapshotPairs);
+            }
+            // Fail closed on an online shrink below the established pair budget.
+            if(capacity<2*snapshotPairs)throw new IllegalStateException("S1_SNAPSHOT_POOL_CAPACITY");
+            return snapshotAdmission;
+        }catch(SQLException e){throw new IllegalStateException("S1_SNAPSHOT_POOL_UNSUPPORTED",e);}
+    }
     BookedSourceReconciliationService(JdbcTemplate jdbc,PlatformTransactionManager manager,TenantAuthorization authorization){
         this.jdbc=jdbc;this.manager=manager;this.authorization=authorization;
     }
@@ -206,8 +226,14 @@ public class BookedSourceReconciliationService {
     private <T> T authorizedSnapshot(VerifiedActor actor,UUID tenant,boolean nativeFence,java.util.function.Function<UUID,T> action){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("S1_REQUIRES_OWN_TRANSACTION");
-        if(!snapshotAdmission.tryAcquire())throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_BUSY");
+        var budget=snapshotBudget();
+        // Same-tenant native reads would serialize on the same exclusive guard.
+        // Reject redundant work before consuming a connection or a global permit.
+        if(nativeFence&&!nativeInFlight.add(tenant))throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_BUSY");
+        boolean acquired=false;
         try {
+        acquired=budget.tryAcquire();
+        if(!acquired)throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_BUSY");
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(outer->{
@@ -231,7 +257,8 @@ public class BookedSourceReconciliationService {
             actor.userId();return result;
         });
         } finally {
-            snapshotAdmission.release();
+            if(acquired)budget.release();
+            if(nativeFence)nativeInFlight.remove(tenant);
         }
     }
     private void requirePostgres(){
