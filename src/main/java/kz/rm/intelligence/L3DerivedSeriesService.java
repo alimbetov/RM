@@ -47,7 +47,8 @@ class L3DerivedSeriesService {
     record Snapshot(LocalDate from,LocalDate until,PeriodResolver.Policy calendar,Revision revision){}
     record Observation(PeriodResolver.Period period,BigDecimal value,DataQuality quality,String reason){}
     record Series(UUID tenant,UUID generation,Metric metric,Filter filter,Revision revision,
-                  List<Observation> facts,Map<DerivedMetricEngine.Operator,DerivedMetricEngine.Result> derived){}
+                  List<Observation> facts,Map<DerivedMetricEngine.Operator,DerivedMetricEngine.Result> derived,
+                  Map<DerivedMetricEngine.Operator,BigDecimal> sqlCandidates){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final MultidimensionalCoverageService coverage;
@@ -137,7 +138,10 @@ class L3DerivedSeriesService {
                         "SOURCE_PARITY_ONLY_HISTORICAL_ADMISSION_REQUIRED");
                 derived.put(op,result);
             }
-            return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived));
+            var sqlCandidates=parity && points.stream().allMatch(p->p.quality()==DataQuality.READY)
+                ?PostgresDerivedWindows.latest(jdbc,points.stream().map(DerivedMetricEngine.Point::value).toList())
+                :Map.<DerivedMetricEngine.Operator,BigDecimal>of();
+            return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates);
         });
     }
     private Observation readPeriod(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,

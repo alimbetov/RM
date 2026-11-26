@@ -12,7 +12,7 @@ final class DerivedMetricEngine {
     private static final MathContext MC = MathContext.DECIMAL128;
     static final int METHOD_VERSION = 1;
     static final int DEFAULT_WINDOW = 3;
-    enum Operator { AVG, SMA, PERIOD_CHANGE, PERIOD_GROWTH, TREND, STDDEV_POP, CV, MIN, MAX }
+    enum Operator { AVG, SMA, PERIOD_CHANGE, PERIOD_GROWTH, TREND, STDDEV_POP, CV, MIN, MAX, EMA, FORECAST_NEXT }
     record Scope(UUID tenant, UUID generation, String metric, int methodVersion,
                  String dimensionKey, String authorizationScopeKey, String unitKey, String currencyKey,
                  PeriodResolver.Code periodCode, PeriodResolver.Policy calendar, long sourceRevision) {
@@ -82,7 +82,12 @@ final class DerivedMetricEngine {
         BigDecimal delta = last.subtract(prior);
         BigDecimal value;
         switch(op) {
-            case AVG, SMA -> value=mean;
+            case AVG, SMA, FORECAST_NEXT -> value=mean;
+            case EMA -> {
+                BigDecimal alpha=BigDecimal.valueOf(2).divide(n.add(BigDecimal.ONE),MC);
+                value=values.get(0);
+                for(int i=1;i<size;i++) value=alpha.multiply(values.get(i),MC).add(BigDecimal.ONE.subtract(alpha).multiply(value,MC),MC);
+            }
             case PERIOD_CHANGE -> value=delta;
             case PERIOD_GROWTH -> {
                 if (prior.signum()<=0) return unavailable(op,size,DataQuality.NOT_MEASURABLE,"NONPOSITIVE_BASE");
