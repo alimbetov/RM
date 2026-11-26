@@ -163,7 +163,7 @@ class L3DerivedSeriesService {
         });
     }
     // One set-based extraction for all requested calendar periods. Missing periods stay explicit.
-    private List<Observation> readPeriods(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,
+    List<Observation> readPeriods(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,
                                           List<PeriodResolver.Period> periods,Snapshot snapshot){
         var args=new ArrayList<Object>();
         for(var period:periods){

@@ -328,7 +328,38 @@ final class L1ProjectionJourneyEvidence {
         assertThat(activationProof.parity()).isTrue();
         assertThatThrownBy(()->dimProof.activate(otherTenant,gen,activationProof.id(),null))
             .hasMessage("INT_ACTIVATION_NOT_BUILDING");
+        // B4.8: compare owner-source and active L3 on identical authorized scopes.
+        var reader=context.getBean(AuthorizedAnalyticalReadService.class);
+        var queries=new ArrayList<AuthorizedAnalyticalReadService.Query>();
+        for(var metric:AuthorizedAnalyticalReadService.Metric.values()){
+            boolean booked=metric.name().startsWith("BOOKED");
+            boolean stock=metric.name().startsWith("STOCK");
+            queries.add(new AuthorizedAnalyticalReadService.Query(metric,calendarVersion,PeriodResolver.Code.D,
+                from.plusDays(1),null,null,stock?sku:null,booked?List.of():List.of(warehouse),
+                metric.name().endsWith("AMOUNT")?jdbc.queryForObject("SELECT trim(currency) FROM crm.sales_order WHERE tenant_id=? AND id=?",String.class,tenant,order):null));
+        }
+        var baseline=queries.stream().map(q->reader.read(staff,tenant,q)).toList();
+        assertThat(baseline).allSatisfy(r->assertThat(r.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0));
         var activated=dimProof.activate(tenant,gen,activationProof.id(),null);
+        for(int i=0;i<queries.size();i++){
+            var actual=reader.read(staff,tenant,queries.get(i));
+            var expected=baseline.get(i);
+            if(actual.period().endExclusive().isAfter(actual.observedAt())){
+                assertThat(actual.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
+            }else{
+                assertThat(actual.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
+                assertThat(actual.proof()).isEqualTo(activated.activeProof());
+            }
+            if(expected.value()==null)assertThat(actual.value()).isNull();
+            else assertThat(actual.value()).isEqualByComparingTo(expected.value());
+            assertThat(actual.quality()).isEqualTo(expected.quality());
+        }
+        assertThatThrownBy(()->reader.read(foreign,tenant,queries.getFirst())).isInstanceOf(SecurityException.class);
+        var stockQuery=queries.stream().filter(q->q.metric()==AuthorizedAnalyticalReadService.Metric.STOCK_IN).findFirst().orElseThrow();
+        revoke.run();
+        try{assertThatThrownBy(()->reader.read(staff,tenant,stockQuery)).isInstanceOf(SecurityException.class);}
+        finally{restore.run();}
+
         assertThat(activated.replay()).isFalse();
         assertThat(dimProof.status(tenant,gen,activated.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
         assertThat(dimProof.activate(tenant,gen,activationProof.id(),null).activeProof()).isEqualTo(activated.activeProof());
