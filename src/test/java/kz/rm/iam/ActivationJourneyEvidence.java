@@ -138,12 +138,44 @@ final class ActivationJourneyEvidence {
                 assertThat(progress.l2Steps()).isEqualTo(1);
                 assertThat(pointer(jdbc,tenant)).isEqualTo(winner);
                 long receiptsBefore=delivery.consumerCoverage(tenant,"l2:"+rebuild).pending();
+                // Fail L2 receipt after its effect, with the first committed batch intact.
+                String receiptFault="rebuild_receipt_"+rebuild.toString().replace("-","");
+                jdbc.execute("CREATE FUNCTION crm."+receiptFault+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='"
+                    +tenant+"'::uuid AND NEW.consumer_code='l2:"+rebuild+"' THEN RAISE EXCEPTION 'REBUILD_RECEIPT_FAULT'; END IF; RETURN NEW; END; $$");
+                jdbc.execute("CREATE TRIGGER "+receiptFault+" BEFORE INSERT ON crm.int_fact_consumer_receipt FOR EACH ROW EXECUTE FUNCTION crm."+receiptFault+"()");
+                String beforeL2=jdbc.queryForObject("SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY stream_code,source_id),'[]'::jsonb)::text FROM crm.int_l2_contribution x WHERE tenant_id=? AND generation_id=?",String.class,tenant,rebuild);
+                long beforeDirty=jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?",Long.class,tenant,rebuild);
+                var failingService=service;
+                try{
+                    assertThatThrownBy(()->failingService.step(request,1,1)).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("REBUILD_RECEIPT_FAULT");
+                    assertThat(delivery.consumerCoverage(tenant,"l2:"+rebuild).pending()).isEqualTo(receiptsBefore);
+                    assertThat(jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?",Long.class,tenant,rebuild)).isEqualTo(beforeDirty);
+                    assertThat(jdbc.queryForObject("SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY stream_code,source_id),'[]'::jsonb)::text FROM crm.int_l2_contribution x WHERE tenant_id=? AND generation_id=?",String.class,tenant,rebuild)).isEqualTo(beforeL2);
+                }finally{
+                    jdbc.execute("DROP TRIGGER "+receiptFault+" ON crm.int_fact_consumer_receipt");
+                    jdbc.execute("DROP FUNCTION crm."+receiptFault+"()");
+                }
                 service=new GenerationRebuildService(jdbc,l1,l2,l3,delivery,coverage);
                 boolean sawRollup=false;
+                boolean injectedLate=false;
+                long rebuildStarted=System.nanoTime();
                 for(int i=0;i<200;i++){
                     progress=service.step(request,2,1);
                     assertThat(pointer(jdbc,tenant)).isEqualTo(winner);
-                    if(progress.state()==GenerationRebuildService.State.ROLLUP_PENDING)sawRollup=true;
+                    if(progress.state()==GenerationRebuildService.State.ROLLUP_PENDING){
+                        sawRollup=true;
+                        if(!injectedLate){
+                            injectedLate=true;
+                            // A committed source arrives between partial rollup steps.
+                            UUID during=UUID.randomUUID();
+                            new TransactionTemplate(manager).executeWithoutResult(s->{
+                                jdbc.update("INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at) VALUES (?,?,?,'PLACED',?)",
+                                    tenant,during,order,Timestamp.from(from.minusDays(6).atStartOfDay(ZoneOffset.UTC).toInstant()));
+                                appender.append(new CanonicalFactKey(tenant,CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,during));
+                            });
+                            assertThat(delivery.consumerCoverage(tenant,"l2:"+rebuild).pending()).isPositive();
+                        }
+                    }
                     if(progress.state()==GenerationRebuildService.State.READY)break;
                     assertThat(progress.state()).isIn(GenerationRebuildService.State.REPLAY_PENDING,
                         GenerationRebuildService.State.ROLLUP_PENDING);
@@ -156,6 +188,35 @@ final class ActivationJourneyEvidence {
                 var replay=service.step(request,2,1);
                 assertThat(replay.state()).isEqualTo(GenerationRebuildService.State.READY);
                 assertThat(replay.l1Steps()).isZero();assertThat(replay.l2Steps()).isZero();assertThat(replay.refreshed()).isZero();
+                assertThat(replay.proof()).isEqualTo(progress.proof());
+                assertThat(injectedLate).isTrue();
+                // Force a rollup transaction failure after cell deletion, before its stamp.
+                String rollupFault="rebuild_rollup_"+rebuild.toString().replace("-","");
+                jdbc.execute("CREATE FUNCTION crm."+rollupFault+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='"
+                    +tenant+"'::uuid AND NEW.generation_id='"+rebuild+"'::uuid AND NEW.refreshed_revision IS NOT NULL THEN RAISE EXCEPTION 'REBUILD_ROLLUP_FAULT'; END IF; RETURN NEW; END; $$");
+                jdbc.execute("CREATE TRIGGER "+rollupFault+" BEFORE UPDATE ON crm.int_l3_period FOR EACH ROW EXECUTE FUNCTION crm."+rollupFault+"()");
+                long beforeCells=cells(jdbc,tenant,rebuild);
+                try{
+                    assertThatThrownBy(()->l3.refresh(tenant,rebuild,PeriodResolver.Code.D,from)).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("REBUILD_ROLLUP_FAULT");
+                    assertThat(cells(jdbc,tenant,rebuild)).isEqualTo(beforeCells);
+                    assertThat(coverage.status(tenant,rebuild,replay.proof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+                }finally{
+                    jdbc.execute("DROP TRIGGER "+rollupFault+" ON crm.int_l3_period");
+                    jdbc.execute("DROP FUNCTION crm."+rollupFault+"()");
+                }
+                // Two callers resume the identical generation; no fresh stamp may be rewritten.
+                var concurrentService=service;
+                var rebuildBarrier=new CyclicBarrier(2);
+                var rx=pool.submit(()->{rebuildBarrier.await(15,TimeUnit.SECONDS);return concurrentService.step(request,2,1);});
+                var ry=pool.submit(()->{rebuildBarrier.await(15,TimeUnit.SECONDS);return concurrentService.step(request,2,1);});
+                for(var result:List.of(rx.get(120,TimeUnit.SECONDS),ry.get(120,TimeUnit.SECONDS))){
+                    assertThat(result.state()).isEqualTo(GenerationRebuildService.State.READY);
+                    assertThat(result.refreshed()).isZero();
+                    assertThat(result.proof()).isEqualTo(replay.proof());
+                }
+                System.out.printf("B4.7 rebuild fixture elapsedMs=%.3f facts=%d cells=%d%n",
+                    (System.nanoTime()-rebuildStarted)/1_000_000.0,
+                    delivery.consumerCoverage(tenant,"l2:"+rebuild).facts(),cells(jdbc,tenant,rebuild));
                 var recovered=coverage.activate(tenant,rebuild,replay.proof(),winner);
                 assertThat(pointer(jdbc,tenant)).isEqualTo(rebuild);
                 assertThat(l1.lifecycle(tenant,winner)).isEqualTo(new L1ProjectionService.Lifecycle("RETIRED",2));

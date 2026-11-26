@@ -30,7 +30,9 @@ public class GenerationRebuildService {
                 throw new IllegalArgumentException("INT_REBUILD_SCOPE");
         }
     }
-    public record Progress(State state,int l1Steps,int l2Steps,int refreshed,UUID proof){}
+    public enum Reason { PENDING_RECEIPTS, REJECTED_OR_MISMATCHED_RECEIPTS, PERIOD_BUDGET,
+        DELIVERY_MISMATCH, CONTRIBUTION_MISMATCH, PERIOD_MISMATCH, CELL_OR_MEMBERSHIP_MISMATCH, REVISION_CHANGED, QUALIFIED }
+    public record Progress(State state,int l1Steps,int l2Steps,int refreshed,UUID proof,Reason reason){}
     private record PeriodKey(PeriodResolver.Code code,LocalDate from,LocalDate until){}
     private record Stamp(PeriodKey key,Long revision){}
     /** Each step commits separately; callers may restart with the identical request.
@@ -49,8 +51,8 @@ public class GenerationRebuildService {
         var c1=delivery.consumerCoverage(r.tenant(),g.consumerCode());
         var c2=delivery.consumerCoverage(r.tenant(),consumer);
         if(c1.rejected()>0||c2.rejected()>0||c1.receiptMismatches()>0||c2.receiptMismatches()>0)
-            return new Progress(State.SOURCE_INCOMPLETE,n1,n2,0,null);
-        if(!c1.caughtUp()||!c2.caughtUp())return new Progress(State.REPLAY_PENDING,n1,n2,0,null);
+            return new Progress(State.SOURCE_INCOMPLETE,n1,n2,0,null,Reason.REJECTED_OR_MISMATCHED_RECEIPTS);
+        if(!c1.caughtUp()||!c2.caughtUp())return new Progress(State.REPLAY_PENDING,n1,n2,0,null,Reason.PENDING_RECEIPTS);
         long dirty=Objects.requireNonNull(jdbc.queryForObject("""
             SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=?
             """,Long.class,r.tenant(),r.generation()));
@@ -72,18 +74,29 @@ public class GenerationRebuildService {
                 if(!b.isAfter(cursor))throw new IllegalStateException("INT_REBUILD_CALENDAR_PROGRESS");
                 if(!a.isBefore(r.from())&&!b.isAfter(r.until())&&
                    !Objects.equals(stamps.get(new PeriodKey(code,a,b)),dirty)){
-                    if(refreshed==periodBudget)return new Progress(State.ROLLUP_PENDING,n1,n2,refreshed,null);
-                    l3.refresh(r.tenant(),r.generation(),code,cursor);
-                    refreshed++;
+                    if(refreshed==periodBudget)return new Progress(State.ROLLUP_PENDING,n1,n2,refreshed,null,Reason.PERIOD_BUDGET);
+                    if(l3.refreshIfStale(r.tenant(),r.generation(),code,cursor).isPresent())refreshed++;
                 }
                 cursor=b;
             }
         }
         // Independent owner oracle, not receipt counts or rollup stamps alone.
-        var proof=coverage.prove(r.tenant(),r.generation());
-        if(!proof.parity())return new Progress(State.SOURCE_INCOMPLETE,n1,n2,refreshed,proof.id());
+        var proof=coverage.proveOrReuse(r.tenant(),r.generation());
+        if(!proof.parity()){
+            var latest1=delivery.consumerCoverage(r.tenant(),g.consumerCode());
+            var latest2=delivery.consumerCoverage(r.tenant(),consumer);
+            if(latest1.rejected()>0||latest2.rejected()>0||latest1.receiptMismatches()>0||latest2.receiptMismatches()>0)
+                return new Progress(State.SOURCE_INCOMPLETE,n1,n2,refreshed,proof.id(),Reason.REJECTED_OR_MISMATCHED_RECEIPTS);
+            if(latest1.pending()>0||latest2.pending()>0)
+                return new Progress(State.REPLAY_PENDING,n1,n2,refreshed,proof.id(),Reason.PENDING_RECEIPTS);
+            Reason reason=proof.delivery()>0?Reason.DELIVERY_MISMATCH:
+                proof.contributions()>0?Reason.CONTRIBUTION_MISMATCH:
+                proof.periods()>0?Reason.PERIOD_MISMATCH:Reason.CELL_OR_MEMBERSHIP_MISMATCH;
+            return new Progress(reason==Reason.PERIOD_MISMATCH?State.ROLLUP_PENDING:State.SOURCE_INCOMPLETE,
+                n1,n2,refreshed,proof.id(),reason);
+        }
         if(coverage.status(r.tenant(),r.generation(),proof.id())!=MultidimensionalCoverageService.Status.CURRENT)
-            return new Progress(State.STALE,n1,n2,refreshed,proof.id());
-        return new Progress(State.READY,n1,n2,refreshed,proof.id());
+            return new Progress(State.STALE,n1,n2,refreshed,proof.id(),Reason.REVISION_CHANGED);
+        return new Progress(State.READY,n1,n2,refreshed,proof.id(),Reason.QUALIFIED);
     }
 }

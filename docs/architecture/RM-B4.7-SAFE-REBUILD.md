@@ -13,3 +13,11 @@ Internal only. Production admission remains HOLD.
 - Previous active generation remains intact throughout rebuild; after source drift it is STALE, not falsely current. B4.8 must provide authorized L0 fallback; this package does not promise uninterrupted materialized reads.
 - No auto-scheduler, public route, production database-role provisioning or ML admission.
 - Qualification: bounded replay, service recreation, partial rollup, no-op retry, proof, explicit activation, preservation of previous generation and other tenant.
+
+## Qualification additions
+
+- Conditional refresh rechecks the stamp under the existing dirty-revision lock.
+- Progress exposes a diagnostic reason; pending canonical receipts and stale periods are retryable, mathematical or source discrepancies remain fail closed.
+- Reuse a matching zero-mismatch proof only after a fresh independent parity check. Concurrent first proof creation may still produce duplicate audit rows.
+- Fixture exercises L2 receipt failure, rollup stamp failure, late canonical arrival between committed steps, concurrent retries of a READY generation, and proof reuse.
+- Fixture timing is diagnostic only; 1k/10k/100k real fact rebuild throughput is not certified by this small fixture.

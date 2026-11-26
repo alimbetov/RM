@@ -199,11 +199,32 @@ public class MultidimensionalCoverageService {
                   +(SELECT count(*) FROM (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected) x)
             """,tenant,gen);
     }
+    /** Reuse only a zero-mismatch proof with the exact snapshot vector and
+     * a fresh independent oracle. The ordinary prove() remains an explicit audit.
+     */
+    public Proof proveOrReuse(UUID tenant,UUID gen){
+        return proveInternal(tenant,gen,true);
+    }
     public Proof prove(UUID tenant,UUID gen){
+        return proveInternal(tenant,gen,false);
+    }
+    private Proof proveInternal(UUID tenant,UUID gen,boolean reuse){
         Objects.requireNonNull(tenant);Objects.requireNonNull(gen);
         return tx(()->{
             Scope s=scope(tenant,gen);
             if(!"BUILDING".equals(s.state()))throw new IllegalStateException("INT_DIM_GENERATION_NOT_BUILDING");
+            if(reuse){
+                var v=s.revisions();
+                UUID prior=jdbc.query("""
+                    SELECT proof_id FROM crm.int_dim_coverage_proof WHERE tenant_id=? AND generation_id=?
+                      AND (source_revision,dirty_revision,receipt_revision,materialization_revision,lifecycle_revision)=(?,?,?,?,?)
+                      AND delivery_mismatches=0 AND contribution_mismatches=0 AND period_mismatches=0
+                      AND cell_mismatches=0 AND membership_mismatches=0
+                    ORDER BY observed_at DESC,proof_id LIMIT 1
+                    """,rs->rs.next()?rs.getObject(1,UUID.class):null,tenant,gen,v.source(),v.dirty(),v.receipt(),v.materialization(),v.lifecycle());
+                if(prior!=null&&evaluate(tenant,gen,prior)==Status.CURRENT)
+                    return new Proof(prior,v,0,0,0,0,0);
+            }
             var proof=new Proof(UUID.randomUUID(),s.revisions(),delivery(tenant,s.consumer()),contributions(tenant,gen,s),
                 periods(tenant,gen,s),cells(tenant,gen),memberships(tenant,gen));
             var r=proof.revisions();

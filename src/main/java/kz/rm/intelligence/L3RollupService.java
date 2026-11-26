@@ -23,6 +23,12 @@ public class L3RollupService {
     private record Scope(LocalDate from,LocalDate until,long calendar,ZoneId zone){}
     public record Refresh(PeriodResolver.Code code,LocalDate from,LocalDate until,long revision,int cells,int memberships){}
     public Refresh refresh(UUID tenant,UUID generation,PeriodResolver.Code code,LocalDate anchor){
+        return refreshInternal(tenant,generation,code,anchor,false).orElseThrow();
+    }
+    public java.util.Optional<Refresh> refreshIfStale(UUID tenant,UUID generation,PeriodResolver.Code code,LocalDate anchor){
+        return refreshInternal(tenant,generation,code,anchor,true);
+    }
+    private java.util.Optional<Refresh> refreshInternal(UUID tenant,UUID generation,PeriodResolver.Code code,LocalDate anchor,boolean conditional){
         Objects.requireNonNull(tenant);Objects.requireNonNull(generation);Objects.requireNonNull(code);Objects.requireNonNull(anchor);
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("L3_REQUIRES_OWN_TRANSACTION");
@@ -49,6 +55,10 @@ public class L3RollupService {
                 throw new IllegalArgumentException("L3_PARTIAL_PERIOD");
             long revision=jdbc.queryForObject("SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=? AND generation_id=? FOR UPDATE",Long.class,tenant,generation);
             String c=code.name();
+            if(conditional&&Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM crm.int_l3_period WHERE tenant_id=? AND generation_id=?
+                  AND period_code=? AND from_day=? AND until_day=? AND refreshed_revision=?)
+                """,Boolean.class,tenant,generation,c,from,until,revision)))return java.util.Optional.empty();
             jdbc.update("""
                 INSERT INTO crm.int_l3_period(tenant_id,generation_id,period_code,from_day,until_day,refreshed_revision)
                 VALUES (?,?,?,?,?,NULL)
@@ -91,7 +101,7 @@ public class L3RollupService {
                 UPDATE crm.int_l3_period SET refreshed_revision=?
                 WHERE tenant_id=? AND generation_id=? AND period_code=? AND from_day=?
                 """,revision,tenant,generation,c,from)!=1)throw new IllegalStateException("L3_STAMP_MISSING");
-            return new Refresh(code,from,until,revision,cells,memberships);
+            return java.util.Optional.of(new Refresh(code,from,until,revision,cells,memberships));
         });
     }
 }
