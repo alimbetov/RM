@@ -32,3 +32,6 @@ E7D.11–13 are mandatory P0 across Intelligence, Customer/Warehouse 360, ABC/XY
 
 ## E7D.1–2 — observer and evidence schema
 Explicit internal observer polls committed canonical facts in its own RC transaction, serializes cooperating observers per tenant with advisory lock, and never backdates. No scheduler, dedicated DB principal, or guarantee against direct SQL bypass yet. Feature evidence adds proof FK, revision vector, activity/version, request UUID, actor and SHA-256 metadata. Insert trigger stamps persistence time and checks proof vector (not current parity). Legacy candidates excluded; no production admission. Dedicated privileges and writer/reader qualification remain required.
+
+## E7D repair: database uniqueness and payload integrity
+0219 adds source-key uniqueness without deleting legacy evidence, atomic observer replay and a database SHA-256 check over PostgreSQL JSONB textual representation. Public grants removed; explicit deployment role grants and trusted direct-SQL boundaries still required. Migration fails on duplicate or mismatched existing evidence; investigate rather than silently repair. No test changes.

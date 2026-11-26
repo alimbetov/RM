@@ -6945,3 +6945,16 @@ CREATE TRIGGER trg_int_feature_evidence_stamp BEFORE INSERT ON crm.int_feature_c
 -- Preserve old observations, do not infer historic commit timestamps.
 CREATE INDEX idx_int_availability_source_lookup ON crm.int_fact_availability_observation(tenant_id,owner_module,source_kind,source_id);
 --rollback DROP INDEX crm.idx_int_availability_source_lookup;
+
+
+--changeset rm:0219-int-observation-unique-and-feature-hash dbms:postgresql splitStatements:false
+-- Fail rather than delete historical evidence if an earlier writer created duplicates.
+ALTER TABLE crm.int_fact_availability_observation ADD CONSTRAINT uq_int_availability_source
+ UNIQUE(tenant_id,owner_module,source_kind,source_id);
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_payload_hash
+ CHECK(request_key IS NULL OR payload_sha256=encode(sha256(convert_to(payload::text,'UTF8')),'hex'));
+REVOKE ALL ON crm.int_fact_availability_observation,crm.int_feature_candidate FROM PUBLIC;
+REVOKE ALL ON FUNCTION crm.int_availability_observation_stamp(),crm.int_feature_evidence_stamp() FROM PUBLIC;
+--rollback ALTER TABLE crm.int_feature_candidate DROP CONSTRAINT ck_int_feature_payload_hash;
+--rollback ALTER TABLE crm.int_fact_availability_observation DROP CONSTRAINT uq_int_availability_source;
+-- Privilege hardening is intentionally not reversed.

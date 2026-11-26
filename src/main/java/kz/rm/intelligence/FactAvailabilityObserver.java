@@ -35,6 +35,7 @@ class FactAvailabilityObserver {
                     WHERE (o.tenant_id,o.owner_module,o.source_kind,o.source_id)=
                           (f.tenant_id,f.owner_module,f.source_kind,f.source_id))
                 ORDER BY f.owner_module,f.source_kind,f.source_id LIMIT ?
+                ON CONFLICT(tenant_id,owner_module,source_kind,source_id) DO NOTHING
                 """,tenant,limit);
         });
     }
