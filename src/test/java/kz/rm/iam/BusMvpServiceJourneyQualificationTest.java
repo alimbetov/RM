@@ -481,7 +481,9 @@ class BusMvpServiceJourneyQualificationTest {
         if(scenario==CanonicalCase.L1){
             long calendarVersion=calendar.append(owner,tenant,"Etc/UTC",0).version();
             L1ProjectionJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
-                l1,tenant,otherTenant,orderId,warehouse.id(),published.id(),calendarVersion,applicationContext,staff);
+                l1,tenant,otherTenant,orderId,warehouse.id(),published.id(),calendarVersion,applicationContext,staff,
+                ()->warehouseScope.revoke(owner,tenant,warehouse.id(),staffId),
+                ()->warehouseScope.assign(owner,tenant,warehouse.id(),staffId),otherOwner);
             return;
         }
         if(scenario==CanonicalCase.DELIVERY){
