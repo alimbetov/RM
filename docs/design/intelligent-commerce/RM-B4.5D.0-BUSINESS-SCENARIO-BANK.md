@@ -105,3 +105,81 @@ Each implemented scenario has positive and relevant negative controls, independe
 ## 7. Reuse
 
 RM Intelligence, Radar, Customer 360, Warehouse 360, ABC/XYZ, Smart Demand and Intelligent Commerce R2 may later register capabilities and independent scenario adapters. Scenario bank is a test asset, not a customer-facing economic simulator or a claim of predictive accuracy. Future customer-facing simulation needs separate specification and validation.
+
+
+## 8. Interpretation qualification extension — R1.1 (planned)
+
+The bank must distinguish observations, explanations, predictions and decisions. A correct calculation is not sufficient evidence of a correct interpretation. Synthetic ground truth is held by the oracle, not exposed to the tested interpreter. No causal claim may be inferred solely from correlation. The test contract distinguishes a uniquely identifiable cause under declared assumptions, a set of plausible hypotheses, contradictory evidence, and unidentifiable causes. In the last case, abstention and a request for discriminating evidence are correct outcomes.
+
+### 8.1 Additional 48 interpretation families (112 total families with section 3)
+
+| ID | Observable pattern / contrast | Required distinction or safe response |
+|---|---|---|
+| BS-065 | Sales fall: demand decline vs stockout | Check availability and lost-demand evidence |
+| BS-066 | Sales fall: seasonal trough vs structural decline | Compare like periods and trend |
+| BS-067 | Sales fall: channel outage vs customer churn | Check channel health and cohorts |
+| BS-068 | Sales fall: late ingestion vs real decline | Check freshness and completeness |
+| BS-069 | Sales rise: unit growth vs price inflation | Separate price and volume |
+| BS-070 | Sales rise: promotion vs organic demand | Separate temporary and durable effects |
+| BS-071 | Revenue rises: product mix vs volume | Price-volume-mix decomposition |
+| BS-072 | Revenue rises while gross profit falls | Check unit cost, mix, discount |
+| BS-073 | Margin falls: FX vs supplier price vs freight | Identify supported cost drivers |
+| BS-074 | Margin rises but cash position worsens | Distinguish accrual, receivables and cash |
+| BS-075 | Margin percent rises while gross profit falls | Distinguish absolute and relative metrics |
+| BS-076 | FX moves with domestic fixed-price supplier | No automatic FX pass-through |
+| BS-077 | FX moves after inventory purchase | Preserve historical valuation |
+| BS-078 | FX exposure offset by matched currency receipts | Net exposure, if supported |
+| BS-079 | Low stock: high demand vs supply interruption | Separate depletion and replenishment |
+| BS-080 | High stock: demand fall vs early delivery | Distinguish temporary surplus |
+| BS-081 | High turnover: healthy sales vs stock scarcity | Check service level and availability |
+| BS-082 | Procurement increase vs cash constraint | Feasible bounded action or abstain |
+| BS-083 | Lower unit price vs excessive MOQ | Total cost and holding risk |
+| BS-084 | Supplier delay vs missing receiving event | Data quality before escalation |
+| BS-085 | Regional decline vs warehouse outage | Compare unaffected regions |
+| BS-086 | Regional growth vs transfer displacement | Avoid counting transfers as final sales |
+| BS-087 | Category growth vs reclassification | Historical hierarchy vs current grouping |
+| BS-088 | Aggregate growth hides SKU decline | Drill down; prevent Simpson reversal |
+| BS-089 | Aggregate margin falls despite segment improvement | Detect mix effects / Simpson reversal |
+| BS-090 | Customer churn vs identity merge | Check identity lifecycle |
+| BS-091 | Large order vs broad demand increase | Concentration and outlier handling |
+| BS-092 | Increased returns vs late return recording | Event time vs recorded time |
+| BS-093 | Zero sales vs missing sales feed | No data is not zero |
+| BS-094 | Zero observed demand with out-of-stock SKU | Censoring and uncertainty |
+| BS-095 | Incomplete period vs full prior period | Like-for-like coverage |
+| BS-096 | Currency conversion vs native currency totals | Require approved FX and valuation date |
+| BS-097 | Short history vs apparent trend | Insufficient evidence |
+| BS-098 | Conflicting sales and inventory indicators | Report conflict, not fabricated certainty |
+| BS-099 | Identical observations with two latent causes | Return plausible set / abstain |
+| BS-100 | Noisy observations around alert threshold | Stability and hysteresis where specified |
+| BS-101 | Crisis shock vs ordinary seasonal variation | Distinguish only when supported |
+| BS-102 | Recovery from low base vs sustainable recovery | Base effects and persistence |
+| BS-103 | Demand rebound with constrained supply | Separate forecast and feasible fulfillment |
+| BS-104 | Inflation and recession jointly | Nominal vs real volume and margins |
+| BS-105 | Liquidity shock with profitable orders | Do not infer solvency from margin |
+| BS-106 | Multi-region shock vs local anomaly | Scope evidence and avoid tenant leakage |
+| BS-107 | Alternative intervention changes outcome | Counterfactual only under explicit model |
+| BS-108 | Recommendation becomes obsolete after late event | Invalidate and re-evaluate |
+| BS-109 | Unseen combination of known shocks | Generalization or safe abstention |
+| BS-110 | Novel regime outside training support | Out-of-distribution warning |
+| BS-111 | Sensitive recommendation based on incomplete inputs | No automatic action; request missing inputs |
+| BS-112 | No material change / false alarm control | No unsupported recommendation |
+
+### 8.2 Scenario variants and contrast sets
+
+For each applicable family generate a baseline/no-op, positive case, matched symptom with alternative cause, inverse perturbation, boundary case, missing evidence, contradictory evidence, delayed evidence and recovery case. Not every variant is applicable; explicit applicability and exclusion rationale are required. Contrast pairs share nuisance parameters, tenant scope and random seed while changing a declared causal factor; observationally equivalent pairs intentionally hide the discriminating variable. Include matched cases where cause is constant but symptom magnitude changes. Vary sector, size, turnover, season, currency, supplier concentration, warehouse and SKU distribution without leaking synthetic labels into features. Parameter sampling: boundary values, pairwise interactions, constrained random sampling, and selected three-or-more-factor crisis compositions. Do not claim exhaustive Cartesian coverage. Maintain hidden held-out seeds and entire scenario families for future model generalization tests; tuning against the final holdout is prohibited.
+
+### 8.3 Typed interpretation evidence contract (future capability-gated)
+
+Proposed records: ObservationWindow, EvidenceRef, Hypothesis, InterpretationResult, DecisionCandidate, InterpretationOracle. Each result carries tenant, as-of, scope, source versions, metric values and units, coverage/freshness, observation vs inference distinction, candidate causes, supporting and opposing evidence references, missing discriminating inputs, uncertainty, severity, and reason code. Status: IDENTIFIED (only under declared identifiability), PLAUSIBLE, AMBIGUOUS, INSUFFICIENT_DATA, CONFLICTING_EVIDENCE, OUT_OF_DISTRIBUTION, NO_MATERIAL_CHANGE. Hypothesis confidence must be calibrated before numeric probabilities are advertised; otherwise use qualitative uncertainty. Evidence must be traceable to authorized source snapshots; no future observation, fabricated fact or cross-tenant signal. Recommendations separate from interpretation, with prerequisites, constraints, alternatives, expected tradeoffs, validity horizon, invalidation trigger and approval requirement; no automatic purchase or price change authorized. Missing capability is NOT_IMPLEMENTED, not a passing inference.
+
+### 8.4 Independent interpretation oracle and scoring
+
+Oracle stores latent truth, observable facts, identifiability class, accepted explanation sets, required evidence, prohibited assertions, acceptable abstentions, decision feasibility constraints and alternative-action bounds. For identifiable golden cases compare exact expected reason codes and evidence. For ambiguous cases score acceptable hypothesis sets and abstention; do not reward guessing hidden cause. A wrong confident explanation is a critical failure for golden safety cases. Hard gates for implemented capabilities: zero fabricated evidence, future leakage, cross-tenant data, unsupported causal certainty on unidentifiable golden pairs, unsafe action violating explicit constraints, and silent conversion of unknown to zero. Measure cause precision/recall, macro-F1, set coverage, false alarm rate, abstention coverage vs error, calibration (Brier/reliability where probabilities exist), evidence attribution accuracy, and decision regret only where an independent objective/feasible optimum is defined. Model-specific thresholds require later approval using baseline and cost of errors; no arbitrary aggregate score can mask a critical failure. Compare against simple rule and naive forecast baselines. For stochastic models report repeated-seed variation and uncertainty intervals, not single-run accuracy. Report performance separately by crisis severity, tenant size, family and data quality.
+
+### 8.5 Illustrative golden contrast
+
+A: sales units 100 to 60; availability 100%; traffic and conversion fall, no missing feed. B: sales units 100 to 60; availability constrained, independent attempted orders remain 100. C: sales units 100 to 60 with missing stock/traffic/attempt data. A supports demand decline under fixture assumptions; B supports stockout-censored sales, not demand decline; C must abstain from choosing between causes. Purchase recommendation requires lead time, inventory position (on hand + inbound - committed under approved semantics), cash constraints and service target. It is not entailed by the sales change. No actual procurement feature is implemented by this document.
+
+### 8.6 Roadmap extension
+
+B4.5D.0B includes this versioned 112-family taxonomy and contrast generator. B4.5D.0C includes independent interpretation oracle schema and golden anchors; B4.5D.0D includes contrast, metamorphic and missing-evidence tests; B4.5D.0E records capability, identifiability, rejected assertions and evidence trace. Current B4.5D executes only implemented math/data/transaction capabilities (including freshness, historical classification and currency separation); future Intelligence/Radar/Forecast/Procurement releases own behavioral qualification of their respective interpretation contracts. No new runtime module, ML library, production route or autonomous action is approved. B4.5C.7B/B4.4B.3 prerequisites and B4.6/production HOLD unchanged.
