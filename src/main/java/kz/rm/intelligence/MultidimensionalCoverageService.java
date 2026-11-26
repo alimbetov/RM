@@ -227,6 +227,9 @@ public class MultidimensionalCoverageService {
             !Objects.equals(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel(),
                 TransactionDefinition.ISOLATION_REPEATABLE_READ))
             throw new IllegalStateException("INT_DIM_PROOF_SNAPSHOT_REQUIRED");
+        return evaluate(tenant,gen,proofId);
+    }
+    private Status evaluate(UUID tenant,UUID gen,UUID proofId){
         Objects.requireNonNull(proofId);
             Scope s=scope(tenant,gen);
             if("ABORTED".equals(s.state()))return Status.ABORTED;
@@ -245,5 +248,75 @@ public class MultidimensionalCoverageService {
             return delivery(tenant,s.consumer())==0&&contributions(tenant,gen,s)==0
                 &&periods(tenant,gen,s)==0&&cells(tenant,gen)==0&&memberships(tenant,gen)==0
                 ?Status.CURRENT:Status.INCOMPLETE;
+    }
+
+    /** Internal controlled L3 activation; no public route or ML admission.
+     * Workspace UPDATE conflicts with source journal FK KEY SHARE and trusted
+     * command SHARE locks. Lifecycle NOWAIT avoids waiting behind projection workers.
+     * READ COMMITTED obtains fresh snapshots after both fences are held.
+     */
+    public record Activation(UUID generation,UUID admissionProof,UUID activeProof,boolean replay){}
+    public Activation activate(UUID tenant,UUID generation,UUID proof,UUID expectedPrevious){
+        Objects.requireNonNull(tenant);Objects.requireNonNull(generation);Objects.requireNonNull(proof);
+        if(TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("INT_ACTIVATION_OWN_TRANSACTION");
+        var tx=new TransactionTemplate(manager);
+        tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);tx.setTimeout(120);
+        return tx.execute(status->{
+            if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
+                c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
+                throw new IllegalStateException("INT_ACTIVATION_POSTGRESQL_REQUIRED");
+            UUID fence=jdbc.query("SELECT id FROM public.iam_workspace WHERE id=? AND status='ACTIVE' FOR UPDATE",
+                rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
+            if(fence==null)throw new IllegalArgumentException("INT_ACTIVATION_TENANT_NOT_FOUND");
+            Activation current=jdbc.query("""
+                SELECT generation_id,admission_proof_id,dim_proof_id FROM crm.int_active_generation
+                WHERE tenant_id=? AND projection_code='L3' FOR UPDATE
+                """,rs->rs.next()?new Activation(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),true):null,tenant);
+            if(current!=null&&current.generation().equals(generation)&&current.admissionProof().equals(proof)){
+                if(evaluate(tenant,generation,current.activeProof())!=Status.CURRENT)
+                    throw new IllegalStateException("INT_ACTIVATION_PROOF_STALE");
+                return current;
+            }
+            if(!Objects.equals(expectedPrevious,current==null?null:current.generation()))
+                throw new IllegalStateException("INT_ACTIVATION_POINTER_CONFLICT");
+            String state=jdbc.query("""
+                SELECT lifecycle_state FROM crm.int_projection_lifecycle
+                WHERE tenant_id=? AND generation_id=? FOR UPDATE NOWAIT
+                """,rs->rs.next()?rs.getString(1):null,tenant,generation);
+            if(!"BUILDING".equals(state))throw new IllegalStateException("INT_ACTIVATION_NOT_BUILDING");
+            if(evaluate(tenant,generation,proof)!=Status.CURRENT)
+                throw new IllegalStateException("INT_ACTIVATION_PROOF_NOT_CURRENT");
+            if(current!=null){
+                jdbc.update("DELETE FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",tenant);
+                if(jdbc.update("""
+                    UPDATE crm.int_projection_lifecycle SET lifecycle_state='RETIRED',revision=2,
+                      changed_at=greatest(changed_at,clock_timestamp())
+                    WHERE tenant_id=? AND generation_id=? AND lifecycle_state='ACTIVE' AND revision=1
+                    """,tenant,current.generation())!=1)throw new IllegalStateException("INT_ACTIVATION_RETIRE_CONFLICT");
+            }
+            if(jdbc.update("""
+                UPDATE crm.int_projection_lifecycle SET lifecycle_state='ACTIVE',revision=1,
+                  changed_at=greatest(changed_at,clock_timestamp())
+                WHERE tenant_id=? AND generation_id=? AND lifecycle_state='BUILDING' AND revision=0
+                """,tenant,generation)!=1)throw new IllegalStateException("INT_ACTIVATION_LIFECYCLE_CONFLICT");
+            // Create a new immutable proof after the sole lifecycle revision change.
+            UUID active=UUID.randomUUID();
+            if(jdbc.update("""
+                INSERT INTO crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id,observed_at,
+                  source_revision,dirty_revision,receipt_revision,materialization_revision,lifecycle_revision,
+                  delivery_mismatches,contribution_mismatches,period_mismatches,cell_mismatches,membership_mismatches)
+                SELECT tenant_id,generation_id,?,statement_timestamp(),source_revision,dirty_revision,receipt_revision,
+                  materialization_revision,1,delivery_mismatches,contribution_mismatches,period_mismatches,cell_mismatches,membership_mismatches
+                FROM crm.int_dim_coverage_proof WHERE tenant_id=? AND generation_id=? AND proof_id=?
+                """,active,tenant,generation,proof)!=1)throw new IllegalStateException("INT_ACTIVATION_PROOF_MISSING");
+            if(evaluate(tenant,generation,active)!=Status.CURRENT)
+                throw new IllegalStateException("INT_ACTIVATION_POSTCHECK");
+            jdbc.update("""
+                INSERT INTO crm.int_active_generation(tenant_id,projection_code,generation_id,dim_proof_id,admission_proof_id,lifecycle_state)
+                VALUES (?,'L3',?,?,?,'ACTIVE')
+                """,tenant,generation,active,proof);
+            return new Activation(generation,proof,active,false);
+        });
     }
 }

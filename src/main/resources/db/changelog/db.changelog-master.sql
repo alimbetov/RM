@@ -6980,3 +6980,58 @@ ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_payload_bind
  AND (payload->>'observedAt')::timestamptz IS NOT DISTINCT FROM observed_at
  ));
 --rollback ALTER TABLE crm.int_feature_candidate DROP CONSTRAINT ck_int_feature_payload_binding;
+
+
+--changeset rm:0221-int-controlled-l3-activation dbms:postgresql splitStatements:false
+-- Frozen L3 generations; L1 routing remains disabled. No public API admission.
+ALTER TABLE crm.int_projection_lifecycle DROP CONSTRAINT int_projection_lifecycle_check;
+ALTER TABLE crm.int_projection_lifecycle ADD CONSTRAINT ck_int_lifecycle_transition CHECK(
+ (lifecycle_state='BUILDING' AND revision=0) OR
+ (lifecycle_state IN ('ABORTED','ACTIVE') AND revision=1) OR
+ (lifecycle_state='RETIRED' AND revision=2));
+CREATE UNIQUE INDEX uq_int_single_active_generation ON crm.int_projection_lifecycle(tenant_id)
+ WHERE lifecycle_state='ACTIVE';
+ALTER TABLE crm.int_active_generation DROP CONSTRAINT int_active_generation_projection_code_check;
+ALTER TABLE crm.int_active_generation ALTER COLUMN proof_id DROP NOT NULL;
+ALTER TABLE crm.int_active_generation ADD COLUMN dim_proof_id UUID, ADD COLUMN admission_proof_id UUID;
+ALTER TABLE crm.int_active_generation ADD CONSTRAINT ck_int_pointer_kind CHECK(
+ (projection_code='L1' AND proof_id IS NOT NULL AND dim_proof_id IS NULL AND admission_proof_id IS NULL) OR
+ (projection_code='L3' AND proof_id IS NULL AND dim_proof_id IS NOT NULL AND admission_proof_id IS NOT NULL));
+ALTER TABLE crm.int_active_generation ADD CONSTRAINT fk_int_pointer_dim_proof
+ FOREIGN KEY(tenant_id,generation_id,dim_proof_id) REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id);
+ALTER TABLE crm.int_active_generation ADD CONSTRAINT fk_int_pointer_admission_proof
+ FOREIGN KEY(tenant_id,generation_id,admission_proof_id) REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id);
+CREATE OR REPLACE FUNCTION crm.int_guard_generation_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.lifecycle_state='BUILDING' AND NEW.revision=0 THEN RETURN NEW; END IF;
+ ELSIF TG_OP='UPDATE' THEN
+   IF OLD.tenant_id=NEW.tenant_id AND OLD.generation_id=NEW.generation_id
+      AND NEW.changed_at>=OLD.changed_at AND NEW.revision=OLD.revision+1
+      AND ((OLD.lifecycle_state='BUILDING' AND NEW.lifecycle_state IN ('ABORTED','ACTIVE'))
+           OR (OLD.lifecycle_state='ACTIVE' AND NEW.lifecycle_state='RETIRED'))
+   THEN RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'INT_GENERATION_LIFECYCLE_TRANSITION' USING ERRCODE='23514';
+END; $$;
+-- At commit every ACTIVE generation must have the L3 pointer. L1 remains disabled.
+CREATE FUNCTION crm.int_assert_active_pointer() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid;
+BEGIN
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id; ELSE t:=NEW.tenant_id; END IF;
+ IF EXISTS(SELECT 1 FROM crm.int_projection_lifecycle l
+   WHERE l.tenant_id=t AND l.lifecycle_state='ACTIVE' AND NOT EXISTS(
+     SELECT 1 FROM crm.int_active_generation a WHERE a.tenant_id=l.tenant_id
+       AND a.generation_id=l.generation_id AND a.projection_code='L3'))
+ OR EXISTS(SELECT 1 FROM crm.int_active_generation a WHERE a.tenant_id=t AND a.projection_code='L1')
+ THEN RAISE EXCEPTION 'INT_ACTIVE_POINTER_REQUIRED' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END; $$;
+CREATE CONSTRAINT TRIGGER trg_int_activation_lifecycle AFTER INSERT OR UPDATE OR DELETE ON crm.int_projection_lifecycle
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_assert_active_pointer();
+CREATE CONSTRAINT TRIGGER trg_int_activation_pointer AFTER INSERT OR UPDATE OR DELETE ON crm.int_active_generation
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_assert_active_pointer();
+REVOKE ALL ON FUNCTION crm.int_assert_active_pointer() FROM PUBLIC;
+REVOKE ALL ON crm.int_active_generation,crm.int_projection_lifecycle FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_ACTIVATION_FORWARD_ONLY'; END; $$;

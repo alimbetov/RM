@@ -311,6 +311,30 @@ final class L1ProjectionJourneyEvidence {
         assertThat(l1.buckets(tenant,shadow,from)).isEqualTo(saved);
         assertThat(delivery.consumerCoverage(tenant,"l1:"+shadow)).isEqualTo(receipts);
         assertThat(l1.lifecycle(tenant,gen)).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+        // B4.6: late proof must fail, then rebuild every affected period before activation.
+        assertThatThrownBy(()->dimProof.activate(tenant,gen,refreshedProof.id(),null))
+            .hasMessage("INT_ACTIVATION_PROOF_NOT_CURRENT");
+        for(var code:PeriodResolver.Code.values()){
+            LocalDate cursor=from;
+            while(cursor.isBefore(until)){
+                var interval=PeriodResolver.resolve(code,cursor,new PeriodResolver.Policy(g.zone(),calendarVersion));
+                LocalDate a=interval.startInclusive().atZone(g.zone()).toLocalDate();
+                LocalDate b=interval.endExclusive().atZone(g.zone()).toLocalDate();
+                if(!a.isBefore(from)&&!b.isAfter(until))l3.refresh(tenant,gen,code,cursor);
+                cursor=b;
+            }
+        }
+        var activationProof=dimProof.prove(tenant,gen);
+        assertThat(activationProof.parity()).isTrue();
+        assertThatThrownBy(()->dimProof.activate(otherTenant,gen,activationProof.id(),null))
+            .hasMessage("INT_ACTIVATION_NOT_BUILDING");
+        var activated=dimProof.activate(tenant,gen,activationProof.id(),null);
+        assertThat(activated.replay()).isFalse();
+        assertThat(dimProof.status(tenant,gen,activated.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+        assertThat(dimProof.activate(tenant,gen,activationProof.id(),null).activeProof()).isEqualTo(activated.activeProof());
+        assertThat(l1.lifecycle(tenant,gen)).isEqualTo(new L1ProjectionService.Lifecycle("ACTIVE",1));
+        assertThat(l1.route(tenant,calendarVersion,1,from,until).materialized()).isFalse();
+        assertThatThrownBy(()->l3.refresh(tenant,gen,PeriodResolver.Code.D,from)).hasMessage("L3_GENERATION_NOT_BUILDING");
         selectorPlans(jdbc,manager,tenant);
     }
     /** Bounded selector-only experiment, not end-to-end apply throughput. */
