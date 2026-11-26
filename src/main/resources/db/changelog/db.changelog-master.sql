@@ -6904,3 +6904,44 @@ CREATE TRIGGER trg_int_feature_candidate_immutable BEFORE UPDATE OR DELETE ON cr
 CREATE TRIGGER trg_int_feature_candidate_no_truncate BEFORE TRUNCATE ON crm.int_feature_candidate
  FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
 --rollback DROP TABLE crm.int_feature_candidate;
+
+
+--changeset rm:0217-int-feature-evidence-hardening dbms:postgresql splitStatements:false
+-- Existing candidate rows remain legacy and cannot enter the new reader.
+ALTER TABLE crm.int_feature_candidate ADD COLUMN proof_id UUID,
+ ADD COLUMN source_revision BIGINT, ADD COLUMN dirty_revision BIGINT,
+ ADD COLUMN receipt_revision BIGINT, ADD COLUMN materialization_revision BIGINT,
+ ADD COLUMN lifecycle_revision BIGINT, ADD COLUMN activity_policy_version INTEGER,
+ ADD COLUMN activity VARCHAR(32), ADD COLUMN payload_sha256 VARCHAR(64),
+ ADD COLUMN request_key UUID, ADD COLUMN actor_id UUID;
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT fk_int_feature_proof
+ FOREIGN KEY(tenant_id,generation_id,proof_id) REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id);
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT uq_int_feature_request UNIQUE(tenant_id,request_key);
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_evidence CHECK (
+ request_key IS NULL OR (
+ proof_id IS NOT NULL AND actor_id IS NOT NULL AND source_revision IS NOT NULL AND source_revision>=0
+ AND dirty_revision IS NOT NULL AND dirty_revision>=0 AND receipt_revision IS NOT NULL AND receipt_revision>=0
+ AND materialization_revision IS NOT NULL AND materialization_revision>=0 AND lifecycle_revision IS NOT NULL AND lifecycle_revision>=0
+ AND activity_policy_version IS NOT NULL AND activity_policy_version>0
+ AND activity IS NOT NULL AND activity IN ('INSUFFICIENT_HISTORY','PERIOD_GAP','PARTIAL_COVERAGE','OPEN_PERIOD','STALE','INVALID','NOT_APPLICABLE','DISABLED')
+ AND payload_sha256 IS NOT NULL AND payload_sha256 ~ '^[0-9a-f]{64}$'));
+CREATE FUNCTION crm.int_feature_evidence_stamp() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ NEW.persisted_at:=clock_timestamp();
+ IF NEW.request_key IS NULL THEN RAISE EXCEPTION 'INT_FEATURE_EVIDENCE_REQUIRED'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM crm.int_dim_coverage_proof p
+ WHERE p.tenant_id=NEW.tenant_id AND p.generation_id=NEW.generation_id AND p.proof_id=NEW.proof_id
+ AND (p.source_revision,p.dirty_revision,p.receipt_revision,p.materialization_revision,p.lifecycle_revision)=
+ (NEW.source_revision,NEW.dirty_revision,NEW.receipt_revision,NEW.materialization_revision,NEW.lifecycle_revision)
+ AND p.delivery_mismatches=0 AND p.contribution_mismatches=0 AND p.period_mismatches=0 AND p.cell_mismatches=0 AND p.membership_mismatches=0)
+ THEN RAISE EXCEPTION 'INT_FEATURE_PROOF_MISMATCH'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER trg_int_feature_evidence_stamp BEFORE INSERT ON crm.int_feature_candidate
+ FOR EACH ROW EXECUTE FUNCTION crm.int_feature_evidence_stamp();
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_FEATURE_EVIDENCE_FORWARD_ONLY'; END; $$;
+
+--changeset rm:0218-int-availability-idempotent-observer dbms:postgresql
+-- Preserve old observations, do not infer historic commit timestamps.
+CREATE INDEX idx_int_availability_source_lookup ON crm.int_fact_availability_observation(tenant_id,owner_module,source_kind,source_id);
+--rollback DROP INDEX crm.idx_int_availability_source_lookup;
