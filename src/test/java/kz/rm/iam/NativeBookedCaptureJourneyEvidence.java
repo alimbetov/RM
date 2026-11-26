@@ -125,6 +125,11 @@ final class NativeBookedCaptureJourneyEvidence {
                     if(waiter==null)Thread.sleep(25);
                 }
                 assertThat(waiter).as("native closure waits for source transaction").isNotNull();
+                // This second caller must be rejected before borrowing any JDBC connection.
+                // The first snapshot still owns its admission and waits on the source guard.
+                assertThatThrownBy(()->reconciliation.inspectNativeRange(reader,tenant,run))
+                    .isInstanceOf(IllegalStateException.class).hasMessage("S1_SNAPSHOT_ADMISSION_BUSY");
+                System.out.println("S1_SNAPSHOT_ADMISSION_BUSY_PASS");
             }finally{release.countDown();}
             writer.get(30,TimeUnit.SECONDS);
             var pending=read.get(30,TimeUnit.SECONDS);
