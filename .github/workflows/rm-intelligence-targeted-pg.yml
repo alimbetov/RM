@@ -5,6 +5,8 @@ on:
     branches: [base_dev]
     paths:
       - 'src/main/java/kz/rm/intelligence/**'
+      - 'src/main/resources/db/changelog/**'
+      - 'pom.xml'
       - 'src/test/java/kz/rm/intelligence/**'
       - 'src/test/java/kz/rm/iam/L1ProjectionJourneyEvidence.java'
       - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
@@ -54,7 +56,7 @@ jobs:
       - name: Execute targeted canonical and L0-L3 journeys
         run: |
           set -euo pipefail
-          mvn -B -ntp clean test '-Dtest=BusMvpServiceJourneyQualificationTest#canonicalSalesAndInventoryDigestOraclePg+canonicalSourceAdmissionAndOwnerRollbackPg+canonicalConcurrentReplayAndRollbackPg+canonicalSourceSealingLockOrdersPg+canonicalTenantSourceCollisionPg+p2CanonicalDurableDiscoveryReplayAndBackfillPg+p3L1ProjectionParityAndLateDuplicatePg+b4RegionAndNomenclatureSnapshotsPg'
+          mvn -B -ntp clean test '-Dtest=BusMvpServiceJourneyQualificationTest#canonicalSalesAndInventoryDigestOraclePg+canonicalSourceAdmissionAndOwnerRollbackPg+canonicalConcurrentReplayAndRollbackPg+canonicalSourceSealingLockOrdersPg+canonicalTenantSourceCollisionPg+p2CanonicalDurableDiscoveryReplayAndBackfillPg+p3L1ProjectionParityAndLateDuplicatePg+b4RegionAndNomenclatureSnapshotsPg,DerivedMetricQualificationTest'
       - name: Verify exact JUnit evidence
         run: python3 .github/scripts/verify_rm_intelligence_targeted.py --reports target/surefire-reports --registry .github/qualification/rm-intelligence-targeted.json --sha "$GITHUB_SHA" --output rm-intelligence-targeted.json
       - name: Run existing SQL role qualification on populated fixtures

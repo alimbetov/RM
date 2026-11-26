@@ -52,6 +52,22 @@
     {
       "classname": "kz.rm.iam.BusMvpServiceJourneyQualificationTest",
       "name": "b4RegionAndNomenclatureSnapshotsPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "deterministicMathematics"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "missingIsNotZeroAndFutureRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "activitySeparatesGapHistoryAndDecision"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "numericParityFailsClosed"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
