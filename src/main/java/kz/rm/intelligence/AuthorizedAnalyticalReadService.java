@@ -59,25 +59,40 @@ public class AuthorizedAnalyticalReadService {
     }
     /** One authorized scope and one MVCC snapshot for a bounded calendar window. */
     List<Result> readWindow(VerifiedActor actor,UUID tenant,Query query,List<LocalDate> anchors){
-        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);Objects.requireNonNull(query);
+        return readMetricWindows(actor,tenant,List.of(query),anchors).getFirst();
+    }
+    /** B5.4: bounded same-grain metric windows in one authorized snapshot. */
+    List<List<Result>> readMetricWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors){
+        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
+        var qs=List.copyOf(queries);
+        if(qs.isEmpty()||qs.size()>3||qs.stream().map(Query::metric).distinct().count()!=qs.size())
+            throw new IllegalArgumentException("ANALYTICAL_METRIC_WINDOW");
+        var q0=qs.getFirst();
+        if(qs.stream().anyMatch(q->q.calendarVersion()!=q0.calendarVersion()||q.period()!=q0.period()
+            ||!q.anchor().equals(q0.anchor())||!Objects.equals(q.region(),q0.region())
+            ||!Objects.equals(q.group(),q0.group())||!Objects.equals(q.sku(),q0.sku())
+            ||!q.warehouses().equals(q0.warehouses())))
+            throw new IllegalArgumentException("ANALYTICAL_METRIC_SCOPE");
         var dates=List.copyOf(anchors);
         if(dates.isEmpty()||dates.size()>12||new HashSet<>(dates).size()!=dates.size())
             throw new IllegalArgumentException("ANALYTICAL_WINDOW_SIZE");
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("ANALYTICAL_OWN_TRANSACTION");
-        var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
-        var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(outer->{
-            l3.admit(actor,tenant,m,f);
+            for(var q:qs)l3.admit(actor,tenant,L3DerivedSeriesService.Metric.valueOf(q.metric().name()),
+                new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
             var snapshot=new TransactionTemplate(manager);
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             snapshot.setReadOnly(true);snapshot.setTimeout(120);
-            List<Result> result=snapshot.execute(inner->dates.stream().map(anchor->
-                readSnapshot(tenant,new Query(query.metric(),query.calendarVersion(),query.period(),anchor,
-                    query.region(),query.group(),query.sku(),query.warehouses(),query.currency()),m,f)).toList());
+            List<List<Result>> result=snapshot.execute(inner->qs.stream().map(query->{
+                var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
+                var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
+                return dates.stream().map(anchor->readSnapshot(tenant,new Query(query.metric(),query.calendarVersion(),
+                    query.period(),anchor,query.region(),query.group(),query.sku(),query.warehouses(),query.currency()),m,f)).toList();
+            }).toList());
             actor.userId();
             return result;
         });

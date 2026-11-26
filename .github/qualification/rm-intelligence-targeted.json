@@ -168,6 +168,34 @@
     {
       "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
       "name": "incompatibleEvidenceAndPolicyRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs065StockFlowsDoNotIdentifyAvailability"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs098DifferentFlowDirectionIsNotCausalConflict"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs068PartialAndMissingNeverPromoted"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs106ForeignTenantOrWarehouseRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs108RevisionMismatchInvalidatesFactorEvidence"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "bs112StableSalesNoUnsupportedRecommendation"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
+      "name": "growthDoesNotIdentifyPromotionOrDemand"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

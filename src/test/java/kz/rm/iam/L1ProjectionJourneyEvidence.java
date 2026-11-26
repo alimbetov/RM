@@ -398,8 +398,22 @@ final class L1ProjectionJourneyEvidence {
         assertThatThrownBy(()->observation.observePattern(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO,
             1,new BigDecimal("3"),new BigDecimal("0.5"))).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->observation.observe(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
+        var factor=context.getBean(BusinessFactorService.class);
+        var salesScope=new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.FULFILLED_PRODUCT_UNITS,
+            calendarVersion,PeriodResolver.Code.D,from.plusDays(1),null,null,sku,List.of(warehouse),null);
+        var factors=factor.observe(staff,tenant,salesScope,from,1,BigDecimal.ONE,new BigDecimal("0.05"));
+        assertThat(factors.evidence()).hasSize(3);
+        var factorEvidence=factors.evidence().stream().flatMap(x->x.observations().stream()).toList();
+        assertThat(factorEvidence).hasSize(6);
+        assertThat(factorEvidence.stream().map(AuthorizedAnalyticalReadService.Result::sourceRevision).distinct().count()).isEqualTo(1);
+        assertThat(factorEvidence.stream().map(AuthorizedAnalyticalReadService.Result::observedAt).distinct().count()).isEqualTo(1);
+        assertThat(factors.decisionEligibility()).isEqualTo("BLOCKED");
+        assertThat(factors.quality()).isNotEqualTo(DataQuality.READY);
+        assertThat(factors.hypotheses()).isEmpty();
+        assertThatThrownBy(()->factor.observe(foreign,tenant,salesScope,from,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
         revoke.run();
         try{
+            assertThatThrownBy(()->factor.observe(staff,tenant,salesScope,from,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->reader.read(staff,tenant,stockQuery)).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->observation.observe(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
         }finally{restore.run();}
