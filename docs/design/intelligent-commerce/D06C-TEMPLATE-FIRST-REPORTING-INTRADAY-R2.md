@@ -164,3 +164,7 @@ Cases are design requirements, not executed tests or new bank families. Exact-SH
 5. File Service/Radar integration after owner gates; intraday L0 3-hour descriptive slice and qualification, comparison only after separate methodology proof.
 6. Expand remaining nine templates only on proven renderer and qualifying sources. Existing B5 implementation continues independently. No automatic merge/design branch code changes.
 Open decisions: precise approved versions, actual report/worker owner grant, historical read contract, timezone/business day and missed slots, template locale/print profiles, storage retention, report scope and queue resource budgets, PDF fidelity, admitted pattern mapping, production threshold/SLA. Initial 10 jobs, 24 months, 3h and template-first are target choices; 2 PDF workers, sheet names, report IDs, registry/config shapes are engineering proposals requiring qualification. No actual XLSX template binaries or Java code supplied by this design-only commit.
+
+
+## D06D — Unified Analytical Dataset & Pattern Tickets (2026-11-26)
+[Сквозной архитектурный контракт](D06D-UNIFIED-ANALYTICAL-PATTERN-TICKETS-R2.md) фиксирует согласованное направление B5.5/D06B/D06C/Radar: 24M history / 12M display, допустимые многомерные scope, относительные паттерны, Pattern Ticket → Information Ticket, единые labels и template bindings, night + 3h intraday. Не меняет текущий roadmap, B4 FREEZE, MIC, existing gates, descriptive-only intraday до квалификации сопоставимого cutoff и отдельный Radar admission. DESIGN ONLY / PRODUCTION HOLD.

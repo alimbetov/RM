@@ -82,3 +82,7 @@ Spring Batch выбран для исполнения ночных отчётн�
 
 ## 9. Template First и трёхчасовые срезы — уточнение 2026-11-26
 [Детализированное ТЗ D06C](D06C-TEMPLATE-FIRST-REPORTING-INTRADAY-R2.md) определяет библиотеку из 12 шаблонов (3 pilot), единый payload, 24-месячный горизонт только при qualified coverage, Spring Batch до 10 jobs на кластер, Excel → PDF trial, intraday L0 с начала дня каждые 3 часа. D06C уточняет приоритеты §8 и не снимает ни один admission gate. Никаких новых доменов и изменения B4.
+
+
+## D06D — Unified Analytical Dataset & Pattern Tickets (2026-11-26)
+[Сквозной архитектурный контракт](D06D-UNIFIED-ANALYTICAL-PATTERN-TICKETS-R2.md) фиксирует согласованное направление B5.5/D06B/D06C/Radar: 24M history / 12M display, допустимые многомерные scope, относительные паттерны, Pattern Ticket → Information Ticket, единые labels и template bindings, night + 3h intraday. Не меняет текущий roadmap, B4 FREEZE, MIC, existing gates, descriptive-only intraday до квалификации сопоставимого cutoff и отдельный Radar admission. DESIGN ONLY / PRODUCTION HOLD.
