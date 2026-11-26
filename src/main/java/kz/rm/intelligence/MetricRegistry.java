@@ -8,7 +8,16 @@ public final class MetricRegistry {
     public enum Selection { ORDER_PERIOD,MOVEMENT_PERIOD,LIVE_POSITION }
     public enum Basis { STATUS_OCCURRED,STOCK_RECORDED,LIVE_POSITION }
     public enum Unit { COUNT,CURRENCY_AMOUNT,SKU_QUANTITY }
-    public record Definition(Code code,int version,Selection selection,Basis basis,Unit unit,String permission,boolean warehouseAssignment) {}
+    public enum Aggregation { ADDITIVE, EXACT_DISTINCT, SEMI_ADDITIVE, DERIVED_RATIO, NON_ADDITIVE }
+    public enum Identity { ORDER, ORDER_LINE, SKU, CUSTOMER, NONE }
+    public record Definition(Code code,int version,Selection selection,Basis basis,Unit unit,String permission,boolean warehouseAssignment) {
+        public Aggregation aggregation(){return switch(code){
+            case PLACED_ORDERS,CONFIRMED_ORDERS,FULFILLED_ORDERS,CANCELLED_ORDERS -> Aggregation.EXACT_DISTINCT;
+            case BOOKED_ORDER_AMOUNT,STOCK_IN_QTY,STOCK_OUT_QTY -> Aggregation.ADDITIVE;
+            case CURRENT_AVAILABLE -> Aggregation.SEMI_ADDITIVE;
+        };}
+        public Identity identity(){return aggregation()==Aggregation.EXACT_DISTINCT?Identity.ORDER:Identity.NONE;}
+    }
     public static Definition require(Code code,int version,Selection selection) {
         Objects.requireNonNull(code); Objects.requireNonNull(selection);
         if(version!=1) throw new IllegalArgumentException("Unknown method version");

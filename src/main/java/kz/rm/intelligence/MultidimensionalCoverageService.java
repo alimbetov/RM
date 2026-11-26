@@ -219,7 +219,15 @@ public class MultidimensionalCoverageService {
     }
     public Status status(UUID tenant,UUID gen,UUID proofId){
         Objects.requireNonNull(proofId);
-        return tx(()->{
+        return tx(()->statusInSnapshot(tenant,gen,proofId));
+    }
+    // Caller owns the repeatable-read transaction. Recheck source parity in the same snapshot as the series.
+    Status statusInSnapshot(UUID tenant,UUID gen,UUID proofId){
+        if(!TransactionSynchronizationManager.isActualTransactionActive() ||
+            !Objects.equals(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel(),
+                TransactionDefinition.ISOLATION_REPEATABLE_READ))
+            throw new IllegalStateException("INT_DIM_PROOF_SNAPSHOT_REQUIRED");
+        Objects.requireNonNull(proofId);
             Scope s=scope(tenant,gen);
             if("ABORTED".equals(s.state()))return Status.ABORTED;
             Proof p=jdbc.query("""
@@ -237,6 +245,5 @@ public class MultidimensionalCoverageService {
             return delivery(tenant,s.consumer())==0&&contributions(tenant,gen,s)==0
                 &&periods(tenant,gen,s)==0&&cells(tenant,gen)==0&&memberships(tenant,gen)==0
                 ?Status.CURRENT:Status.INCOMPLETE;
-        });
     }
 }

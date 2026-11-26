@@ -1,6 +1,10 @@
 package kz.rm.intelligence;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import kz.rm.iam.DomainPermission;
+import kz.rm.iam.TenantAuthorization;
+import kz.rm.iam.VerifiedActor;
+import kz.rm.iam.WarehouseStaffScopeService;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -29,7 +33,7 @@ class L3DerivedSeriesService {
         final String stream, operation, unit;
         Metric(String stream,String operation,String unit){this.stream=stream;this.operation=operation;this.unit=unit;}
     }
-    // Explicit leaf filters; null means no filter, not UNKNOWN. Parent expansion is deferred.
+    // Historical node IDs; group selects the node and its historical descendants. Null means no filter.
     record Filter(String region, UUID group, UUID sku, List<UUID> warehouses, String currency) {
         Filter {
             warehouses=List.copyOf(warehouses);
@@ -46,8 +50,35 @@ class L3DerivedSeriesService {
                   List<Observation> facts,Map<DerivedMetricEngine.Operator,DerivedMetricEngine.Result> derived){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
-    L3DerivedSeriesService(JdbcTemplate jdbc,PlatformTransactionManager manager){this.jdbc=jdbc;this.manager=manager;}
+    private final MultidimensionalCoverageService coverage;
+    private final TenantAuthorization authorization;
+    private final WarehouseStaffScopeService warehouseScope;
+    L3DerivedSeriesService(JdbcTemplate jdbc,PlatformTransactionManager manager,MultidimensionalCoverageService coverage,
+                           TenantAuthorization authorization,WarehouseStaffScopeService warehouseScope){
+        this.jdbc=jdbc;this.manager=manager;this.coverage=coverage;this.authorization=authorization;this.warehouseScope=warehouseScope;
+    }
+    // Fresh RC authorization fences remain held while the nested RR snapshot reads evidence.
+    // Internal Java API only. No HTTP admission or historical authorization claim.
+    Series readAuthorized(VerifiedActor actor,UUID tenant,UUID generation,UUID proofId,Metric metric,Filter filter,
+                          PeriodResolver.Code code,LocalDate anchor,int window){
+        Objects.requireNonNull(actor);Objects.requireNonNull(metric);Objects.requireNonNull(filter);Objects.requireNonNull(proofId);
+        if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("DERIVED_REQUIRES_OWN_TRANSACTION");
+        var admission=new TransactionTemplate(manager);
+        admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
+        return admission.execute(status->{
+            if(!metric.stream.equals("STOCK"))authorization.requireForCommand(actor.userId(),tenant,DomainPermission.SALES_ORDER_READ);
+            if(!metric.stream.equals("BOOKED")){
+                authorization.requireForCommand(actor.userId(),tenant,DomainPermission.INVENTORY_STOCK_READ);
+                for(UUID warehouse:filter.warehouses().stream().sorted().toList())warehouseScope.requireAssigned(actor.userId(),tenant,warehouse);
+            }
+            return readSnapshot(tenant,generation,metric,filter,code,anchor,window,proofId,actor.userId().toString());
+        });
+    }
     Series read(UUID tenant,UUID generation,Metric metric,Filter filter,PeriodResolver.Code code,LocalDate anchor,int window){
+        if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("DERIVED_REQUIRES_OWN_TRANSACTION");
+        return readSnapshot(tenant,generation,metric,filter,code,anchor,window,null,"INTERNAL_SHADOW_ONLY");
+    }
+    private Series readSnapshot(UUID tenant,UUID generation,Metric metric,Filter filter,PeriodResolver.Code code,LocalDate anchor,int window,UUID proofId,String actorKey){
         Objects.requireNonNull(tenant);Objects.requireNonNull(generation);Objects.requireNonNull(metric);
         Objects.requireNonNull(filter);Objects.requireNonNull(code);Objects.requireNonNull(anchor);
         if(metric.stream.equals("BOOKED") && (filter.region()!=null || !filter.warehouses().isEmpty()))
@@ -58,10 +89,9 @@ class L3DerivedSeriesService {
             throw new IllegalArgumentException("DERIVED_CURRENCY_SCOPE");
         if(metric.unit.equals("SKU_QUANTITY") && filter.sku()==null)
             throw new IllegalArgumentException("DERIVED_SKU_REQUIRED");
-        if(TransactionSynchronizationManager.isActualTransactionActive())
-            throw new IllegalStateException("DERIVED_REQUIRES_OWN_TRANSACTION");
         var tx=new TransactionTemplate(manager);
-        tx.setReadOnly(true);tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);tx.setTimeout(60);
+        tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        tx.setReadOnly(true);tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);tx.setTimeout(120);
         return tx.execute(status->{
             if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
                 c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
@@ -80,9 +110,10 @@ class L3DerivedSeriesService {
                     new PeriodResolver.Policy(ZoneId.of(rs.getString(3)),rs.getLong(4)),
                     new Revision(rs.getLong(5),rs.getLong(6),rs.getLong(7),rs.getLong(8),rs.getLong(9))):null,tenant,generation);
             if(snapshot==null)throw new IllegalArgumentException("DERIVED_BUILDING_GENERATION_REQUIRED");
+            boolean parity=proofId!=null && coverage.statusInSnapshot(tenant,generation,proofId)==MultidimensionalCoverageService.Status.CURRENT;
             Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",java.sql.Timestamp.class)).toInstant();
             var scope=new DerivedMetricEngine.Scope(tenant,generation,metric.name(),1,filter.toString(),
-                "INTERNAL_SHADOW_ONLY",metric.unit,Objects.toString(filter.currency(),"NONE"),code,snapshot.calendar(),snapshot.revision().source());
+                actorKey,metric.unit,Objects.toString(filter.currency(),"NONE"),code,snapshot.calendar(),snapshot.revision().source());
             var periods=DerivedMetricEngine.closedWindow(scope,anchor,now,window);
             var observations=new ArrayList<Observation>();
             var points=new ArrayList<DerivedMetricEngine.Point>();
@@ -94,12 +125,18 @@ class L3DerivedSeriesService {
                     o=new Observation(period,null,DataQuality.MISSING,"OUTSIDE_GENERATION");
                 else o=readPeriod(tenant,generation,metric,filter,code,period,from,until,snapshot.revision().dirty());
                 observations.add(o);
-                // Deliberately retain provisional quality. Never manufacture READY from a fresh L3 stamp.
-                points.add(new DerivedMetricEngine.Point(scope,period,o.value(),o.quality(),now));
+                // Source parity permits candidate arithmetic, not a historical completeness or activation claim.
+                var arithmeticQuality=parity && o.quality()==DataQuality.PARTIAL && o.value()!=null ? DataQuality.READY:o.quality();
+                points.add(new DerivedMetricEngine.Point(scope,period,o.value(),arithmeticQuality,now));
             }
             var derived=new EnumMap<DerivedMetricEngine.Operator,DerivedMetricEngine.Result>(DerivedMetricEngine.Operator.class);
-            for(var op:DerivedMetricEngine.Operator.values())
-                derived.put(op,DerivedMetricEngine.calculate(scope,op,anchor,now,window,points));
+            for(var op:DerivedMetricEngine.Operator.values()){
+                var result=DerivedMetricEngine.calculate(scope,op,anchor,now,window,points);
+                if(result.quality()==DataQuality.READY)
+                    result=new DerivedMetricEngine.Result(op,result.methodVersion(),window,DataQuality.PARTIAL,result.value(),
+                        "SOURCE_PARITY_ONLY_HISTORICAL_ADMISSION_REQUIRED");
+                derived.put(op,result);
+            }
             return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived));
         });
     }
@@ -116,7 +153,19 @@ class L3DerivedSeriesService {
               SELECT * FROM crm.int_l3_cell WHERE tenant_id=? AND generation_id=? AND period_code=? AND from_day=? AND stream_code=?
             """);
         if(f.region()!=null){sql.append(" AND region_code=?");args.add(f.region());}
-        if(f.group()!=null){sql.append(" AND group_id=?");args.add(f.group());}
+        if(f.group()!=null){
+            sql.append("""
+                AND group_id IN (
+                    WITH RECURSIVE descendants(id) AS (
+                        SELECT id FROM crm.cat_group_node WHERE tenant_id=? AND id=?
+                        UNION
+                        SELECT n.id FROM crm.cat_group_node n JOIN descendants d ON n.parent_id=d.id
+                        WHERE n.tenant_id=?
+                    ) SELECT id FROM descendants
+                )
+                """);
+            args.add(tenant);args.add(f.group());args.add(tenant);
+        }
         if(f.sku()!=null){sql.append(" AND sku_id=?");args.add(f.sku());}
         if(f.currency()!=null){sql.append(" AND currency=?");args.add(f.currency());}
         if(!f.warehouses().isEmpty()){
