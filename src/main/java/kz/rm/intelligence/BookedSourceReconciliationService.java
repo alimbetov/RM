@@ -13,6 +13,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.Semaphore;
 
 /** S1.2B diagnostic only. A reconciled backfill is NOT an owner completeness authority. */
 @Service
@@ -58,6 +59,10 @@ public class BookedSourceReconciliationService {
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final TenantAuthorization authorization;
+    // Each admission holds one connection while its RR snapshot borrows another.
+    // Bound this service to one such pair per JVM, before any connection is acquired.
+    // This does not reserve pool capacity against unrelated services or other JVMs.
+    private final Semaphore snapshotAdmission=new Semaphore(1);
     BookedSourceReconciliationService(JdbcTemplate jdbc,PlatformTransactionManager manager,TenantAuthorization authorization){
         this.jdbc=jdbc;this.manager=manager;this.authorization=authorization;
     }
@@ -201,6 +206,8 @@ public class BookedSourceReconciliationService {
     private <T> T authorizedSnapshot(VerifiedActor actor,UUID tenant,boolean nativeFence,java.util.function.Function<UUID,T> action){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("S1_REQUIRES_OWN_TRANSACTION");
+        if(!snapshotAdmission.tryAcquire())throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_BUSY");
+        try {
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(outer->{
@@ -223,6 +230,9 @@ public class BookedSourceReconciliationService {
             var result=snapshot.execute(inner->action.apply(user));
             actor.userId();return result;
         });
+        } finally {
+            snapshotAdmission.release();
+        }
     }
     private void requirePostgres(){
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>)c->
