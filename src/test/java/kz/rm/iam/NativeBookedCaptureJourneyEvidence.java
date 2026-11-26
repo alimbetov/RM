@@ -126,6 +126,58 @@ final class NativeBookedCaptureJourneyEvidence {
         }
     }
 
+    // A separate fresh tenant is required: activation is irreversible.
+    static void activationFirst(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            NativeBookedCaptureService capture,VerifiedActor owner,UUID tenant,Supplier<UUID> checkout){
+        var workers=Executors.newFixedThreadPool(3);
+        var ready=new CompletableFuture<Integer>();
+        var release=new CountDownLatch(1);
+        try{
+            var holding=workers.submit(()->new TransactionTemplate(manager).executeWithoutResult(st->{
+                assertThat(jdbc.queryForObject("SELECT tenant_id FROM crm.int_native_booked_capture WHERE tenant_id=? AND started_at IS NULL FOR UPDATE",UUID.class,tenant)).isEqualTo(tenant);
+                ready.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                try{if(!release.await(45,TimeUnit.SECONDS))throw new AssertionError("S1_NATIVE_ACTIVATION_FIRST_RELEASE");}
+                catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+            }));
+            int guardPid=ready.get(20,TimeUnit.SECONDS);
+            var activating=workers.submit(()->capture.activate(owner,tenant));
+            Integer activationPid;
+            Future<UUID> writing;
+            try{
+                activationPid=waitForBlock(jdbc,activating,guardPid,"crm.int_native_booked_capture");
+                writing=workers.submit(checkout::get);
+                waitForBlock(jdbc,writing,activationPid,"public.iam_workspace");
+            }finally{release.countDown();}
+            holding.get(30,TimeUnit.SECONDS);
+            var boundary=activating.get(30,TimeUnit.SECONDS);
+            UUID order=writing.get(30,TimeUnit.SECONDS);
+            Instant created=jdbc.queryForObject("SELECT created_at FROM crm.sales_order WHERE tenant_id=? AND id=?",Timestamp.class,tenant,order).toInstant();
+            assertThat(created).isAfterOrEqualTo(boundary.startedAt());
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED' AND occurred_at=?",Long.class,tenant,order,Timestamp.from(created))).isEqualTo(1L);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND order_id=?",Long.class,tenant,order)).isEqualTo(1L);
+            System.out.println("S1_NATIVE_ACTIVATION_FIRST_PASS");
+        }catch(Exception e){throw new AssertionError("S1_NATIVE_ACTIVATION_FIRST",e);}
+        finally{
+            release.countDown();workers.shutdownNow();
+            try{if(!workers.awaitTermination(60,TimeUnit.SECONDS))throw new AssertionError("S1_NATIVE_ACTIVATION_FIRST_WORKERS");}
+            catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+        }
+    }
+    private static int waitForBlock(JdbcTemplate jdbc,Future<?> future,int blocker,String relation) throws Exception{
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(15);
+        while(System.nanoTime()<deadline){
+            if(future.isDone()){future.get();throw new AssertionError("S1_NATIVE_EXPECTED_BLOCK "+relation);}
+            Integer pid=jdbc.query("""
+                SELECT l.pid FROM pg_locks l WHERE l.locktype='relation'
+                  AND l.relation=CAST(? AS regclass) AND l.mode='RowShareLock' AND l.granted
+                  AND ?=ANY(pg_blocking_pids(l.pid)) ORDER BY l.pid LIMIT 1
+                """,rs->rs.next()?rs.getInt(1):null,relation,blocker);
+            if(pid!=null)return pid;
+            Thread.sleep(25);
+        }
+        throw new AssertionError("S1_NATIVE_BLOCK_TIMEOUT "+relation);
+    }
+
     private static void lateTransaction(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
             BookedSourceReconciliationService reconciliation,CanonicalFactDeliveryService delivery,VerifiedActor reader,
             UUID tenant,UUID template,UUID run,Instant time,NativeBookedClosure.Result previous,boolean commit){
