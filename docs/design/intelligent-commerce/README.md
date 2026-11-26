@@ -160,3 +160,7 @@ RM должна помогать ответить: что происходит, 
 
 ## D06B — интеграция ночных микроотчётов и оперативных триггеров (2026-11-26)
 [Утверждённое продуктовое направление](D06B-NIGHT-REPORTS-OPERATIONAL-TRIGGERS-R2.md): использовать существующие Intelligence, FX/Pricing, EVT, Files и Radar; никаких B6/B7 или новых доменов. Design-only, B5 roadmap и gates неизменны.
+
+
+## D06C — Template-First Analytical Reporting & Intraday Refresh
+[Техническое задание](D06C-TEMPLATE-FIRST-REPORTING-INTRADAY-R2.md) уточняет D06B: готовые XLSX-шаблоны, Spring Batch 10 jobs, 3h накопительный L0, 24-месячная qualified history, Excel/PDF/Radar. Design-only; B4 freeze и gates сохранены.
