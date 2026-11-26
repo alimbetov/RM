@@ -127,6 +127,41 @@ final class ActivationJourneyEvidence {
                 UUID activeProof=jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,tenant);
                 assertThat(coverage.status(tenant,winner,activeProof)).isEqualTo(MultidimensionalCoverageService.Status.STALE);
                 assertThat(coverage.status(otherTenant,foreign,jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,otherTenant))).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+                // B4.7: rebuild from a fresh generation, interrupt after a committed
+                // bounded step, then resume with a new service instance.
+                UUID rebuild=UUID.randomUUID();
+                var request=new GenerationRebuildService.Request(tenant,rebuild,calendar,from,until);
+                var delivery=new CanonicalFactDeliveryService(jdbc,manager,appender);
+                var service=new GenerationRebuildService(jdbc,l1,l2,l3,delivery,coverage);
+                var progress=service.step(request,1,1);
+                assertThat(progress.state()).isEqualTo(GenerationRebuildService.State.REPLAY_PENDING);
+                assertThat(progress.l2Steps()).isEqualTo(1);
+                assertThat(pointer(jdbc,tenant)).isEqualTo(winner);
+                long receiptsBefore=delivery.consumerCoverage(tenant,"l2:"+rebuild).pending();
+                service=new GenerationRebuildService(jdbc,l1,l2,l3,delivery,coverage);
+                boolean sawRollup=false;
+                for(int i=0;i<200;i++){
+                    progress=service.step(request,2,1);
+                    assertThat(pointer(jdbc,tenant)).isEqualTo(winner);
+                    if(progress.state()==GenerationRebuildService.State.ROLLUP_PENDING)sawRollup=true;
+                    if(progress.state()==GenerationRebuildService.State.READY)break;
+                    assertThat(progress.state()).isIn(GenerationRebuildService.State.REPLAY_PENDING,
+                        GenerationRebuildService.State.ROLLUP_PENDING);
+                }
+                assertThat(receiptsBefore).isPositive();
+                assertThat(sawRollup).isTrue();
+                assertThat(progress.state()).isEqualTo(GenerationRebuildService.State.READY);
+                assertThat(delivery.consumerCoverage(tenant,"l2:"+rebuild).caughtUp()).isTrue();
+                assertThat(coverage.status(tenant,rebuild,progress.proof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+                var replay=service.step(request,2,1);
+                assertThat(replay.state()).isEqualTo(GenerationRebuildService.State.READY);
+                assertThat(replay.l1Steps()).isZero();assertThat(replay.l2Steps()).isZero();assertThat(replay.refreshed()).isZero();
+                var recovered=coverage.activate(tenant,rebuild,replay.proof(),winner);
+                assertThat(pointer(jdbc,tenant)).isEqualTo(rebuild);
+                assertThat(l1.lifecycle(tenant,winner)).isEqualTo(new L1ProjectionService.Lifecycle("RETIRED",2));
+                assertThat(coverage.status(tenant,rebuild,recovered.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+                assertThat(pointer(jdbc,otherTenant)).isEqualTo(foreign);
+
             }finally{commitSource.countDown();}
         }catch(Exception e){throw new AssertionError("B4_ACTIVATION_JOURNEY",e);}
         finally{pool.shutdownNow();}
