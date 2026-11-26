@@ -89,3 +89,7 @@ Vision A1–A6 относятся к **отдельному провайдеру
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Radar использует MIC-compliant metric results; сохранять cohort, scope, UOM, quality и denominator. Не суммировать distinct SKU counts.
+
+
+## D06B cross-reference
+[Интеграция микроотчётов и оперативных триггеров](D06B-NIGHT-REPORTS-OPERATIONAL-TRIGGERS-R2.md): Radar summary + report reference, повторная авторизация на всех read paths. Resumption и действующие gates неизменны.

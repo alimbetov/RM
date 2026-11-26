@@ -77,3 +77,7 @@ Exit E1 — безопасный preview/permissions/closed DSL; E2 — B2 sourc
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). Предикаты метрик используют methodVersion, cohort, UOM, scope и quality. MISSING не равен zero; distinct counts не суммируются.
+
+
+## D06B cross-reference
+[Ночные микроотчёты и оперативные FX-триггеры](D06B-NIGHT-REPORTS-OPERATIONAL-TRIGGERS-R2.md) используют существующий EVT после квалификации; не вводят второй event bus и не разрешают автоматические команды в обход owner gates.

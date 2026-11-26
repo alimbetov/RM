@@ -156,3 +156,7 @@ RM должна помогать ответить: что происходит, 
 
 ## Mandatory analytical integrity extension
 [MIC-R2](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md) supplements MIC-R1 for derived metrics, continuous history, metric activity, decision admission and point-in-time feature evidence. Shadow results are not production permits. Implementation and qualification status must be verified against base_dev.
+
+
+## D06B — интеграция ночных микроотчётов и оперативных триггеров (2026-11-26)
+[Утверждённое продуктовое направление](D06B-NIGHT-REPORTS-OPERATIONAL-TRIGGERS-R2.md): использовать существующие Intelligence, FX/Pricing, EVT, Files и Radar; никаких B6/B7 или новых доменов. Design-only, B5 roadmap и gates неизменны.

@@ -64,3 +64,7 @@ D08 можно закрывать только когда:
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). MIC-R1 утверждён как обязательный архитектурный контракт; methodology и implementation admission остаются отдельными.
+
+
+## Решение владельца 2026-11-26 — D06B
+[Ночные микроотчёты и оперативные триггеры](D06B-NIGHT-REPORTS-OPERATIONAL-TRIGGERS-R2.md): направление согласовано; архитектура не расширяется, реализация только доказанных gaps. Не разрешает production, автоматическую корректировку цен, Radar resumption или новый MVP scope. Методики и интеграционные решения остаются отдельными.
