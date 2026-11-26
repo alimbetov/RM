@@ -5,6 +5,9 @@ on:
     branches: [base_dev]
     paths:
       - 'src/main/java/kz/rm/intelligence/**'
+      - 'src/main/java/kz/rm/iam/WarehouseStaffScopeService.java'
+      - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
+      - 'src/main/java/kz/rm/iam/VerifiedActor.java'
       - 'src/main/resources/db/changelog/**'
       - 'pom.xml'
       - 'src/test/java/kz/rm/intelligence/**'
