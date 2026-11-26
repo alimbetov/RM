@@ -21,7 +21,7 @@ final class DerivedMetricEngine {
             Objects.requireNonNull(periodCode); Objects.requireNonNull(calendar);
             for (String key : List.of(metric, dimensionKey, authorizationScopeKey, unitKey, currencyKey))
                 if (key.isBlank()) throw new IllegalArgumentException("DERIVED_SCOPE_KEY");
-            if (methodVersion < 1 || sourceRevision < 0) throw new IllegalArgumentException("DERIVED_VERSION");
+            if (methodVersion != METHOD_VERSION || sourceRevision < 0) throw new IllegalArgumentException("DERIVED_VERSION");
         }
     }
     record Point(Scope scope, PeriodResolver.Period period, BigDecimal value, DataQuality quality,

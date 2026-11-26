@@ -401,4 +401,87 @@ BEGIN
  END;
 END $$;
 RESET ROLE;
+
+-- B4 shadow feature roles: synthetic privilege proof only; not deployment.
+CREATE ROLE rm_observer_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+CREATE ROLE rm_feature_store_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA crm TO rm_observer_gate,rm_feature_store_gate;
+GRANT SELECT ON crm.int_canonical_fact TO rm_observer_gate;
+GRANT SELECT,INSERT ON crm.int_fact_availability_observation TO rm_observer_gate;
+GRANT SELECT,INSERT ON crm.int_feature_candidate TO rm_feature_store_gate;
+GRANT SELECT ON crm.int_dim_coverage_proof TO rm_feature_store_gate;
+
+SET LOCAL ROLE rm_observer_gate;
+DO $$
+DECLARE t uuid:=current_setting('rm.gate_tenant')::uuid;
+BEGIN
+ IF has_any_column_privilege(current_user,'crm.int_feature_candidate','INSERT,UPDATE')
+ OR has_any_column_privilege(current_user,'crm.int_canonical_fact','INSERT,UPDATE')
+ OR has_any_column_privilege(current_user,'crm.int_fact_availability_observation','UPDATE')
+ OR has_table_privilege(current_user,'crm.int_fact_availability_observation','DELETE,TRUNCATE,TRIGGER')
+ THEN RAISE EXCEPTION 'OBSERVER_ROLE_EXCESSIVE_PRIVILEGE'; END IF;
+ INSERT INTO crm.int_fact_availability_observation(tenant_id,owner_module,source_kind,source_id)
+ SELECT tenant_id,owner_module,source_kind,source_id FROM crm.int_canonical_fact WHERE tenant_id=t
+ ON CONFLICT(tenant_id,owner_module,source_kind,source_id) DO NOTHING;
+ IF NOT EXISTS(SELECT 1 FROM crm.int_fact_availability_observation WHERE tenant_id=t)
+ THEN RAISE EXCEPTION 'OBSERVER_ROLE_NO_OBSERVATION'; END IF;
+ BEGIN
+   INSERT INTO crm.int_feature_candidate DEFAULT VALUES;
+   RAISE EXCEPTION 'OBSERVER_FEATURE_INSERT_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $$;
+RESET ROLE;
+
+-- Prepare synthetic zero-vector proof as fixture owner, not a real parity assertion.
+DO $$
+DECLARE t uuid:=current_setting('rm.gate_tenant')::uuid;
+ g uuid:=current_setting('rm.gate_projection')::uuid;
+ p uuid:=gen_random_uuid();
+BEGIN
+ INSERT INTO crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id,observed_at,
+ source_revision,dirty_revision,receipt_revision,materialization_revision,lifecycle_revision,
+ delivery_mismatches,contribution_mismatches,period_mismatches,cell_mismatches,membership_mismatches)
+ VALUES(t,g,p,CURRENT_TIMESTAMP,0,0,0,0,0,0,0,0,0,0);
+ PERFORM set_config('rm.gate_feature_proof',p::text,true);
+END $$;
+SET LOCAL ROLE rm_feature_store_gate;
+DO $$
+DECLARE t uuid:=current_setting('rm.gate_tenant')::uuid;
+ g uuid:=current_setting('rm.gate_projection')::uuid;
+ p uuid:=current_setting('rm.gate_feature_proof')::uuid;
+ f uuid:=gen_random_uuid(); k uuid:=gen_random_uuid();
+ at_time timestamptz:=clock_timestamp();
+ body jsonb;
+BEGIN
+ IF has_any_column_privilege(current_user,'crm.int_canonical_fact','INSERT,UPDATE')
+ OR has_any_column_privilege(current_user,'crm.int_fact_availability_observation','INSERT,UPDATE')
+ OR has_any_column_privilege(current_user,'crm.int_dim_coverage_proof','INSERT,UPDATE')
+ OR has_any_column_privilege(current_user,'crm.int_feature_candidate','UPDATE')
+ OR has_table_privilege(current_user,'crm.int_feature_candidate','DELETE,TRUNCATE,TRIGGER')
+ THEN RAISE EXCEPTION 'FEATURE_ROLE_EXCESSIVE_PRIVILEGE'; END IF;
+ body:=jsonb_build_object('request',jsonb_build_object('generation',g,'proof',p,
+ 'contractVersion',1,'methodVersion',1,'numericPolicyVersion',1,'activityPolicyVersion',1),
+ 'sourceRevision',0,'dirtyRevision',0,'receiptRevision',0,'materializationRevision',0,'lifecycleRevision',0,
+ 'activity','INSUFFICIENT_HISTORY','decisionEligibility','BLOCKED','inputs',jsonb_build_array(),
+ 'observedAt',at_time);
+ INSERT INTO crm.int_feature_candidate(tenant_id,generation_id,feature_id,contract_version,numeric_policy_version,
+ method_version,observed_at,payload,availability,proof_id,source_revision,dirty_revision,receipt_revision,
+ materialization_revision,lifecycle_revision,activity_policy_version,activity,payload_sha256,request_key,actor_id)
+ VALUES(t,g,f,1,1,1,at_time,body,'CURRENT_SNAPSHOT_ONLY',p,0,0,0,0,0,1,'INSUFFICIENT_HISTORY',
+ encode(sha256(convert_to(body::text,'UTF8')),'hex'),k,gen_random_uuid());
+ IF NOT EXISTS(SELECT 1 FROM crm.int_feature_candidate WHERE tenant_id=t AND feature_id=f)
+ THEN RAISE EXCEPTION 'FEATURE_ROLE_INSERT_FAILED'; END IF;
+ BEGIN
+   UPDATE crm.int_feature_candidate SET activity='STALE' WHERE tenant_id=t AND feature_id=f;
+   RAISE EXCEPTION 'FEATURE_ROLE_MUTATION_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+   INSERT INTO crm.int_fact_availability_observation DEFAULT VALUES;
+   RAISE EXCEPTION 'FEATURE_ROLE_OBSERVATION_INSERT_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $$;
+RESET ROLE;
 ROLLBACK;

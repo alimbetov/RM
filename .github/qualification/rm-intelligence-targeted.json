@@ -76,6 +76,10 @@
     {
       "classname": "kz.rm.intelligence.DerivedPostgresQualificationTest",
       "name": "boundedBatchWorkload"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "unsupportedMethodVersionRejected"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

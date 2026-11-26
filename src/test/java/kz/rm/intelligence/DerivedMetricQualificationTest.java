@@ -65,4 +65,10 @@ class DerivedMetricQualificationTest {
         assertFalse(DerivedNumericParity.equivalent(DerivedMetricEngine.Operator.MIN,BigDecimal.ONE,new BigDecimal("1.000000000000001")));
         assertFalse(DerivedNumericParity.equivalent(DerivedMetricEngine.Operator.SMA,BigDecimal.ONE,null));
     }
+    @Test void unsupportedMethodVersionRejected(){
+        assertThrows(IllegalArgumentException.class,()->new DerivedMetricEngine.Scope(
+            scope.tenant(),scope.generation(),scope.metric(),2,scope.dimensionKey(),
+            scope.authorizationScopeKey(),scope.unitKey(),scope.currencyKey(),
+            scope.periodCode(),scope.calendar(),scope.sourceRevision()));
+    }
 }
