@@ -246,7 +246,13 @@ DECLARE t UUID:=current_setting('rm.gate_tenant')::uuid;
  o UUID:=current_setting('rm.gate_order')::uuid;
  l crm.sales_order_line%ROWTYPE;
  day_key DATE:=CURRENT_DATE;
+ other_revisions_before jsonb;
+ other_revisions_after jsonb;
 BEGIN
+ -- Other tenants may already have qualified generations on the populated fixture.
+ -- Compare their complete revision rows before and after this probe, not their existence.
+ SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.tenant_id,r.generation_id),'[]'::jsonb)
+ INTO other_revisions_before FROM crm.int_dim_revision r WHERE r.tenant_id<>t;
  SELECT * INTO STRICT l FROM crm.sales_order_line WHERE tenant_id=t AND order_id=o ORDER BY id LIMIT 1;
  INSERT INTO crm.int_dim_revision(tenant_id,generation_id) VALUES(t,g);
  INSERT INTO crm.int_l2_contribution(tenant_id,generation_id,stream_code,source_id,line_id,order_id,local_day,currency,amount,sku_id)
@@ -284,7 +290,9 @@ BEGIN
  END;
  IF (SELECT dirty_revision FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g)<>2
  THEN RAISE EXCEPTION 'INT_DIM_DIRTY_REVISION'; END IF;
- IF EXISTS(SELECT 1 FROM crm.int_dim_revision WHERE tenant_id=current_setting('rm.gate_other_tenant')::uuid)
+ SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.tenant_id,r.generation_id),'[]'::jsonb)
+ INTO other_revisions_after FROM crm.int_dim_revision r WHERE r.tenant_id<>t;
+ IF other_revisions_after IS DISTINCT FROM other_revisions_before
  THEN RAISE EXCEPTION 'INT_DIM_CROSS_TENANT_REVISION'; END IF;
 END
 $$;
