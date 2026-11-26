@@ -90,3 +90,6 @@ D08 можно закрывать только когда:
 
 ## D06E.5 — Dynamic Analytical Contracts & Visualization Matrix (2026-11-26)
 [Reverse report-to-metric design](D06E.5-DYNAMIC-ANALYTICAL-CONTRACTS-VISUALIZATION-R2.md) defines 12 reusable logical data contracts DC-01–12 for the existing 12 reports and 8 UI compositions, stable typed payload bindings, chart interpretation safeguards and qualification mapping. D06E.4 inventory unchanged; no new metric admission, engine, DAG stage or test family. Product concept/B4 FREEZE, D08 OPEN, B5.5 NEXT, Radar/production HOLD.
+
+## D06E.5.1 — Adaptive Ranked Distribution (2026-11-26)
+[Owner-agreed grouping contract](D06E.5.1-ADAPTIVE-RANKED-DISTRIBUTION-R2.md): direct display ≤5, otherwise up to seven bands with 15% step; COUNT_PERCENTILE default / CUMULATIVE_VALUE_SHARE alternative, FIXED/DYNAMIC comparison, deterministic ranking, exact additive reconciliation and authorized drill-down. Reuse DC-05/06/08/09 and existing payload/templates; no new engine or metric admission. Product concept/B4 FREEZE, B5.5 NEXT, D08 OPEN, Radar/production HOLD.
