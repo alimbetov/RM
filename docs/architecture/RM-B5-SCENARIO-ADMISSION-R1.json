@@ -1,0 +1,1722 @@
+{
+  "schema": "RM-B5-SCENARIO-ADMISSION/v1",
+  "source": {
+    "path": "docs/design/intelligent-commerce/RM-B4.5D.0-BUSINESS-SCENARIO-BANK.md",
+    "sha": "d71ba3a2dc7c0f114d969cf78147602b316bef80",
+    "blob": "3ac6912ce5971fd174dcea3d0dc19cd67c5e3060",
+    "designSha": "10834168e76c381d85b165f1df0d1e4953416844"
+  },
+  "qualificationBaseline": {
+    "sha": "d71ba3a2dc7c0f114d969cf78147602b316bef80",
+    "workflow": "https://github.com/alimbetov/RM/actions/runs/45788122584",
+    "admission": "https://github.com/alimbetov/RM/actions/runs/45788122405",
+    "scope": "B4 development qualification only"
+  },
+  "status": "PLANNING_ONLY",
+  "productionAdmission": "HOLD",
+  "counts": {
+    "families": 112,
+    "base": 64,
+    "interpretation": 48
+  },
+  "mappingPolicy": "Lane and candidate metric mapping is engineering proposal, not proof of eligibility. Every scenario retains exact bank ID/title/expected text; candidate metrics are lane-level possibilities, not individually sufficient inputs. R2 88 acceptance families and 40 overlapping scenario rows remain separate.",
+  "scenarios": [
+    {
+      "id": "BS-001",
+      "title": "Stable demand",
+      "sourceExpected": "No spurious trend",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-002",
+      "title": "Sustained growth",
+      "sourceExpected": "Directional demand increase",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-003",
+      "title": "Sustained decline",
+      "sourceExpected": "Directional demand decrease",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-004",
+      "title": "Seasonal peaks",
+      "sourceExpected": "Calendar-aware pattern",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-005",
+      "title": "Promotion spike",
+      "sourceExpected": "Separate transient uplift",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-006",
+      "title": "Structural break",
+      "sourceExpected": "Detect regime change",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-007",
+      "title": "Sparse/intermittent demand",
+      "sourceExpected": "Avoid unjustified precision",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-008",
+      "title": "New SKU cold start",
+      "sourceExpected": "Explicit uncertainty",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-009",
+      "title": "Product substitution",
+      "sourceExpected": "Category vs SKU demand",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-010",
+      "title": "Cannibalization",
+      "sourceExpected": "No double-counted demand",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-011",
+      "title": "Regional divergence",
+      "sourceExpected": "Region-level aggregation",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-012",
+      "title": "Customer concentration",
+      "sourceExpected": "Concentration risk",
+      "lane": "CUSTOMER",
+      "plannedSlice": "C1/C2",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_AMOUNT"
+      ],
+      "missingEvidence": "Authorized current customer-buyer link, cohort and owner visibility; customer filter not supported by current B4.8 port; channel evidence where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-013",
+      "title": "FX depreciation",
+      "sourceExpected": "Future replacement cost increases",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-014",
+      "title": "FX appreciation",
+      "sourceExpected": "Future replacement cost decreases",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-015",
+      "title": "FX volatility",
+      "sourceExpected": "Sensitivity and uncertainty",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-016",
+      "title": "Supplier price increase",
+      "sourceExpected": "Margin pressure",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-017",
+      "title": "Supplier price decrease",
+      "sourceExpected": "Cost opportunity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-018",
+      "title": "Sales discount",
+      "sourceExpected": "Revenue vs margin distinction",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-019",
+      "title": "Freight cost shock",
+      "sourceExpected": "Landed cost sensitivity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-020",
+      "title": "Multi-currency sales",
+      "sourceExpected": "No implicit cross-currency sum",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-021",
+      "title": "FX observation missing",
+      "sourceExpected": "Fail closed / explicit unavailable",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-022",
+      "title": "Inflation regime",
+      "sourceExpected": "Nominal vs real distinction where supported",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-023",
+      "title": "Stockout / censored demand",
+      "sourceExpected": "Sales not equivalent to demand",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-024",
+      "title": "Excess inventory",
+      "sourceExpected": "Overstock signal",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-025",
+      "title": "Lead-time increase",
+      "sourceExpected": "Reorder sensitivity",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-026",
+      "title": "Supplier delay",
+      "sourceExpected": "Arrival risk",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-027",
+      "title": "Supplier failure",
+      "sourceExpected": "Alternate sourcing constraints",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-028",
+      "title": "MOQ / lot constraints",
+      "sourceExpected": "Feasible procurement",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-029",
+      "title": "Warehouse transfer",
+      "sourceExpected": "No double count of stock",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-030",
+      "title": "Partial fulfillment",
+      "sourceExpected": "Exact fulfillment grain",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-031",
+      "title": "Cancellation and reserve release",
+      "sourceExpected": "No phantom fulfillment",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-032",
+      "title": "Return / damage",
+      "sourceExpected": "Explicit supported movement semantics",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-033",
+      "title": "Category reassignment",
+      "sourceExpected": "Immutable historical group",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-034",
+      "title": "Warehouse region change",
+      "sourceExpected": "Immutable historical location",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-035",
+      "title": "Empty calendar periods",
+      "sourceExpected": "Complete period manifest",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-036",
+      "title": "Duplicate / replay",
+      "sourceExpected": "Idempotence",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-037",
+      "title": "Late event",
+      "sourceExpected": "Proof invalidation/reconciliation",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-038",
+      "title": "Out-of-order fulfillment",
+      "sourceExpected": "Source parity",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-039",
+      "title": "Dimension-only repair",
+      "sourceExpected": "No invented historical data",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-040",
+      "title": "Concurrent tenant workloads",
+      "sourceExpected": "Isolation",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-041",
+      "title": "Recession / broad demand fall",
+      "sourceExpected": "Stress demand and liquidity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-042",
+      "title": "Stagflation",
+      "sourceExpected": "Demand down, replacement costs up",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-043",
+      "title": "Currency crisis",
+      "sourceExpected": "FX shock + volatility + supply uncertainty",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-044",
+      "title": "Liquidity crunch",
+      "sourceExpected": "Constrained procurement",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-045",
+      "title": "Credit tightening",
+      "sourceExpected": "Financing constraints",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-046",
+      "title": "Payment delay",
+      "sourceExpected": "Cash-flow pressure",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-047",
+      "title": "Supplier bankruptcy",
+      "sourceExpected": "Supply interruption",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-048",
+      "title": "Logistics disruption",
+      "sourceExpected": "Lead-time / availability shock",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-049",
+      "title": "Regional warehouse outage",
+      "sourceExpected": "Capacity and transfer constraints",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-050",
+      "title": "Demand panic buying",
+      "sourceExpected": "Spike and rationed supply",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-051",
+      "title": "Sudden demand collapse",
+      "sourceExpected": "Excess stock and markdown risk",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-052",
+      "title": "Import restriction",
+      "sourceExpected": "Substitution / availability",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-053",
+      "title": "Energy cost shock",
+      "sourceExpected": "Operating cost sensitivity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-054",
+      "title": "Combined FX + demand + lead time",
+      "sourceExpected": "Conflicting procurement signals",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-055",
+      "title": "Crisis recovery",
+      "sourceExpected": "Controlled normalization",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-056",
+      "title": "False recovery / double dip",
+      "sourceExpected": "Avoid premature optimism",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-057",
+      "title": "Data ingestion interruption",
+      "sourceExpected": "Stale proof / no false completeness",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-058",
+      "title": "Worker crash mid-transaction",
+      "sourceExpected": "Atomic rollback and replay",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-059",
+      "title": "Concurrent refresh and late facts",
+      "sourceExpected": "Revision fence consistency",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-060",
+      "title": "Forged proof / digest",
+      "sourceExpected": "Fail-closed admission",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-061",
+      "title": "Extreme tenant skew",
+      "sourceExpected": "Hot tenant isolation and latency",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-062",
+      "title": "Extreme SKU/category skew",
+      "sourceExpected": "Exact DISTINCT and rollup",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-063",
+      "title": "Long historical horizon",
+      "sourceExpected": "Calendar and index scalability",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-064",
+      "title": "Correlated multi-region crisis",
+      "sourceExpected": "Cross-region comparison without tenant leakage",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-065",
+      "title": "Sales fall: demand decline vs stockout",
+      "sourceExpected": "Check availability and lost-demand evidence",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-066",
+      "title": "Sales fall: seasonal trough vs structural decline",
+      "sourceExpected": "Compare like periods and trend",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-067",
+      "title": "Sales fall: channel outage vs customer churn",
+      "sourceExpected": "Check channel health and cohorts",
+      "lane": "CUSTOMER",
+      "plannedSlice": "C1/C2",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_AMOUNT"
+      ],
+      "missingEvidence": "Authorized current customer-buyer link, cohort and owner visibility; customer filter not supported by current B4.8 port; channel evidence where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-068",
+      "title": "Sales fall: late ingestion vs real decline",
+      "sourceExpected": "Check freshness and completeness",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-069",
+      "title": "Sales rise: unit growth vs price inflation",
+      "sourceExpected": "Separate price and volume",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-070",
+      "title": "Sales rise: promotion vs organic demand",
+      "sourceExpected": "Separate temporary and durable effects",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-071",
+      "title": "Revenue rises: product mix vs volume",
+      "sourceExpected": "Price-volume-mix decomposition",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-072",
+      "title": "Revenue rises while gross profit falls",
+      "sourceExpected": "Check unit cost, mix, discount",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-073",
+      "title": "Margin falls: FX vs supplier price vs freight",
+      "sourceExpected": "Identify supported cost drivers",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-074",
+      "title": "Margin rises but cash position worsens",
+      "sourceExpected": "Distinguish accrual, receivables and cash",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-075",
+      "title": "Margin percent rises while gross profit falls",
+      "sourceExpected": "Distinguish absolute and relative metrics",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-076",
+      "title": "FX moves with domestic fixed-price supplier",
+      "sourceExpected": "No automatic FX pass-through",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-077",
+      "title": "FX moves after inventory purchase",
+      "sourceExpected": "Preserve historical valuation",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-078",
+      "title": "FX exposure offset by matched currency receipts",
+      "sourceExpected": "Net exposure, if supported",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-079",
+      "title": "Low stock: high demand vs supply interruption",
+      "sourceExpected": "Separate depletion and replenishment",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-080",
+      "title": "High stock: demand fall vs early delivery",
+      "sourceExpected": "Distinguish temporary surplus",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-081",
+      "title": "High turnover: healthy sales vs stock scarcity",
+      "sourceExpected": "Check service level and availability",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-082",
+      "title": "Procurement increase vs cash constraint",
+      "sourceExpected": "Feasible bounded action or abstain",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-083",
+      "title": "Lower unit price vs excessive MOQ",
+      "sourceExpected": "Total cost and holding risk",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-084",
+      "title": "Supplier delay vs missing receiving event",
+      "sourceExpected": "Data quality before escalation",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-085",
+      "title": "Regional decline vs warehouse outage",
+      "sourceExpected": "Compare unaffected regions",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-086",
+      "title": "Regional growth vs transfer displacement",
+      "sourceExpected": "Avoid counting transfers as final sales",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-087",
+      "title": "Category growth vs reclassification",
+      "sourceExpected": "Historical hierarchy vs current grouping",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-088",
+      "title": "Aggregate growth hides SKU decline",
+      "sourceExpected": "Drill down; prevent Simpson reversal",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-089",
+      "title": "Aggregate margin falls despite segment improvement",
+      "sourceExpected": "Detect mix effects / Simpson reversal",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-090",
+      "title": "Customer churn vs identity merge",
+      "sourceExpected": "Check identity lifecycle",
+      "lane": "CUSTOMER",
+      "plannedSlice": "C1/C2",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_AMOUNT"
+      ],
+      "missingEvidence": "Authorized current customer-buyer link, cohort and owner visibility; customer filter not supported by current B4.8 port; channel evidence where applicable.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-091",
+      "title": "Large order vs broad demand increase",
+      "sourceExpected": "Concentration and outlier handling",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-092",
+      "title": "Increased returns vs late return recording",
+      "sourceExpected": "Event time vs recorded time",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-093",
+      "title": "Zero sales vs missing sales feed",
+      "sourceExpected": "No data is not zero",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-094",
+      "title": "Zero observed demand with out-of-stock SKU",
+      "sourceExpected": "Censoring and uncertainty",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-095",
+      "title": "Incomplete period vs full prior period",
+      "sourceExpected": "Like-for-like coverage",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-096",
+      "title": "Currency conversion vs native currency totals",
+      "sourceExpected": "Require approved FX and valuation date",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-097",
+      "title": "Short history vs apparent trend",
+      "sourceExpected": "Insufficient evidence",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-098",
+      "title": "Conflicting sales and inventory indicators",
+      "sourceExpected": "Report conflict, not fabricated certainty",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-099",
+      "title": "Identical observations with two latent causes",
+      "sourceExpected": "Return plausible set / abstain",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-100",
+      "title": "Noisy observations around alert threshold",
+      "sourceExpected": "Stability and hysteresis where specified",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-101",
+      "title": "Crisis shock vs ordinary seasonal variation",
+      "sourceExpected": "Distinguish only when supported",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-102",
+      "title": "Recovery from low base vs sustainable recovery",
+      "sourceExpected": "Base effects and persistence",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-103",
+      "title": "Demand rebound with constrained supply",
+      "sourceExpected": "Separate forecast and feasible fulfillment",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-104",
+      "title": "Inflation and recession jointly",
+      "sourceExpected": "Nominal vs real volume and margins",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-105",
+      "title": "Liquidity shock with profitable orders",
+      "sourceExpected": "Do not infer solvency from margin",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-106",
+      "title": "Multi-region shock vs local anomaly",
+      "sourceExpected": "Scope evidence and avoid tenant leakage",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-107",
+      "title": "Alternative intervention changes outcome",
+      "sourceExpected": "Counterfactual only under explicit model",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-108",
+      "title": "Recommendation becomes obsolete after late event",
+      "sourceExpected": "Invalidate and re-evaluate",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-109",
+      "title": "Unseen combination of known shocks",
+      "sourceExpected": "Generalization or safe abstention",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-110",
+      "title": "Novel regime outside training support",
+      "sourceExpected": "Out-of-distribution warning",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-111",
+      "title": "Sensitive recommendation based on incomplete inputs",
+      "sourceExpected": "No automatic action; request missing inputs",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    },
+    {
+      "id": "BS-112",
+      "title": "No material change / false alarm control",
+      "sourceExpected": "No unsupported recommendation",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "status": "INVENTORIED_NOT_QUALIFIED",
+      "runtimeEvidence": []
+    }
+  ]
+}
