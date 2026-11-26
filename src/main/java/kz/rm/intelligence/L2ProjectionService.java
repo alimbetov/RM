@@ -91,7 +91,7 @@ public class L2ProjectionService {
             ), expected AS MATERIALIZED (
               SELECT e.tenant_id,p.generation_id,e.stream_code,e.source_id,e.line_id,e.movement_id,e.order_id,
                 (e.event_at AT TIME ZONE p.zone_id)::date local_day,e.region_code,e.group_id,e.item_kind,
-                e.warehouse_id,e.sku_id,e.currency,e.amount,e.qty_in,e.qty_out
+                e.warehouse_id,e.sku_id,e.currency,e.amount,e.qty_in,e.qty_out,e.product_order_units
               FROM crm.int_l2_expected_source e,p
               WHERE e.tenant_id=p.tenant_id AND e.stream_code=p.stream
                 AND ((p.order_key IS NOT NULL AND e.order_id=p.order_key) OR e.source_id=p.source_key)
@@ -105,21 +105,21 @@ public class L2ProjectionService {
             )
             INSERT INTO crm.int_l2_contribution AS current_row
               (tenant_id,generation_id,stream_code,source_id,line_id,movement_id,order_id,local_day,region_code,
-               group_id,item_kind,warehouse_id,sku_id,currency,amount,qty_in,qty_out)
+               group_id,item_kind,warehouse_id,sku_id,currency,amount,qty_in,qty_out,product_order_units)
             SELECT tenant_id,generation_id,stream_code,source_id,line_id,movement_id,order_id,local_day,region_code,
-               group_id,item_kind,warehouse_id,sku_id,currency,amount,qty_in,qty_out FROM expected
+               group_id,item_kind,warehouse_id,sku_id,currency,amount,qty_in,qty_out,product_order_units FROM expected
             ON CONFLICT (tenant_id,generation_id,stream_code,source_id) DO UPDATE SET
                line_id=excluded.line_id,movement_id=excluded.movement_id,order_id=excluded.order_id,
                local_day=excluded.local_day,region_code=excluded.region_code,group_id=excluded.group_id,
                item_kind=excluded.item_kind,warehouse_id=excluded.warehouse_id,sku_id=excluded.sku_id,
-               currency=excluded.currency,amount=excluded.amount,qty_in=excluded.qty_in,qty_out=excluded.qty_out
+               currency=excluded.currency,amount=excluded.amount,qty_in=excluded.qty_in,qty_out=excluded.qty_out,product_order_units=excluded.product_order_units
             WHERE (current_row.line_id,current_row.movement_id,current_row.order_id,current_row.local_day,
                current_row.region_code,current_row.group_id,current_row.item_kind,current_row.warehouse_id,
-               current_row.sku_id,current_row.currency,current_row.amount,current_row.qty_in,current_row.qty_out)
+               current_row.sku_id,current_row.currency,current_row.amount,current_row.qty_in,current_row.qty_out,current_row.product_order_units)
                IS DISTINCT FROM
               (excluded.line_id,excluded.movement_id,excluded.order_id,excluded.local_day,excluded.region_code,
                excluded.group_id,excluded.item_kind,excluded.warehouse_id,excluded.sku_id,excluded.currency,
-               excluded.amount,excluded.qty_in,excluded.qty_out)
+               excluded.amount,excluded.qty_in,excluded.qty_out,excluded.product_order_units)
             """,stream,order,source,tenant,gen);
     }
 }

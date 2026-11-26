@@ -6794,3 +6794,63 @@ CREATE TRIGGER trg_int_dim_reservation_revision AFTER INSERT OR UPDATE OR DELETE
 --rollback DROP FUNCTION crm.int_dim_materialization_revision();
 --rollback DROP TRIGGER trg_int_dim_receipt_revision ON crm.int_fact_consumer_receipt;
 --rollback DROP FUNCTION crm.int_dim_receipt_revision();
+
+
+--changeset rm:0214-int-commercial-order-units dbms:postgresql splitStatements:false
+ALTER TABLE crm.int_l2_contribution ADD COLUMN product_order_units NUMERIC CHECK(product_order_units>=0 AND (product_order_units IS NULL OR (stream_code IN ('BOOKED','FULFILLED') AND item_kind='PRODUCT')));
+ALTER TABLE crm.int_l3_cell ADD COLUMN product_order_units NUMERIC CHECK(product_order_units>=0 AND (product_order_units IS NULL OR (stream_code IN ('BOOKED','FULFILLED') AND item_kind='PRODUCT')));
+CREATE OR REPLACE VIEW crm.int_l2_expected_source AS
+WITH eligible AS (
+ SELECT tenant_id,order_id,event_type,min(occurred_at) AS event_at
+ FROM crm.sales_order_status_event WHERE event_type IN ('PLACED','COMPLETED')
+ GROUP BY tenant_id,order_id,event_type HAVING count(*)=1
+)
+SELECT l.tenant_id,'BOOKED'::varchar AS stream_code,l.id AS source_id,l.id AS line_id,
+ NULL::uuid AS movement_id,l.order_id,e.event_at,
+ NULL::varchar AS region_code,d.group_id,d.item_kind,NULL::uuid AS warehouse_id,
+ l.catalog_item_id_snapshot AS sku_id,trim(l.currency)::varchar AS currency,
+ (l.quantity*l.unit_price_snapshot)::numeric AS amount,0::numeric AS qty_in,0::numeric AS qty_out,
+ CASE WHEN d.item_kind='PRODUCT' THEN l.quantity::numeric END AS product_order_units
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='PLACED'
+UNION ALL
+SELECT m.tenant_id,'FULFILLED',m.id,l.id,m.id,l.order_id,e.event_at,
+ md.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,trim(l.currency),
+ (-m.delta_quantity*l.unit_price_snapshot)::numeric,0::numeric,0::numeric,
+ CASE WHEN d.item_kind='PRODUCT' THEN -m.delta_quantity END
+FROM eligible e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
+JOIN crm.inv_stock_reservation r ON r.tenant_id=l.tenant_id AND r.order_line_id=l.id AND r.order_id=l.order_id
+JOIN crm.inv_stock_movement m ON m.tenant_id=r.tenant_id AND m.reservation_id=r.id
+ AND m.location_id=r.location_id AND m.item_id=r.item_id AND m.movement_kind='FULFILLMENT'
+LEFT JOIN crm.int_movement_dimension md ON md.tenant_id=m.tenant_id AND md.movement_id=m.id
+LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
+WHERE e.event_type='COMPLETED'
+UNION ALL
+SELECT m.tenant_id,'STOCK',m.id,NULL::uuid,m.id,NULL::uuid,m.recorded_at,
+ d.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,NULL::varchar,
+ 0::numeric,greatest(m.delta_quantity,0),greatest(-m.delta_quantity,0),NULL::numeric
+FROM crm.inv_stock_movement m
+LEFT JOIN crm.int_movement_dimension d ON d.tenant_id=m.tenant_id AND d.movement_id=m.id;
+
+CREATE OR REPLACE FUNCTION crm.int_l2_provenance_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_SCHEMA<>'crm' OR TG_TABLE_NAME<>'int_l2_contribution' OR TG_OP NOT IN ('INSERT','UPDATE')
+ THEN RAISE EXCEPTION 'INT_L2_TRIGGER_SCOPE'; END IF;
+ IF NOT EXISTS(
+   SELECT 1 FROM crm.int_l2_expected_source e
+   JOIN crm.int_projection_generation g ON g.tenant_id=e.tenant_id AND g.generation_id=NEW.generation_id
+   JOIN crm.int_calendar_policy p ON p.tenant_id=g.tenant_id AND p.version=g.calendar_version
+   WHERE e.tenant_id=NEW.tenant_id AND e.stream_code=NEW.stream_code AND e.source_id=NEW.source_id
+     AND (e.line_id,e.movement_id,e.order_id,(e.event_at AT TIME ZONE p.zone_id)::date,
+          e.region_code,e.group_id,e.item_kind,e.warehouse_id,e.sku_id,e.currency,e.amount,e.qty_in,e.qty_out,e.product_order_units)
+     IS NOT DISTINCT FROM
+         (NEW.line_id,NEW.movement_id,NEW.order_id,NEW.local_day,
+          NEW.region_code,NEW.group_id,NEW.item_kind,NEW.warehouse_id,NEW.sku_id,NEW.currency,NEW.amount,NEW.qty_in,NEW.qty_out,NEW.product_order_units)
+ ) THEN RAISE EXCEPTION 'INT_L2_SOURCE_MISMATCH' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_l2_provenance_guard() FROM PUBLIC;
+-- Existing generations must pass the expanded independent proof; legacy rows are not silently backfilled.
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_COMMERCIAL_UNITS_REQUIRES_FORWARD_REBUILD'; END; $$;

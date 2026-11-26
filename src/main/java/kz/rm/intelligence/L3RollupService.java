@@ -62,10 +62,10 @@ public class L3RollupService {
             jdbc.update("DELETE FROM crm.int_l3_cell WHERE tenant_id=? AND generation_id=? AND period_code=? AND from_day=?",tenant,generation,c,from);
             int cells=jdbc.update("""
                 INSERT INTO crm.int_l3_cell(tenant_id,generation_id,period_code,from_day,cell_id,stream_code,
-                  region_code,group_id,item_kind,warehouse_id,sku_id,currency,amount,qty_in,qty_out,distinct_orders)
+                  region_code,group_id,item_kind,warehouse_id,sku_id,currency,amount,qty_in,qty_out,distinct_orders,product_order_units)
                 SELECT tenant_id,generation_id,?,CAST(? AS date),gen_random_uuid(),stream_code,
                   region_code,group_id,item_kind,warehouse_id,sku_id,currency,
-                  sum(amount),sum(qty_in),sum(qty_out),count(DISTINCT order_id)
+                  sum(amount),sum(qty_in),sum(qty_out),count(DISTINCT order_id),sum(product_order_units)
                 FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND local_day>=? AND local_day<?
                 GROUP BY tenant_id,generation_id,stream_code,region_code,group_id,item_kind,warehouse_id,sku_id,currency
                 """,c,from,tenant,generation,from,until);

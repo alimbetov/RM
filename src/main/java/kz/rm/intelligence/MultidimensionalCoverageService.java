@@ -99,14 +99,16 @@ public class MultidimensionalCoverageService {
               SELECT 'BOOKED'::varchar stream_code,l.id source_id,l.id line_id,NULL::uuid movement_id,l.order_id,
                 CAST(e.occurred_at AT TIME ZONE p.z AS date) local_day,NULL::varchar region_code,
                 d.group_id,d.item_kind,NULL::uuid warehouse_id,l.catalog_item_id_snapshot sku_id,
-                trim(l.currency)::varchar currency,l.unit_price_snapshot*l.quantity amount,0::numeric qty_in,0::numeric qty_out
+                trim(l.currency)::varchar currency,l.unit_price_snapshot*l.quantity amount,0::numeric qty_in,0::numeric qty_out,
+                CASE WHEN d.item_kind='PRODUCT' THEN l.quantity::numeric END product_order_units
               FROM p,unique_events e JOIN crm.sales_order_line l ON l.tenant_id=e.tenant_id AND l.order_id=e.order_id
               LEFT JOIN crm.int_sales_line_dimension d ON d.tenant_id=l.tenant_id AND d.line_id=l.id
               WHERE e.event_type='PLACED'
               UNION ALL
               SELECT 'FULFILLED',m.id,l.id,m.id,l.order_id,CAST(e.occurred_at AT TIME ZONE p.z AS date),
                 md.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,trim(l.currency),
-                abs(m.delta_quantity)*l.unit_price_snapshot,0::numeric,0::numeric
+                abs(m.delta_quantity)*l.unit_price_snapshot,0::numeric,0::numeric,
+                CASE WHEN d.item_kind='PRODUCT' THEN -m.delta_quantity END
               FROM p,crm.inv_stock_movement m
               JOIN crm.inv_stock_reservation r ON r.tenant_id=m.tenant_id AND r.id=m.reservation_id
                 AND r.location_id=m.location_id AND r.item_id=m.item_id
@@ -119,13 +121,13 @@ public class MultidimensionalCoverageService {
               SELECT 'STOCK',m.id,NULL::uuid,m.id,NULL::uuid,CAST(m.recorded_at AT TIME ZONE p.z AS date),
                 d.region_code,d.group_id,d.item_kind,m.location_id,m.item_id,NULL::varchar,0::numeric,
                 CASE WHEN m.delta_quantity>0 THEN m.delta_quantity ELSE 0 END,
-                CASE WHEN m.delta_quantity<0 THEN -m.delta_quantity ELSE 0 END
+                CASE WHEN m.delta_quantity<0 THEN -m.delta_quantity ELSE 0 END,NULL::numeric
               FROM p,crm.inv_stock_movement m LEFT JOIN crm.int_movement_dimension d
                 ON d.tenant_id=m.tenant_id AND d.movement_id=m.id WHERE m.tenant_id=p.t
             ), expected AS (SELECT o.* FROM owner_rows o,p WHERE o.local_day>=p.a AND o.local_day<p.b),
             actual AS (
               SELECT stream_code,source_id,line_id,movement_id,order_id,local_day,region_code,group_id,item_kind,
-                warehouse_id,sku_id,currency,amount,qty_in,qty_out
+                warehouse_id,sku_id,currency,amount,qty_in,qty_out,product_order_units
               FROM crm.int_l2_contribution x,p WHERE x.tenant_id=p.t AND x.generation_id=p.g
             )
             SELECT (SELECT count(*) FROM (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual) x)
@@ -167,14 +169,14 @@ public class MultidimensionalCoverageService {
             WITH p AS (SELECT CAST(? AS uuid) t,CAST(? AS uuid) g),
             expected AS (
               SELECT r.period_code,r.from_day,l.stream_code,l.region_code,l.group_id,l.item_kind,l.warehouse_id,l.sku_id,l.currency,
-                sum(l.amount) amount,sum(l.qty_in) qty_in,sum(l.qty_out) qty_out,count(DISTINCT l.order_id) distinct_orders
+                sum(l.amount) amount,sum(l.qty_in) qty_in,sum(l.qty_out) qty_out,count(DISTINCT l.order_id) distinct_orders,sum(l.product_order_units) product_order_units
               FROM crm.int_l3_period r JOIN crm.int_l2_contribution l ON l.tenant_id=r.tenant_id AND l.generation_id=r.generation_id
                 AND l.local_day>=r.from_day AND l.local_day<r.until_day,p
               WHERE r.tenant_id=p.t AND r.generation_id=p.g
               GROUP BY r.period_code,r.from_day,l.stream_code,l.region_code,l.group_id,l.item_kind,l.warehouse_id,l.sku_id,l.currency
             ), actual AS (
               SELECT period_code,from_day,stream_code,region_code,group_id,item_kind,warehouse_id,sku_id,currency,
-                amount,qty_in,qty_out,distinct_orders FROM crm.int_l3_cell x,p WHERE x.tenant_id=p.t AND x.generation_id=p.g
+                amount,qty_in,qty_out,distinct_orders,product_order_units FROM crm.int_l3_cell x,p WHERE x.tenant_id=p.t AND x.generation_id=p.g
             )
             SELECT (SELECT count(*) FROM (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual) x)
                   +(SELECT count(*) FROM (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected) x)
