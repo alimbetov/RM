@@ -807,5 +807,230 @@
         ]
       }
     ]
+  },
+  "tenant_report_templates": {
+    "document": "D06E.5.2-TENANT-REPORT-OWNERSHIP-METADATA-TEMPLATES-R2.md",
+    "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED",
+    "counts": {
+      "aggregate_backed": 8,
+      "live_owner_backed": 1,
+      "method_gated": 1,
+      "owner_gated": 2,
+      "runtime_qualified": 0
+    },
+    "pilot_order": [
+      "RM-R02",
+      "RM-R10",
+      "RM-R11"
+    ],
+    "reports": [
+      {
+        "report_code": "RM-R01",
+        "name": "Executive summary",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_AMOUNT",
+          "BOOKED_ORDERS",
+          "CANCELLED_ORDERS"
+        ],
+        "presentation": "KPI, 12+12 line, comparative table",
+        "scope": "T; F authorized W subset separate",
+        "gates": "No ticket/attention block until separate lifecycle admission; no mixed basis totals",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R02",
+        "name": "Sales dynamics",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_AMOUNT",
+          "BOOKED_ORDERS",
+          "FULFILLED_PRODUCT_ORDERS",
+          "BOOKED_LINES",
+          "FULFILLED_LINES"
+        ],
+        "presentation": "KPI, 12+12 line, paired bars, comparative table",
+        "scope": "T/G/K booked; F adds R/W, currency mandatory",
+        "gates": "First pilot; average check only matched numerator/denominator, optional grouped distribution after method admission",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R03",
+        "name": "Orders",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "PLACED_ORDERS",
+          "CONFIRMED_ORDERS",
+          "FULFILLED_ORDERS",
+          "CANCELLED_ORDERS",
+          "BOOKED_LINES"
+        ],
+        "presentation": "status bars, time series, status table",
+        "scope": "L1 tenant status; eligible L3 line scope separately",
+        "gates": "Not cohort conversion; cohort candidate gated; no branch status allocation",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R04",
+        "name": "Product structure",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_AMOUNT",
+          "BOOKED_SKUS",
+          "FULFILLED_SKUS",
+          "FULFILLED_LINES"
+        ],
+        "presentation": "rank bars, Pareto, grouped detail table",
+        "scope": "G/K; F R/W intersections",
+        "gates": "SKU first; historical group proof required; additive amount only for shares, D06E.5.1",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R05",
+        "name": "Geography",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "FULFILLED_AMOUNT",
+          "FULFILLED_PRODUCT_ORDERS",
+          "STOCK_IN",
+          "STOCK_OUT"
+        ],
+        "presentation": "region/warehouse comparative bars, heatmap and detail table",
+        "scope": "R/W, eligible G intersection; stock K required",
+        "gates": "City and Branch HOLD until owner mapping qualified; booked geography unavailable",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R06",
+        "name": "Inventory position",
+        "source_readiness": "LIVE_OWNER_BACKED",
+        "minimum_metric_codes": [
+          "CURRENT_AVAILABLE"
+        ],
+        "presentation": "current position KPI, stock bar, inventory table",
+        "scope": "W/K at actual asOf",
+        "gates": "on_hand/reserved owner fields require admitted read; historical balances/turnover HOLD",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R07",
+        "name": "Stock flows",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "STOCK_IN",
+          "STOCK_OUT"
+        ],
+        "presentation": "paired bars, history, movement table",
+        "scope": "W/K; R/T authorized subset for same SKU/UOM",
+        "gates": "net/gross and movement counts optional unadmitted candidates; flow is not balance",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R08",
+        "name": "ABC/XYZ",
+        "source_readiness": "METHOD_GATED",
+        "minimum_metric_codes": [
+          "BOOKED_AMOUNT",
+          "FULFILLED_PRODUCT_UNITS",
+          "CV"
+        ],
+        "presentation": "Pareto, ABC/XYZ matrix, classification table",
+        "scope": "T/currency for proposed ABC; SKU/UOM XYZ",
+        "gates": "W3 approved methodology, history and population; ordinary qualified Pareto belongs R04 until admission",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R09",
+        "name": "Customer activity",
+        "source_readiness": "OWNER_GATED",
+        "minimum_metric_codes": [],
+        "presentation": "activity line, comparative customer table",
+        "scope": "C1/C2 authorized CRM links only",
+        "gates": "No customer identity in L2/L3; no fabricated RFM, counts, retention; PII gate",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R10",
+        "name": "Anomalies",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "FULFILLED_AMOUNT",
+          "SMA",
+          "EMA",
+          "STDDEV_POP",
+          "CV",
+          "TREND"
+        ],
+        "presentation": "actual/baseline band, anomaly table",
+        "scope": "eligible F scope/currency; other metrics individually admitted",
+        "gates": "Pilot after R02; B5.3 qualified baseline; B5.5 interpretation; Radar separate",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R11",
+        "name": "Factor evidence",
+        "source_readiness": "AGGREGATE_BACKED",
+        "minimum_metric_codes": [
+          "FULFILLED_PRODUCT_UNITS",
+          "STOCK_IN",
+          "STOCK_OUT"
+        ],
+        "presentation": "paired bars/small multiples, evidence table",
+        "scope": "same W/K/UOM, equal-duration adjacent periods",
+        "gates": "Pilot after R10; B5.4/B5.5; no causal claims, no inventory availability from flows",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      },
+      {
+        "report_code": "RM-R12",
+        "name": "FX/pricing",
+        "source_readiness": "OWNER_GATED",
+        "minimum_metric_codes": [],
+        "presentation": "rate line, current vs candidate price table",
+        "scope": "currency pair/nominal/SKU owner scope",
+        "gates": "existing FX preview is not admitted report feed; CUR-R2C, actual vs candidate; no automatic execution",
+        "status": "DESIGN_SPECIFIED_NOT_RUNTIME_QUALIFIED"
+      }
+    ],
+    "table_codes": [
+      "TB-01",
+      "TB-02",
+      "TB-03",
+      "TB-04",
+      "TB-05",
+      "TB-06",
+      "TB-07",
+      "TB-08",
+      "TB-09",
+      "TB-10"
+    ],
+    "code_contracts": [
+      "CC-01",
+      "CC-02",
+      "CC-03",
+      "CC-04",
+      "CC-09",
+      "CC-10",
+      "CC-11",
+      "CC-12"
+    ],
+    "qualification_cases": [
+      "UAP-02",
+      "UAP-03",
+      "UAP-04",
+      "UAP-08",
+      "UAP-09",
+      "UAP-10",
+      "TPL-01",
+      "TPL-02",
+      "TPL-03",
+      "TPL-04",
+      "TPL-05",
+      "SEC-02",
+      "JOB-01",
+      "PERF-02"
+    ]
   }
 }
