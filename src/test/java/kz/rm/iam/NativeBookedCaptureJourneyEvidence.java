@@ -24,7 +24,7 @@ final class NativeBookedCaptureJourneyEvidence {
                         BookedSourceReconciliationService reconciliation,CanonicalFactDeliveryService delivery,
                         VerifiedActor owner,VerifiedActor reader,UUID tenant,long calendar,UUID template,CanonicalFactAppender appender,Supplier<UUID> checkout){
         assertThatThrownBy(()->capture.activate(reader,tenant)).isInstanceOf(SecurityException.class);
-        var boundary=capture.activate(owner,tenant);
+        var boundary=checkoutFirst(jdbc,manager,capture,owner,tenant,checkout);
         assertThat(capture.activate(owner,tenant)).isEqualTo(boundary);
         Instant zeroEnd=clock(jdbc);
         assertThat(zeroEnd).isAfter(boundary.startedAt());
@@ -77,6 +77,53 @@ final class NativeBookedCaptureJourneyEvidence {
         assertThat(month.state()).isEqualTo(NativeBookedClosure.State.BEFORE_CAPTURE);
         assertThat(month.shadowValue()).isNull();
         System.out.println("S1_NATIVE_CAPTURE_PASS actual_checkout=1 closed_zero=0 rollback guard historical_boundary blocked");
+    }
+
+    // Real checkout starts while capture is inactive and retains the existing
+    // workspace lock until commit. Owner activation cannot cross that checkout.
+    private static NativeBookedCaptureService.Boundary checkoutFirst(JdbcTemplate jdbc,PlatformTransactionManager manager,
+            NativeBookedCaptureService capture,VerifiedActor owner,UUID tenant,Supplier<UUID> checkout){
+        var workers=Executors.newFixedThreadPool(2);
+        var staged=new CompletableFuture<Integer>();
+        var release=new CountDownLatch(1);
+        try{
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_native_booked_capture WHERE tenant_id=? AND started_at IS NULL",Long.class,tenant)).isEqualTo(1L);
+            var writing=workers.submit(()->new TransactionTemplate(manager).execute(st->{
+                UUID order=checkout.get();
+                staged.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                try{if(!release.await(30,TimeUnit.SECONDS))throw new AssertionError("S1_NATIVE_ACTIVATION_RELEASE");}
+                catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+                return order;
+            }));
+            int writerPid=staged.get(20,TimeUnit.SECONDS);
+            var activating=workers.submit(()->capture.activate(owner,tenant));
+            Integer waiter=null;
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
+            try{
+                while(System.nanoTime()<deadline&&waiter==null){
+                    if(activating.isDone()){activating.get();throw new AssertionError("S1_ACTIVATION_CROSSED_CHECKOUT");}
+                    waiter=jdbc.query("""
+                        SELECT l.pid FROM pg_locks l WHERE l.locktype='relation'
+                          AND l.relation='public.iam_workspace'::regclass AND l.mode='RowShareLock' AND l.granted
+                          AND ?=ANY(pg_blocking_pids(l.pid)) ORDER BY l.pid LIMIT 1
+                        """,rs->rs.next()?rs.getInt(1):null,writerPid);
+                    if(waiter==null)Thread.sleep(25);
+                }
+                assertThat(waiter).as("activation waits for real checkout commit").isNotNull();
+            }finally{release.countDown();}
+            UUID order=writing.get(30,TimeUnit.SECONDS);
+            var boundary=activating.get(30,TimeUnit.SECONDS);
+            Instant created=jdbc.queryForObject("SELECT created_at FROM crm.sales_order WHERE tenant_id=? AND id=?",Timestamp.class,tenant,order).toInstant();
+            assertThat(created).isBefore(boundary.startedAt());
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND order_id=?",Long.class,tenant,order)).isEqualTo(1L);
+            System.out.printf("S1_NATIVE_CHECKOUT_FIRST_PASS writer=%d waiter=%d%n",writerPid,waiter);
+            return boundary;
+        }catch(Exception e){throw new AssertionError("S1_NATIVE_CHECKOUT_FIRST",e);}
+        finally{
+            release.countDown();workers.shutdownNow();
+            try{if(!workers.awaitTermination(60,TimeUnit.SECONDS))throw new AssertionError("S1_NATIVE_ACTIVATION_WORKERS");}
+            catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+        }
     }
 
     private static void lateTransaction(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
