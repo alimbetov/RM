@@ -177,3 +177,6 @@ Within DI-05 existing family: list/preview/download under current tenant+audienc
 
 ## RM-IC-R2 source alignment and roadmap (2026-11-26)
 [Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.
+
+## Final technical reconciliation — 2026-11-26
+DI-05 atomic operation inventory proposal, no new family: definition list/get, instance request, job status, list/search/get metadata, preview, download XLSX/PDF, audience grant/revoke/list, regenerate, retention expire/delete, authorized detail/latest query, cancel own admitted job. Each records actor/tenant/scope/permission, state preconditions, idempotency/revision, response/error, audit, negative ACL/test evidence. EVT/tickets expand in existing families per slice; no claim of complete TCRUD.

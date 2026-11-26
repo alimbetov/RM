@@ -34,4 +34,26 @@ C1/C2, W1/W2/W3 and E1/E2/E3 may proceed in parallel only by operative DAG depen
 ### Five previous review refinements (bounded implementation gates)
 RQ-01 P0: durable dataset attempt BUILDING→VALIDATING→READY atomically under revision and authorization fence, then terminal consumers/retention; no partial renderer reads, READY immutable, retries new attempt. RQ-03 P0: report owner access operations in existing TCRUD and File Service; owner grants/revoke/list/read/download/delete/regenerate, audit and current scope, no CRM permission reuse. RQ-02 P1: monitor oldest blocked partition, active/expired dataset counts, creation/drop failures, disk and leases; backpressure, no unsafe cleanup. RQ-04 P1: bounded chart/table/detail/export, validate POI/JDBC/PDF memory and Excel row/precision ceilings; choose actual budgets after load evidence, no dense Cartesian. RQ-05 P1: staging ≥24h after successful publication fixed; finished file/metadata/audit retention independently approved by tenant and owner policy; suggested 30/90/365-day defaults are NOT approved here. Physical schema/worker identity and permissions remain subject to inventory/admission. Daily partition UTC and 2-day lookahead proposal retained; no new services.
 ### Development discipline
-Before each slice: pin base_dev SHA, identify owner/contract and applicable MIC/tests, verify prerequisite admission, implement only in base_dev after authorization, qualify exact SHA, update design trace separately with actual evidence. Source drift requires reconciliation, not automatic merge design branch. Keep main outside design edits. Open: historical completeness, crosswalk, city/branch/history, bulk SQL, method thresholds, worker/report ACL, actual template/PDF binding, retention/budgets, global D08. This audit used selected Java classes, DDL inventory, pom, source DAG, existing workflow metadata and design contracts; no local build, new tests, full domain proof, CI logs or artifact visual UAT. 
+Before each slice: pin base_dev SHA, identify owner/contract and applicable MIC/tests, verify prerequisite admission, implement only in base_dev after authorization, qualify exact SHA, update design trace separately with actual evidence. Source drift requires reconciliation, not automatic merge design branch. Keep main outside design edits. Open: historical completeness, crosswalk, city/branch/history, bulk SQL, method thresholds, worker/report ACL, actual template/PDF binding, retention/budgets, global D08. This audit used selected Java classes, DDL inventory, pom, source DAG, existing workflow metadata and design contracts; no local build, new tests, full domain proof, CI logs or artifact visual UAT.
+
+## Final technical reconciliation — 2026-11-26
+Original 15 A2 decisions OWNER_APPROVED in base_dev source JSON, not global R2/runtime approval. Review dispositions:
+
+| ID | Status | Resolution / remaining gate |
+|---|---|---|
+| REV-01 | DESIGN_RECONCILED | D00/D08 DAG R1.2 and source baseline |
+| REV-02 | DESIGN_RECONCILED | INT/EVT registration; runtime grants pending |
+| REV-03 | DESIGN_RECONCILED | int_ report table prefix |
+| REV-04 | DESIGN_RECONCILED | Spring Batch preferred conditional; one lifecycle |
+| REV-05 | DESIGN_RECONCILED | 15 source A2 approvals; runtime separate |
+| REV-06 | DESIGN_RECONCILED | actual Java types authoritative; per-slice concrete diff |
+| REV-07 | GATE_PENDING | S5 permissions/file owner IAM admission + PG |
+| REV-08 | DESIGN_RECONCILED | canonical ticket identity proposed; S3 tests |
+| REV-09 | GATE_PENDING | S4/S5 actual lock DAG/DDL and PG concurrency |
+| REV-10 | DESIGN_RECONCILED | MOCK-0.1 registered |
+| REV-11 | GATE_PENDING | S6 measured budgets and prior acceptance criteria |
+| REV-12 | GATE_PENDING | atomic operation inventory and evidence per slice |
+| REV-13 | GATE_PENDING | exact-SHA scenario evidence per slice |
+| REV-14 | GATE_PENDING | MPC-1 binding and MOCK-0.2 actual binary qualification |
+
+Product concept and B4 FREEZE; design inconsistencies reconciled; remaining engineering gates stay open. S0/B5.5 NEXT, no new DAG stage.

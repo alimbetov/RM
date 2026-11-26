@@ -62,7 +62,7 @@ PDF: компактный вывод, период, значения/едини�
 | Apache ECharts | Интерактивные диаграммы React и печатное представление | P0 |
 | Playwright Java | HTML → PDF, специализированный/fallback renderer | P1 — уточнено D06C |
 | Apache POI | XLSX: таблицы, формулы, нативные диаграммы | P0 |
-| Spring Batch | Выбранная ночная оркестрация, до 10 jobs на кластер | P0 target — уточнено D06C |
+| Spring Batch | Предпочтительный кандидат ночной оркестрации, до 10 jobs на кластер | P0 target — уточнено D06C |
 | LibreOffice Headless | XLSX → PDF | P0 qualification candidate — D06C |
 
 ### 8.1. Единый контракт представления
@@ -74,7 +74,7 @@ PDF: компактный вывод, период, значения/едини�
 - Apache POI: XSSFWorkbook и XDDF для компактных XLSX; SXSSFWorkbook для больших выгрузок только после проверки диаграмм и memory/disk budget. Сложные диаграммы могут использовать изображения с сохранением исходных рядов. Проверить отображение чисел/точность, формулы, Unicode, форматирование и отсутствие внешних ссылок или недоверенных формул; закрытие workbook и очистка временных файлов.
 
 ### 8.3. Spring Batch — уточнение владельца
-Spring Batch выбран для исполнения ночных отчётных jobs с начальным кластерным лимитом 10, не chunk(10). Запуск через существующий scheduler/worker и completion contract; не вводить второй scheduler, очередь, event bus или дублирующий orchestration lifecycle. Batch metadata/schema и dependencies требуют отдельного admission. Оперативный FX-триггер не должен ждать ночного Batch. Детали в D06C.
+Spring Batch предпочтителен для исполнения ночных отчётных jobs с начальным кластерным лимитом 10, не chunk(10). Запуск через существующий scheduler/worker и completion contract; не вводить второй scheduler, очередь, event bus или дублирующий orchestration lifecycle. Batch metadata/schema и dependencies требуют отдельного admission. Оперативный FX-триггер не должен ждать ночного Batch. Детали в D06C.
 
 ### 8.4. Квалификация перед подключением
 Сверить actual pom.xml/frontend package manifest, Java/Spring compatibility, dependency/security/license checks, версии Chromium и runtime resources; не фиксировать непроверенные версии. Для NIGHT-02 дополнительно сравнить React/PDF/XLSX с независимым oracle и единым payload (числа, диаграммы, качество, locale, pagination, читаемость); для NIGHT-03 и SEC-01 проверить concurrent tenant render, retry/crash, ACL и публикацию только доступного файла; для PERF-01 измерить heap/native memory, disk, CPU, throughput, backlog и p95/p99 при совместной ночной/оперативной нагрузке. Не считать эти критерии новыми семействами тестов и не заявлять PASS до runtime evidence. B4 FREEZE, roadmap B5, Radar resumption, CUR-R2C execution gate, production HOLD и запрет новых доменов B6/B7 сохраняются.
@@ -89,3 +89,6 @@ Spring Batch выбран для исполнения ночных отчётн�
 
 ## Current metric baseline — D06E.4 reconciliation (2026-11-26)
 [Audited inventory](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.md) / [JSON](D06E.4-AGGREGATE-CAPABILITY-INVENTORY-R2.json) is the current aggregate capability catalog: 12 B4.8 pilot codes, 8 owner registry codes (7 L1 materialized, 1 live), 11 numerical operator codes, 22 unadmitted candidates; 53 catalog entries, not 53 unique business metrics. Pilot is not a ceiling. Additional registered capabilities are admitted individually after semantic, source, applicability, authorization and independent oracle qualification. No new architecture or automatic runtime admission. Reuse existing L3DerivedSeriesService.readPeriods set-based extraction within a qualified authorized bulk contract; existing 12-anchor/3-metric factor path remains unchanged. Product concept and B4 FROZEN; D08 global admission OPEN; B5.5 NEXT; Radar and production HOLD.
+
+## Final technical reconciliation — 2026-11-26
+Durable reporting lifecycle, initial cluster-wide ceiling 10 jobs, fairness, bounded queue, retry/recovery and verified completion mandatory. Spring Batch preferred candidate conditional on existing job inventory and dependency/schema admission; if existing admitted mechanism meets same contract reuse it. One job authority, no second scheduler/queue. Supersedes unconditional library wording. 3h cumulative analytical refresh does not require XLSX/PDF per tenant/scope/slot; files scheduled, on demand or admitted event only.

@@ -33,7 +33,7 @@ INTRADAY: [dayStart, actualAsOf), новый накопительный итог
 |---|---|---|
 | Spring Boot/Java/PostgreSQL, B4/B5 | existing owner calculation and application | REUSE |
 | Apache POI + XLSX templates | основной renderer | P0 |
-| Spring Batch | выбранный механизм исполнения отчётных jobs в существующем ночном workflow | P0 target |
+| Spring Batch | предпочтительный кандидат исполнения отчётных jobs в существующем ночном workflow | P0 target |
 | React + Apache ECharts | интерактивное представление | P0 target |
 | LibreOffice Headless | кандидат Excel → PDF, только после проверки качества, безопасности и runtime | P0 qualification candidate |
 | Playwright Java | HTML → PDF fallback/специализированные отчёты | P1 conditional |
@@ -203,3 +203,6 @@ For ranked Groups/Details, FULL_DISTRIBUTION uses the entire authorized metric-a
 
 ## RM-IC-R2 source alignment and roadmap (2026-11-26)
 [Project alignment and roadmap](RM-IC-R2-PROJECT-ALIGNMENT-ROADMAP.md) is the current design handoff against base_dev a6bf99107aa64f4eb255b4997ef9417748b05607. Existing S0–S6 and operative DAG R1.2 (33 nodes/54 edges) preserved; older descriptive counts are historical, not current topology. MPC-1 in D06E.1 and D06E.4 JSON covers 53 registered entries without runtime admission. B5.5 NEXT; coverage before bulk/pattern/report publication; C/W/E lanes retain own gates, D08 OPEN, Radar/production HOLD. Only design branch updated.
+
+## Final technical reconciliation — 2026-11-26
+Durable reporting lifecycle, initial cluster-wide ceiling 10 jobs, fairness, bounded queue, retry/recovery and verified completion mandatory. Spring Batch preferred candidate conditional on existing job inventory and dependency/schema admission; if existing admitted mechanism meets same contract reuse it. One job authority, no second scheduler/queue. Supersedes unconditional library wording. 3h cumulative analytical refresh does not require XLSX/PDF per tenant/scope/slot; files scheduled, on demand or admitted event only.

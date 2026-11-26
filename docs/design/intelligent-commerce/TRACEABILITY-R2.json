@@ -2904,5 +2904,151 @@
       "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java"
     ],
     "note": "CI observation remains for review_base only; new head qualification not asserted"
+  },
+  "final_technical_reconciliation": {
+    "source_sha": "a6bf99107aa64f4eb255b4997ef9417748b05607",
+    "design_parent_sha": "fad1974c219012b73ac8ffd0cb46d42ea3a5bf3d",
+    "a2_source": "docs/reviews/RM-IE-00B-R2-A2-CONTRACTS.json",
+    "original_decisions": [
+      {
+        "id": "DEC-R2-01",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-02",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-03",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-04",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-05",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-06",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-07",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-08",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-09",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-10",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-11",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-12",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-13",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-14",
+        "state": "OWNER_APPROVED"
+      },
+      {
+        "id": "DEC-R2-15",
+        "state": "OWNER_APPROVED"
+      }
+    ],
+    "operative_dag": {
+      "revision": "R1.2",
+      "nodes": 33,
+      "edges": 54
+    },
+    "findings": [
+      {
+        "id": "REV-01",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "D00/D08 DAG R1.2 and source baseline"
+      },
+      {
+        "id": "REV-02",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "INT/EVT registration; runtime grants pending"
+      },
+      {
+        "id": "REV-03",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "int_ report table prefix"
+      },
+      {
+        "id": "REV-04",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "Spring Batch preferred conditional; one lifecycle"
+      },
+      {
+        "id": "REV-05",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "15 source A2 approvals; runtime separate"
+      },
+      {
+        "id": "REV-06",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "actual Java types authoritative; per-slice concrete diff"
+      },
+      {
+        "id": "REV-07",
+        "status": "GATE_PENDING",
+        "disposition": "S5 permissions/file owner IAM admission + PG"
+      },
+      {
+        "id": "REV-08",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "canonical ticket identity proposed; S3 tests"
+      },
+      {
+        "id": "REV-09",
+        "status": "GATE_PENDING",
+        "disposition": "S4/S5 actual lock DAG/DDL and PG concurrency"
+      },
+      {
+        "id": "REV-10",
+        "status": "DESIGN_RECONCILED",
+        "disposition": "MOCK-0.1 registered"
+      },
+      {
+        "id": "REV-11",
+        "status": "GATE_PENDING",
+        "disposition": "S6 measured budgets and prior acceptance criteria"
+      },
+      {
+        "id": "REV-12",
+        "status": "GATE_PENDING",
+        "disposition": "atomic operation inventory and evidence per slice"
+      },
+      {
+        "id": "REV-13",
+        "status": "GATE_PENDING",
+        "disposition": "exact-SHA scenario evidence per slice"
+      },
+      {
+        "id": "REV-14",
+        "status": "GATE_PENDING",
+        "disposition": "MPC-1 binding and MOCK-0.2 actual binary qualification"
+      }
+    ],
+    "runtime_tests_executed": false,
+    "implementation_admission": false
   }
 }
