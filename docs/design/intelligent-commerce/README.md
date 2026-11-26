@@ -172,3 +172,7 @@ RM должна помогать ответить: что происходит, 
 
 ## D06E — Minimal Analytical Dataset & Pattern Qualification (2026-11-26)
 [Техническое приложение D06E](D06E-ANALYTICAL-DATASET-PATTERN-QUALIFICATION-R2.md) детализирует T01–T17: четыре логических представления без новых физических банков, historical coverage first, bounded authorized 24M reads, sparse scopes, typed pattern registry, минимальные tickets, existing template/worker/Radar contracts и последовательность qualification. DESIGN ONLY; B4 FREEZE, MIC, execution DAG, separate Radar admission и Production HOLD сохраняются.
+
+
+## D06E.1 — Synthetic history and Metric Code / Hint (2026-11-26)
+[Обязательное уточнение контракта представления и тестовых данных](D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md): 4 synthetic tenants (25/15/10/6 closed months), all 12 existing analytical metrics at eligible grain, English geography fixture labels, chart title/legend/header use Metric Code; localized purpose as Hint (static in PDF). Reuse existing registry and payload. DESIGN ONLY, no runtime admission or change to B4 FREEZE/DAG.
