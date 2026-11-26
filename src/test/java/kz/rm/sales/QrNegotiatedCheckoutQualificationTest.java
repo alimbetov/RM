@@ -2,6 +2,8 @@ package kz.rm.sales;
 
 import kz.rm.autoorder.AutoOrderService;
 import kz.rm.iam.*;
+import kz.rm.intelligence.*;
+import org.springframework.transaction.support.TransactionTemplate;
 import kz.rm.storefront.PublishedOfferQrService;
 import kz.rm.storefront.StorefrontOfferService;
 import org.junit.jupiter.api.Assumptions;
@@ -50,10 +52,13 @@ class QrNegotiatedCheckoutQualificationTest {
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired GlobalAccountStatusService accountStatus;
     @Autowired GlobalAccountDeletionService accountDeletion;
+    @Autowired NativeBookedCaptureService nativeCapture;
+    @Autowired BookedSourceReconciliationService reconciliation;
+    @Autowired CanonicalFactDeliveryService delivery;
 
     private record Buyer(VerifiedActor actor,UUID user,String email) {}
     private record Fixture(UUID tenant,UUID offer,UUID item,String slug,String qrRef,
-                           VerifiedActor seller,Buyer buyer) {}
+                           VerifiedActor owner,VerifiedActor seller,Buyer buyer) {}
     private VerifiedActor verified(UUID user){
         String sub=jdbc.queryForObject("""
                 SELECT external_subject FROM public.iam_user_account WHERE id=?
@@ -80,7 +85,8 @@ class QrNegotiatedCheckoutQualificationTest {
         }
         return new Buyer(verified(user),user,email);
     }
-    private Fixture setup(){
+    private Fixture setup(){return setup(false);}
+    private Fixture setup(boolean nativeRead){
         var org=organizations.saveAndFlush(new OrganizationEntity(UUID.randomUUID(),
                 "Negotiation Seller Ltd","Seller","KZ"));
         UUID tenant=workspaces.saveAndFlush(
@@ -100,6 +106,7 @@ class QrNegotiatedCheckoutQualificationTest {
                 "Price negotiation seller");
         roles.grant(admin,tenant,role.id(),DomainPermission.STOREFRONT_OFFER_MANAGE);
         roles.grant(admin,tenant,role.id(),DomainPermission.SALES_PROPOSAL_RESPOND);
+        if(nativeRead)roles.grant(admin,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
         roles.assign(admin,tenant,staff,role.id());
         roles.enable(admin,tenant);
         UUID item=UUID.randomUUID(),offer=UUID.randomUUID(),store=UUID.randomUUID();
@@ -121,7 +128,7 @@ class QrNegotiatedCheckoutQualificationTest {
         VerifiedActor seller=verified(staff);
         String ref=qr.issueOrGet(seller,tenant,offer,0,
                 "NEG_"+UUID.randomUUID().toString().replace("-","")).publicRef();
-        return new Fixture(tenant,offer,item,slug,ref,seller,buyer(true));
+        return new Fixture(tenant,offer,item,slug,ref,admin,seller,buyer(true));
     }
     private static String key(){return "NEG_"+UUID.randomUUID().toString().replace("-","");}
     private SalesPriceProposalService.Result submit(Fixture f,int qty,String price,String requestKey){
@@ -159,6 +166,112 @@ class QrNegotiatedCheckoutQualificationTest {
             Assumptions.assumeTrue(c.getMetaData().getDatabaseProductName()
                     .toLowerCase().contains("postgresql"));
         }
+    }
+
+    private Instant nativeClock(){
+        return jdbc.queryForObject("SELECT clock_timestamp()",Timestamp.class).toInstant();
+    }
+    private long nativeRevision(Fixture f){
+        return jdbc.queryForObject("""
+            SELECT coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=?),0)
+              +(SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?)
+            """,Long.class,f.tenant(),f.tenant());
+    }
+    private UUID nativeRun(Fixture f,Instant from,Instant until){
+        UUID run=UUID.randomUUID();
+        delivery.openBackfill(new CanonicalFactDeliveryService.Slice(f.tenant(),run,CanonicalFactKey.Owner.SALES,
+            CanonicalFactKey.Kind.ORDER_PLACED,from,until));
+        delivery.backfillBatch(f.tenant(),run,10);
+        return run;
+    }
+    private void assertNativeOrder(Fixture f,UUID order,UUID quote,Instant boundary){
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order o JOIN crm.sales_order_status_event e
+              ON e.tenant_id=o.tenant_id AND e.order_id=o.id AND e.event_type='PLACED' AND e.occurred_at=o.created_at
+            JOIN crm.int_canonical_fact c ON c.tenant_id=e.tenant_id AND c.source_id=e.id AND c.subject_id=o.id
+              AND c.owner_module='SALES' AND c.source_kind='ORDER_PLACED' AND c.schema_version=2
+            JOIN crm.sales_checkout_receipt r ON r.tenant_id=o.tenant_id AND r.order_id=o.id
+            JOIN crm.sales_order_line l ON l.tenant_id=o.tenant_id AND l.order_id=o.id
+            JOIN crm.sales_accepted_quote q ON q.tenant_id=o.tenant_id AND q.id=l.accepted_quote_id AND q.consumed_order_id=o.id
+            WHERE o.tenant_id=? AND o.id=? AND o.created_at>=? AND o.booked_snapshot_sealed
+              AND l.price_source='NEGOTIATED' AND l.unit_price_snapshot=750 AND l.quantity=2
+              AND o.total_amount=1500 AND q.id=? AND q.state='CONSUMED'
+            """,Long.class,f.tenant(),order,Timestamp.from(boundary),quote)).isEqualTo(1L);
+    }
+
+    @Test void nativeNegotiatedCaptureAndCrossTenantRollbackPg() throws Exception{
+        requirePostgres();
+        var a=setup(true);var b=setup(true);
+        var qa=agreed(a,2,"750");var qb=agreed(b,2,"750");
+        var ba=nativeCapture.activate(a.owner(),a.tenant());
+        var bb=nativeCapture.activate(b.owner(),b.tenant());
+        long revisionA=nativeRevision(a);
+        String keyA=key(),keyB=key();
+        var staged=new java.util.concurrent.CompletableFuture<UUID>();
+        var release=new CountDownLatch(1);
+        var workers=Executors.newFixedThreadPool(2);
+        UUID runB;
+        UUID aborted;
+        try{
+            var writing=workers.submit(()->new TransactionTemplate(transactionManager).execute(st->{
+                UUID order=pay(a,qa.quoteId(),1,2,"750",keyA).order().orderId();
+                staged.complete(order);
+                try{if(!release.await(60,TimeUnit.SECONDS))throw new AssertionError("S1_NEGOTIATED_RELEASE");}
+                catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+                st.setRollbackOnly();
+                return order;
+            }));
+            aborted=staged.get(20,TimeUnit.SECONDS);
+            var independent=workers.submit(()->{
+                UUID order=pay(b,qb.quoteId(),1,2,"750",keyB).order().orderId();
+                assertNativeOrder(b,order,qb.quoteId(),bb.startedAt());
+                assertThat(pay(b,qb.quoteId(),1,2,"750",keyB).order().orderId()).isEqualTo(order);
+                UUID run=nativeRun(b,bb.startedAt(),nativeClock());
+                var result=reconciliation.inspectNativeRange(b.seller(),b.tenant(),run);
+                assertThat(result.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_VALUE);
+                assertThat(result.shadowValue()).isEqualTo(1L);
+                assertThat(result.admitted()).isFalse();
+                return run;
+            });
+            try{
+                // B must complete while A's actual checkout transaction is still open.
+                runB=independent.get(40,TimeUnit.SECONDS);
+                assertThat(writing.isDone()).isFalse();
+                assertThat(orders(a)).isZero();
+                assertThat(nativeRevision(a)).isEqualTo(revisionA);
+            }finally{release.countDown();}
+            assertThat(writing.get(20,TimeUnit.SECONDS)).isEqualTo(aborted);
+        }finally{
+            release.countDown();workers.shutdownNow();
+            assertThat(workers.awaitTermination(60,TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(orders(a)).isZero();
+        assertThat(nativeRevision(a)).isEqualTo(revisionA);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=?",Long.class,a.tenant())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=?",Long.class,a.tenant())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND event_type='PLACED'",Long.class,a.tenant())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'",Long.class,a.tenant())).isZero();
+        assertThat(jdbc.queryForObject("SELECT state FROM crm.sales_accepted_quote WHERE tenant_id=? AND id=?",String.class,a.tenant(),qa.quoteId())).isEqualTo("AVAILABLE");
+        UUID zero=nativeRun(a,ba.startedAt(),nativeClock());
+        var z=reconciliation.inspectNativeRange(a.seller(),a.tenant(),zero);
+        assertThat(z.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_ZERO);
+        assertThat(z.shadowValue()).isZero();
+        assertThat(z.admitted()).isFalse();
+        assertThatThrownBy(()->reconciliation.inspectNativeRange(b.seller(),a.tenant(),zero)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->reconciliation.inspectNativeRange(a.seller(),a.tenant(),runB)).isInstanceOf(IllegalArgumentException.class);
+        // Retrying the same quote/key after rollback must commit exactly once.
+        UUID committed=pay(a,qa.quoteId(),1,2,"750",keyA).order().orderId();
+        assertNativeOrder(a,committed,qa.quoteId(),ba.startedAt());
+        assertThat(pay(a,qa.quoteId(),1,2,"750",keyA).order().orderId()).isEqualTo(committed);
+        assertThat(orders(a)).isEqualTo(1);
+        assertThat(orders(b)).isEqualTo(1);
+        UUID positive=nativeRun(a,ba.startedAt(),nativeClock());
+        var result=reconciliation.inspectNativeRange(a.seller(),a.tenant(),positive);
+        assertThat(result.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_VALUE);
+        assertThat(result.shadowValue()).isEqualTo(1L);
+        assertThat(result.admitted()).isFalse();
+        assertThat(reconciliation.inspectNativeRange(b.seller(),b.tenant(),runB).shadowValue()).isEqualTo(1L);
+        System.out.println("S1_NATIVE_NEGOTIATED_CROSS_TENANT_PASS");
     }
 
     @Test void qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents(){
@@ -453,7 +566,7 @@ class QrNegotiatedCheckoutQualificationTest {
         var f=setup();
         var buyer=new Buyer(issuer.resolve(jdbc,users,f.buyer().user()),f.buyer().user(),f.buyer().email());
         return new Fixture(f.tenant(),f.offer(),f.item(),f.slug(),f.qrRef(),
-                issuer.resolve(jdbc,users,f.seller().userId()),buyer);
+                issuer.resolve(jdbc,users,f.owner().userId()),issuer.resolve(jdbc,users,f.seller().userId()),buyer);
     }
 
     // Independent committed rows. Project only business evidence, not secrets

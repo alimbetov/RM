@@ -676,4 +676,50 @@ BEGIN
  RAISE NOTICE 'S1_NATIVE_LOCK_ROLE_PASS';
 END $$;
 RESET ROLE;
+
+-- Activation privilege candidate, separate from reader and lock-only roles.
+-- This gate is run inside the existing rollback-only qualification transaction.
+-- The owner identity is taken from a populated inactive organization fixture;
+-- actual actor authorization remains in the service, not inferred from SQL GRANT.
+SELECT set_config('rm.s1_native_gate_tenant',w.id::text,true),
+       set_config('rm.s1_native_gate_owner',m.user_id::text,true)
+FROM public.iam_workspace w JOIN crm.int_native_booked_capture c ON c.tenant_id=w.id
+JOIN public.iam_org_membership m ON m.organization_id=w.organization_id AND m.role='OWNER' AND m.status='ACTIVE'
+WHERE w.kind='ORGANIZATION' AND w.status='ACTIVE' AND c.started_at IS NULL
+ORDER BY w.id,m.user_id LIMIT 1;
+CREATE ROLE rm_s1_native_activation_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA crm TO rm_s1_native_activation_gate;
+GRANT SELECT ON crm.int_native_booked_capture TO rm_s1_native_activation_gate;
+GRANT UPDATE(activated_by) ON crm.int_native_booked_capture TO rm_s1_native_activation_gate;
+SET LOCAL ROLE rm_s1_native_activation_gate;
+DO $$
+DECLARE t uuid:=current_setting('rm.s1_native_gate_tenant')::uuid;
+        a uuid:=current_setting('rm.s1_native_gate_owner')::uuid;
+        prior timestamptz; boundary timestamptz; issuer uuid;
+BEGIN
+ SELECT started_at INTO STRICT prior FROM crm.int_native_booked_capture WHERE tenant_id=t FOR UPDATE;
+ IF prior IS NOT NULL THEN RAISE EXCEPTION 'S1_NATIVE_ACTIVATION_GATE_FIXTURE'; END IF;
+ IF NOT has_column_privilege(current_user,'crm.int_native_booked_capture','activated_by','UPDATE')
+   OR has_column_privilege(current_user,'crm.int_native_booked_capture','started_at','UPDATE')
+   OR has_column_privilege(current_user,'crm.int_native_booked_capture','tenant_id','UPDATE')
+   OR has_column_privilege(current_user,'crm.int_native_booked_capture','policy_version','UPDATE')
+   OR has_table_privilege(current_user,'crm.int_native_booked_capture','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+ THEN RAISE EXCEPTION 'S1_NATIVE_ACTIVATION_PRIVILEGE'; END IF;
+ UPDATE crm.int_native_booked_capture SET activated_by=a WHERE tenant_id=t;
+ SELECT started_at,activated_by INTO STRICT boundary,issuer FROM crm.int_native_booked_capture WHERE tenant_id=t;
+ IF boundary IS NULL OR issuer IS DISTINCT FROM a THEN RAISE EXCEPTION 'S1_NATIVE_ACTIVATION_FAILED'; END IF;
+ BEGIN
+   UPDATE crm.int_native_booked_capture SET activated_by=a WHERE tenant_id=t;
+   RAISE EXCEPTION 'S1_NATIVE_REACTIVATION_ALLOWED';
+ EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM<>'S1_NATIVE_CAPTURE_IMMUTABLE' THEN RAISE; END IF;
+ END;
+ BEGIN
+   UPDATE crm.int_native_booked_capture SET started_at=clock_timestamp() WHERE tenant_id=t;
+   RAISE EXCEPTION 'S1_NATIVE_BOUNDARY_WRITE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ RAISE NOTICE 'S1_NATIVE_ACTIVATION_ROLE_PASS';
+END $$;
+RESET ROLE;
 ROLLBACK;

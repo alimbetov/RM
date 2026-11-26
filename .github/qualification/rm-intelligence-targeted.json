@@ -384,6 +384,10 @@
     {
       "classname": "kz.rm.intelligence.NativeBookedClosureQualificationTest",
       "name": "headerAndMonthlyOraclesMustAgree"
+    },
+    {
+      "classname": "kz.rm.sales.QrNegotiatedCheckoutQualificationTest",
+      "name": "nativeNegotiatedCaptureAndCrossTenantRollbackPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
