@@ -58,7 +58,10 @@ final class NativeBookedCaptureJourneyEvidence {
         assertThat(freshZero.snapshot().sourceRevision()).isEqualTo(result.snapshot().sourceRevision());
         // A deliberately late (but post-activation) order commits inside the previously
         // empty interval. The reader must wait on the capture guard, then see it.
-        lateCommit(jdbc,manager,appender,reconciliation,delivery,reader,tenant,template,zeroRun,boundary.startedAt(),freshZero);
+        // First exercise the identical fence with a fully staged transaction that rolls back.
+        // An aborted source must not advance the committed revision or poison the zero.
+        lateTransaction(jdbc,manager,appender,reconciliation,delivery,reader,tenant,template,zeroRun,boundary.startedAt(),freshZero,false);
+        lateTransaction(jdbc,manager,appender,reconciliation,delivery,reader,tenant,template,zeroRun,boundary.startedAt(),freshZero,true);
         assertThatThrownBy(()->jdbc.update("UPDATE crm.sales_checkout_receipt SET request_sha256=request_sha256 WHERE tenant_id=? AND order_id=?",tenant,actual))
             .hasStackTraceContaining("S1_NATIVE_CHECKOUT_RECEIPT_IMMUTABLE");
         assertThatThrownBy(()->jdbc.update("DELETE FROM crm.sales_checkout_receipt WHERE tenant_id=? AND order_id=?",tenant,actual))
@@ -76,9 +79,9 @@ final class NativeBookedCaptureJourneyEvidence {
         System.out.println("S1_NATIVE_CAPTURE_PASS actual_checkout=1 closed_zero=0 rollback guard historical_boundary blocked");
     }
 
-    private static void lateCommit(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
+    private static void lateTransaction(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
             BookedSourceReconciliationService reconciliation,CanonicalFactDeliveryService delivery,VerifiedActor reader,
-            UUID tenant,UUID template,UUID run,Instant time,NativeBookedClosure.Result previous){
+            UUID tenant,UUID template,UUID run,Instant time,NativeBookedClosure.Result previous,boolean commit){
         var workers=Executors.newFixedThreadPool(2);
         var ready=new CompletableFuture<Integer>();
         var release=new CountDownLatch(1);
@@ -105,6 +108,7 @@ final class NativeBookedCaptureJourneyEvidence {
                 ready.complete(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
                 try{if(!release.await(30,TimeUnit.SECONDS))throw new AssertionError("S1_NATIVE_RELEASE");}
                 catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+                if(!commit)st.setRollbackOnly();
             }));
             int writerPid=ready.get(20,TimeUnit.SECONDS);
             var read=workers.submit(()->reconciliation.inspectNativeRange(reader,tenant,run));
@@ -124,6 +128,20 @@ final class NativeBookedCaptureJourneyEvidence {
             }finally{release.countDown();}
             writer.get(30,TimeUnit.SECONDS);
             var pending=read.get(30,TimeUnit.SECONDS);
+            if(!commit){
+                assertThat(pending.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_ZERO);
+                assertThat(pending.shadowValue()).isZero();
+                assertThat(pending.admitted()).isFalse();
+                assertThat(pending.snapshot().sourceRevision()).isEqualTo(previous.snapshot().sourceRevision());
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order WHERE tenant_id=? AND id=?",Long.class,tenant,order)).isZero();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_status_event WHERE tenant_id=? AND id=?",Long.class,tenant,event)).isZero();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?",Long.class,tenant,order)).isZero();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.sales_checkout_receipt WHERE tenant_id=? AND order_id=?",Long.class,tenant,order)).isZero();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE tenant_id=? AND source_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED'",Long.class,tenant,event)).isZero();
+                assertThat(delivery.backfillBatch(tenant,run,10)).isEmpty();
+                System.out.printf("S1_NATIVE_LATE_ROLLBACK_PASS writer=%d waiter=%d zero_preserved=true%n",writerPid,waiter);
+                return;
+            }
             assertThat(pending.state()).isEqualTo(NativeBookedClosure.State.UNRECONCILED_RANGE);
             assertThat(pending.shadowValue()).isNull();
             assertThat(pending.snapshot().sourceRevision()).isGreaterThan(previous.snapshot().sourceRevision());
@@ -133,7 +151,7 @@ final class NativeBookedCaptureJourneyEvidence {
             assertThat(requalified.shadowValue()).isEqualTo(1L);
             assertThat(requalified.admitted()).isFalse();
             System.out.printf("S1_NATIVE_LATE_COMMIT_PASS writer=%d waiter=%d zero_to_one=true%n",writerPid,waiter);
-        }catch(Exception e){throw new AssertionError("S1_NATIVE_LATE_COMMIT",e);}
+        }catch(Exception e){throw new AssertionError(commit?"S1_NATIVE_LATE_COMMIT":"S1_NATIVE_LATE_ROLLBACK",e);}
         finally{
             release.countDown();workers.shutdownNow();
             try{if(!workers.awaitTermination(60,TimeUnit.SECONDS))throw new AssertionError("S1_NATIVE_WORKERS");}
