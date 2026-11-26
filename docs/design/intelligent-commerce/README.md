@@ -168,3 +168,7 @@ RM должна помогать ответить: что происходит, 
 
 ## D06D — Unified Analytical Dataset & Pattern Tickets (2026-11-26)
 [Сквозной архитектурный контракт](D06D-UNIFIED-ANALYTICAL-PATTERN-TICKETS-R2.md) фиксирует согласованное направление B5.5/D06B/D06C/Radar: 24M history / 12M display, допустимые многомерные scope, относительные паттерны, Pattern Ticket → Information Ticket, единые labels и template bindings, night + 3h intraday. Не меняет текущий roadmap, B4 FREEZE, MIC, existing gates, descriptive-only intraday до квалификации сопоставимого cutoff и отдельный Radar admission. DESIGN ONLY / PRODUCTION HOLD.
+
+
+## D06E — Minimal Analytical Dataset & Pattern Qualification (2026-11-26)
+[Техническое приложение D06E](D06E-ANALYTICAL-DATASET-PATTERN-QUALIFICATION-R2.md) детализирует T01–T17: четыре логических представления без новых физических банков, historical coverage first, bounded authorized 24M reads, sparse scopes, typed pattern registry, минимальные tickets, existing template/worker/Radar contracts и последовательность qualification. DESIGN ONLY; B4 FREEZE, MIC, execution DAG, separate Radar admission и Production HOLD сохраняются.
