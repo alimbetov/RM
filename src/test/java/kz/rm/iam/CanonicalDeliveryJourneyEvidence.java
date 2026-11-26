@@ -85,7 +85,7 @@ final class CanonicalDeliveryJourneyEvidence {
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
                         CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template,
                         BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner,
-                        VerifiedActor otherReader){
+                        VerifiedActor otherReader,Runnable revokeReader,Runnable restoreReader){
         var tx=new TransactionTemplate(manager);
         String table="p2_test_effect_"+UUID.randomUUID().toString().replace("-","");
         jdbc.execute("CREATE TABLE crm."+table+" (tenant_id UUID NOT NULL,consumer_code VARCHAR(96) NOT NULL,"
@@ -225,6 +225,25 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(composed.reconciledObservedOrders()).isEqualTo(2L);
             assertThat(composed.boundary()).isEqualTo(kz.rm.intelligence.BookedHistoryComposition.Boundary.IMPORTED_PRE_TENANT_AUTHORITY_REQUIRED);
             assertThat(composed.ownerCompletenessProven()).isFalse();
+            kz.rm.intelligence.BookedDigestPgEvidence.parity(jdbc,manager,tenant,START,END,2,0,0);
+            BookedConcurrencyEvidence.qualify(jdbc,manager,reconciliation,otherReader,otherTenant,START,END,
+                List.of(run),revokeReader,restoreReader);
+            var barrier=new CyclicBarrier(2);
+            var aRead=pool.submit(()->{barrier.await(15,TimeUnit.SECONDS);return reconciliation.inspectComposition(staff,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,right));});
+            var bRead=pool.submit(()->{barrier.await(15,TimeUnit.SECONDS);return reconciliation.inspectComposition(otherReader,otherTenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(run));});
+            assertThat(result(aRead).reconciledObservedOrders()).isEqualTo(2L);
+            var concurrentB=result(bRead);
+            assertThat(concurrentB.snapshot().tenant()).isEqualTo(otherTenant);
+            assertThat(concurrentB.reconciledObservedOrders()).isNull();
+            assertThat(concurrentB.slices().getFirst().counts().owners()).isZero();
+            assertThatThrownBy(()->reconciliation.inspectComposition(staff,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(run,left,right,UUID.randomUUID(),UUID.randomUUID())))
+                .hasMessage("S1_COMPOSITION_RUNS");
+            assertThatThrownBy(()->reconciliation.inspectComposition(staff,tenant,
+                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,START.plus(Duration.ofDays(125)),List.of()))
+                .hasMessage("S1_COMPOSITION_RANGE");
             assertThat(composed.slices()).allSatisfy(e->{
                 assertThat(e.asOf()).isEqualTo(composed.snapshot().asOf());
                 assertThat(e.sourceRevision()).isEqualTo(composed.snapshot().sourceRevision());
@@ -282,6 +301,8 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(corrupted.counts().extra()).isEqualTo(1);
             assertThat(corrupted.counts().rejected()).isEqualTo(2);
             assertThat(corrupted.ownerCompletenessProven()).isFalse();
+            kz.rm.intelligence.BookedDigestPgEvidence.parity(jdbc,manager,tenant,START,END,
+                7,2,3);
             assertThat(count(jdbc,"SELECT count(*) FROM crm.int_fact_backfill_receipt WHERE tenant_id=? AND run_id=?",tenant,run)).isEqualTo(7);
             assertThat(jdbc.queryForObject("SELECT error_code FROM crm.int_fact_backfill_receipt WHERE tenant_id=? AND run_id=? AND source_id=?",
                 String.class,tenant,run,invalid)).isEqualTo("CANONICAL_SNAPSHOT_AMOUNT_MISMATCH");
@@ -336,6 +357,7 @@ final class CanonicalDeliveryJourneyEvidence {
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThatThrownBy(()->jdbc.update("UPDATE crm.int_fact_backfill_receipt SET disposition=disposition WHERE tenant_id=? AND run_id=?",tenant,run))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            kz.rm.intelligence.BookedDigestPgEvidence.limits(jdbc,manager,tenant,template,START.plus(Duration.ofDays(10)));
         }finally{
             release.countDown();pool.shutdownNow();
             try{if(!pool.awaitTermination(30,TimeUnit.SECONDS))throw new AssertionError("P2 pool did not stop");}

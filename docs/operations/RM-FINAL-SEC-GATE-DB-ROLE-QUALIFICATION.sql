@@ -520,4 +520,48 @@ BEGIN
  END;
 END $$;
 RESET ROLE;
+
+-- S1 diagnostic snapshot role only. IAM admission is a separate app transaction;
+-- this role is not the actual deployed login and does not prove database RLS.
+CREATE ROLE rm_s1_read_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA public,crm TO rm_s1_read_gate;
+GRANT SELECT ON public.iam_workspace,crm.sales_order,crm.sales_order_line,crm.sales_order_status_event,
+    crm.int_canonical_fact,crm.int_fact_backfill_run,crm.int_fact_backfill_receipt,
+    crm.int_source_revision,crm.int_source_revision_event TO rm_s1_read_gate;
+SET LOCAL ROLE rm_s1_read_gate;
+DO $
+DECLARE rel text; t uuid; r uuid; a timestamptz; b timestamptz; receipts bigint; facts bigint;
+BEGIN
+ FOREACH rel IN ARRAY ARRAY['public.iam_workspace','crm.sales_order','crm.sales_order_line','crm.sales_order_status_event',
+    'crm.int_canonical_fact','crm.int_fact_backfill_run','crm.int_fact_backfill_receipt','crm.int_source_revision','crm.int_source_revision_event'] LOOP
+  IF NOT has_table_privilege(current_user,rel,'SELECT')
+     OR has_table_privilege(current_user,rel,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+     OR has_any_column_privilege(current_user,rel,'INSERT,UPDATE')
+  THEN RAISE EXCEPTION 'S1_READ_ROLE_PRIVILEGE: %',rel; END IF;
+ END LOOP;
+ SELECT tenant_id,run_id,range_start,range_end INTO STRICT t,r,a,b
+ FROM crm.int_fact_backfill_run WHERE owner_module='SALES' AND source_kind='ORDER_PLACED'
+ ORDER BY tenant_id,run_id LIMIT 1;
+ PERFORM created_at FROM public.iam_workspace WHERE id=t;
+ PERFORM revision FROM crm.int_source_revision WHERE tenant_id=t;
+ PERFORM count(*) FROM crm.int_source_revision_event WHERE tenant_id=t;
+ SELECT count(*) INTO receipts FROM crm.int_fact_backfill_receipt WHERE tenant_id=t AND run_id=r;
+ SELECT count(*) INTO facts FROM crm.int_canonical_fact WHERE tenant_id=t AND owner_module='SALES'
+   AND source_kind='ORDER_PLACED' AND occurred_at>=a AND occurred_at<b;
+ PERFORM count(*) FROM crm.sales_order_status_event e
+   JOIN crm.sales_order o ON o.tenant_id=e.tenant_id AND o.id=e.order_id
+   JOIN crm.sales_order_line l ON l.tenant_id=o.tenant_id AND l.order_id=o.id WHERE e.tenant_id=t;
+ BEGIN
+   UPDATE crm.int_fact_backfill_receipt SET disposition=disposition WHERE tenant_id=t AND run_id=r;
+   RAISE EXCEPTION 'S1_READ_ROLE_MUTATION_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+   INSERT INTO crm.int_source_revision_event(tenant_id) VALUES(t);
+   RAISE EXCEPTION 'S1_READ_ROLE_JOURNAL_WRITE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ RAISE NOTICE 'S1_READ_ROLE_PASS facts=% receipts=%',facts,receipts;
+END $;
+RESET ROLE;
 ROLLBACK;
