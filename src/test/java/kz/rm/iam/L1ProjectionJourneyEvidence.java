@@ -385,6 +385,10 @@ final class L1ProjectionJourneyEvidence {
         assertThat(insight.evidence().getFirst().observedAt()).isEqualTo(insight.evidence().getLast().observedAt());
         assertThat(insight.decisionEligibility()).isEqualTo("BLOCKED");
         assertThat(insight.quality()).isNotEqualTo(DataQuality.READY);
+        var series=observation.observeSeries(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,new BigDecimal("0.05"));
+        assertThat(series.trend().direction()).isEqualTo("UNAVAILABLE");
+        assertThat(series.trend().decisionEligibility()).isEqualTo("BLOCKED");
+        assertThat(series.trend().slope()).isNull();
         assertThatThrownBy(()->observation.observe(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
         revoke.run();
         try{

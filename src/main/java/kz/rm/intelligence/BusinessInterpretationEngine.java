@@ -44,6 +44,7 @@ final class BusinessInterpretationEngine {
             return blocked(Status.INSUFFICIENT_DATA,Reason.INSUFFICIENT_HISTORY,DataQuality.MISSING);
         var first=points.getFirst();var scope=first.scope();var base=first.evidence();
         Instant previousEnd=null;boolean partial=false;
+        UUID l3Generation=null,l3Proof=null;
         for(var p:points){
             var e=p.evidence();var period=e.period();
             if(!scope.equals(p.scope())||e.metric()!=scope.metric()||e.methodVersion()!=scope.methodVersion()
@@ -55,6 +56,11 @@ final class BusinessInterpretationEngine {
                 ||(e.route()==AuthorizedAnalyticalReadService.Route.L3&&(e.generation()==null||e.proof()==null))
                 ||(e.route()==AuthorizedAnalyticalReadService.Route.L0&&(e.generation()!=null||e.proof()!=null)))
                 return blocked(Status.CONFLICTING_EVIDENCE,Reason.INCOMPATIBLE_EVIDENCE,DataQuality.STALE);
+            if(e.route()==AuthorizedAnalyticalReadService.Route.L3){
+                if(l3Generation!=null&&(!l3Generation.equals(e.generation())||!l3Proof.equals(e.proof())))
+                    return blocked(Status.CONFLICTING_EVIDENCE,Reason.INCOMPATIBLE_EVIDENCE,DataQuality.STALE);
+                l3Generation=e.generation();l3Proof=e.proof();
+            }
             var calendar=new PeriodResolver.Policy(ZoneId.of(period.zoneId()),period.calendarVersion());
             if(!period.equals(PeriodResolver.resolve(scope.code(),period.startInclusive().atZone(calendar.zone()).toLocalDate(),calendar))
                 ||(previousEnd!=null&&!previousEnd.equals(period.startInclusive())))

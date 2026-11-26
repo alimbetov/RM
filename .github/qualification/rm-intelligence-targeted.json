@@ -108,6 +108,34 @@
     {
       "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
       "name": "incompatibleTenantAndRevisionFailClosed"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs001StableAndCumulativeDrift"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs002MonotonicObservedGrowth"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs003MonotonicObservedDecline"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs006SingleShockNotSustained"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs097ShortMissingAndPartialWindow"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "bs102ReboundIsNotRecovery"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
+      "name": "unequalCalendarDurationAbstains"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

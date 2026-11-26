@@ -18,7 +18,15 @@ public class BusinessObservationService {
                           boolean sustainedTrend,String decisionEligibility){
         public Insight {evidence=List.copyOf(evidence);hypotheses=List.copyOf(hypotheses);}
     }
+    public record Trend(int policyVersion,String direction,String reason,DataQuality quality,String activity,
+                        int periods,int readyPeriods,BigDecimal slope,BigDecimal movingAverage,
+                        boolean sustainedTrend,String decisionEligibility){}
+    public record SeriesInsight(Insight observation,Trend trend){}
     public Insight observe(VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query query,
+                           List<LocalDate> anchors,int policyVersion,BigDecimal absoluteThreshold,BigDecimal relativeThreshold){
+        return observeSeries(actor,tenant,query,anchors,policyVersion,absoluteThreshold,relativeThreshold).observation();
+    }
+    public SeriesInsight observeSeries(VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query query,
                            List<LocalDate> anchors,int policyVersion,BigDecimal absoluteThreshold,BigDecimal relativeThreshold){
         var policy=new BusinessInterpretationEngine.Policy(policyVersion,absoluteThreshold,relativeThreshold);
         var dates=List.copyOf(anchors);
@@ -30,8 +38,12 @@ public class BusinessObservationService {
             new BusinessInterpretationEngine.Scope(tenant,actorId,query.metric(),query.calendarVersion(),query.period(),
                 query.region(),query.group(),query.sku(),query.warehouses(),query.currency(),e.unit(),e.methodVersion()),e)).toList();
         var result=BusinessInterpretationEngine.evaluate(points,policy);
-        return new Insight(tenant,actorId,query,policyVersion,absoluteThreshold,relativeThreshold,evidence,
+        var observation=new Insight(tenant,actorId,query,policyVersion,absoluteThreshold,relativeThreshold,evidence,
             result.status().name(),result.reason().name(),result.quality(),result.delta(),result.growth(),
             result.hypotheses().stream().map(Enum::name).toList(),result.sustainedTrend(),result.decisionEligibility().name());
+        var trend=BusinessTrendAssessment.evaluate(points,policy,result);
+        return new SeriesInsight(observation,new Trend(trend.policyVersion(),trend.direction().name(),trend.reason().name(),
+            trend.quality(),trend.activity(),trend.periods(),trend.readyPeriods(),trend.slope(),trend.movingAverage(),
+            trend.sustainedTrend(),trend.decisionEligibility()));
     }
 }
