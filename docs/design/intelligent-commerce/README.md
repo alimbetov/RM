@@ -153,3 +153,6 @@ RM должна помогать ответить: что происходит, 
 
 ## Обязательное дополнение MIC-R1 (2026-11-26)
 [RM Mathematical Integrity Contract R1](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md). MIC-R1 обязателен для всех пяти контуров; design-only сохраняется.
+
+## Mandatory analytical integrity extension
+[MIC-R2](../../architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md) supplements MIC-R1 for derived metrics, continuous history, metric activity, decision admission and point-in-time feature evidence. Shadow results are not production permits. Implementation and qualification status must be verified against base_dev.
