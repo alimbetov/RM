@@ -60,7 +60,7 @@ public class MultidimensionalCoverageService {
     private long count(String sql,Object... args){return Objects.requireNonNull(jdbc.queryForObject(sql,Long.class,args));}
     // Whole-tenant owner/fact/receipt identity coverage, independent of the L2 producer.
     private long delivery(UUID tenant,String consumer){
-        return count("""
+        return new IndependentCanonicalDigestVerifier(jdbc).mismatches(tenant)+count("""
             WITH p AS (SELECT CAST(? AS uuid) t,CAST(? AS varchar) c),
             owners AS (
               SELECT 'SALES' owner_module,'ORDER_'||event_type source_kind,id source_id,order_id subject_id,
@@ -228,7 +228,13 @@ public class MultidimensionalCoverageService {
                     rs.getLong(6),rs.getLong(7),rs.getLong(8),rs.getLong(9),rs.getLong(10)):null,tenant,gen,proofId);
             if(p==null)return Status.UNPROVEN;
             if(!p.revisions().equals(s.revisions()))return Status.STALE;
-            return p.parity()?Status.CURRENT:Status.INCOMPLETE;
+            if(!p.parity())return Status.INCOMPLETE;
+            // A stored zero vector is not a trust boundary: even an inserted forged
+            // proof cannot admit a mathematically incomplete generation. This is
+            // deliberately expensive until a separately qualified proof writer exists.
+            return delivery(tenant,s.consumer())==0&&contributions(tenant,gen,s)==0
+                &&periods(tenant,gen,s)==0&&cells(tenant,gen)==0&&memberships(tenant,gen)==0
+                ?Status.CURRENT:Status.INCOMPLETE;
         });
     }
 }

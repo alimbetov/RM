@@ -127,6 +127,20 @@ final class L1ProjectionJourneyEvidence {
         assertThat(incomplete.memberships()).isZero();
         assertThat(incomplete.periods()).isPositive();
         assertThat(dimProof.status(tenant,gen,incomplete.id())).isEqualTo(MultidimensionalCoverageService.Status.INCOMPLETE);
+        // A forged zero-vector proof with exact current revisions cannot bypass
+        // the live parity check. The fixture owner intentionally has INSERT rights.
+        UUID forged=UUID.randomUUID();
+        assertThat(jdbc.update("""
+            INSERT INTO crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id,observed_at,
+              source_revision,dirty_revision,receipt_revision,materialization_revision,lifecycle_revision,
+              delivery_mismatches,contribution_mismatches,period_mismatches,cell_mismatches,membership_mismatches)
+            SELECT tenant_id,generation_id,?,statement_timestamp(),source_revision,dirty_revision,receipt_revision,
+              materialization_revision,lifecycle_revision,0,0,0,0,0 FROM crm.int_dim_coverage_proof
+            WHERE tenant_id=? AND generation_id=? AND proof_id=?
+            """,forged,tenant,gen,incomplete.id())).isEqualTo(1);
+        assertThat(dimProof.status(tenant,gen,forged)).isEqualTo(MultidimensionalCoverageService.Status.INCOMPLETE);
+        assertThatThrownBy(()->jdbc.update("UPDATE crm.int_dim_coverage_proof SET period_mismatches=0 WHERE tenant_id=? AND generation_id=? AND proof_id=?",tenant,gen,incomplete.id()))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class);
         // Complete manifest of all fully contained periods, including empty days.
         for(var code:PeriodResolver.Code.values()){
             LocalDate cursor=from;

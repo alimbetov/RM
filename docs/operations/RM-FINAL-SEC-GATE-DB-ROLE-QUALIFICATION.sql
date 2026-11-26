@@ -288,4 +288,39 @@ BEGIN
  THEN RAISE EXCEPTION 'INT_DIM_CROSS_TENANT_REVISION'; END IF;
 END
 $$;
+-- B4.5C.7: synthetic untrusted runtime/worker roles cannot forge proof or revision rows.
+DO $
+DECLARE role_name text;
+BEGIN
+ FOREACH role_name IN ARRAY ARRAY['rm_runtime_gate','rm_int_worker_gate'] LOOP
+   IF has_table_privilege(role_name,'crm.int_dim_coverage_proof','INSERT,UPDATE,DELETE,TRUNCATE')
+      OR has_any_column_privilege(role_name,'crm.int_dim_coverage_proof','INSERT,UPDATE')
+      OR has_table_privilege(role_name,'crm.int_dim_revision','INSERT,UPDATE,DELETE,TRUNCATE')
+      OR has_any_column_privilege(role_name,'crm.int_dim_revision','INSERT,UPDATE')
+      OR has_function_privilege(role_name,'crm.int_dim_receipt_revision()','EXECUTE')
+      OR has_function_privilege(role_name,'crm.int_dim_materialization_revision()','EXECUTE')
+      OR has_function_privilege(role_name,'crm.int_dim_reservation_revision()','EXECUTE')
+   THEN RAISE EXCEPTION 'INT_DIM_UNTRUSTED_ROLE_PRIVILEGES: %',role_name; END IF;
+ END LOOP;
+END $;
+SET LOCAL ROLE rm_int_worker_gate;
+DO $
+BEGIN
+ BEGIN
+   INSERT INTO crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id,observed_at,
+       source_revision,dirty_revision,receipt_revision,materialization_revision,lifecycle_revision,
+       delivery_mismatches,contribution_mismatches,period_mismatches,cell_mismatches,membership_mismatches)
+   VALUES(current_setting('rm.gate_tenant')::uuid,current_setting('rm.gate_projection')::uuid,
+       gen_random_uuid(),CURRENT_TIMESTAMP,0,0,0,0,0,0,0,0,0,0);
+   RAISE EXCEPTION 'INT_DIM_FORGED_PROOF_ACCEPTED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+   UPDATE crm.int_dim_revision SET materialization_revision=0
+   WHERE tenant_id=current_setting('rm.gate_tenant')::uuid AND generation_id=current_setting('rm.gate_projection')::uuid;
+   RAISE EXCEPTION 'INT_DIM_COUNTER_RESET_ACCEPTED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $;
+RESET ROLE;
 ROLLBACK;
