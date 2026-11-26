@@ -23,6 +23,8 @@ class L3DerivedSeriesService {
         BOOKED_ORDERS("BOOKED","ORDER", "COUNT"),
         FULFILLED_PRODUCT_ORDERS("FULFILLED","ORDER","COUNT"),
         BOOKED_SKUS("BOOKED","SKU","COUNT"),
+        BOOKED_LINES("BOOKED","LINE","COUNT"),
+        FULFILLED_LINES("FULFILLED","LINE","COUNT"),
         FULFILLED_SKUS("FULFILLED","SKU","COUNT"),
         BOOKED_AMOUNT("BOOKED","AMOUNT","CURRENCY"),
         FULFILLED_AMOUNT("FULFILLED","AMOUNT","CURRENCY"),
@@ -31,6 +33,8 @@ class L3DerivedSeriesService {
         STOCK_IN("STOCK","QTY_IN","SKU_QUANTITY"),
         STOCK_OUT("STOCK","QTY_OUT","SKU_QUANTITY");
         final String stream, operation, unit;
+        MetricRegistry.Aggregation aggregation(){return identity()==MetricRegistry.Identity.NONE?MetricRegistry.Aggregation.ADDITIVE:MetricRegistry.Aggregation.EXACT_DISTINCT;}
+        MetricRegistry.Identity identity(){return switch(operation){case "ORDER" -> MetricRegistry.Identity.ORDER; case "LINE" -> MetricRegistry.Identity.ORDER_LINE; case "SKU" -> MetricRegistry.Identity.SKU; default -> MetricRegistry.Identity.NONE;};}
         Metric(String stream,String operation,String unit){this.stream=stream;this.operation=operation;this.unit=unit;}
     }
     // Historical node IDs; group selects the node and its historical descendants. Null means no filter.
@@ -141,6 +145,13 @@ class L3DerivedSeriesService {
             var sqlCandidates=parity && points.stream().allMatch(p->p.quality()==DataQuality.READY)
                 ?PostgresDerivedWindows.latest(jdbc,points.stream().map(DerivedMetricEngine.Point::value).toList())
                 :Map.<DerivedMetricEngine.Operator,BigDecimal>of();
+            if(!sqlCandidates.isEmpty()){
+                for(var op:DerivedMetricEngine.Operator.values()){
+                    if(op==DerivedMetricEngine.Operator.EMA)continue;
+                    if(!DerivedNumericParity.equivalent(op,derived.get(op).value(),sqlCandidates.get(op)))
+                        throw new IllegalStateException("DERIVED_NUMERIC_PARITY_MISMATCH:"+op);
+                }
+            }
             return new Series(tenant,generation,metric,filter,snapshot.revision(),List.copyOf(observations),Map.copyOf(derived),sqlCandidates);
         });
     }
@@ -184,6 +195,15 @@ class L3DerivedSeriesService {
                   USING(tenant_id,generation_id,period_code,from_day,cell_id) HAVING count(*)>0
                 """;
             case "SKU" -> "SELECT count(DISTINCT sku_id)::numeric FROM selected HAVING count(*)>0 AND count(sku_id)=count(*)";
+            case "LINE" -> """
+                SELECT count(DISTINCT l.line_id)::numeric FROM selected s
+                JOIN crm.int_l3_period p USING(tenant_id,generation_id,period_code,from_day)
+                JOIN crm.int_l2_contribution l ON l.tenant_id=s.tenant_id AND l.generation_id=s.generation_id
+                  AND l.local_day>=p.from_day AND l.local_day<p.until_day
+                  AND (l.stream_code,l.region_code,l.group_id,l.item_kind,l.warehouse_id,l.sku_id,l.currency)
+                    IS NOT DISTINCT FROM (s.stream_code,s.region_code,s.group_id,s.item_kind,s.warehouse_id,s.sku_id,s.currency)
+                HAVING count(*)>0 AND count(l.line_id)=count(*)
+                """;
             case "AMOUNT" -> "SELECT sum(amount) FROM selected";
             case "PRODUCT_UNITS" -> "SELECT CASE WHEN count(*)=count(product_order_units) THEN sum(product_order_units) END FROM selected";
             case "QTY_IN" -> "SELECT sum(qty_in) FROM selected";
