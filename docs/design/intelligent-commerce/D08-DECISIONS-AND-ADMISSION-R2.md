@@ -72,3 +72,7 @@ D08 можно закрывать только когда:
 
 ## D06C — уточнение reporting 2026-11-26
 [Template First & Intraday Refresh](D06C-TEMPLATE-FIRST-REPORTING-INTRADAY-R2.md): владелец согласовал подход, 3h срезы, очередь 10 и заранее подготовленные шаблоны. Технологические версии, конкретные методы и runtime/owner admission остаются открытыми; ACTIVE L3 не мутировать, OPEN_PERIOD не повышать до READY. Не менять DAG, B5 roadmap или production HOLD.
+
+
+## D06E.3 — Analytical Presentation & Progressive Business Insights (2026-11-26)
+[Согласованное владельцем дополнение](D06E.3-ANALYTICAL-PRESENTATION-PROGRESSIVE-INSIGHTS-R2.md) фиксирует восемь переиспользуемых композиций: Morning Brief, Business Pulse, Heatmap, Top Winners & Losers, Drill-Down, Contribution Analysis, Historical Range Selector, What Changed. Один qualified payload, Metric Code + Hint, без новых движков/доменов/шаблонов на каждый вариант. D06E.2 и финальная сверка D08/traceability остаются открытыми. DESIGN ONLY / B4 FREEZE / PRODUCTION HOLD.

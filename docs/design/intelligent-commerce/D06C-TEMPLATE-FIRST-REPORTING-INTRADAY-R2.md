@@ -172,3 +172,7 @@ Open decisions: precise approved versions, actual report/worker owner grant, his
 
 ## D06E.1 — Synthetic history and Metric Code / Hint (2026-11-26)
 [Обязательное уточнение контракта представления и тестовых данных](D06E.1-SYNTHETIC-HISTORY-AND-METRIC-PRESENTATION-R2.md): 4 synthetic tenants (25/15/10/6 closed months), all 12 existing analytical metrics at eligible grain, English geography fixture labels, chart title/legend/header use Metric Code; localized purpose as Hint (static in PDF). Reuse existing registry and payload. DESIGN ONLY, no runtime admission or change to B4 FREEZE/DAG.
+
+
+## D06E.3 — Analytical Presentation & Progressive Business Insights (2026-11-26)
+[Согласованное владельцем дополнение](D06E.3-ANALYTICAL-PRESENTATION-PROGRESSIVE-INSIGHTS-R2.md) фиксирует восемь переиспользуемых композиций: Morning Brief, Business Pulse, Heatmap, Top Winners & Losers, Drill-Down, Contribution Analysis, Historical Range Selector, What Changed. Один qualified payload, Metric Code + Hint, без новых движков/доменов/шаблонов на каждый вариант. D06E.2 и финальная сверка D08/traceability остаются открытыми. DESIGN ONLY / B4 FREEZE / PRODUCTION HOLD.
