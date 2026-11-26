@@ -28,7 +28,7 @@ final class IndependentCanonicalDigestVerifier {
         return bad;
     }
     /** Bounded diagnostic extension; existing B4 whole-tenant verifier is unchanged. */
-    record SliceDigest(long checked,long mismatches,long legacy,boolean budgetExceeded){}
+    record SliceDigest(long checked,long mismatches,long legacy,boolean budgetExceeded,String populationDigest){}
     SliceDigest bookedSlice(UUID tenant,Instant from,Instant until,int limit){
         if(limit<1||limit>CanonicalFactDeliveryService.MAX_BATCH||!from.isBefore(until))
             throw new IllegalArgumentException("S1_DIGEST_BUDGET");
@@ -40,10 +40,15 @@ final class IndependentCanonicalDigestVerifier {
                 rs.getTimestamp(5).toInstant(),rs.getTimestamp(6)==null?null:rs.getTimestamp(6).toInstant(),
                 rs.getObject(7,Long.class),rs.getInt(8),rs.getString(9)),tenant,
                 java.sql.Timestamp.from(from),java.sql.Timestamp.from(until),limit+1);
-        if(facts.size()>limit)return new SliceDigest(0,0,0,true);
+        if(facts.size()>limit)return new SliceDigest(0,0,0,true,null);
         long bad=0,legacy=0;
         for(var f:facts){if(!matches(tenant,f))bad++;if(f.schema()==1)legacy++;}
-        return new SliceDigest(facts.size(),bad,legacy,false);
+        // Versioned, order-independent fingerprint of the exact canonical set.
+        // This is not itself an owner attestation. Reuse only after independent verification.
+        var framed=facts.stream().map(f->frame(f.id(),f.subject(),f.occurred(),f.recorded(),
+            f.version(),f.schema(),f.digest())).sorted().toArray();
+        String populationDigest=hash(frame("RM-S1-BOOKED-POPULATION-V1",tenant,from,until,frame(framed)));
+        return new SliceDigest(facts.size(),bad,legacy,false,populationDigest);
     }
     private boolean matches(UUID tenant,Fact f){
         String payload,extended;

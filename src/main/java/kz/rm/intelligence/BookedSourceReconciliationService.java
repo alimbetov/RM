@@ -17,7 +17,7 @@ import java.util.*;
 /** S1.2B diagnostic only. A reconciled backfill is NOT an owner completeness authority. */
 @Service
 public class BookedSourceReconciliationService {
-    static final int VERSION=1;
+    static final int VERSION=2;
     public enum State { RECONCILED_PRESENT_SOURCE,INCOMPLETE,CONFLICT,BUDGET_EXHAUSTED }
     public enum Limitation { OWNER_AUTHORITY_MISSING,OPEN_RANGE,IDENTITY_MISMATCH,MISSING_RECEIPTS,
         REJECTED_RECEIPTS,RECEIPT_MISMATCH,DIGEST_MISMATCH,LEGACY_DIGEST,DIGEST_BUDGET_EXHAUSTED,OWNER_POPULATION_INVALID }
@@ -28,17 +28,33 @@ public class BookedSourceReconciliationService {
             missing>owners||unprocessed>owners||extra>facts||invalidOwnerEvents>owners||
             distinctValidOrders>owners-invalidOwnerEvents)throw new IllegalArgumentException("S1_RECONCILIATION_COUNTS");}
     }
-    public record Digest(long checked,long mismatches,long legacy,boolean budgetExceeded){
+    public record Digest(long checked,long mismatches,long legacy,boolean budgetExceeded,String populationDigest){
         public Digest {if(checked<0||mismatches<0||legacy<0||mismatches>checked||legacy>checked||
-            (budgetExceeded&&checked!=0))throw new IllegalArgumentException("S1_DIGEST_COUNTS");}
+            (budgetExceeded?(checked!=0||populationDigest!=null):
+                (populationDigest==null||!populationDigest.matches("[0-9a-f]{64}"))))
+            throw new IllegalArgumentException("S1_DIGEST_COUNTS");}
+    }
+    /** Within an immutable run, receipt cardinality is an append-only revision,
+     * not a global sequence or an independent content digest. */
+    public record RevisionBinding(UUID tenant,UUID runId,Instant from,Instant until,long sourceRevision,long receiptRevision){
+        public RevisionBinding {
+            Objects.requireNonNull(tenant);Objects.requireNonNull(runId);Objects.requireNonNull(from);Objects.requireNonNull(until);
+            if(!from.isBefore(until)||sourceRevision<0||receiptRevision<0)
+                throw new IllegalArgumentException("S1_REVISION_BINDING");
+        }
     }
     public record Evidence(int version,UUID tenant,UUID actor,UUID runId,Instant from,Instant until,
-                           long sourceRevision,Instant asOf,Counts counts,Digest digest,State state,
+                           long sourceRevision,long receiptRevision,Instant asOf,Counts counts,Digest digest,State state,
                            List<Limitation> limitations,HistoricalCoverageService.Eligibility eligibility){
-        public Evidence {limitations=List.copyOf(limitations);}
+        public Evidence {
+            limitations=List.copyOf(limitations);
+            new RevisionBinding(tenant,runId,from,until,sourceRevision,receiptRevision);
+        }
+        public RevisionBinding revisionBinding(){return new RevisionBinding(tenant,runId,from,until,sourceRevision,receiptRevision);}
         public boolean ownerCompletenessProven(){return false;}
     }
     private record Run(Instant from,Instant until,long revision,Instant asOf){}
+    private record Measured(Counts counts,long receiptRevision){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final TenantAuthorization authorization;
@@ -81,7 +97,7 @@ public class BookedSourceReconciliationService {
             throw new IllegalArgumentException("S1_BOOKED_RUN_RANGE");
         // Independently compare the exact identity set; receipt identity includes tenant, owner and kind.
         // No nested call to delivery.coverage(): that would own a different snapshot.
-        var counts=jdbc.queryForObject("""
+        var measured=jdbc.queryForObject("""
             WITH p AS (SELECT CAST(? AS uuid) t,CAST(? AS uuid) run_id,
                   CAST(? AS timestamptz) a,CAST(? AS timestamptz) b),
             o AS (SELECT e.tenant_id,e.id,e.order_id,e.occurred_at,
@@ -110,19 +126,25 @@ public class BookedSourceReconciliationService {
                     (f.source_id IS NULL OR r.digest IS DISTINCT FROM f.digest OR r.schema_version IS DISTINCT FROM f.schema_version)),
                 (SELECT count(*) FROM r WHERE NOT EXISTS(SELECT 1 FROM o WHERE o.tenant_id=r.tenant_id AND o.id=r.source_id)),
                 (SELECT count(DISTINCT order_id) FROM o WHERE valid),
-                (SELECT count(*) FROM o WHERE NOT valid)
-            """,(rs,n)->new Counts(rs.getLong(1),rs.getLong(2),rs.getLong(3),rs.getLong(4),rs.getLong(5),rs.getLong(6),
-                rs.getLong(7),rs.getLong(8),rs.getLong(9),rs.getLong(10)),tenant,runId,Timestamp.from(run.from()),Timestamp.from(run.until()));
+                (SELECT count(*) FROM o WHERE NOT valid),
+                (SELECT count(*) FROM r)
+            """,(rs,n)->new Measured(new Counts(rs.getLong(1),rs.getLong(2),rs.getLong(3),rs.getLong(4),rs.getLong(5),rs.getLong(6),
+                rs.getLong(7),rs.getLong(8),rs.getLong(9),rs.getLong(10)),rs.getLong(11)),tenant,runId,Timestamp.from(run.from()),Timestamp.from(run.until()));
         var checked=new IndependentCanonicalDigestVerifier(jdbc).bookedSlice(tenant,run.from(),run.until(),CanonicalFactDeliveryService.MAX_BATCH);
-        var digest=new Digest(checked.checked(),checked.mismatches(),checked.legacy(),checked.budgetExceeded());
-        return classify(tenant,actor,runId,run.from(),run.until(),run.revision(),run.asOf(),Objects.requireNonNull(counts),digest);
+        var digest=new Digest(checked.checked(),checked.mismatches(),checked.legacy(),checked.budgetExceeded(),checked.populationDigest());
+        Objects.requireNonNull(measured);
+        return classify(tenant,actor,runId,run.from(),run.until(),run.revision(),measured.receiptRevision(),run.asOf(),measured.counts(),digest);
     }
-    static Evidence classify(UUID tenant,UUID actor,UUID run,Instant from,Instant until,long revision,Instant asOf,Counts c,Digest d){
+    static Evidence classify(UUID tenant,UUID actor,UUID run,Instant from,Instant until,long revision,long receiptRevision,Instant asOf,Counts c,Digest d){
         var reasons=new ArrayList<Limitation>();reasons.add(Limitation.OWNER_AUTHORITY_MISSING);
         boolean open=until.isAfter(asOf);
         if(open)reasons.add(Limitation.OPEN_RANGE);
         Objects.requireNonNull(tenant);Objects.requireNonNull(actor);Objects.requireNonNull(run);
         if(revision<0||!from.isBefore(until))throw new IllegalArgumentException("S1_RECONCILIATION_SCOPE");
+        // The receipt PK gives at most one receipt per owner identity in this run.
+        // A receipt is either for a present owner or an orphan; bind the measured set.
+        if(receiptRevision!=Math.addExact(c.owners()-c.unprocessed(),c.orphanReceipts()))
+            throw new IllegalArgumentException("S1_RECEIPT_CARDINALITY");
         boolean invalidPopulation=c.invalidOwnerEvents()!=0||c.distinctValidOrders()!=c.owners();
         if(invalidPopulation)reasons.add(Limitation.OWNER_POPULATION_INVALID);
         boolean identity=c.missing()!=0||c.extra()!=0||c.owners()!=c.facts();
@@ -138,7 +160,7 @@ public class BookedSourceReconciliationService {
         State state=identity||invalidPopulation||receipt||badDigest||c.rejected()!=0?State.CONFLICT:
             d.budgetExceeded()?State.BUDGET_EXHAUSTED:open||c.unprocessed()!=0||d.legacy()!=0?State.INCOMPLETE:
             State.RECONCILED_PRESENT_SOURCE;
-        return new Evidence(VERSION,tenant,actor,run,from,until,revision,asOf,c,d,state,reasons,
+        return new Evidence(VERSION,tenant,actor,run,from,until,revision,receiptRevision,asOf,c,d,state,reasons,
             HistoricalCoverageService.Eligibility.BLOCKED);
     }
 }

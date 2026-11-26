@@ -292,6 +292,26 @@
     {
       "classname": "kz.rm.intelligence.BookedSourceReconciliationQualificationTest",
       "name": "matchingEventIdentitiesCannotHideInvalidOrderPopulation"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "structurallyMatchingClaimsNeverAdmitRuntimeAuthority"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "absentAndForeignAuthorityAreRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "sourceAndReceiptRevisionsIndependentlyInvalidateClaims"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "countAndPopulationMustBothMatch"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "futureIssuanceAndUncoveredIntervalCannotMatch"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

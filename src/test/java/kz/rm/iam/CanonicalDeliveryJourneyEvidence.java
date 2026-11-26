@@ -198,11 +198,17 @@ final class CanonicalDeliveryJourneyEvidence {
             // A receipt-only commit changes reconciliation without changing the source journal.
             // This is evidence for the separate receipt revision requirement, not a READY proof.
             assertThat(afterReceipt.sourceRevision()).isEqualTo(afterLate.sourceRevision());
+            assertThat(afterReceipt.receiptRevision()).isEqualTo(afterLate.receiptRevision()+1);
+            assertThat(afterReceipt.revisionBinding()).isNotEqualTo(afterLate.revisionBinding());
+            assertThat(afterReceipt.digest().populationDigest()).isEqualTo(afterLate.digest().populationDigest());
+            assertThat(afterLate.digest().populationDigest()).isNotEqualTo(beforeLate.digest().populationDigest());
             assertThat(afterReceipt.counts().unprocessed()).isZero();
             assertThat(afterReceipt.ownerCompletenessProven()).isFalse();
             var stillEmpty=reconciliation.inspect(otherReader,otherTenant,run);
             assertThat(stillEmpty.tenant()).isEqualTo(otherTenant);
             assertThat(stillEmpty.sourceRevision()).isEqualTo(empty.sourceRevision());
+            assertThat(stillEmpty.revisionBinding()).isEqualTo(empty.revisionBinding());
+            assertThat(stillEmpty.digest().populationDigest()).isEqualTo(empty.digest().populationDigest());
             assertThat(stillEmpty.counts().owners()).isZero();
             assertThat(stillEmpty.counts().facts()).isZero();
             assertThat(stillEmpty.ownerCompletenessProven()).isFalse();
