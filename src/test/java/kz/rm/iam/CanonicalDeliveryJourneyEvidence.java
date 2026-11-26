@@ -86,7 +86,7 @@ final class CanonicalDeliveryJourneyEvidence {
                         CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template,
                         BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner,
                         VerifiedActor otherReader,VerifiedActor owner,kz.rm.intelligence.BookedOwnerDeclarationService declarations,
-                        Runnable revokeReader,Runnable restoreReader){
+                        Runnable revokeReader,Runnable restoreReader,TenantOwnershipTransferService transfer){
         var tx=new TransactionTemplate(manager);
         String table="p2_test_effect_"+UUID.randomUUID().toString().replace("-","");
         jdbc.execute("CREATE TABLE crm."+table+" (tenant_id UUID NOT NULL,consumer_code VARCHAR(96) NOT NULL,"
@@ -144,6 +144,7 @@ final class CanonicalDeliveryJourneyEvidence {
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThatThrownBy(()->jdbc.update("DELETE FROM crm.int_booked_owner_revocation WHERE tenant_id=? AND proof_id=?",otherTenant,declarationId))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            BookedDeclarationLifecycleEvidence.qualify(jdbc,declarations,reconciliation,transfer,otherOwner,otherReader,otherTenant,emptyDraft);
             assertThatThrownBy(()->reconciliation.inspect(otherOwner,tenant,run)).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->reconciliation.inspect(otherReader,tenant,run)).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->reconciliation.inspect(staff,otherTenant,run)).isInstanceOf(SecurityException.class);

@@ -567,4 +567,50 @@ BEGIN
  RAISE NOTICE 'S1_READ_ROLE_PASS facts=% receipts=%',facts,receipts;
 END $$;
 RESET ROLE;
+
+-- S1 candidate writer privilege probe only, not actual IAM command identity.
+CREATE ROLE rm_s1_writer_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA crm,public TO rm_s1_writer_gate;
+GRANT SELECT ON crm.int_fact_backfill_run,crm.int_fact_backfill_receipt,crm.int_source_revision,crm.int_source_revision_event,
+    public.iam_workspace TO rm_s1_writer_gate;
+GRANT SELECT,INSERT ON crm.int_booked_owner_declaration,crm.int_booked_owner_revocation TO rm_s1_writer_gate;
+SET LOCAL ROLE rm_s1_writer_gate;
+DO $$
+DECLARE src crm.int_booked_owner_declaration%ROWTYPE; new_id uuid:=gen_random_uuid(); rel text;
+BEGIN
+ SELECT * INTO STRICT src FROM crm.int_booked_owner_declaration ORDER BY tenant_id,proof_id LIMIT 1;
+ FOREACH rel IN ARRAY ARRAY['crm.int_booked_owner_declaration','crm.int_booked_owner_revocation'] LOOP
+   IF NOT has_table_privilege(current_user,rel,'SELECT') OR NOT has_table_privilege(current_user,rel,'INSERT')
+      OR has_table_privilege(current_user,rel,'UPDATE,DELETE,TRUNCATE,TRIGGER')
+      OR has_any_column_privilege(current_user,rel,'UPDATE') THEN
+      RAISE EXCEPTION 'S1_WRITER_PRIVILEGE: %',rel;
+   END IF;
+ END LOOP;
+ FOREACH rel IN ARRAY ARRAY['crm.int_fact_backfill_run','crm.int_fact_backfill_receipt','crm.int_source_revision',
+     'crm.int_source_revision_event','crm.int_canonical_fact','crm.sales_order','crm.sales_order_status_event',
+     'public.iam_workspace','public.iam_org_membership'] LOOP
+   IF has_table_privilege(current_user,rel,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+      OR has_any_column_privilege(current_user,rel,'INSERT,UPDATE') THEN
+      RAISE EXCEPTION 'S1_WRITER_SOURCE_PRIVILEGE: %',rel;
+   END IF;
+ END LOOP;
+ INSERT INTO crm.int_booked_owner_declaration(tenant_id,proof_id,run_id,issuer_id,authority_version,history_mode,
+     provenance_ref,provenance_digest,source_from,source_until,source_revision,receipt_revision,expected_orders,expected_population_digest)
+ VALUES(src.tenant_id,new_id,src.run_id,src.issuer_id,src.authority_version,src.history_mode,
+     'ROLE_GATE_SYNTHETIC',src.provenance_digest,src.source_from,src.source_until,src.source_revision,src.receipt_revision,
+     src.expected_orders,src.expected_population_digest);
+ INSERT INTO crm.int_booked_owner_revocation(tenant_id,proof_id,revoked_by) VALUES(src.tenant_id,new_id,src.issuer_id);
+ BEGIN
+   UPDATE crm.int_booked_owner_declaration SET provenance_ref='MUTATE' WHERE tenant_id=src.tenant_id AND proof_id=new_id;
+   RAISE EXCEPTION 'S1_WRITER_UPDATE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+   DELETE FROM crm.int_booked_owner_revocation WHERE tenant_id=src.tenant_id AND proof_id=new_id;
+   RAISE EXCEPTION 'S1_WRITER_DELETE_ALLOWED';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ RAISE NOTICE 'S1_WRITER_ROLE_PASS';
+END $$;
+RESET ROLE;
 ROLLBACK;

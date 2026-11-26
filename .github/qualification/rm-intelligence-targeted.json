@@ -344,6 +344,18 @@
     {
       "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
       "name": "persistedAuthorityVersionCannotBeReplacedByCurrentVersion"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "persistedProfileIsFrozenAndRejectsAlgorithmDrift"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "nativeCaptureAndImportedManifestAreDistinctUnadmittedContracts"
+    },
+    {
+      "classname": "kz.rm.intelligence.BookedOwnerAuthorityQualificationTest",
+      "name": "importedManifestCannotSubstituteForeignOrDifferentPopulation"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

@@ -87,4 +87,52 @@ class BookedOwnerAuthorityQualificationTest {
         assertThat(match.state()).isEqualTo(BookedOwnerDeclarationService.State.MATCHED_CONTRACT_NOT_ADMITTED);
         assertThat(match.admitted()).isFalse();
     }
+
+    @Test void persistedProfileIsFrozenAndRejectsAlgorithmDrift(){
+        var p=profile(1);
+        assertThat(p.metric()).isEqualTo("BOOKED_ORDERS");
+        assertThat(p.stream()).isEqualTo("SALES/ORDER_PLACED");
+        assertThat(p.timeBasis()).isEqualTo("OCCURRED");
+        assertThat(p.unit()).isEqualTo("COUNT");
+        assertThat(compatibleVersion(1,2,1,1)).isTrue();
+        assertThat(compatibleVersion(2,2,1,1)).isFalse();
+        assertThat(compatibleVersion(1,3,1,1)).isFalse();
+        assertThat(compatibleVersion(1,2,2,1)).isFalse();
+        assertThat(compatibleVersion(1,2,1,2)).isFalse();
+    }
+    @Test void nativeCaptureAndImportedManifestAreDistinctUnadmittedContracts(){
+        var e=evidence(T,7,2,2,false);
+        var nativeClaim=claim(e,Mode.NATIVE_HISTORY,2,DIGEST);
+        var importedClaim=claim(e,Mode.IMPORTED_HISTORY,2,DIGEST);
+        var nativeInput=new BookedSourceAuthorityInputs.NativeCapture(T,FROM,UNTIL,2,DIGEST,1,FROM,
+            "CAPTURE_POLICY","CLOSURE","b".repeat(64));
+        var importedInput=new BookedSourceAuthorityInputs.ImportedManifest(T,FROM,UNTIL,2,DIGEST,1,
+            "ERP","EXPORT","b".repeat(64),"MAP_V1","IMPORT_COMPLETION");
+        assertThat(BookedSourceAuthorityInputs.compare(nativeClaim,nativeInput,FROM))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.MATCHED_SOURCE_CONTRACT_NOT_ADMITTED);
+        assertThat(BookedSourceAuthorityInputs.compare(nativeClaim,nativeInput,FROM.plusSeconds(1)))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.INVALID_BOUNDARY);
+        assertThat(BookedSourceAuthorityInputs.compare(importedClaim,importedInput,FROM.plusSeconds(1)))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.MATCHED_SOURCE_CONTRACT_NOT_ADMITTED);
+        assertThat(BookedSourceAuthorityInputs.compare(nativeClaim,importedInput,FROM))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.INCOMPATIBLE_SCOPE);
+        assertThat(BookedSourceAuthorityInputs.compare(importedClaim,null,FROM))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.MISSING_SOURCE);
+        assertThat(evaluate(e,importedClaim).admitted()).isFalse();
+    }
+    @Test void importedManifestCannotSubstituteForeignOrDifferentPopulation(){
+        var e=evidence(T,7,2,2,false);
+        var cl=claim(e,Mode.IMPORTED_HISTORY,2,DIGEST);
+        for(var input:List.of(
+            new BookedSourceAuthorityInputs.ImportedManifest(new UUID(0,9),FROM,UNTIL,2,DIGEST,1,"ERP","E","b".repeat(64),"M","C"),
+            new BookedSourceAuthorityInputs.ImportedManifest(T,FROM.minusSeconds(1),UNTIL,2,DIGEST,1,"ERP","E","b".repeat(64),"M","C")))
+            assertThat(BookedSourceAuthorityInputs.compare(cl,input,FROM))
+                .isEqualTo(BookedSourceAuthorityInputs.Result.INCOMPATIBLE_SCOPE);
+        var wrong=new BookedSourceAuthorityInputs.ImportedManifest(T,FROM,UNTIL,3,DIGEST,1,"ERP","E","b".repeat(64),"M","C");
+        assertThat(BookedSourceAuthorityInputs.compare(cl,wrong,FROM))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.POPULATION_MISMATCH);
+        var different=new BookedSourceAuthorityInputs.ImportedManifest(T,FROM,UNTIL,2,DIGEST,1,"ERP","E","c".repeat(64),"M","C");
+        assertThat(BookedSourceAuthorityInputs.compare(cl,different,FROM))
+            .isEqualTo(BookedSourceAuthorityInputs.Result.INVALID_BOUNDARY);
+    }
 }

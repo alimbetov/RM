@@ -19,6 +19,7 @@ final class IndependentCanonicalDigestVerifier {
     private record BookedOwner(UUID source,UUID order,Instant occurred,Header header){}
     private record BookedLine(UUID order,Line line){}
     static final int BOOKED_LINE_LIMIT=20_000;
+    static final int BOOKED_POPULATION_ENCODING_VERSION=1;
     long mismatches(UUID tenant){
         var facts=jdbc.query("""
             SELECT owner_module,source_kind,source_id,subject_id,occurred_at,recorded_at,source_version,schema_version,digest

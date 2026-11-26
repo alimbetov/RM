@@ -9,6 +9,17 @@ import static kz.rm.intelligence.BookedSourceReconciliationService.*;
  * No production adapter is admitted yet; no caller-supplied claim can promote READY. */
 final class BookedOwnerAuthorityContract {
     static final int AUTHORITY_VERSION=1;
+    // Immutable interpretation of the persisted authority_version=1 in changeset 0222.
+    // Do not derive these coordinates from mutable current-version constants.
+    record VersionProfile(int authority,int reconciliation,int populationEncoding,int methodVersion,
+                          String metric,String scope,String stream,String timeBasis,String unit){}
+    private static final VersionProfile V1=new VersionProfile(1,2,1,1,"BOOKED_ORDERS",
+        "TENANT_SALES_READ","SALES/ORDER_PLACED","OCCURRED","COUNT");
+    static VersionProfile profile(int authorityVersion){return authorityVersion==1?V1:null;}
+    static boolean compatibleVersion(int authorityVersion,int reconciliationVersion,int populationEncoding,int methodVersion){
+        var p=profile(authorityVersion);
+        return p!=null&&p.reconciliation()==reconciliationVersion&&p.populationEncoding()==populationEncoding&&p.methodVersion()==methodVersion;
+    }
     enum Mode { NATIVE_HISTORY,IMPORTED_HISTORY }
     enum Status { OWNER_AUTHORITY_MISSING,INCOMPATIBLE_SCOPE,STALE_REVISION,INVALID_PROVENANCE,
         OPEN_INTERVAL,UNRECONCILED_SOURCE,POPULATION_MISMATCH,MATCHED_CONTRACT_NOT_ADMITTED }
@@ -45,7 +56,8 @@ final class BookedOwnerAuthorityContract {
         if(expected.sourceRevision()!=supplied.sourceRevision()||expected.receiptRevision()!=supplied.receiptRevision())
             return result(Status.STALE_REVISION,claim);
         if(current.until().isAfter(current.asOf()))return result(Status.OPEN_INTERVAL,claim);
-        if(claim.authorityVersion()!=AUTHORITY_VERSION||current.version()!=BookedSourceReconciliationService.VERSION||
+        if(!compatibleVersion(claim.authorityVersion(),current.version(),IndependentCanonicalDigestVerifier.BOOKED_POPULATION_ENCODING_VERSION,1)||
+            current.version()!=BookedSourceReconciliationService.VERSION||
             claim.issuedAt().isAfter(current.asOf())||claim.sourceUntil().isAfter(claim.issuedAt()))
             return result(Status.INVALID_PROVENANCE,claim);
         if(current.state()!=State.RECONCILED_PRESENT_SOURCE||current.digest().budgetExceeded()||
