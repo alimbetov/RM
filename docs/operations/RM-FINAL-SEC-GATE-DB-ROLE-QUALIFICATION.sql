@@ -323,4 +323,59 @@ BEGIN
  END;
 END $dim_gate$;
 RESET ROLE;
+
+-- B4.5C.7B: separate synthetic proof writer from generic runtime roles.
+-- Writer is trusted for persistence, not for source changes or activation.
+CREATE ROLE rm_dim_proof_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+GRANT USAGE ON SCHEMA crm TO rm_dim_proof_gate;
+GRANT SELECT ON crm.int_projection_generation,crm.int_calendar_policy,crm.int_projection_lifecycle,
+ crm.int_l2_consumer,crm.int_dim_revision,crm.int_source_revision,crm.int_source_revision_event,
+ crm.int_canonical_fact,crm.int_fact_consumer_receipt,crm.sales_order_status_event,crm.sales_order,
+ crm.sales_order_line,crm.inv_stock_movement,crm.inv_stock_reservation,crm.int_sales_line_dimension,
+ crm.int_movement_dimension,crm.int_l2_contribution,crm.int_l3_period,crm.int_l3_cell,
+ crm.int_l3_cell_order TO rm_dim_proof_gate;
+GRANT SELECT,INSERT ON crm.int_dim_coverage_proof TO rm_dim_proof_gate;
+DO $proof_role$
+DECLARE t UUID:=current_setting('rm.gate_tenant')::uuid;
+ g UUID:=current_setting('rm.gate_projection')::uuid;
+ c text:='l2:'||g::text;
+BEGIN
+ INSERT INTO crm.int_fact_consumer(tenant_id,consumer_code) VALUES(t,c);
+ INSERT INTO crm.int_l2_consumer(tenant_id,generation_id,consumer_code) VALUES(t,g,c);
+END $proof_role$;
+SET LOCAL ROLE rm_dim_proof_gate;
+DO $proof_role$
+DECLARE t UUID:=current_setting('rm.gate_tenant')::uuid;
+ g UUID:=current_setting('rm.gate_projection')::uuid;
+ p UUID:=gen_random_uuid();
+BEGIN
+ IF has_any_column_privilege(current_user,'crm.int_dim_revision','UPDATE,INSERT')
+    OR has_table_privilege(current_user,'crm.int_dim_revision','DELETE,TRUNCATE')
+    OR has_any_column_privilege(current_user,'crm.int_canonical_fact','UPDATE,INSERT')
+    OR has_any_column_privilege(current_user,'crm.int_fact_consumer_receipt','UPDATE,INSERT')
+    OR has_any_column_privilege(current_user,'crm.int_l2_contribution','UPDATE,INSERT')
+    OR has_any_column_privilege(current_user,'crm.int_l3_period','UPDATE,INSERT')
+    OR has_any_column_privilege(current_user,'crm.int_active_generation','UPDATE,INSERT')
+    OR has_any_column_privilege(current_user,'crm.int_dim_coverage_proof','UPDATE')
+    OR has_table_privilege(current_user,'crm.int_dim_coverage_proof','DELETE,TRUNCATE')
+ THEN RAISE EXCEPTION 'INT_DIM_PROOF_ROLE_EXCESSIVE_PRIVILEGES'; END IF;
+ INSERT INTO crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id,observed_at,
+   source_revision,dirty_revision,receipt_revision,materialization_revision,lifecycle_revision,
+   delivery_mismatches,contribution_mismatches,period_mismatches,cell_mismatches,membership_mismatches)
+ SELECT t,g,p,CURRENT_TIMESTAMP,0,dirty_revision,receipt_revision,materialization_revision,0,1,1,1,1,1
+ FROM crm.int_dim_revision WHERE tenant_id=t AND generation_id=g;
+ IF NOT EXISTS(SELECT 1 FROM crm.int_dim_coverage_proof WHERE tenant_id=t AND generation_id=g AND proof_id=p)
+ THEN RAISE EXCEPTION 'INT_DIM_PROOF_WRITER_INSERT_FAILED'; END IF;
+ BEGIN
+   UPDATE crm.int_dim_revision SET dirty_revision=0 WHERE tenant_id=t AND generation_id=g;
+   RAISE EXCEPTION 'INT_DIM_PROOF_WRITER_REVISION_MUTATION';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+ BEGIN
+   UPDATE crm.int_dim_coverage_proof SET delivery_mismatches=0 WHERE tenant_id=t AND generation_id=g AND proof_id=p;
+   RAISE EXCEPTION 'INT_DIM_PROOF_WRITER_PROOF_MUTATION';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $proof_role$;
+RESET ROLE;
 ROLLBACK;

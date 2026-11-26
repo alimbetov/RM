@@ -152,6 +152,36 @@ final class L1ProjectionJourneyEvidence {
                 cursor=b;
             }
         }
+        // Fault-injection only: simulate a storage administrator changing BOTH digests
+        // without touching revision counters. Restore before the next journey assertion.
+        String l2Consumer="l2:"+gen;
+        UUID placedSource=jdbc.queryForObject("SELECT id FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED'",UUID.class,tenant,order);
+        String originalDigest=jdbc.queryForObject("SELECT digest FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?",String.class,tenant,placedSource);
+        String wrongDigest="0".repeat(64).equals(originalDigest)?"1".repeat(64):"0".repeat(64);
+        try {
+            tx.executeWithoutResult(status->{
+                jdbc.execute("ALTER TABLE crm.int_canonical_fact DISABLE TRIGGER trg_int_fact_immutable");
+                jdbc.execute("ALTER TABLE crm.int_fact_consumer_receipt DISABLE TRIGGER trg_int_consumer_receipt_immutable");
+                assertThat(jdbc.update("UPDATE crm.int_canonical_fact SET digest=? WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?",wrongDigest,tenant,placedSource)).isEqualTo(1);
+                assertThat(jdbc.update("UPDATE crm.int_fact_consumer_receipt SET digest=? WHERE tenant_id=? AND consumer_code=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?",wrongDigest,tenant,l2Consumer,placedSource)).isEqualTo(1);
+                jdbc.execute("ALTER TABLE crm.int_fact_consumer_receipt ENABLE TRIGGER trg_int_consumer_receipt_immutable");
+                jdbc.execute("ALTER TABLE crm.int_canonical_fact ENABLE TRIGGER trg_int_fact_immutable");
+            });
+            var corrupt=dimProof.prove(tenant,gen);
+            assertThat(corrupt.delivery()).isEqualTo(1);
+            assertThat(corrupt.parity()).isFalse();
+            assertThat(dimProof.status(tenant,gen,corrupt.id())).isEqualTo(MultidimensionalCoverageService.Status.INCOMPLETE);
+            assertThat(corrupt.contributions()).isZero();
+        } finally {
+            tx.executeWithoutResult(status->{
+                jdbc.execute("ALTER TABLE crm.int_canonical_fact DISABLE TRIGGER trg_int_fact_immutable");
+                jdbc.execute("ALTER TABLE crm.int_fact_consumer_receipt DISABLE TRIGGER trg_int_consumer_receipt_immutable");
+                jdbc.update("UPDATE crm.int_canonical_fact SET digest=? WHERE tenant_id=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?",originalDigest,tenant,placedSource);
+                jdbc.update("UPDATE crm.int_fact_consumer_receipt SET digest=? WHERE tenant_id=? AND consumer_code=? AND owner_module='SALES' AND source_kind='ORDER_PLACED' AND source_id=?",originalDigest,tenant,l2Consumer,placedSource);
+                jdbc.execute("ALTER TABLE crm.int_fact_consumer_receipt ENABLE TRIGGER trg_int_consumer_receipt_immutable");
+                jdbc.execute("ALTER TABLE crm.int_canonical_fact ENABLE TRIGGER trg_int_fact_immutable");
+            });
+        }
         var complete=dimProof.prove(tenant,gen);
         assertThat(complete.parity()).isTrue();
         assertThat(dimProof.status(tenant,gen,complete.id())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
