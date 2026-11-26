@@ -27,7 +27,8 @@ final class L1ProjectionJourneyEvidence {
     }
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
                         CanonicalFactDeliveryService delivery,L1ProjectionService l1,UUID tenant,UUID otherTenant,
-                        UUID order,UUID warehouse,UUID sku,long calendarVersion){
+                        UUID order,UUID warehouse,UUID sku,long calendarVersion,
+                        org.springframework.context.ApplicationContext context,VerifiedActor staff){
         Instant orderTime=jdbc.queryForObject("SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED'",
             Timestamp.class,tenant,order).toInstant();
         LocalDate from=orderTime.atZone(ZoneOffset.UTC).toLocalDate().minusDays(1),until=from.plusDays(3);
@@ -195,6 +196,7 @@ final class L1ProjectionJourneyEvidence {
         var refreshedProof=dimProof.prove(tenant,gen);
         assertThat(refreshedProof.parity()).isTrue();
         assertThatThrownBy(()->dimProof.status(otherTenant,gen,refreshedProof.id())).hasMessage("INT_DIM_GENERATION_NOT_FOUND");
+        var feature=kz.rm.intelligence.FeatureStoreJourneyEvidence.qualify(context,jdbc,manager,staff,tenant,gen,refreshedProof.id(),warehouse,sku,bookedDay.minusDays(1));
         var beforeLate=l1.prove(tenant,gen);
         assertThat(beforeLate.parity()).isTrue();
         assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.CURRENT);
@@ -218,6 +220,7 @@ final class L1ProjectionJourneyEvidence {
         });
         assertThat(l1.fenceStatus(tenant,gen,beforeLate.id())).isEqualTo(L1ProjectionService.FenceStatus.STALE);
         assertThat(dimProof.status(tenant,gen,refreshedProof.id())).isEqualTo(MultidimensionalCoverageService.Status.STALE);
+        feature.run();
         var stale=l1.prove(tenant,gen);
         assertThat(stale.pendingFacts()).isEqualTo(1);
         assertThat(stale.bucketMismatches()).isPositive();

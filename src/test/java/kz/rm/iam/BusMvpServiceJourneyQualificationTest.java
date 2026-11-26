@@ -65,6 +65,7 @@ class BusMvpServiceJourneyQualificationTest {
     @Autowired AuthenticatedSalesCommands sales;
     @Autowired AuthenticatedSalesQueries orderReads;
     @Autowired JdbcTemplate jdbc;
+    @Autowired org.springframework.context.ApplicationContext applicationContext;
     @Autowired kz.rm.intelligence.CanonicalFactAppender canonicalFacts;
     @Autowired kz.rm.intelligence.CanonicalFactDeliveryService canonicalDelivery;
     @Autowired kz.rm.intelligence.L1ProjectionService l1;
@@ -480,7 +481,7 @@ class BusMvpServiceJourneyQualificationTest {
         if(scenario==CanonicalCase.L1){
             long calendarVersion=calendar.append(owner,tenant,"Etc/UTC",0).version();
             L1ProjectionJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
-                l1,tenant,otherTenant,orderId,warehouse.id(),published.id(),calendarVersion);
+                l1,tenant,otherTenant,orderId,warehouse.id(),published.id(),calendarVersion,applicationContext,staff);
             return;
         }
         if(scenario==CanonicalCase.DELIVERY){
