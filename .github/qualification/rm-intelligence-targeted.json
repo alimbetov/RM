@@ -196,6 +196,34 @@
     {
       "classname": "kz.rm.intelligence.BusinessFactorQualificationTest",
       "name": "growthDoesNotIdentifyPromotionOrDemand"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "readyDeclineIsDescriptiveNotCausal"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "partialAndMissingNeverProduceFindings"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "zeroBaselineDoesNotInventGrowth"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "unequalDurationsDoNotProduceDirection"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "revisionMismatchAbstains"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "factorFlowsRemainAmbiguousAndSeparate"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
+      "name": "deniedReadPropagatesWithoutConclusion"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

@@ -411,8 +411,25 @@ final class L1ProjectionJourneyEvidence {
         assertThat(factors.quality()).isNotEqualTo(DataQuality.READY);
         assertThat(factors.hypotheses()).isEmpty();
         assertThatThrownBy(()->factor.observe(foreign,tenant,salesScope,from,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
+        var conclusions=context.getBean(BusinessConclusionService.class);
+        var conclusion=conclusions.concludePattern(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,new BigDecimal("0.05"),
+            1,new BigDecimal("3"),new BigDecimal("0.5"));
+        assertThat(conclusion.findings()).allSatisfy(f->{
+            assertThat(f.disposition()).isEqualTo(BusinessConclusionService.Disposition.ABSTAINED);
+            assertThat(f.measures()).isEmpty();
+        });
+        assertThat(conclusion.evidence().getFirst().points()).hasSize(2);
+        assertThat(conclusion.decisionEligibility()).isEqualTo(BusinessConclusionService.DecisionEligibility.BLOCKED);
+        var factorConclusion=conclusions.concludeFactors(staff,tenant,salesScope,from,1,BigDecimal.ONE,new BigDecimal("0.05"));
+        assertThat(factorConclusion.findings()).allSatisfy(f->assertThat(f.disposition()).isEqualTo(BusinessConclusionService.Disposition.ABSTAINED));
+        assertThat(factorConclusion.evidence().stream().flatMap(e->e.points().stream())
+            .map(AuthorizedAnalyticalReadService.Result::observedAt).distinct().count()).isEqualTo(1);
+        assertThatThrownBy(()->conclusions.concludePattern(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO,
+            1,new BigDecimal("3"),new BigDecimal("0.5"))).isInstanceOf(SecurityException.class);
         revoke.run();
         try{
+            assertThatThrownBy(()->conclusions.concludeFactors(staff,tenant,salesScope,from,1,BigDecimal.ONE,BigDecimal.ZERO))
+                .isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->factor.observe(staff,tenant,salesScope,from,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->reader.read(staff,tenant,stockQuery)).isInstanceOf(SecurityException.class);
             assertThatThrownBy(()->observation.observe(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
