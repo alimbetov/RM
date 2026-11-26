@@ -121,14 +121,19 @@ class FeatureCandidateStore {
         });
     }
     private String payload(String identity,PredictiveFeatureContract.Candidate c){
-        var inputs=new ArrayList<String>();
+        var args=new ArrayList<Object>();
+        int ordinal=0;
         for(var o:c.inputs()){
-            inputs.add(jdbc.queryForObject("""
-                SELECT jsonb_build_object('from',CAST(? AS text),'until',CAST(? AS text),'zone',CAST(? AS text),
-                'calendarVersion',CAST(? AS bigint),'value',CAST(? AS numeric),'quality',CAST(? AS text),'reason',CAST(? AS text))::text
-                """,String.class,o.period().startInclusive().toString(),o.period().endExclusive().toString(),
-                o.period().zoneId(),o.period().calendarVersion(),o.value(),o.quality().name(),o.reason()));
+            Collections.addAll(args,ordinal++,o.period().startInclusive().toString(),o.period().endExclusive().toString(),
+                o.period().zoneId(),o.period().calendarVersion(),o.value(),o.quality().name(),o.reason());
         }
+        String tuples=String.join(",",Collections.nCopies(c.inputs().size(),
+            "(CAST(? AS integer),CAST(? AS text),CAST(? AS text),CAST(? AS text),CAST(? AS bigint),CAST(? AS numeric),CAST(? AS text),CAST(? AS text))"));
+        String inputJson=jdbc.queryForObject("""
+            SELECT jsonb_agg(jsonb_build_object('from',a,'until',b,'zone',z,'calendarVersion',cv,
+              'value',v,'quality',q,'reason',r) ORDER BY ordinal)::text
+            FROM (VALUES %s) AS inputs(ordinal,a,b,z,cv,v,q,r)
+            """.formatted(tuples),String.class,args.toArray());
         var r=c.revision();var a=c.activity();
         return jdbc.queryForObject("""
             SELECT jsonb_build_object('request',CAST(? AS jsonb),'inputs',CAST(? AS jsonb),
@@ -137,7 +142,7 @@ class FeatureCandidateStore {
               'materializationRevision',CAST(? AS bigint),'lifecycleRevision',CAST(? AS bigint),
               'activity',CAST(? AS text),'requiredPeriods',CAST(? AS integer),'availablePeriods',CAST(? AS integer),
               'decisionEligibility','BLOCKED')::text
-            """,String.class,identity,"["+String.join(",",inputs)+"]",c.observedAt().toString(),c.value(),c.quality().name(),
+            """,String.class,identity,inputJson,c.observedAt().toString(),c.value(),c.quality().name(),
             r.source(),r.dirty(),r.receipt(),r.materialization(),r.lifecycle(),a.activity().name(),a.requiredPeriods(),a.availablePeriods());
     }
     ReadResult read(VerifiedActor actor,UUID tenant,UUID requestKey,Request request){

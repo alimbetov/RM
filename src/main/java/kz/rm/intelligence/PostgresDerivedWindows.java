@@ -30,7 +30,7 @@ final class PostgresDerivedWindows {
             ), ema(series_key,i,value) AS (
               SELECT series_key,i,v FROM input WHERE i=0
               UNION ALL
-              SELECT x.series_key,x.i,(2::numeric/(z.n+1))*x.v+(1-2::numeric/(z.n+1))*e.value
+              SELECT x.series_key,x.i,round((2.0000000000000000000000000000000000000000::numeric/(z.n+1))*x.v+(1-2.0000000000000000000000000000000000000000::numeric/(z.n+1))*e.value,40)
               FROM ema e JOIN input x ON x.series_key=e.series_key AND x.i=e.i+1
               JOIN sizes z ON z.series_key=x.series_key
             ), stats AS (

@@ -68,6 +68,10 @@
     {
       "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
       "name": "numericParityFailsClosed"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedPostgresQualificationTest",
+      "name": "allOperatorsAgainstJavaAcrossBatch"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
