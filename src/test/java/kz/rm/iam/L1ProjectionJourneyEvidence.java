@@ -112,6 +112,14 @@ final class L1ProjectionJourneyEvidence {
         assertThat(jdbc.queryForObject("SELECT refreshed_revision FROM crm.int_l3_period WHERE tenant_id=? AND generation_id=? AND period_code='D' AND from_day=?",Long.class,tenant,gen,bookedDay)).isEqualTo(dimBefore);
         assertThat(l3.refresh(tenant,gen,PeriodResolver.Code.D,bookedDay)).isEqualTo(roll);
         var dimProof=new MultidimensionalCoverageService(jdbc,manager);
+        // B4.5C-R1: scope must resolve the exact tenant/generation even with
+        // calendar, lifecycle, consumer and revision relations sharing tenant_id.
+        assertThat(dimProof.status(tenant,gen,UUID.randomUUID()))
+            .isEqualTo(MultidimensionalCoverageService.Status.UNPROVEN);
+        assertThatThrownBy(()->dimProof.status(otherTenant,gen,UUID.randomUUID()))
+            .hasMessage("INT_DIM_GENERATION_NOT_FOUND");
+        assertThatThrownBy(()->dimProof.prove(tenant,UUID.randomUUID()))
+            .hasMessage("INT_DIM_GENERATION_NOT_FOUND");
         var incomplete=dimProof.prove(tenant,gen);
         assertThat(incomplete.delivery()).isZero();
         assertThat(incomplete.contributions()).isZero();

@@ -46,9 +46,9 @@ public class MultidimensionalCoverageService {
               d.dirty_revision,d.receipt_revision,d.materialization_revision,l.revision
             FROM crm.int_projection_generation g
             JOIN crm.int_calendar_policy p ON p.tenant_id=g.tenant_id AND p.version=g.calendar_version
-            JOIN crm.int_projection_lifecycle l USING(tenant_id,generation_id)
-            JOIN crm.int_l2_consumer b USING(tenant_id,generation_id)
-            JOIN crm.int_dim_revision d USING(tenant_id,generation_id)
+            JOIN crm.int_projection_lifecycle l ON l.tenant_id=g.tenant_id AND l.generation_id=g.generation_id
+            JOIN crm.int_l2_consumer b ON b.tenant_id=g.tenant_id AND b.generation_id=g.generation_id
+            JOIN crm.int_dim_revision d ON d.tenant_id=g.tenant_id AND d.generation_id=g.generation_id
             LEFT JOIN crm.int_source_revision r ON r.tenant_id=g.tenant_id
             WHERE g.tenant_id=? AND g.generation_id=?
             """,rs->rs.next()?new Scope(rs.getObject(1,LocalDate.class),rs.getObject(2,LocalDate.class),
