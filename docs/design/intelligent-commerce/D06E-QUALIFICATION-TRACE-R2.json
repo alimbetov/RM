@@ -1,0 +1,171 @@
+{
+  "schema": "RM-D06E-QUALIFICATION-TRACE/v1",
+  "status": "DESIGN_ONLY_PRODUCT_CONCEPT_FROZEN",
+  "source_sha": "a6bf99107aa64f4eb255b4997ef9417748b05607",
+  "design_parent_sha": "4c051d6e0c6a11a30c1c62e5f2fe7ad3cb9f3391",
+  "baseline_trace": "TRACEABILITY-R2.json",
+  "code_trace": "CODE-TRACE-R2.json",
+  "implementation_admission": false,
+  "runtime_tests_executed": false,
+  "counts_semantics": "Mappings refine existing cases; no new family counts or PASS evidence",
+  "contracts": [
+    {
+      "id": "CC-01",
+      "cases": [
+        "UAP-01",
+        "UAP-03",
+        "UAP-05"
+      ],
+      "slices": [
+        "S1"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-02",
+      "cases": [
+        "UAP-01",
+        "UAP-03",
+        "UAP-10"
+      ],
+      "slices": [
+        "S2"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-03",
+      "cases": [
+        "UAP-02",
+        "UAP-06"
+      ],
+      "slices": [
+        "S1",
+        "S2"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-04",
+      "cases": [
+        "UAP-03",
+        "UAP-02"
+      ],
+      "slices": [
+        "S2"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-05",
+      "cases": [
+        "UAP-01",
+        "UAP-05",
+        "UAP-06"
+      ],
+      "slices": [
+        "S0",
+        "S3"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-06",
+      "cases": [
+        "UAP-06",
+        "UAP-07"
+      ],
+      "slices": [
+        "S3"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-07",
+      "cases": [
+        "UAP-07",
+        "UAP-08"
+      ],
+      "slices": [
+        "S3"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-08",
+      "cases": [
+        "UAP-01",
+        "TPL-03",
+        "INTRA-01"
+      ],
+      "slices": [
+        "S1",
+        "S2"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-09",
+      "cases": [
+        "UAP-02",
+        "UAP-06",
+        "TPL-05"
+      ],
+      "slices": [
+        "S1",
+        "S6"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-10",
+      "cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05"
+      ],
+      "slices": [
+        "S4"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-11",
+      "cases": [
+        "INTRA-01",
+        "INTRA-02",
+        "INTRA-03",
+        "JOB-01",
+        "JOB-02",
+        "SEC-02"
+      ],
+      "slices": [
+        "S5"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    },
+    {
+      "id": "CC-12",
+      "cases": [
+        "PERF-01",
+        "PERF-02",
+        "SEC-01"
+      ],
+      "slices": [
+        "S6"
+      ],
+      "status": "PLANNED_NOT_EXECUTED"
+    }
+  ],
+  "open": [
+    "historical source completeness",
+    "metric semantic equivalence",
+    "city/history attribution",
+    "bulk SQL",
+    "owner worker/file/Radar admission",
+    "thresholds and budgets"
+  ],
+  "freeze": "Product concept only; global D08 and runtime gates remain open"
+}

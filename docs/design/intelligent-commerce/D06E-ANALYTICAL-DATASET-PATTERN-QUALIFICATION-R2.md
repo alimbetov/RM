@@ -70,3 +70,7 @@ Open before runtime: authoritative historical coverage source/contract, city map
 
 ## D06E.3 — Analytical Presentation & Progressive Business Insights (2026-11-26)
 [Согласованное владельцем дополнение](D06E.3-ANALYTICAL-PRESENTATION-PROGRESSIVE-INSIGHTS-R2.md) фиксирует восемь переиспользуемых композиций: Morning Brief, Business Pulse, Heatmap, Top Winners & Losers, Drill-Down, Contribution Analysis, Historical Range Selector, What Changed. Один qualified payload, Metric Code + Hint, без новых движков/доменов/шаблонов на каждый вариант. D06E.2 и финальная сверка D08/traceability остаются открытыми. DESIGN ONLY / B4 FREEZE / PRODUCTION HOLD.
+
+
+## D06E.2 — Minimal Code Contracts & PRODUCT CONCEPT DESIGN FREEZE (2026-11-26)
+[Итоговый контракт CC-01–12](D06E.2-MINIMAL-CODE-CONTRACTS-QUALIFICATION-R2.md) и [qualification trace](D06E-QUALIFICATION-TRACE-R2.json) фиксируют согласованную продуктовую концепцию D06A–D06E.3, минимальные code contracts, 12 metric passports, synthetic profiles и handoff S0–S6. PRODUCT CONCEPT FROZEN; further functional expansion requires explicit change control. D08 global admission checklist/DEC decisions, source completeness, semantic/city/owner/runtime qualification remain OPEN by slice; no claim of full DESIGN APPROVED or implementation/production admission. Earlier statements that D06E.2 is outstanding are superseded by this section. Existing normative DAG, B4 FREEZE, MIC and Radar resumption unchanged. Next technical priority B5.5.
