@@ -80,6 +80,34 @@
     {
       "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
       "name": "unsupportedMethodVersionRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs065DeclineCannotIdentifyCause"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs093ZeroIsNotMissing"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs095OpenAndNonAdjacentPeriodsRejected"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs097ShortAndPartialHistory"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs099MatchedSymptomsAbstain"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "bs112MaterialityBoundary"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessInterpretationQualificationTest",
+      "name": "incompatibleTenantAndRevisionFailClosed"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

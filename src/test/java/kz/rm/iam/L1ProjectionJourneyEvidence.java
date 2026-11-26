@@ -377,9 +377,20 @@ final class L1ProjectionJourneyEvidence {
         System.out.printf("B4.8 fixture queries=%d L0ms=%.3f mixedRouteMs=%.3f%n",queries.size(),l0Elapsed/1e6,(System.nanoTime()-l3Start)/1e6);
         assertThatThrownBy(()->reader.read(foreign,tenant,queries.getFirst())).isInstanceOf(SecurityException.class);
         var stockQuery=queries.stream().filter(q->q.metric()==AuthorizedAnalyticalReadService.Metric.STOCK_IN).findFirst().orElseThrow();
+        var observation=context.getBean(BusinessObservationService.class);
+        var dates=List.of(from,from.plusDays(1));
+        var insight=observation.observe(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,new BigDecimal("0.05"));
+        assertThat(insight.evidence()).hasSize(2);
+        assertThat(insight.evidence().getFirst().sourceRevision()).isEqualTo(insight.evidence().getLast().sourceRevision());
+        assertThat(insight.evidence().getFirst().observedAt()).isEqualTo(insight.evidence().getLast().observedAt());
+        assertThat(insight.decisionEligibility()).isEqualTo("BLOCKED");
+        assertThat(insight.quality()).isNotEqualTo(DataQuality.READY);
+        assertThatThrownBy(()->observation.observe(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
         revoke.run();
-        try{assertThatThrownBy(()->reader.read(staff,tenant,stockQuery)).isInstanceOf(SecurityException.class);}
-        finally{restore.run();}
+        try{
+            assertThatThrownBy(()->reader.read(staff,tenant,stockQuery)).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->observation.observe(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
+        }finally{restore.run();}
 
         assertThat(activated.replay()).isFalse();
         assertThat(dimProof.status(tenant,gen,activated.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);

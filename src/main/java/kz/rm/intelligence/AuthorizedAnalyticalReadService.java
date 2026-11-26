@@ -55,7 +55,14 @@ public class AuthorizedAnalyticalReadService {
         this.jdbc=jdbc;this.manager=manager;this.l3=l3;this.coverage=coverage;
     }
     public Result read(VerifiedActor actor,UUID tenant,Query query){
+        return readWindow(actor,tenant,query,List.of(query.anchor())).getFirst();
+    }
+    /** One authorized scope and one MVCC snapshot for a bounded calendar window. */
+    List<Result> readWindow(VerifiedActor actor,UUID tenant,Query query,List<LocalDate> anchors){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);Objects.requireNonNull(query);
+        var dates=List.copyOf(anchors);
+        if(dates.isEmpty()||dates.size()>12||new HashSet<>(dates).size()!=dates.size())
+            throw new IllegalArgumentException("ANALYTICAL_WINDOW_SIZE");
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("ANALYTICAL_OWN_TRANSACTION");
         var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
@@ -68,7 +75,9 @@ public class AuthorizedAnalyticalReadService {
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             snapshot.setReadOnly(true);snapshot.setTimeout(120);
-            Result result=snapshot.execute(inner->readSnapshot(tenant,query,m,f));
+            List<Result> result=snapshot.execute(inner->dates.stream().map(anchor->
+                readSnapshot(tenant,new Query(query.metric(),query.calendarVersion(),query.period(),anchor,
+                    query.region(),query.group(),query.sku(),query.warehouses(),query.currency()),m,f)).toList());
             actor.userId();
             return result;
         });
