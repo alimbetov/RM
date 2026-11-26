@@ -539,9 +539,19 @@ class BusMvpServiceJourneyQualificationTest {
             return;
         }
         if(scenario==CanonicalCase.DELIVERY){
+            // OWNER membership is not operational authorization under enforced RBAC.
+            // Give a separate employee only the permission required by this diagnostic read.
+            UUID reconciliationReaderId=account("bus-other-reconciliation-reader");
+            VerifiedActor reconciliationReader=actor(reconciliationReaderId);
+            assertThat(enrollment.invite(otherOwner,otherTenant,reconciliationReaderId).status()).isEqualTo("INVITED");
+            assertThat(enrollment.accept(reconciliationReader,otherTenant).status()).isEqualTo("ACTIVE");
+            var reconciliationRole=roles.createRole(otherOwner,otherTenant,"RECONCILIATION_TEST","Booked source read isolation");
+            roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ);
+            roles.assign(otherOwner,otherTenant,reconciliationReaderId,reconciliationRole.id());
+            roles.enable(otherOwner,otherTenant);
             CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
                 tenant,otherTenant,orderId,applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
-                staff,otherOwner);
+                staff,otherOwner,reconciliationReader);
             return;
         }
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);

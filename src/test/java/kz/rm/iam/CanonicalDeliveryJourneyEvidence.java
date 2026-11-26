@@ -84,7 +84,8 @@ final class CanonicalDeliveryJourneyEvidence {
     }
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
                         CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template,
-                        BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner){
+                        BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner,
+                        VerifiedActor otherReader){
         var tx=new TransactionTemplate(manager);
         String table="p2_test_effect_"+UUID.randomUUID().toString().replace("-","");
         jdbc.execute("CREATE TABLE crm."+table+" (tenant_id UUID NOT NULL,consumer_code VARCHAR(96) NOT NULL,"
@@ -99,13 +100,24 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThatThrownBy(()->service.openBackfill(slice(tenant,run,START,END.plusSeconds(1))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("BACKFILL_RUN_SCOPE_CONFLICT");
             assertThatThrownBy(()->service.backfillNext(otherTenant,run)).hasMessage("BACKFILL_RUN_NOT_FOUND");
+            // The reader of B is authorized in B but cannot resolve A's run before B has its own.
+            assertThatThrownBy(()->reconciliation.inspect(otherReader,otherTenant,run))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("S1_BOOKED_RUN_NOT_FOUND");
             service.openBackfill(slice(otherTenant,run,START,END));
             assertThat(service.coverage(otherTenant,run).sources()).isZero();
-            var empty=reconciliation.inspect(otherOwner,otherTenant,run);
+            // A real existing run still must not be readable by an ungranted owner.
+            assertThatThrownBy(()->reconciliation.inspect(otherOwner,otherTenant,run))
+                .isInstanceOf(SecurityException.class).hasMessage("Tenant RBAC permission denied");
+            var empty=reconciliation.inspect(otherReader,otherTenant,run);
+            assertThat(empty.tenant()).isEqualTo(otherTenant);
+            assertThat(empty.actor()).isEqualTo(otherReader.userId());
+            assertThat(empty.runId()).isEqualTo(run);
             assertThat(empty.counts().owners()).isZero();
             assertThat(empty.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
             assertThat(empty.ownerCompletenessProven()).isFalse();
             assertThatThrownBy(()->reconciliation.inspect(otherOwner,tenant,run)).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->reconciliation.inspect(otherReader,tenant,run)).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->reconciliation.inspect(staff,otherTenant,run)).isInstanceOf(SecurityException.class);
             service.openConsumer(tenant,CONSUMER);
             service.openConsumer(otherTenant,CONSUMER);
             assertThat(service.consumeNext(otherTenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
@@ -181,8 +193,19 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(afterLate.state()).isEqualTo(BookedSourceReconciliationService.State.INCOMPLETE);
             assertThat(restarted.backfillNext(tenant,run).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.coverage(tenant,run).complete()).isTrue();
-            assertThat(reconciliation.inspect(staff,tenant,run).state())
-                .isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
+            var afterReceipt=reconciliation.inspect(staff,tenant,run);
+            assertThat(afterReceipt.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
+            // A receipt-only commit changes reconciliation without changing the source journal.
+            // This is evidence for the separate receipt revision requirement, not a READY proof.
+            assertThat(afterReceipt.sourceRevision()).isEqualTo(afterLate.sourceRevision());
+            assertThat(afterReceipt.counts().unprocessed()).isZero();
+            assertThat(afterReceipt.ownerCompletenessProven()).isFalse();
+            var stillEmpty=reconciliation.inspect(otherReader,otherTenant,run);
+            assertThat(stillEmpty.tenant()).isEqualTo(otherTenant);
+            assertThat(stillEmpty.sourceRevision()).isEqualTo(empty.sourceRevision());
+            assertThat(stillEmpty.counts().owners()).isZero();
+            assertThat(stillEmpty.counts().facts()).isZero();
+            assertThat(stillEmpty.ownerCompletenessProven()).isFalse();
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER)).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
 
