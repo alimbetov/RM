@@ -1,0 +1,455 @@
+{
+  "schema": "RM-REPORT-MOCKUP-CATALOG/v1",
+  "version": "MOCK-0.1",
+  "design_parent_sha": "02352716a1330e9f60c9915cdb43df6c723f5bf4",
+  "source_sha": "a6bf99107aa64f4eb255b4997ef9417748b05607",
+  "status": "SYNTHETIC_DESIGN_MOCKUPS_NOT_RUNTIME_ADMITTED",
+  "production_template_binding": false,
+  "runtime_tests_executed": false,
+  "source_qualification": false,
+  "fixture_tenant": "TENANT-A",
+  "artifact_type": "xlsx",
+  "scope": "Visual examples for existing RM-R01..12; not a full binding or production data source",
+  "pilot_order": [
+    "RM-R02",
+    "RM-R10",
+    "RM-R11"
+  ],
+  "counts": {
+    "workbooks": 12,
+    "native_charts": 14,
+    "chart_series": 25,
+    "chart_cache_points_verified": 408,
+    "excel_tables": 20
+  },
+  "workbooks": [
+    {
+      "report_code": "RM-R01",
+      "file": "RM-R01.xlsx",
+      "git_blob_sha": "2c7215c5e4c92e5dbc8561d4cbc2aa7fee21b6ef",
+      "bytes": 18640,
+      "sha256": "0ad586d9f1a2c64000f6223c037e5299376483cf948a19b55675430d0df52c4e",
+      "sheets": [
+        "Dashboard",
+        "Dynamics",
+        "History",
+        "Booked",
+        "Summary",
+        "Metadata"
+      ],
+      "native_charts": 2,
+      "excel_tables": 4,
+      "title": "Executive Business Review",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-02",
+        "DC-03",
+        "DC-04"
+      ],
+      "illustrated_registered_metrics": [
+        "FULFILLED_AMOUNT",
+        "BOOKED_AMOUNT",
+        "BOOKED_ORDERS",
+        "CANCELLED_ORDERS"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R02",
+      "file": "RM-R02.xlsx",
+      "git_blob_sha": "de777fbc34e35c27741657d60d0cee6ffdad13d4",
+      "bytes": 17093,
+      "sha256": "b3318e86641f1be90ff751711a026bc594eb06a4e8d41c21aedef76d60ae8456",
+      "sheets": [
+        "Dashboard",
+        "Dynamics",
+        "History",
+        "Booked",
+        "Metadata"
+      ],
+      "native_charts": 2,
+      "excel_tables": 3,
+      "title": "Sales Performance & Dynamics",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-02",
+        "DC-03",
+        "DC-04"
+      ],
+      "illustrated_registered_metrics": [
+        "FULFILLED_AMOUNT",
+        "BOOKED_AMOUNT"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R03",
+      "file": "RM-R03.xlsx",
+      "git_blob_sha": "bac8b0aa2f667dbafa68aee7b8a9b87e53ad58e2",
+      "bytes": 10991,
+      "sha256": "07838f8167d45fdf4abc5b4e28e0dc4a1ea84e18ea85661ba308185c21b40d4e",
+      "sheets": [
+        "Dashboard",
+        "Details",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Order Lifecycle Analytics",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-03",
+        "DC-04"
+      ],
+      "illustrated_registered_metrics": [
+        "PLACED_ORDERS",
+        "CONFIRMED_ORDERS",
+        "FULFILLED_ORDERS",
+        "CANCELLED_ORDERS"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R04",
+      "file": "RM-R04.xlsx",
+      "git_blob_sha": "72369bbf30f4298edf12b09979511d26c2b0e823",
+      "bytes": 23925,
+      "sha256": "c8a43484c0864f7c96ef5289cb2d89b9de366936d32f04870b77b0ec0eef52df",
+      "sheets": [
+        "Dashboard",
+        "Groups",
+        "Details",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 2,
+      "title": "Product & Assortment Intelligence",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-05",
+        "DC-08"
+      ],
+      "illustrated_registered_metrics": [
+        "FULFILLED_AMOUNT"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R05",
+      "file": "RM-R05.xlsx",
+      "git_blob_sha": "77026f6be3e838d0664ce8ee034316a6695dd25a",
+      "bytes": 10904,
+      "sha256": "555c7c4fe111507b5c6456f500ff21d9bf7c900d49645e07ad8ca5d4a97588b5",
+      "sheets": [
+        "Dashboard",
+        "Details",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Regional Intelligence",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-03",
+        "DC-04"
+      ],
+      "illustrated_registered_metrics": [
+        "FULFILLED_AMOUNT"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R06",
+      "file": "RM-R06.xlsx",
+      "git_blob_sha": "969b115682f26d47df0ba53dacfbdade543dc337",
+      "bytes": 10693,
+      "sha256": "8ec2f7fb8c18e06f25a844676811a2787e1d843fd18513c24ea786c8a5cdadbd",
+      "sheets": [
+        "Dashboard",
+        "Details",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Inventory Position",
+      "source_readiness": "LIVE_OWNER_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01"
+      ],
+      "illustrated_registered_metrics": [
+        "CURRENT_AVAILABLE"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R07",
+      "file": "RM-R07.xlsx",
+      "git_blob_sha": "353a853821ebeeb922115e16a7daf52c35ba6092",
+      "bytes": 10968,
+      "sha256": "1dfddc48bef98cf1179b36cef3ed0acaecb3bcd2f2f5012a5c685e0fe192fc17",
+      "sheets": [
+        "Dashboard",
+        "Dynamics",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Inventory Flow Analytics",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-02"
+      ],
+      "illustrated_registered_metrics": [
+        "STOCK_IN",
+        "STOCK_OUT"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R08",
+      "file": "RM-R08.xlsx",
+      "git_blob_sha": "081464983e9c09af90e5e8ccec99dba841bc736d",
+      "bytes": 12389,
+      "sha256": "18f608efaf963f8194265d7c5c25bb013637e81a927c35947fe6fa5be0a9a0c3",
+      "sheets": [
+        "Dashboard",
+        "Details",
+        "Matrix",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 2,
+      "title": "ABC/XYZ Portfolio Analysis",
+      "source_readiness": "METHOD_GATED",
+      "illustrated_dynamic_contracts": [
+        "DC-09"
+      ],
+      "illustrated_registered_metrics": [],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R09",
+      "file": "RM-R09.xlsx",
+      "git_blob_sha": "63b9532d48538975f365eaf973e3d03868d56a01",
+      "bytes": 10985,
+      "sha256": "2cc3679f4a2b0b5b13bc64233de5fdedf0164c5873d9d31f09b2f833c9a1b77f",
+      "sheets": [
+        "Dashboard",
+        "Dynamics",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Customer Activity Intelligence",
+      "source_readiness": "OWNER_GATED",
+      "illustrated_dynamic_contracts": [
+        "DC-02"
+      ],
+      "illustrated_registered_metrics": [],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R10",
+      "file": "RM-R10.xlsx",
+      "git_blob_sha": "103d7acd061532a14677a89bd868a36cf1840df2",
+      "bytes": 11128,
+      "sha256": "ba23056945cc919764646dbee51052ac97b74314cf187273daa83b1e304477b4",
+      "sheets": [
+        "Dashboard",
+        "Dynamics",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Anomaly Monitoring",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-02",
+        "DC-11"
+      ],
+      "illustrated_registered_metrics": [
+        "FULFILLED_AMOUNT",
+        "SMA"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R11",
+      "file": "RM-R11.xlsx",
+      "git_blob_sha": "878b8a359e6188fe43a610b88c19ed7f0243df2f",
+      "bytes": 10938,
+      "sha256": "dc626ca2ffc4ca04d50ad2642678e25bc774246bb05642d17dd79db917b3035a",
+      "sheets": [
+        "Dashboard",
+        "Details",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 1,
+      "title": "Factor Evidence Analysis",
+      "source_readiness": "AGGREGATE_BACKED",
+      "illustrated_dynamic_contracts": [
+        "DC-03",
+        "DC-04",
+        "DC-12"
+      ],
+      "illustrated_registered_metrics": [
+        "FULFILLED_PRODUCT_UNITS",
+        "STOCK_IN",
+        "STOCK_OUT"
+      ],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    },
+    {
+      "report_code": "RM-R12",
+      "file": "RM-R12.xlsx",
+      "git_blob_sha": "ff72a56d6426bbe25f2c9f13c987ae731a5b93f9",
+      "bytes": 12114,
+      "sha256": "dac4742df7db8944293ade8c6e9c7cd87ce098b3dbf51efe348c09cd678df981",
+      "sheets": [
+        "Dashboard",
+        "Dynamics",
+        "Details",
+        "Metadata"
+      ],
+      "native_charts": 1,
+      "excel_tables": 2,
+      "title": "Pricing & Currency Intelligence",
+      "source_readiness": "OWNER_GATED",
+      "illustrated_dynamic_contracts": [
+        "DC-01",
+        "DC-02",
+        "DC-03"
+      ],
+      "illustrated_registered_metrics": [],
+      "status": "MOCK_ONLY",
+      "qualifying_cases": [
+        "TPL-01",
+        "TPL-02",
+        "TPL-03",
+        "TPL-04",
+        "TPL-05",
+        "UAP-09"
+      ]
+    }
+  ],
+  "fixture_assertions": {
+    "R01_R02_raw_months": 24,
+    "R04_sku_count": 500,
+    "R04_band_count": 7,
+    "R04_sum_kzt": 100000000,
+    "R04_counts": [
+      75,
+      75,
+      75,
+      75,
+      75,
+      75,
+      50
+    ],
+    "R04_values_million_kzt": [
+      48,
+      22,
+      13,
+      8,
+      5,
+      3,
+      1
+    ]
+  },
+  "verification": "Local OOXML ZIP CRC/XML parse, chart reference and cached category/value equality to source cells, rank sums, month counts, representative RM-R02 visual render; Git blob SHA verified. Excel/LibreOffice/POI runtime, PDF, full visual UAT, named range manifests, production source/access/retention/performance qualification pending."
+}

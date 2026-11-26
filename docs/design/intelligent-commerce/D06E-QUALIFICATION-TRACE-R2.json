@@ -1062,5 +1062,29 @@
       "TPL-05"
     ],
     "implementation_admission": false
+  },
+  "report_mockup_artifacts": {
+    "document": "report-templates/README.md",
+    "catalog": "report-templates/manifest.json",
+    "version": "MOCK-0.1",
+    "workbooks": 12,
+    "native_charts": 14,
+    "chart_cache_points_verified": 408,
+    "status": "SYNTHETIC_DESIGN_MOCKUPS_NOT_RUNTIME_ADMITTED",
+    "code_contracts": [
+      "CC-02",
+      "CC-09",
+      "CC-10",
+      "CC-12"
+    ],
+    "qualification_cases": [
+      "TPL-01",
+      "TPL-02",
+      "TPL-03",
+      "TPL-04",
+      "TPL-05",
+      "UAP-09"
+    ],
+    "implementation_admission": false
   }
 }
