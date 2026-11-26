@@ -6958,3 +6958,25 @@ REVOKE ALL ON FUNCTION crm.int_availability_observation_stamp(),crm.int_feature_
 --rollback ALTER TABLE crm.int_feature_candidate DROP CONSTRAINT ck_int_feature_payload_hash;
 --rollback ALTER TABLE crm.int_fact_availability_observation DROP CONSTRAINT uq_int_availability_source;
 -- Privilege hardening is intentionally not reversed.
+
+
+--changeset rm:0220-int-feature-payload-binding dbms:postgresql splitStatements:false
+ALTER TABLE crm.int_feature_candidate ADD CONSTRAINT ck_int_feature_payload_binding CHECK (
+ request_key IS NULL OR (
+ (payload #> '{request,generation}') IS NOT DISTINCT FROM to_jsonb(generation_id)
+ AND (payload #> '{request,proof}') IS NOT DISTINCT FROM to_jsonb(proof_id)
+ AND (payload #> '{request,contractVersion}') IS NOT DISTINCT FROM to_jsonb(contract_version)
+ AND (payload #> '{request,methodVersion}') IS NOT DISTINCT FROM to_jsonb(method_version)
+ AND (payload #> '{request,numericPolicyVersion}') IS NOT DISTINCT FROM to_jsonb(numeric_policy_version)
+ AND (payload #> '{request,activityPolicyVersion}') IS NOT DISTINCT FROM to_jsonb(activity_policy_version)
+ AND (payload->'sourceRevision') IS NOT DISTINCT FROM to_jsonb(source_revision)
+ AND (payload->'dirtyRevision') IS NOT DISTINCT FROM to_jsonb(dirty_revision)
+ AND (payload->'receiptRevision') IS NOT DISTINCT FROM to_jsonb(receipt_revision)
+ AND (payload->'materializationRevision') IS NOT DISTINCT FROM to_jsonb(materialization_revision)
+ AND (payload->'lifecycleRevision') IS NOT DISTINCT FROM to_jsonb(lifecycle_revision)
+ AND (payload->'activity') IS NOT DISTINCT FROM to_jsonb(activity)
+ AND (payload->'decisionEligibility') IS NOT DISTINCT FROM to_jsonb('BLOCKED'::text)
+ AND jsonb_typeof(payload->'inputs') IS NOT DISTINCT FROM 'array'
+ AND (payload->>'observedAt')::timestamptz IS NOT DISTINCT FROM observed_at
+ ));
+--rollback ALTER TABLE crm.int_feature_candidate DROP CONSTRAINT ck_int_feature_payload_binding;

@@ -41,3 +41,6 @@ FeatureCandidateStore accepts typed requests and VerifiedActor, not externally a
 
 ### E7D runtime proof fence
 Expose the result of independent proof parity in the exact read snapshot; reject new feature writes without CURRENT proof, and mark saved results stale when current parity fails even if the revision tuple is unchanged. Existing idempotent receipts contain no numerical payload. Historical candidate read is not a decision permit. Role isolation must be deployed separately; current shared datasource is not a dedicated principal.
+
+## E7D completion boundary
+0220 binds JSONB evidence to typed proof, revision, version, activity and observation metadata. NULL-safe comparisons prevent missing keys from bypassing checks. Feature decisions remain BLOCKED. Operational SQL template documents separate observer/store privileges; it rolls back deliberately and is not deployment or an effective privilege proof. Current shared datasource must not be represented as isolated. Existing writer/reader and observer are sufficient for shadow functionality; no additional services required. Concurrent retry, rollback and crash recovery require real PostgreSQL qualification before production.
