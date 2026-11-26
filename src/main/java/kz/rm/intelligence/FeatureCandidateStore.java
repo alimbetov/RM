@@ -94,6 +94,7 @@ class FeatureCandidateStore {
             }
             var observed=series.readAdmitted(actor,tenant,request.generation(),request.proof(),request.metric(),
                 request.filter(),request.period(),request.anchor(),request.window());
+            if(!observed.currentProof())throw new IllegalStateException("FEATURE_PROOF_NOT_CURRENT");
             var candidate=PredictiveFeatureContract.candidate(observed,request.operator());
             // No caller supplied JSON. The immutable payload includes the exact ordered inputs.
             String payload=payload(identity,candidate);
@@ -155,9 +156,9 @@ class FeatureCandidateStore {
                   AND materialization_revision=? AND lifecycle_revision=?)
                 """,Boolean.class,tenant,requestKey,current.revision().source(),current.revision().dirty(),
                 current.revision().receipt(),current.revision().materialization(),current.revision().lifecycle()));
-            if(!same)activity=new MetricActivityGate.Assessment(MetricActivityGate.POLICY_VERSION,
+            if(!same || !current.currentProof())activity=new MetricActivityGate.Assessment(MetricActivityGate.POLICY_VERSION,
                 MetricActivityGate.Activity.STALE,MetricActivityGate.DecisionEligibility.BLOCKED,
-                request.window(),0,List.of("FEATURE_REVISION_CHANGED"));
+                request.window(),0,List.of(same?"FEATURE_PROOF_NOT_CURRENT":"FEATURE_REVISION_CHANGED"));
             actor.userId();
             return new ReadResult(row.id(),row.payload(),activity);
         });
