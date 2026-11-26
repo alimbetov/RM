@@ -389,6 +389,14 @@ final class L1ProjectionJourneyEvidence {
         assertThat(series.trend().direction()).isEqualTo("UNAVAILABLE");
         assertThat(series.trend().decisionEligibility()).isEqualTo("BLOCKED");
         assertThat(series.trend().slope()).isNull();
+        var pattern=observation.observePattern(staff,tenant,stockQuery,dates,1,BigDecimal.ONE,new BigDecimal("0.05"),
+            1,new BigDecimal("3"),new BigDecimal("0.5"));
+        assertThat(pattern.anomaly().pattern()).isEqualTo("UNAVAILABLE");
+        assertThat(pattern.anomaly().decisionEligibility()).isEqualTo("BLOCKED");
+        assertThat(pattern.anomaly().sma()).isNull();
+        assertThat(pattern.anomaly().anomalyCandidate()).isFalse();
+        assertThatThrownBy(()->observation.observePattern(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO,
+            1,new BigDecimal("3"),new BigDecimal("0.5"))).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->observation.observe(foreign,tenant,stockQuery,dates,1,BigDecimal.ONE,BigDecimal.ZERO)).isInstanceOf(SecurityException.class);
         revoke.run();
         try{

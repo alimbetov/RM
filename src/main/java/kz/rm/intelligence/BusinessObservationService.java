@@ -22,6 +22,28 @@ public class BusinessObservationService {
                         int periods,int readyPeriods,BigDecimal slope,BigDecimal movingAverage,
                         boolean sustainedTrend,String decisionEligibility){}
     public record SeriesInsight(Insight observation,Trend trend){}
+    public record Anomaly(int policyVersion,BigDecimal sigmaMultiplier,BigDecimal maxBaselineCv,
+                          String pattern,String reason,DataQuality quality,int baselinePeriods,
+                          BigDecimal actual,BigDecimal sma,BigDecimal ema,BigDecimal stddev,BigDecimal cv,
+                          BigDecimal baselineSlope,BigDecimal deviation,BigDecimal standardizedDeviation,
+                          boolean anomalyCandidate,String decisionEligibility){}
+    public record PatternInsight(SeriesInsight series,Anomaly anomaly){}
+    public PatternInsight observePattern(VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query query,
+                           List<LocalDate> anchors,int policyVersion,BigDecimal absoluteThreshold,BigDecimal relativeThreshold,
+                           int anomalyPolicyVersion,BigDecimal sigmaMultiplier,BigDecimal maxBaselineCv){
+        var anomalyPolicy=new BusinessAnomalyAssessment.Policy(anomalyPolicyVersion,sigmaMultiplier,maxBaselineCv);
+        var series=observeSeries(actor,tenant,query,anchors,policyVersion,absoluteThreshold,relativeThreshold);
+        var observation=series.observation();
+        var points=observation.evidence().stream().map(e->new BusinessInterpretationEngine.Point(
+            new BusinessInterpretationEngine.Scope(tenant,observation.actor(),query.metric(),query.calendarVersion(),query.period(),
+                query.region(),query.group(),query.sku(),query.warehouses(),query.currency(),e.unit(),e.methodVersion()),e)).toList();
+        var result=BusinessAnomalyAssessment.evaluate(points,new BusinessInterpretationEngine.Policy(
+            policyVersion,absoluteThreshold,relativeThreshold),anomalyPolicy);
+        return new PatternInsight(series,new Anomaly(result.policyVersion(),sigmaMultiplier,maxBaselineCv,
+            result.pattern().name(),result.reason().name(),result.quality(),result.baselinePeriods(),result.actual(),
+            result.sma(),result.ema(),result.stddev(),result.cv(),result.baselineSlope(),result.deviation(),
+            result.standardizedDeviation(),result.anomalyCandidate(),result.decisionEligibility()));
+    }
     public Insight observe(VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query query,
                            List<LocalDate> anchors,int policyVersion,BigDecimal absoluteThreshold,BigDecimal relativeThreshold){
         return observeSeries(actor,tenant,query,anchors,policyVersion,absoluteThreshold,relativeThreshold).observation();

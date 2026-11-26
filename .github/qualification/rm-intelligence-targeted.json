@@ -136,6 +136,38 @@
     {
       "classname": "kz.rm.intelligence.BusinessTrendQualificationTest",
       "name": "unequalCalendarDurationAbstains"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs005SpikeExcludesTargetFromBaseline"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs051DropAndNonconstantBaseline"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs100NoiseAndBandBoundary"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs007VolatileBaselineSuppressesDirectionalCandidate"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs093ZeroBaselineAndMissing"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs097ShortPartialAndUnequalDuration"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "bs112StableNoFalseAlarm"
+    },
+    {
+      "classname": "kz.rm.intelligence.BusinessAnomalyQualificationTest",
+      "name": "incompatibleEvidenceAndPolicyRejected"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
