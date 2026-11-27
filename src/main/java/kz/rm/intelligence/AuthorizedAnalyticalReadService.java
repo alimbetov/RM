@@ -70,7 +70,7 @@ public class AuthorizedAnalyticalReadService {
     /** Internal report candidate only. Exactly 24 consecutive closed months.
      * Does not grant publication, historical completeness or transport access. */
     ReportSourceManifest readReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries){
-        var qs=List.copyOf(queries);
+        var qs=List.copyOf(queries).stream().sorted(Comparator.comparing(x->x.metric().name())).toList();
         if(qs.isEmpty()||qs.size()>3)throw new IllegalArgumentException("REPORT_METRIC_WINDOW");
         var end=qs.getFirst().anchor();
         if(end.getDayOfMonth()!=1||qs.stream().anyMatch(q->q.period()!=PeriodResolver.Code.M))

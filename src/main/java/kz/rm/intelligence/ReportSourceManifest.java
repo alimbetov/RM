@@ -8,12 +8,27 @@ import java.util.*;
 import static kz.rm.intelligence.AuthorizedAnalyticalReadService.*;
 
 /** Internal, bounded source evidence candidate. Not a coverage certificate or publication permit. */
-record ReportSourceManifest(UUID tenant, String scopeDigest, String sha256, Instant observedAt,
-                            long sourceRevision, List<Query> queries, List<List<Result>> windows) {
-    ReportSourceManifest {
-        queries=List.copyOf(queries);
-        windows=windows.stream().map(List::copyOf).toList();
+final class ReportSourceManifest {
+    private final UUID tenant;
+    private final String scopeDigest, sha256;
+    private final Instant observedAt;
+    private final long sourceRevision;
+    private final List<Query> queries;
+    private final List<List<Result>> windows;
+    private ReportSourceManifest(UUID tenant,String scopeDigest,String sha256,Instant observedAt,
+                                 long sourceRevision,List<Query> queries,List<List<Result>> windows){
+        this.tenant=tenant;this.scopeDigest=scopeDigest;this.sha256=sha256;
+        this.observedAt=observedAt;this.sourceRevision=sourceRevision;
+        this.queries=List.copyOf(queries);
+        this.windows=windows.stream().map(List::copyOf).toList();
     }
+    UUID tenant(){return tenant;}
+    String scopeDigest(){return scopeDigest;}
+    String sha256(){return sha256;}
+    Instant observedAt(){return observedAt;}
+    long sourceRevision(){return sourceRevision;}
+    List<Query> queries(){return queries;}
+    List<List<Result>> windows(){return windows;}
     static ReportSourceManifest from(UUID tenant,List<Query> queries,List<List<Result>> windows){
         Objects.requireNonNull(tenant);
         if(queries.isEmpty()||queries.size()>3||queries.size()!=windows.size())
