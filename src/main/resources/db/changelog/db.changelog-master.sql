@@ -7338,3 +7338,119 @@ REVOKE ALL ON FUNCTION crm.int_intraday_result_guard(),crm.int_intraday_assert_p
  crm.int_intraday_ack(uuid,uuid,uuid,bigint,integer,uuid,text,timestamptz,timestamptz,bigint,bigint,text,text,text,timestamptz,timestamptz)
  FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_INTRADAY_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0227-int-report-storage-foundation dbms:postgresql splitStatements:false
+-- RM-ARS-R1 P3/P4: dormant storage foundation. No runtime grants, scheduler,
+-- publication, automatic cleanup or report authorization admission.
+CREATE SCHEMA reporting;
+REVOKE ALL ON SCHEMA reporting FROM PUBLIC;
+
+CREATE TABLE reporting.int_report_instance (
+ tenant_id uuid NOT NULL REFERENCES public.iam_workspace(id),
+ instance_id uuid NOT NULL,
+ idempotency_key varchar(128) NOT NULL CHECK(length(trim(idempotency_key))>0),
+ request_digest varchar(64) NOT NULL CHECK(request_digest ~ '^[0-9a-f]{64}$'),
+ scope_digest varchar(64) NOT NULL CHECK(scope_digest ~ '^[0-9a-f]{64}$'),
+ report_code varchar(32) NOT NULL,
+ template_version varchar(64) NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(tenant_id,instance_id),
+ UNIQUE(tenant_id,idempotency_key)
+);
+CREATE INDEX idx_int_report_instance_created
+ ON reporting.int_report_instance(tenant_id,created_at DESC,instance_id);
+
+-- Durable catalog/tombstone identity; future dates are precreated, not allocatable.
+CREATE TABLE reporting.int_report_partition_day (
+ staging_date date PRIMARY KEY,
+ child_oid oid NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ retired_at timestamptz,
+ CHECK(retired_at IS NULL OR retired_at>=created_at)
+);
+
+CREATE TABLE reporting.int_report_dataset_attempt (
+ tenant_id uuid NOT NULL REFERENCES public.iam_workspace(id),
+ dataset_id uuid NOT NULL,
+ staging_date date NOT NULL REFERENCES reporting.int_report_partition_day(staging_date),
+ allocated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ scope_digest varchar(64) NOT NULL CHECK(scope_digest ~ '^[0-9a-f]{64}$'),
+ PRIMARY KEY(tenant_id,dataset_id),
+ UNIQUE(tenant_id,dataset_id,staging_date),
+ CHECK(staging_date=(allocated_at AT TIME ZONE 'UTC')::date)
+);
+
+CREATE TABLE reporting.int_report_dataset (
+ staging_date date NOT NULL,
+ tenant_id uuid NOT NULL,
+ dataset_id uuid NOT NULL,
+ row_key bigint NOT NULL CHECK(row_key>0),
+ metric_code varchar(64) NOT NULL,
+ method_version bigint NOT NULL CHECK(method_version>0),
+ from_inclusive timestamptz NOT NULL,
+ until_exclusive timestamptz NOT NULL CHECK(until_exclusive>from_inclusive),
+ dimensions jsonb NOT NULL CHECK(jsonb_typeof(dimensions)='array'),
+ unit_code varchar(64) NOT NULL,
+ currency varchar(3) CHECK(currency ~ '^[A-Z]{3}$'),
+ metric_value numeric CHECK(metric_value NOT IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)),
+ quality_code varchar(16) NOT NULL CHECK(quality_code IN ('READY','PARTIAL','MISSING','STALE','NOT_MEASURABLE')),
+ quality_reason varchar(128),
+ PRIMARY KEY(staging_date,tenant_id,dataset_id,row_key),
+ FOREIGN KEY(tenant_id,dataset_id,staging_date)
+ REFERENCES reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date)
+) PARTITION BY RANGE(staging_date);
+
+-- No DEFAULT partition. No redundant tenant/date/dataset index: the PK covers
+-- equality predicates followed by ordered row_key pagination.
+REVOKE ALL ON ALL TABLES IN SCHEMA reporting FROM PUBLIC;
+
+-- Foundation identities are immutable. State/consumer/publication extensions
+-- must be introduced by subsequent reviewed changesets, not by runtime grants.
+CREATE TRIGGER trg_int_report_instance_immutable BEFORE UPDATE OR DELETE ON reporting.int_report_instance
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_report_attempt_immutable BEFORE UPDATE OR DELETE ON reporting.int_report_dataset_attempt
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_report_row_immutable BEFORE UPDATE OR DELETE ON reporting.int_report_dataset
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_report_dataset_no_truncate BEFORE TRUNCATE ON reporting.int_report_dataset
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+-- Narrow maintenance primitive, owner-only until separate privilege qualification.
+-- Two-int advisory namespace 1380794706 reserved here for report lifecycle.
+-- Serialize creation on a fixed maintenance key, then date key. Never recreate
+-- a catalogued missing/retired child. Reject unexpected existing relation.
+CREATE FUNCTION reporting.int_report_ensure_day(d date) RETURNS boolean
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE today date; child text; actual oid; registered reporting.int_report_partition_day%ROWTYPE;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock(1380794706,-2147483648);
+ today:=(clock_timestamp() AT TIME ZONE 'UTC')::date;
+ IF d<today OR d>today+2 THEN RAISE EXCEPTION 'INT_REPORT_DATE_HORIZON'; END IF;
+ PERFORM pg_advisory_xact_lock(1380794706,d-date '1970-01-01');
+ today:=(clock_timestamp() AT TIME ZONE 'UTC')::date;
+ IF d<today OR d>today+2 THEN RAISE EXCEPTION 'INT_REPORT_DATE_HORIZON'; END IF;
+ child:='int_report_dataset_'||to_char(d,'YYYYMMDD');
+ actual:=to_regclass(format('reporting.%I',child));
+ SELECT * INTO registered FROM reporting.int_report_partition_day WHERE staging_date=d;
+ IF FOUND THEN
+   IF registered.retired_at IS NOT NULL OR actual IS DISTINCT FROM registered.child_oid
+      OR NOT EXISTS(SELECT 1 FROM pg_inherits WHERE inhrelid=actual
+          AND inhparent='reporting.int_report_dataset'::regclass)
+   THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_DRIFT'; END IF;
+   -- Repeat creation is deliberately not a catalog/grant certification.
+   RETURN false;
+ END IF;
+ IF actual IS NOT NULL THEN RAISE EXCEPTION 'INT_REPORT_UNREGISTERED_PARTITION'; END IF;
+ EXECUTE format('CREATE TABLE reporting.%I PARTITION OF reporting.int_report_dataset FOR VALUES FROM (%L) TO (%L)',child,d,d+1);
+ EXECUTE format('REVOKE ALL ON reporting.%I FROM PUBLIC',child);
+ actual:=to_regclass(format('reporting.%I',child));
+ INSERT INTO reporting.int_report_partition_day(staging_date,child_oid) VALUES(d,actual);
+ RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION reporting.int_report_ensure_day(date) FROM PUBLIC;
+-- No automatic invocation, no DROP routine. Caller must set bounded lock and
+-- statement timeouts; full bounds/index/grant reconciliation and pin/consumer
+-- lifecycle are prerequisites for admission.
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_STORAGE_FORWARD_ONLY'; END; $$;
