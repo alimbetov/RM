@@ -1,0 +1,102 @@
+{
+  "schema": "RM-CI-R3.6B/v1",
+  "purpose": "DEVELOPMENT_ONLY",
+  "executionPolicy": "UNCHANGED",
+  "fallback": "FULL_REQUIRED",
+  "reuse": "FORBIDDEN",
+  "releaseAdmission": "DENIED",
+  "required": [
+    {
+      "path": ".github/workflows/crm-r12-populated-upgrade.yml",
+      "name": "CRM R1.2 Populated PostgreSQL Upgrade Qualification",
+      "artifacts": [
+        "crm-r12-populated-upgrade-surefire"
+      ]
+    },
+    {
+      "path": ".github/workflows/inventory-0081-populated-upgrade.yml",
+      "name": "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification",
+      "artifacts": [
+        "inventory-0081-populated-postgresql"
+      ]
+    },
+    {
+      "path": ".github/workflows/kms-r1-qualification.yml",
+      "name": "RM Domain Security and PostgreSQL Qualification",
+      "artifacts": [
+        "kms-h2-surefire",
+        "kms-postgres-surefire",
+        "iam-pii-populated-pg-surefire"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-cur-r2c-policy-postgresql.yml",
+      "name": "RM CUR-R2C Policy Schema PostgreSQL Qualification",
+      "artifacts": [
+        "cur-r2c-policy-pg-{sha}",
+        "cur-r2c-populated-pg-{sha}",
+        "cur-r2c-anchor-populated-pg-{sha}",
+        "cur-r2c-revoke-populated-pg-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-intelligence-a1-schema.yml",
+      "name": "RM Intelligence A1 PostgreSQL Source Schema",
+      "artifacts": [
+        "rm-intelligence-a1-schema-{sha}",
+        "rm-intelligence-populated-seal-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-mvp-w23-service-strict-pg.yml",
+      "name": "RM MVP W2-W5 Service Journeys PostgreSQL Qualification",
+      "artifacts": [
+        "rm-mvp-w25-strict-pg-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-qr07-r0-pg.yml",
+      "name": "RM QR-07 R0-R2 Physical Return PostgreSQL Qualification",
+      "artifacts": [
+        "qr07-r0-r1-{sha}",
+        "qr07-full-pg-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-task-r2-service.yml",
+      "name": "RM TASK R2 Service Qualification",
+      "artifacts": [
+        "rm-task-h2-{sha}",
+        "rm-task-postgresql-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-task-r32a-populated-upgrade.yml",
+      "name": "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification",
+      "artifacts": [
+        "rm-task-r32a-populated-pg-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rm-task-r32b-t00-postgresql.yml",
+      "name": "RM TASK R32B T00 PostgreSQL Contract Qualification",
+      "artifacts": [
+        "rm-task-t00-postgresql-{sha}"
+      ]
+    },
+    {
+      "path": ".github/workflows/rustfs-real-infra-e2e.yml",
+      "name": "RustFS Real Infrastructure E2E",
+      "artifacts": [
+        "rustfs-real-infra-e2e-surefire"
+      ]
+    },
+    {
+      "path": ".github/workflows/sales-084-populated-upgrade.yml",
+      "name": "SALES 08.4 Populated PostgreSQL Upgrade Qualification",
+      "artifacts": [
+        "sales-084-populated-postgresql"
+      ]
+    }
+  ]
+}
