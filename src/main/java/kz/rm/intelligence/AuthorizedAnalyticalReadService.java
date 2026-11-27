@@ -103,6 +103,37 @@ public class AuthorizedAnalyticalReadService {
             return result;
         });
     }
+    record IntradayObservation(Result result,Instant readObservedAt){}
+    /** Called only after the outer service IAM and job fences are held.
+     * Current-day BOOKED_ORDERS only, same ownerValue and result factory. */
+    IntradayObservation readIntraday(UUID tenant,long calendar,LocalDate day){
+        if(!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("INT_INTRADAY_ADMISSION_REQUIRED");
+        var tx=new TransactionTemplate(manager);
+        tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        tx.setReadOnly(true);tx.setTimeout(120);
+        return Objects.requireNonNull(tx.execute(status->{
+            String zone=jdbc.queryForObject("SELECT zone_id FROM crm.int_calendar_policy WHERE tenant_id=? AND version=?",
+                String.class,tenant,calendar);
+            var period=PeriodResolver.resolve(PeriodResolver.Code.D,day,new PeriodResolver.Policy(ZoneId.of(zone),calendar));
+            var time=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
+            var observed=Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()",Timestamp.class)).toInstant();
+            if(time.isBefore(period.startInclusive())||!time.isBefore(period.endExclusive()))
+                throw new IllegalStateException("INT_INTRADAY_DAY_DRIFT");
+            long revision=sourceRevision(tenant);
+            var metric=L3DerivedSeriesService.Metric.BOOKED_ORDERS;
+            var q=new Query(Metric.BOOKED_ORDERS,calendar,PeriodResolver.Code.D,day,null,null,null,List.of(),null);
+            var value=ownerValue(tenant,metric,new L3DerivedSeriesService.Filter(null,null,null,List.of(),null),period,time);
+            return new IntradayObservation(result(q,metric,period,value,Route.L0,"OPEN_PERIOD",null,null,revision,time),observed);
+        }));
+    }
+    private long sourceRevision(UUID tenant){
+        return Objects.requireNonNull(jdbc.queryForObject("""
+            SELECT coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=?),0)
+              +(SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?)
+            """,Long.class,tenant,tenant));
+    }
     private Result readSnapshot(UUID tenant,Query q,L3DerivedSeriesService.Metric m,L3DerivedSeriesService.Filter f,
             Map<ProofKey,MultidimensionalCoverageService.Status> checkedProofs){
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
@@ -120,10 +151,7 @@ public class AuthorizedAnalyticalReadService {
         var policy=new PeriodResolver.Policy(ZoneId.of(zone),q.calendarVersion());
         var period=PeriodResolver.resolve(q.period(),q.anchor(),policy);
         Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
-        long revision=Objects.requireNonNull(jdbc.queryForObject("""
-            SELECT coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=?),0)
-              +(SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?)
-            """,Long.class,tenant,tenant));
+        long revision=sourceRevision(tenant);
         if(period.startInclusive().isAfter(now)||period.startInclusive().equals(now))
             return result(q,m,period,null,Route.L0,"FUTURE_PERIOD",null,null,revision,now);
         Pointer pointer=jdbc.query("""

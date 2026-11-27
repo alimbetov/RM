@@ -172,6 +172,8 @@ public class TenantAuthorization {
         } else {
             lockActorAndTenant(actorId,tenantId);
         }
+        if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT principal_kind='HUMAN' FROM public.iam_user_account WHERE id=?",Boolean.class,actorId)))
+            throw new SecurityException("Human principal required");
         record ReadAdmission(OrganizationMembershipEntity.Role role,boolean enforced,boolean granted) {}
         ReadAdmission admission=jdbc.query("""
                 SELECT m.role,
@@ -205,6 +207,8 @@ public class TenantAuthorization {
             throw new SecurityException("Authenticated actor, tenant and permission required");
         var actor = users.findById(actorId)
             .orElseThrow(() -> new SecurityException("Actor unknown"));
+        if (actor.getPrincipalKind()!=UserAccountEntity.PrincipalKind.HUMAN)
+            throw new SecurityException("Human principal required");
         if (actor.getStatus() != UserAccountEntity.Status.ACTIVE)
             throw new SecurityException("Actor inactive");
         var workspace = workspaces.findById(tenantId)
@@ -243,6 +247,34 @@ public class TenantAuthorization {
             }
         }
         return new Decision(actorId,tenantId,workspace.getOrganizationId(),membership.getRole(),permission,null);
+    }
+
+    /** Narrow service-only admission. Reuse the actor -> workspace lock protocol,
+     * fresh DB membership and effective role grants, not a synthetic VerifiedActor. */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void requireIntradayRead(VerifiedServiceActor actor,UUID tenantId) {
+        UUID id=actor.accountId();
+        lockActorAndTenant(id,tenantId);
+        boolean allowed=Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(
+              SELECT 1 FROM public.iam_user_account u
+              JOIN public.iam_workspace w ON w.id=?
+              JOIN public.iam_org_membership m ON m.organization_id=w.organization_id AND m.user_id=u.id
+              JOIN public.iam_tenant_rbac_config cfg ON cfg.tenant_id=w.id
+              WHERE u.id=? AND u.external_subject=? AND u.status='ACTIVE' AND u.principal_kind='SERVICE'
+                AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
+                AND m.role='MEMBER' AND m.status='ACTIVE' AND cfg.enforced
+                AND EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+                    JOIN public.iam_tenant_role r ON r.tenant_id=a.tenant_id AND r.id=a.role_id
+                    JOIN public.iam_tenant_role_permission p ON p.tenant_id=r.tenant_id AND p.role_id=r.id
+                    WHERE a.tenant_id=w.id AND a.user_id=u.id AND r.active AND p.permission_code='SALES_ORDER_READ')
+                AND NOT EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+                    JOIN public.iam_tenant_role r ON r.tenant_id=a.tenant_id AND r.id=a.role_id
+                    JOIN public.iam_tenant_role_permission p ON p.tenant_id=r.tenant_id AND p.role_id=r.id
+                    WHERE a.tenant_id=w.id AND a.user_id=u.id AND r.active AND p.permission_code<>'SALES_ORDER_READ'))
+            """,Boolean.class,tenantId,id,actor.subject()));
+        if(!allowed)throw new SecurityException("INT_SERVICE_SCOPE_DENIED");
+        actor.accountId();
     }
 
     private boolean permitted(DomainPermission permission, OrganizationMembershipEntity.Role role) {

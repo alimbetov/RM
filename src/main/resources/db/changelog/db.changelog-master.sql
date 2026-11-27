@@ -7160,3 +7160,131 @@ CREATE TRIGGER trg_int_analytics_job_guard BEFORE INSERT OR UPDATE ON crm.int_an
 --rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_analytics_job_run) THEN RAISE EXCEPTION 'INT_JOB_ROLLBACK_UNSAFE'; END IF; END; $$;
 --rollback DROP TABLE crm.int_analytics_job_run;
 --rollback DROP FUNCTION crm.int_analytics_job_guard();
+
+
+--changeset rm:0225-iam-principal-kind
+-- Existing human accounts retain their user semantics. Deployment inventory
+-- must approve classification of any existing workload account separately.
+ALTER TABLE public.iam_user_account ADD COLUMN principal_kind VARCHAR(16) DEFAULT 'HUMAN' NOT NULL;
+ALTER TABLE public.iam_user_account ADD CONSTRAINT ck_iam_principal_kind CHECK(principal_kind IN ('HUMAN','SERVICE'));
+--rollback ALTER TABLE public.iam_user_account DROP CONSTRAINT ck_iam_principal_kind;
+--rollback ALTER TABLE public.iam_user_account DROP COLUMN principal_kind;
+
+--changeset rm:0226-int-intraday-result dbms:postgresql splitStatements:false
+-- No runtime GRANT or service account provisioning in this changeset.
+CREATE TABLE crm.int_intraday_result (
+ tenant_id uuid NOT NULL,job_id uuid NOT NULL,
+ schema_version smallint NOT NULL DEFAULT 1 CHECK(schema_version=1),
+ consumer_code varchar(48) NOT NULL DEFAULT 'INTRADAY_SNAPSHOT_STORE_V1' CHECK(consumer_code='INTRADAY_SNAPSHOT_STORE_V1'),
+ service_account_id uuid NOT NULL,scope_version bigint NOT NULL CHECK(scope_version>0),
+ scope_digest char(64) NOT NULL CHECK(scope_digest ~ '^[0-9a-f]{64}$'),
+ metric_code varchar(32) NOT NULL DEFAULT 'BOOKED_ORDERS' CHECK(metric_code='BOOKED_ORDERS'),
+ method_version integer NOT NULL DEFAULT 1 CHECK(method_version=1),
+ day_start timestamptz NOT NULL,day_end timestamptz NOT NULL CHECK(day_start<day_end),
+ actual_as_of timestamptz,read_observed_at timestamptz,source_revision bigint CHECK(source_revision>=0),
+ metric_value bigint CHECK(metric_value>0),quality varchar(16) CHECK(quality IN ('PARTIAL','MISSING')),
+ quality_reason varchar(64),result_digest char(64) CHECK(result_digest ~ '^[0-9a-f]{64}$'),acknowledged_at timestamptz,
+ PRIMARY KEY(tenant_id,job_id),FOREIGN KEY(tenant_id,job_id) REFERENCES crm.int_analytics_job_run(tenant_id,job_id),
+ CHECK((acknowledged_at IS NULL AND actual_as_of IS NULL AND read_observed_at IS NULL AND source_revision IS NULL
+   AND metric_value IS NULL AND quality IS NULL AND quality_reason IS NULL AND result_digest IS NULL)
+ OR (acknowledged_at IS NOT NULL AND actual_as_of IS NOT NULL AND read_observed_at IS NOT NULL
+   AND source_revision IS NOT NULL AND quality IS NOT NULL AND quality_reason IS NOT NULL AND result_digest IS NOT NULL
+   AND day_start<=actual_as_of AND actual_as_of<day_end AND actual_as_of<=read_observed_at
+   AND read_observed_at<=acknowledged_at
+   AND ((quality='PARTIAL' AND metric_value IS NOT NULL AND quality_reason='PERIOD_NOT_CLOSED')
+     OR (quality='MISSING' AND metric_value IS NULL AND quality_reason='NO_QUALIFIED_OBSERVATION'))))
+);
+REVOKE ALL ON crm.int_intraday_result FROM PUBLIC;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM crm.int_analytics_job_run WHERE job_type='INTRADAY' AND status='COMPLETED')
+ THEN RAISE EXCEPTION 'INT_INTRADAY_LEGACY_COMPLETED_REQUIRES_RECONCILIATION'; END IF;
+END $$;
+
+CREATE FUNCTION crm.int_intraday_result_guard() RETURNS trigger LANGUAGE plpgsql
+ SET search_path=pg_catalog,pg_temp AS $$
+DECLARE j crm.int_analytics_job_run%ROWTYPE;
+BEGIN
+ SELECT * INTO j FROM crm.int_analytics_job_run WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id;
+ IF NOT FOUND OR j.job_type<>'INTRADAY' OR j.scheduled_slot<NEW.day_start OR j.scheduled_slot>=NEW.day_end
+ THEN RAISE EXCEPTION 'INT_INTRADAY_PARENT' USING ERRCODE='23514'; END IF;
+ IF TG_OP='INSERT' THEN
+   IF j.status<>'PENDING' OR NEW.acknowledged_at IS NOT NULL
+   THEN RAISE EXCEPTION 'INT_INTRADAY_INITIAL_STATE' USING ERRCODE='23514'; END IF;
+ ELSE
+   IF OLD.acknowledged_at IS NOT NULL OR NEW.acknowledged_at IS NULL
+    OR (OLD.tenant_id,OLD.job_id,OLD.schema_version,OLD.consumer_code,OLD.service_account_id,OLD.scope_version,
+        OLD.scope_digest,OLD.metric_code,OLD.method_version,OLD.day_start,OLD.day_end)
+       IS DISTINCT FROM
+       (NEW.tenant_id,NEW.job_id,NEW.schema_version,NEW.consumer_code,NEW.service_account_id,NEW.scope_version,
+        NEW.scope_digest,NEW.metric_code,NEW.method_version,NEW.day_start,NEW.day_end)
+    OR j.status<>'RUNNING' OR j.lease_until<=clock_timestamp() OR NEW.actual_as_of<j.scheduled_slot
+   THEN RAISE EXCEPTION 'INT_INTRADAY_IMMUTABLE_OR_FENCE' USING ERRCODE='23514'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_intraday_guard BEFORE INSERT OR UPDATE ON crm.int_intraday_result
+ FOR EACH ROW EXECUTE FUNCTION crm.int_intraday_result_guard();
+CREATE TRIGGER trg_int_intraday_no_delete BEFORE DELETE ON crm.int_intraday_result
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_intraday_no_truncate BEFORE TRUNCATE ON crm.int_intraday_result
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+CREATE FUNCTION crm.int_intraday_assert_pair() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+ SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid; j_id uuid; j crm.int_analytics_job_run%ROWTYPE; r crm.int_intraday_result%ROWTYPE;
+BEGIN
+ IF TG_OP='DELETE' THEN t:=OLD.tenant_id;j_id:=OLD.job_id;
+ ELSE t:=NEW.tenant_id;j_id:=NEW.job_id; END IF;
+ SELECT * INTO j FROM crm.int_analytics_job_run WHERE tenant_id=t AND job_id=j_id;
+ SELECT * INTO r FROM crm.int_intraday_result WHERE tenant_id=t AND job_id=j_id;
+ IF (r.job_id IS NOT NULL AND (j.job_id IS NULL OR j.job_type<>'INTRADAY'))
+ OR (j.job_type='INTRADAY' AND
+      ((j.status='COMPLETED') IS DISTINCT FROM (r.acknowledged_at IS NOT NULL)
+       OR (j.status='COMPLETED' AND (j.actual_as_of,j.source_revision) IS DISTINCT FROM (r.actual_as_of,r.source_revision))))
+ THEN RAISE EXCEPTION 'INT_INTRADAY_ATOMIC_PAIR' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER trg_int_intraday_job_pair AFTER INSERT OR UPDATE OR DELETE ON crm.int_analytics_job_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_intraday_assert_pair();
+CREATE CONSTRAINT TRIGGER trg_int_intraday_result_pair AFTER INSERT OR UPDATE OR DELETE ON crm.int_intraday_result
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION crm.int_intraday_assert_pair();
+
+CREATE FUNCTION crm.int_intraday_register(t uuid,j uuid,actor uuid,v bigint,d text,b timestamptz,e timestamptz)
+ RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ INSERT INTO crm.int_intraday_result(tenant_id,job_id,service_account_id,scope_version,scope_digest,day_start,day_end)
+ VALUES(t,j,actor,v,d,b,e);
+ RETURN true;
+END $$;
+
+CREATE FUNCTION crm.int_intraday_ack(t uuid,j uuid,w uuid,tok bigint,sl integer,actor uuid,d text,
+ a timestamptz,o timestamptz,rev bigint,n bigint,q text,reason text,digest text,ack timestamptz,deadline timestamptz)
+ RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE job crm.int_analytics_job_run%ROWTYPE;
+BEGIN
+ SELECT * INTO job FROM crm.int_analytics_job_run WHERE tenant_id=t AND job_id=j FOR UPDATE;
+ IF NOT FOUND OR job.job_type<>'INTRADAY' OR job.status<>'RUNNING' OR job.lease_owner IS DISTINCT FROM w
+ OR job.attempt_token<>tok OR job.cluster_slot<>sl OR job.lease_until<=clock_timestamp()
+ OR clock_timestamp()>=deadline OR ack>clock_timestamp()
+ OR NOT EXISTS(SELECT 1 FROM public.iam_workspace x JOIN public.org_organization org ON org.id=x.organization_id
+    WHERE x.id=t AND x.kind='ORGANIZATION' AND x.status='ACTIVE' AND org.status='ACTIVE')
+ OR job.calendar_version IS DISTINCT FROM (SELECT p.version FROM crm.int_calendar_policy p
+    WHERE p.tenant_id=t AND p.effective_from<=clock_timestamp() ORDER BY p.version DESC LIMIT 1)
+ THEN RAISE EXCEPTION 'INT_INTRADAY_ACK_FENCE' USING ERRCODE='23514'; END IF;
+ UPDATE crm.int_intraday_result SET actual_as_of=a,read_observed_at=o,source_revision=rev,
+  metric_value=n,quality=q,quality_reason=reason,result_digest=digest,acknowledged_at=ack
+ WHERE tenant_id=t AND job_id=j AND service_account_id=actor AND scope_digest=d
+  AND acknowledged_at IS NULL AND clock_timestamp()<day_end AND deadline<=day_end;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_INTRADAY_RESULT_FENCE' USING ERRCODE='23514'; END IF;
+ UPDATE crm.int_analytics_job_run SET status='COMPLETED',actual_as_of=a,source_revision=rev,
+  consecutive_failures=0,last_error_code=NULL,lease_owner=NULL,lease_until=NULL,cluster_slot=NULL,updated_at=clock_timestamp()
+ WHERE tenant_id=t AND job_id=j AND status='RUNNING' AND lease_owner=w AND attempt_token=tok
+  AND cluster_slot=sl AND lease_until>clock_timestamp() AND clock_timestamp()<deadline;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_INTRADAY_COMPLETION_FENCE' USING ERRCODE='23514'; END IF;
+ RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION crm.int_intraday_result_guard(),crm.int_intraday_assert_pair(),
+ crm.int_intraday_register(uuid,uuid,uuid,bigint,text,timestamptz,timestamptz),
+ crm.int_intraday_ack(uuid,uuid,uuid,bigint,integer,uuid,text,timestamptz,timestamptz,bigint,bigint,text,text,text,timestamptz,timestamptz)
+ FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_INTRADAY_FORWARD_ONLY'; END; $$;

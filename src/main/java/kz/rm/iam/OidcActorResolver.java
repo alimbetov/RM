@@ -30,6 +30,8 @@ public class OidcActorResolver {
                 throw new SecurityException("OIDC principal subject or expiry missing");
             var user=users.findByExternalSubject(subject)
                 .orElseThrow(()->new SecurityException("OIDC principal not linked to RM"));
+            if(user.getPrincipalKind()!=UserAccountEntity.PrincipalKind.HUMAN)
+                throw new SecurityException("Service principal cannot use user admission");
             if(user.getStatus()!=UserAccountEntity.Status.ACTIVE)
                 throw new SecurityException("OIDC user inactive");
             return new VerifiedActor(user.getId(),jwt.getExpiresAt());

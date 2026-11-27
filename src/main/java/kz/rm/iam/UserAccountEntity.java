@@ -15,6 +15,8 @@ public class UserAccountEntity {
     @Transient private String phoneE164;
     @Transient private String displayName;
     @Enumerated(EnumType.STRING) @Column(nullable=false, length=20) private Status status;
+    @Enumerated(EnumType.STRING) @Column(name="principal_kind",nullable=false,length=16)
+    private PrincipalKind principalKind=PrincipalKind.HUMAN;
     @Column(name="created_at", nullable=false) private Instant createdAt;
     @Column(name="updated_at", nullable=false) private Instant updatedAt;
     @Version @Column(name="row_version",nullable=false) private long rowVersion;
@@ -28,5 +30,7 @@ public class UserAccountEntity {
     }
     public UUID getId(){return id;}
     public Status getStatus(){return status;}
+    public PrincipalKind getPrincipalKind(){return principalKind;}
+    public enum PrincipalKind { HUMAN, SERVICE }
     public enum Status { PENDING, ACTIVE, SUSPENDED, DELETED }
 }
