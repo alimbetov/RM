@@ -80,9 +80,11 @@ class IntradayWorker {
                 .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials&client_id="+encode(client)+"&client_secret="+encode(secret))).build();
             var response=http.send(request,info->boundedBody());
             if(response.statusCode()!=200||response.body().length>65536)throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
-            var node=mapper.readTree(response.body()).path("access_token");
+            var root=mapper.readTree(response.body());
+            if(root==null||!root.isObject())throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
+            var node=root.path("access_token");
             if(!node.isString())throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
-            var token=node.asText();
+            var token=node.asString();
             if(token.isBlank()||token.length()>16384)throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
             return token;
         }catch(InterruptedException ex){Thread.currentThread().interrupt();throw new IllegalStateException("INT_SERVICE_TOKEN_INTERRUPTED");}

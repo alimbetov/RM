@@ -968,6 +968,9 @@ class AnalyticalJobFoundationQualificationTest {
             LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class)
                 .atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
             var checkout=context.getBean(kz.rm.autoorder.AutoOrderService.class);
+            var before=tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actor,t),t,1,day));
+            assertThat(before.result().value()).isEqualByComparingTo("2");
+            assertThat(before.result().quality()).isEqualTo(DataQuality.PARTIAL);
             var written=new java.util.concurrent.CountDownLatch(1);
             var allowCommit=new java.util.concurrent.CountDownLatch(1);
             var executor=java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -982,9 +985,24 @@ class AnalyticalJobFoundationQualificationTest {
             }));
             try{
                 assertThat(written.await(15,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-                var before=tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actor,t),t,1,day));
-                assertThat(before.result().value()).isEqualByComparingTo("2");
-                assertThat(before.result().quality()).isEqualTo(DataQuality.PARTIAL);
+                // Checkout holds workspace FOR UPDATE. An admitted service
+                // read must wait, not bypass that fence. The independent
+                // read-only RR oracle observes MVCC visibility separately.
+                var rr=new org.springframework.transaction.support.TransactionTemplate(manager);
+                rr.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+                rr.setReadOnly(true);rr.setTimeout(10);
+                var hiddenCutoff=rr.execute(status->{
+                    var cutoff=jdbc.queryForObject("SELECT transaction_timestamp()",OffsetDateTime.class);
+                    assertThat(jdbc.queryForObject("""
+                        SELECT count(DISTINCT l.order_id) FROM crm.sales_order_line l
+                        JOIN (SELECT tenant_id,order_id,min(occurred_at) AS event_at
+                            FROM crm.sales_order_status_event WHERE tenant_id=? AND event_type='PLACED'
+                            GROUP BY tenant_id,order_id HAVING count(*)=1) e
+                        ON (e.tenant_id,e.order_id)=(l.tenant_id,l.order_id)
+                        WHERE l.tenant_id=? AND e.event_at>=? AND e.event_at<?
+                        """,Long.class,t,t,day.atStartOfDay(java.time.ZoneId.of(zone)).toOffsetDateTime(),cutoff)).isEqualTo(2L);
+                    return cutoff.toInstant();
+                });
                 allowCommit.countDown();
                 UUID late=pending.get(15,java.util.concurrent.TimeUnit.SECONDS);
                 var after=tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actor,t),t,1,day));
@@ -994,11 +1012,11 @@ class AnalyticalJobFoundationQualificationTest {
                 var eventAt=jdbc.queryForObject("""
                     SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED'
                     """,OffsetDateTime.class,t,late).toInstant();
-                assertThat(eventAt).isBefore(before.result().observedAt());
+                assertThat(eventAt).isBefore(hiddenCutoff);
                 Long actualInterval=jdbc.queryForObject("""
                     SELECT count(DISTINCT order_id) FROM crm.sales_order_status_event
                     WHERE tenant_id=? AND event_type='PLACED' AND occurred_at>=? AND occurred_at<?
-                    """,Long.class,t,before.result().observedAt().atOffset(java.time.ZoneOffset.UTC),
+                    """,Long.class,t,hiddenCutoff.atOffset(java.time.ZoneOffset.UTC),
                     after.result().observedAt().atOffset(java.time.ZoneOffset.UTC));
                 assertThat(actualInterval).isZero();
                 assertThat(after.result().value().subtract(before.result().value())).isEqualByComparingTo("1");
