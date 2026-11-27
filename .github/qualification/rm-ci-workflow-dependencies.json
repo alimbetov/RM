@@ -273,11 +273,12 @@
     },
     {
       "path": ".github/workflows/rm-intelligence-targeted-pg.yml",
-      "reviewedBlob": "438038466c8e6abf77f7b2911365cdb5681bb2e2",
+      "reviewedBlob": "bbcdb22b33db26ef42d651da1a9d4c0a4edfc116",
       "domainHint": "INTELLIGENCE",
       "mandatoryRelease": false,
       "directReview": [
-        "TREE_INVENTORY_ONLY"
+        "TREE_INVENTORY_ONLY",
+        "ISOLATED_INTELLIGENCE_DIAGNOSTICS_ONLY"
       ],
       "closure": "UNQUALIFIED",
       "decision": "EXECUTE_REQUIRED"
