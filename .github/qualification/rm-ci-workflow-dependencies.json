@@ -167,13 +167,14 @@
     },
     {
       "path": ".github/workflows/rm-development-admission.yml",
-      "reviewedBlob": "9fdd4500ac845adfa54a47773ec1526d2d444b6d",
+      "reviewedBlob": "0b06b744c9c6a41b4a402885071522d007d710df",
       "domainHint": "CI",
       "mandatoryRelease": false,
       "directReview": [
         "DEVELOPMENT_ONLY",
         "LIVE_API_METADATA",
-        "NO_SELECTIVE_EXECUTION"
+        "NO_SELECTIVE_EXECUTION",
+        "INDEPENDENT_ALLOWLIST_AUDIT"
       ],
       "closure": "UNQUALIFIED",
       "decision": "EXECUTE_REQUIRED"

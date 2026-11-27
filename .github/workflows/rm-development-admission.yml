@@ -45,3 +45,24 @@ jobs:
           name: rm-development-admission-${{ github.sha }}
           path: rm-development-admission.json
           if-no-files-found: error
+  allowlist-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Verify allowlist and dependency audit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_ci_selective_allowlist.py' -v
+          python3 .github/scripts/verify_rm_ci_selective_allowlist.py > rm-ci-selective-allowlist-audit.json
+      - name: Publish dependency audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-ci-selective-allowlist-audit-${{ github.sha }}
+          path: rm-ci-selective-allowlist-audit.json
+          if-no-files-found: error
