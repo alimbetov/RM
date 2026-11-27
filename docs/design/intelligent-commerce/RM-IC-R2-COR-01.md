@@ -25,3 +25,7 @@ Source baseline main 956e1f9c44a58d2951f7c53b853f4dffadf2b64f (B5.4). Selected r
 | COR-01.8 | Architectural acceptance, resume existing S1–S6 | HOLD |
 
 First technical question after recovery: how can existing AuthorizedAnalyticalReadService / L3DerivedSeriesService and generation coverage contract supply BOOKED_ORDERS with source completeness evidence without a new calculation path? Compare exact scopes and zero semantics first, no production code before design review. Existing D08, MIC, DAG, separate Radar and production gates remain.
+
+
+## COR-01.1–01.2 source review — 2026-11-27
+[Actual aggregate and DQR responsibility audit](RM-IC-R2-COR-01.1-01.2-AUDIT.md) records full changed-file inventory and inspected methods. Restored base_dev a2fdfb0 matches B5.5 tree; targeted PASS, exact-SHA pending at entry. Critical pre-existing B4 issue: current proof status reruns independent whole-tenant parity for each eligible anchor/metric. No disabling forged-proof protection; B4 change control required. Historical completeness distinct. COR-01.3 next: proof identity/lock/query-cost and migration compatibility review; COR-01.4 minimal integration proposal before owner approval. No runtime changes.

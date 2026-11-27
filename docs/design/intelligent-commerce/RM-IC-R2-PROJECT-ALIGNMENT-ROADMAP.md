@@ -61,3 +61,7 @@ Product concept and B4 FREEZE; design inconsistencies reconciled; remaining engi
 
 ## 2026-11-27 — Architecture correction and development governance
 Owner agreed to [RM-DEV-GOV-R1](RM-DEV-GOV-R1.md), [single engine contract](RM-IC-SINGLE-ENGINE-CONTRACT-R1.md) and [COR-01](RM-IC-R2-COR-01.md). This supersedes historical NEXT labels for S0/B5.5 and DQR Q4.2/Q5: preserve qualified B5.5 baseline 632f803; next COR-01 source recovery and reuse/authority review, then resume existing S1–S6 only after explicit owner acceptance. B4/API/product concept freeze, D08 OPEN and production HOLD remain; no new DAG node, duplicate engine or runtime admission. Source recovery does not roll back database migrations.
+
+
+## COR-01.1–01.2 source review — 2026-11-27
+[Actual aggregate and DQR responsibility audit](RM-IC-R2-COR-01.1-01.2-AUDIT.md) records full changed-file inventory and inspected methods. Restored base_dev a2fdfb0 matches B5.5 tree; targeted PASS, exact-SHA pending at entry. Critical pre-existing B4 issue: current proof status reruns independent whole-tenant parity for each eligible anchor/metric. No disabling forged-proof protection; B4 change control required. Historical completeness distinct. COR-01.3 next: proof identity/lock/query-cost and migration compatibility review; COR-01.4 minimal integration proposal before owner approval. No runtime changes.
