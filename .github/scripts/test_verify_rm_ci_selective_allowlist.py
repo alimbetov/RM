@@ -80,6 +80,28 @@ class SelectiveAllowlistTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             inspect_diff(self.root, other, self.commit(), self.candidate)
 
+    def test_transient_dependency_change_and_revert_denied(self):
+        self.write("src/Main.java", "class Main { int transientValue; }")
+        self.commit()
+        self.write("src/Main.java", "class Main {}")
+        self.commit()
+        self.write(self.candidate, "changed note")
+        self.assertFalse(inspect_diff(self.root, self.base, self.commit(), self.candidate))
+
+    def test_linear_document_only_history_accepted(self):
+        self.write(self.candidate, "first correction")
+        self.commit()
+        self.write(self.candidate, "second correction")
+        self.assertTrue(inspect_diff(self.root, self.base, self.commit(), self.candidate))
+
+    def test_merge_history_denied(self):
+        self.git("checkout", "-b", "fixture-side")
+        self.write(self.candidate, "side correction")
+        self.commit()
+        self.git("checkout", "--detach", self.base)
+        self.git("merge", "--no-ff", "-m", "fixture merge", "fixture-side")
+        self.assertFalse(inspect_diff(self.root, self.base, self.git("rev-parse", "HEAD"), self.candidate))
+
     def test_review_fingerprint_changes_on_dependency_drift(self):
         initial = tracked(self.root, self.base)
         count, digest = dependency_fingerprint(initial, self.candidate)

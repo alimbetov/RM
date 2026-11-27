@@ -125,7 +125,32 @@ def inspect_diff(root, before, head, candidate):
         content = git(root, "show", commit + ":" + candidate)
         require(b"\0" not in content, "BINARY_DOCUMENT")
         content.decode("utf-8", errors="strict")
-    return True
+    # The endpoint tree comparison alone hides transient changes that were
+    # reverted within the push. Every commit must be a single-parent edit of
+    # the same existing regular document, with no other changed tree entry.
+    # Limit the work and fail closed for merges or unexpectedly long ranges.
+    history = git(root, "rev-list", "--reverse", "--parents", "--max-count=129",
+                  before + ".." + head).decode("ascii").splitlines()
+    if not history or len(history) > 128:
+        return False
+    parent = before
+    parent_tree = old
+    for line in history:
+        parts = line.split()
+        if len(parts) != 2 or parts[1] != parent:
+            return False
+        commit = parts[0]
+        current = tracked(root, commit)
+        changed = {p for p in parent_tree.keys() | current.keys()
+                   if parent_tree.get(p) != current.get(p)}
+        if (changed != {candidate} or candidate not in current
+                or current[candidate][0] != "100644"):
+            return False
+        body = git(root, "show", commit + ":" + candidate)
+        require(b"\0" not in body, "BINARY_DOCUMENT")
+        body.decode("utf-8", errors="strict")
+        parent, parent_tree = commit, current
+    return parent == head
 
 def grep(root, commit, patterns, paths, fixed=True):
     args = ["git", "grep", "-n", "-I", "-F" if fixed else "-E"]
