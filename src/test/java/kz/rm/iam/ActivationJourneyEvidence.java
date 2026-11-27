@@ -50,6 +50,7 @@ final class ActivationJourneyEvidence {
         assertThat(reader.read(staff,tenant,readQuery).route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
         var reuse=new SnapshotProofReuseEvidence(context,jdbc,manager);
         reuse.verify(staff,tenant,readQuery,first,firstActivation.activeProof(),MultidimensionalCoverageService.Status.CURRENT);
+        reuse.verifyReportDenied(staff,tenant,readQuery);
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),foreign=UUID.randomUUID();
         var pa=prepare(l1,l2,l3,coverage,tenant,a,calendar,from,until,zone);
         var pb=prepare(l1,l2,l3,coverage,tenant,b,calendar,from,until,zone);

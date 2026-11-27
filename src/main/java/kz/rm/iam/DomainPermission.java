@@ -43,7 +43,11 @@ public enum DomainPermission {
     STOREFRONT_OFFER_PUBLISH(DomainModule.SALES),
     TASK_READ(DomainModule.TASKS),
     TASK_MANAGE(DomainModule.TASKS),
-    TASK_EXECUTE(DomainModule.TASKS);
+    TASK_EXECUTE(DomainModule.TASKS),
+    REPORT_READ(DomainModule.INTELLIGENCE),
+    REPORT_GENERATE(DomainModule.INTELLIGENCE),
+    REPORT_AUDIENCE_MANAGE(DomainModule.INTELLIGENCE),
+    REPORT_RETENTION_MANAGE(DomainModule.INTELLIGENCE);
 
     private final DomainModule module;
     DomainPermission(DomainModule module) { this.module = module; }

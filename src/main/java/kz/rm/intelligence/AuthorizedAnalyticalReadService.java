@@ -64,6 +64,22 @@ public class AuthorizedAnalyticalReadService {
     }
     /** B5.4: bounded same-grain metric windows in one authorized snapshot. */
     List<List<Result>> readMetricWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors){
+        return readWindows(actor,tenant,queries,anchors,false);
+    }
+
+    /** Internal report candidate only. Exactly 24 consecutive closed months.
+     * Does not grant publication, historical completeness or transport access. */
+    ReportSourceManifest readReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries){
+        var qs=List.copyOf(queries);
+        if(qs.isEmpty()||qs.size()>3)throw new IllegalArgumentException("REPORT_METRIC_WINDOW");
+        var end=qs.getFirst().anchor();
+        if(end.getDayOfMonth()!=1||qs.stream().anyMatch(q->q.period()!=PeriodResolver.Code.M))
+            throw new IllegalArgumentException("REPORT_MONTH_ANCHOR");
+        var dates=java.util.stream.IntStream.range(0,24).mapToObj(i->end.minusMonths(23-i)).toList();
+        var windows=readWindows(actor,tenant,qs,dates,true);
+        return ReportSourceManifest.from(tenant,qs,windows);
+    }
+    private List<List<Result>> readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         var qs=List.copyOf(queries);
         if(qs.isEmpty()||qs.size()>3||qs.stream().map(Query::metric).distinct().count()!=qs.size())
@@ -75,13 +91,14 @@ public class AuthorizedAnalyticalReadService {
             ||!q.warehouses().equals(q0.warehouses())))
             throw new IllegalArgumentException("ANALYTICAL_METRIC_SCOPE");
         var dates=List.copyOf(anchors);
-        if(dates.isEmpty()||dates.size()>12||new HashSet<>(dates).size()!=dates.size())
+        if(dates.isEmpty()||dates.size()>(report?24:12)||new HashSet<>(dates).size()!=dates.size())
             throw new IllegalArgumentException("ANALYTICAL_WINDOW_SIZE");
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("ANALYTICAL_OWN_TRANSACTION");
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(outer->{
+            if(report)l3.admitReport(actor,tenant);
             for(var q:qs)l3.admit(actor,tenant,L3DerivedSeriesService.Metric.valueOf(q.metric().name()),
                 new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
             var snapshot=new TransactionTemplate(manager);
@@ -92,6 +109,12 @@ public class AuthorizedAnalyticalReadService {
                 // Reuse only within this read-only RR snapshot; every new request
                 // still runs the full independent proof validation.
                 var checkedProofs=new HashMap<ProofKey,MultidimensionalCoverageService.Status>();
+                if(report){
+                    String zone=jdbc.queryForObject("SELECT zone_id FROM crm.int_calendar_policy WHERE tenant_id=? AND version=?",String.class,tenant,q0.calendarVersion());
+                    var last=PeriodResolver.resolve(PeriodResolver.Code.M,dates.getLast(),new PeriodResolver.Policy(ZoneId.of(zone),q0.calendarVersion()));
+                    Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
+                    if(last.endExclusive().isAfter(now))throw new IllegalArgumentException("REPORT_MONTH_NOT_CLOSED");
+                }
                 return qs.stream().map(query->{
                     var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
                     var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());

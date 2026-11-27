@@ -310,7 +310,8 @@ public class TenantAuthorization {
                  INVENTORY_FULFILL, FILES_UPLOAD, FILES_READ, FILES_ATTACH,
                  FILES_DETACH, FILES_DELETE, CATALOG_READ, CATALOG_WRITE,
                  CATALOG_PRICE_MANAGE, CATALOG_PUBLISH,
-                 STOREFRONT_OFFER_MANAGE, STOREFRONT_OFFER_PUBLISH, TASK_MANAGE, TASK_EXECUTE -> false;
+                 STOREFRONT_OFFER_MANAGE, STOREFRONT_OFFER_PUBLISH, TASK_MANAGE, TASK_EXECUTE,
+                 REPORT_READ, REPORT_GENERATE, REPORT_AUDIENCE_MANAGE, REPORT_RETENTION_MANAGE -> false;
             case CRM_PII_READ -> role == OrganizationMembershipEntity.Role.OWNER
                 || role == OrganizationMembershipEntity.Role.ADMIN
                 || role == OrganizationMembershipEntity.Role.MANAGER;

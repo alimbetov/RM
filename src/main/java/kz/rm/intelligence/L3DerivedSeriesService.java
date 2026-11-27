@@ -77,6 +77,9 @@ class L3DerivedSeriesService {
             return readSnapshot(tenant,generation,metric,filter,code,anchor,window,proofId,actor.userId().toString());
         });
     }
+    void admitReport(VerifiedActor actor,UUID tenant){
+        authorization.requireForCommand(actor.userId(),tenant,DomainPermission.REPORT_GENERATE);
+    }
     void admit(VerifiedActor actor,UUID tenant,Metric metric,Filter filter){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);Objects.requireNonNull(metric);Objects.requireNonNull(filter);
         if(!TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("DERIVED_AUTH_TRANSACTION_REQUIRED");
