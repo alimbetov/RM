@@ -57,3 +57,7 @@ Original 15 A2 decisions OWNER_APPROVED in base_dev source JSON, not global R2/r
 | REV-14 | GATE_PENDING | MPC-1 binding and MOCK-0.2 actual binary qualification |
 
 Product concept and B4 FREEZE; design inconsistencies reconciled; remaining engineering gates stay open. S0/B5.5 NEXT, no new DAG stage.
+
+
+## 2026-11-27 — Architecture correction and development governance
+Owner agreed to [RM-DEV-GOV-R1](RM-DEV-GOV-R1.md), [single engine contract](RM-IC-SINGLE-ENGINE-CONTRACT-R1.md) and [COR-01](RM-IC-R2-COR-01.md). This supersedes historical NEXT labels for S0/B5.5 and DQR Q4.2/Q5: preserve qualified B5.5 baseline 632f803; next COR-01 source recovery and reuse/authority review, then resume existing S1–S6 only after explicit owner acceptance. B4/API/product concept freeze, D08 OPEN and production HOLD remain; no new DAG node, duplicate engine or runtime admission. Source recovery does not roll back database migrations.
