@@ -16,6 +16,11 @@ import java.util.UUID;
 
 /** RM-ARS-R1 canonical dataset encoding v1. Integrity only, not authorization or source completeness. */
 final class ReportDatasetDigest {
+    static final int MAX_ROWS = 10_000;
+    static final int MAX_DIMENSIONS = 32;
+    static final int MAX_ROW_BYTES = 16 * 1024;
+    static final long MAX_DATASET_BYTES = 32L * 1024 * 1024;
+    private static final int MAX_TOKEN_LENGTH = 128;
     private static final String SCHEMA = "RM-ARS-DATASET-1";
     private static final DateTimeFormatter TIMESTAMP = new DateTimeFormatterBuilder().appendInstant(6).toFormatter();
     private static final Comparator<Dimension> DIMENSION_ORDER = Comparator.comparing(Dimension::kind)
@@ -51,6 +56,9 @@ final class ReportDatasetDigest {
             if (currency != null && !currency.matches("[A-Z]{3}")) throw new IllegalArgumentException("REPORT_CURRENCY");
             if (reason != null) requireToken(reason);
             Objects.requireNonNull(quality);
+            Objects.requireNonNull(dimensions);
+            if (dimensions.size() > MAX_DIMENSIONS) throw new IllegalArgumentException("REPORT_DIMENSION_BUDGET");
+            decimal(value);
             var sorted = new ArrayList<>(List.copyOf(dimensions));
             sorted.sort(DIMENSION_ORDER);
             for (int i = 1; i < sorted.size(); i++) {
@@ -84,6 +92,7 @@ final class ReportDatasetDigest {
     void append(Row row) {
         requireOpen();
         Objects.requireNonNull(row);
+        if (rows >= MAX_ROWS) throw new IllegalArgumentException("REPORT_ROW_BUDGET");
         if (row.rowKey() != Math.addExact(rows, 1)) throw new IllegalArgumentException("REPORT_ROW_SEQUENCE");
         var dimensions = new StringBuilder("[");
         for (var d : row.dimensions()) {
@@ -96,6 +105,13 @@ final class ReportDatasetDigest {
             + quote(timestamp(row.untilExclusive())) + "," + dimensions + "," + quote(row.unit()) + ","
             + quote(row.currency()) + "," + quote(decimal(row.value())) + "," + quote(row.quality().name())
             + "," + quote(row.reason()) + "]";
+        // All row fields are restricted to ASCII; length is exact UTF-8 length.
+        if (encoded.length() > MAX_ROW_BYTES) throw new IllegalArgumentException("REPORT_ROW_BYTE_BUDGET");
+        long framedBytes = encoded.length() + Integer.toString(encoded.length()).length() + 1L;
+        int footerLength = Long.toString(rows + 1).length();
+        long footerBytes = footerLength + Integer.toString(footerLength).length() + 1L;
+        if (bytes + framedBytes + footerBytes > MAX_DATASET_BYTES)
+            throw new IllegalArgumentException("REPORT_DATASET_BYTE_BUDGET");
         frame(encoded);
         rows++;
     }
@@ -135,7 +151,17 @@ final class ReportDatasetDigest {
     private static String decimal(BigDecimal value) {
         if (value == null) return null;
         if (value.signum() == 0) return "0";
-        return value.stripTrailingZeros().toPlainString();
+        // Bound precision before stripping and compute plain length in long
+        // arithmetic before materializing exponent-expanded decimal text.
+        if (value.precision() > MAX_ROW_BYTES) throw new IllegalArgumentException("REPORT_DECIMAL_BUDGET");
+        BigDecimal normalized;
+        try { normalized = value.stripTrailingZeros(); }
+        catch (ArithmeticException e) { throw new IllegalArgumentException("REPORT_DECIMAL_BUDGET", e); }
+        long precision = normalized.precision(), scale = normalized.scale();
+        long length = scale <= 0 ? precision - scale : Math.max(precision + 1, scale + 2);
+        if (normalized.signum() < 0) length++;
+        if (length > MAX_ROW_BYTES) throw new IllegalArgumentException("REPORT_DECIMAL_BUDGET");
+        return normalized.toPlainString();
     }
 
     private static void requireDigest(String value) {
@@ -144,7 +170,7 @@ final class ReportDatasetDigest {
 
     private static void requireToken(String value) {
         // Closed ASCII identifier alphabet: excludes JSON escapes and localized/user text.
-        if (value == null || !value.matches("[A-Za-z0-9_.:-]+"))
+        if (value == null || value.length() > MAX_TOKEN_LENGTH || !value.matches("[A-Za-z0-9_.:-]+"))
             throw new IllegalArgumentException("REPORT_CANONICAL_TOKEN");
     }
 

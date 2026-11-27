@@ -85,6 +85,15 @@ class ReportDatasetDigestTest {
 
     @Test
     void rejectsInvalidCanonicalInputs() {
+        assertThrows(IllegalArgumentException.class, () -> row(1, new BigDecimal("1E+1000000"), List.of()));
+        assertThrows(IllegalArgumentException.class, () -> row(1, new BigDecimal("1E-1000000"), List.of()));
+        assertThrows(IllegalArgumentException.class, () -> new ReportDatasetDigest.Dimension("SKU", "a".repeat(129), 1));
+        assertThrows(IllegalArgumentException.class, () -> row(1, BigDecimal.ONE,
+            java.util.stream.IntStream.range(0,33).mapToObj(i->new ReportDatasetDigest.Dimension("SKU","id"+i,1)).toList()));
+        var encoder = new ReportDatasetDigest(header(TENANT));
+        assertThrows(IllegalArgumentException.class, () -> encoder.append(row(1, new BigDecimal("1E+16383"), List.of())));
+        encoder.append(row(1, BigDecimal.ONE, List.of()));
+        assertEquals(1, encoder.finish().rows());
         assertThrows(IllegalArgumentException.class, () -> new ReportDatasetDigest.Header(TENANT, DATASET, "x", "1".repeat(64)));
         assertThrows(IllegalArgumentException.class, () -> new ReportDatasetDigest.Dimension("SKU", "bad\"id", 1));
         assertThrows(IllegalArgumentException.class, () -> new ReportDatasetDigest.Row(1, "BOOKED_AMOUNT", 1,
