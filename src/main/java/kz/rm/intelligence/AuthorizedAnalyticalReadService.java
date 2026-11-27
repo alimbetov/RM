@@ -121,6 +121,21 @@ public class AuthorizedAnalyticalReadService {
             if(time.isBefore(period.startInclusive())||!time.isBefore(period.endExclusive()))
                 throw new IllegalStateException("INT_INTRADAY_DAY_DRIFT");
             long revision=sourceRevision(tenant);
+            // Diagnostic only: the existing ownerValue remains the sole metric
+            // calculation. Group all visible PLACED events for candidate orders
+            // before the cutoff test (including duplicates outside the cutoff).
+            boolean ambiguous=Boolean.TRUE.equals(jdbc.queryForObject("""
+                WITH candidates AS (
+                    SELECT DISTINCT order_id FROM crm.sales_order_status_event
+                    WHERE tenant_id=? AND event_type='PLACED' AND occurred_at>=? AND occurred_at<?
+                )
+                SELECT EXISTS(
+                    SELECT 1 FROM candidates c
+                    WHERE (SELECT count(*) FROM crm.sales_order_status_event e
+                        WHERE e.tenant_id=? AND e.order_id=c.order_id AND e.event_type='PLACED')<>1
+                    OR NOT EXISTS(SELECT 1 FROM crm.sales_order_line l WHERE l.tenant_id=? AND l.order_id=c.order_id))
+                """,Boolean.class,tenant,Timestamp.from(period.startInclusive()),Timestamp.from(time),tenant,tenant));
+            if(ambiguous)throw new IllegalStateException("INT_INTRADAY_SOURCE_AMBIGUOUS");
             var metric=L3DerivedSeriesService.Metric.BOOKED_ORDERS;
             var q=new Query(Metric.BOOKED_ORDERS,calendar,PeriodResolver.Code.D,day,null,null,null,List.of(),null);
             var value=ownerValue(tenant,metric,new L3DerivedSeriesService.Filter(null,null,null,List.of(),null),period,time);

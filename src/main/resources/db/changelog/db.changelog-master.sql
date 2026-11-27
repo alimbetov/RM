@@ -7243,6 +7243,13 @@ CREATE FUNCTION crm.int_intraday_assert_pair() RETURNS trigger LANGUAGE plpgsql 
  SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid; j_id uuid; j crm.int_analytics_job_run%ROWTYPE; r crm.int_intraday_result%ROWTYPE;
 BEGIN
+ IF TG_TABLE_NAME='int_analytics_job_run' THEN
+   IF TG_OP='DELETE' THEN
+     IF OLD.job_type<>'INTRADAY' THEN RETURN NULL; END IF;
+   ELSE
+     IF NEW.job_type<>'INTRADAY' THEN RETURN NULL; END IF;
+   END IF;
+ END IF;
  IF TG_OP='DELETE' THEN t:=OLD.tenant_id;j_id:=OLD.job_id;
  ELSE t:=NEW.tenant_id;j_id:=NEW.job_id; END IF;
  SELECT * INTO j FROM crm.int_analytics_job_run WHERE tenant_id=t AND job_id=j_id;
@@ -7282,6 +7289,20 @@ BEGIN
     WHERE x.id=t AND x.kind='ORGANIZATION' AND x.status='ACTIVE' AND org.status='ACTIVE')
  OR job.calendar_version IS DISTINCT FROM (SELECT p.version FROM crm.int_calendar_policy p
     WHERE p.tenant_id=t AND p.effective_from<=clock_timestamp() ORDER BY p.version DESC LIMIT 1)
+ OR NOT EXISTS(SELECT 1 FROM public.iam_user_account u
+    JOIN public.iam_workspace x ON x.id=t
+    JOIN public.iam_org_membership m ON m.organization_id=x.organization_id AND m.user_id=u.id
+    JOIN public.iam_tenant_rbac_config cfg ON cfg.tenant_id=x.id
+    WHERE u.id=actor AND u.status='ACTIVE' AND u.principal_kind='SERVICE'
+      AND m.status='ACTIVE' AND m.role='MEMBER' AND cfg.enforced
+      AND EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+        JOIN public.iam_tenant_role rr ON rr.tenant_id=a.tenant_id AND rr.id=a.role_id
+        JOIN public.iam_tenant_role_permission p ON p.tenant_id=rr.tenant_id AND p.role_id=rr.id
+        WHERE a.tenant_id=t AND a.user_id=actor AND rr.active AND p.permission_code='SALES_ORDER_READ')
+      AND NOT EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+        JOIN public.iam_tenant_role rr ON rr.tenant_id=a.tenant_id AND rr.id=a.role_id
+        JOIN public.iam_tenant_role_permission p ON p.tenant_id=rr.tenant_id AND p.role_id=rr.id
+        WHERE a.tenant_id=t AND a.user_id=actor AND rr.active AND p.permission_code<>'SALES_ORDER_READ'))
  THEN RAISE EXCEPTION 'INT_INTRADAY_ACK_FENCE' USING ERRCODE='23514'; END IF;
  UPDATE crm.int_intraday_result SET actual_as_of=a,read_observed_at=o,source_revision=rev,
   metric_value=n,quality=q,quality_reason=reason,result_digest=digest,acknowledged_at=ack

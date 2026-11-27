@@ -360,6 +360,10 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerIntradayUntrustedRoleDeniedPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayAmbiguousSourceOutsideCutoffPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

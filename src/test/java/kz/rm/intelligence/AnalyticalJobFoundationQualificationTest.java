@@ -919,4 +919,35 @@ class AnalyticalJobFoundationQualificationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_roles WHERE rolname=?",Integer.class,role)).isZero();
     }
 
+
+    @Test void schedulerIntradayAmbiguousSourceOutsideCutoffPg() throws Exception {
+        String zone=currentIntradayZone();UUID t=ownerFacts(zone).tenant();
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID account=serviceMember(t,issuer);
+            var actor=issuer.resolveService(jdbc,users,account,kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID);
+            LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class)
+                .atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
+            var scope=new IntradayResultStore.Scope(t,account,1,day,7);
+            UUID job=intradayStore.plan(scope).orElseThrow();
+            // Deliberate corrupt-source fixture, not an owner operation:
+            // duplicate PLACED visible in RR but event time beyond cutoff.
+            UUID order=jdbc.queryForObject("""
+                SELECT order_id FROM crm.sales_order_status_event WHERE tenant_id=? AND event_type='PLACED'
+                ORDER BY order_id LIMIT 1
+                """,UUID.class,t);
+            jdbc.update("""
+                INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at)
+                VALUES (?,?,?,'PLACED',clock_timestamp()+interval '2 days')
+                """,t,UUID.randomUUID(),order);
+            var claim=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),1,300).orElseThrow();
+            try{
+                assertThatThrownBy(()->intradayStore.execute(claim,scope,actor)).hasMessage("INT_INTRADAY_SOURCE_AMBIGUOUS");
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id=? AND acknowledged_at IS NOT NULL",Integer.class,t)).isZero();
+                assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",String.class,t,job)).isEqualTo("RUNNING");
+            }finally{
+                assertThat(jobs.block(claim,AnalyticalJobRepository.Failure.SOURCE_INCOMPLETE)).isTrue();
+            }
+        }
+    }
+
 }
