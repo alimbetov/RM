@@ -117,7 +117,29 @@ class AnalyticalJobRepository {
     private static final String FENCE = """
         WHERE tenant_id=? AND job_id=? AND status='RUNNING' AND lease_owner=?
           AND attempt_token=? AND cluster_slot=? AND lease_until>clock_timestamp()
+          AND generation_id=? AND calendar_version=? AND from_day=? AND until_day=?
+          AND expected_previous IS NOT DISTINCT FROM CAST(? AS uuid)
         """;
+    // Use the persisted job's scope and current owner records in the same
+    // statement snapshot. R1.2 must repeat this under the activation locks.
+    private static final String CURRENT_POLICY = """
+        AND EXISTS(SELECT 1 FROM public.iam_workspace w JOIN public.org_organization o
+            ON o.id=w.organization_id WHERE w.id=j.tenant_id
+              AND w.kind='ORGANIZATION' AND w.status='ACTIVE' AND o.status='ACTIVE')
+        AND j.calendar_version=(SELECT p.version FROM crm.int_calendar_policy p
+            WHERE p.tenant_id=j.tenant_id AND p.effective_from<=clock_timestamp()
+            ORDER BY p.version DESC LIMIT 1)
+        AND j.expected_previous IS NOT DISTINCT FROM (SELECT a.generation_id
+            FROM crm.int_active_generation a WHERE a.tenant_id=j.tenant_id AND a.projection_code='L3')
+        """;
+
+    private static Object[] fenceArgs(Claim c,Object... prefix){
+        Objects.requireNonNull(c);
+        var args=new ArrayList<Object>(Arrays.asList(prefix));
+        Collections.addAll(args,c.tenant(),c.job(),c.worker(),c.token(),c.slot(),c.generation(),
+            c.calendar(),c.from(),c.until(),c.expectedPrevious());
+        return args.toArray();
+    }
 
     private Instant dbNow() {
         return Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class)).toInstant();
@@ -176,15 +198,16 @@ class AnalyticalJobRepository {
 
     /** Expired NIGHT first, then one due PENDING in a free numbered slot.
      * The unique indexes, not the pre-read, arbitrate concurrent claims. */
-    Optional<Claim> claimNext(UUID worker,Set<UUID> pilot,int clusterLimit,int leaseSeconds) {
+    Optional<Claim> claimNext(UUID worker,Map<UUID,LocalDate> pilot,int clusterLimit,int leaseSeconds) {
         Objects.requireNonNull(worker);Objects.requireNonNull(pilot);
         if(pilot.isEmpty()||pilot.size()>1000||clusterLimit<1||clusterLimit>4||leaseSeconds<1||leaseSeconds>900)
             throw new IllegalArgumentException("INT_JOB_CLAIM_LIMIT");
-        var tenants=pilot.stream().sorted().toList();
+        var scopes=Map.copyOf(pilot);
+        var tenants=scopes.keySet().stream().sorted().toList();
         String in=String.join(",",Collections.nCopies(tenants.size(),"?"));
         for(int attempt=0;attempt<2;attempt++){
             try {
-                return ownTx(()->claimOnce(worker,tenants,in,clusterLimit,leaseSeconds));
+                return ownTx(()->claimOnce(worker,scopes,tenants,in,clusterLimit,leaseSeconds));
             } catch(DuplicateKeyException e) {
                 if(!knownClaimRace(e))throw e;
                 // Rollback occurred before retry; never continue an aborted transaction.
@@ -192,7 +215,7 @@ class AnalyticalJobRepository {
         }
         return Optional.empty();
     }
-    private Optional<Claim> claimOnce(UUID worker,List<UUID> tenants,String in,int limit,int seconds) {
+    private Optional<Claim> claimOnce(UUID worker,Map<UUID,LocalDate> scopes,List<UUID> tenants,String in,int limit,int seconds) {
         if(Boolean.TRUE.equals(jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM crm.int_analytics_job_run
                 WHERE status='RUNNING' AND cluster_slot>?)
@@ -243,15 +266,17 @@ class AnalyticalJobRepository {
                 chosen.job(),oldState,chosen.token()).stream().findFirst();
         if(claimed.isEmpty())throw new IllegalStateException("INT_JOB_LOCKED_CLAIM_LOST");
         Claim c=claimed.get();
-        if(!currentPolicy(c)){
+        long days=ChronoUnit.DAYS.between(c.from(),c.until());
+        if(!Objects.equals(scopes.get(c.tenant()),c.from())||days<7||days>31||!currentPolicy(c)){
             if(!release(c,"BLOCKED",Failure.POLICY_CHANGED))throw new IllegalStateException("INT_JOB_POLICY_FENCE_LOST");
             return Optional.empty();
         }
         return claimed;
     }
     private boolean currentPolicy(Claim c) {
-        return activeTenant(c.tenant())&&effectiveCalendar(c.tenant(),dbNow())
-            .map(p->p.version()==c.calendar()).orElse(false);
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM crm.int_analytics_job_run j "+FENCE+CURRENT_POLICY+")",
+            Boolean.class,fenceArgs(c)));
     }
     private static JobKey key(java.sql.ResultSet rs) throws SQLException {
         return new JobKey(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getInt(3),rs.getLong(4));
@@ -276,13 +301,17 @@ class AnalyticalJobRepository {
         Objects.requireNonNull(c);
         if(seconds<1||seconds>900)throw new IllegalArgumentException("INT_JOB_LEASE_LIMIT");
         return ownTx(()->{
-            if(!currentPolicy(c))return Optional.empty();
-            return jdbc.query("""
-                UPDATE crm.int_analytics_job_run
+            var renewed=jdbc.query("""
+                UPDATE crm.int_analytics_job_run j
                 SET lease_until=greatest(lease_until,clock_timestamp()+make_interval(secs=>?)),
                     updated_at=clock_timestamp()
-                """+FENCE+" RETURNING lease_until",(rs,n)->rs.getObject(1,OffsetDateTime.class).toInstant(),
-                seconds,c.tenant(),c.job(),c.worker(),c.token(),c.slot()).stream().findFirst();
+                """+FENCE+CURRENT_POLICY+" RETURNING lease_until",
+                (rs,n)->rs.getObject(1,OffsetDateTime.class).toInstant(),
+                fenceArgs(c,seconds)).stream().findFirst();
+            // A stale or forged claim cannot release the current owner's row.
+            // A live claim with a changed owner policy is fenced BLOCKED.
+            if(renewed.isEmpty()&&!currentPolicy(c))release(c,"BLOCKED",Failure.POLICY_CHANGED);
+            return renewed;
         });
     }
     boolean yieldProgress(Claim c){return ownTx(()->release(c,"PENDING",null));}
@@ -301,7 +330,7 @@ class AnalyticalJobRepository {
                 WHEN 0 THEN 60 WHEN 1 THEN 300 ELSE 900 END),
               consecutive_failures=consecutive_failures+1,last_error_code=?,
               lease_owner=NULL,lease_until=NULL,cluster_slot=NULL,updated_at=clock_timestamp()
-            """+FENCE,reason.name(),c.tenant(),c.job(),c.worker(),c.token(),c.slot())==1);
+            """+FENCE,fenceArgs(c,reason.name()))==1);
     }
     private boolean release(Claim c,String state,Failure reason){
         return jdbc.update("""
@@ -309,8 +338,7 @@ class AnalyticalJobRepository {
               consecutive_failures=CASE WHEN ?='PENDING' THEN 0 ELSE consecutive_failures END,
               next_attempt_at=clock_timestamp()+interval '1 second',
               lease_owner=NULL,lease_until=NULL,cluster_slot=NULL,updated_at=clock_timestamp()
-            """+FENCE,state,reason==null?null:reason.name(),state,
-            c.tenant(),c.job(),c.worker(),c.token(),c.slot())==1;
+            """+FENCE,fenceArgs(c,state,reason==null?null:reason.name(),state))==1;
     }
 
     private static OffsetDateTime utc(Instant value) {

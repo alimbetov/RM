@@ -89,6 +89,7 @@ class AnalyticalJobFoundationQualificationTest {
     }
 
     @Autowired AnalyticalJobRepository jobs;
+    @Autowired org.springframework.context.ApplicationContext context;
 
     private AnalyticalJobRepository.NightSpec spec(UUID t, int hour, LocalDate from) {
         var slot=java.time.Instant.parse("2026-11-26T00:15:00Z").plusSeconds(hour*3600L);
@@ -208,7 +209,7 @@ class AnalyticalJobFoundationQualificationTest {
         UUID t=activeTenant(),other=activeTenant(),a=UUID.randomUUID(),b=UUID.randomUUID();
         enqueue(t,"NIGHT",0,1);enqueue(other,"NIGHT",0,1);
         // Existing fixture slots are historically dated; use DB clock for claim eligibility.
-        var tenants=java.util.Set.of(t,other);
+        var tenants=java.util.Map.of(t,LocalDate.of(2026,11,1),other,LocalDate.of(2026,11,1));
         var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
         var start=new java.util.concurrent.CountDownLatch(1);
         try {
@@ -225,7 +226,7 @@ class AnalyticalJobFoundationQualificationTest {
         } finally {pool.shutdownNow();}
         // Separate tenant, cap 1: expired claim must be reclaimed even with no free slot.
         UUID recovery=activeTenant();enqueue(recovery,"NIGHT",0,1);
-        var scope=java.util.Set.of(recovery);
+        var scope=java.util.Map.of(recovery,LocalDate.of(2026,11,1));
         var old=jobs.claimNext(a,scope,1,1).orElseThrow();
         long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
         while(Boolean.TRUE.equals(jdbc.queryForObject("SELECT lease_until>clock_timestamp() FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",Boolean.class,recovery,old.job()))){
@@ -246,7 +247,7 @@ class AnalyticalJobFoundationQualificationTest {
 
     @Test void schedulerRetryBudgetAndPolicyDriftPg() {
         UUID t=activeTenant();enqueue(t,"NIGHT",0,1);
-        var scope=java.util.Set.of(t);
+        var scope=java.util.Map.of(t,LocalDate.of(2026,11,1));
         UUID worker=UUID.randomUUID();
         for(int i=0;i<4;i++){
             var c=jobs.claimNext(worker,scope,1,30).orElseThrow();
@@ -258,8 +259,52 @@ class AnalyticalJobFoundationQualificationTest {
         assertThat(jobs.claimNext(worker,scope,1,30)).isEmpty();
         UUID other=activeTenant();enqueue(other,"NIGHT",0,1);
         jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",other);
-        assertThat(jobs.claimNext(worker,java.util.Set.of(other),1,30)).isEmpty();
+        assertThat(jobs.claimNext(worker,java.util.Map.of(other,LocalDate.of(2026,11,1)),1,30)).isEmpty();
         assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,other)).isEqualTo("BLOCKED");
+    }
+
+
+    @Test void schedulerRejectsWrongPilotAndForgedClaimPg() {
+        UUID t=activeTenant();enqueue(t,"NIGHT",0,1);
+        UUID worker=UUID.randomUUID();
+        LocalDate from=LocalDate.of(2026,11,1);
+        var c=jobs.claimNext(worker,java.util.Map.of(t,from),1,30).orElseThrow();
+        var forged=new AnalyticalJobRepository.Claim(c.tenant(),c.job(),UUID.randomUUID(),
+            c.worker(),c.token(),c.slot(),c.leaseUntil(),c.calendar(),c.from(),c.until(),c.expectedPrevious());
+        try {
+            assertThat(jobs.renew(forged,30)).isEmpty();
+            assertThat(jobs.yieldProgress(forged)).isFalse();
+            assertThat(jobs.retry(forged,AnalyticalJobRepository.Failure.TRANSIENT)).isFalse();
+            assertThat(jobs.block(forged,AnalyticalJobRepository.Failure.SOURCE_INCOMPLETE)).isFalse();
+            assertThat(jobs.renew(c,30)).isPresent();
+            jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",t);
+            assertThat(jobs.renew(c,30)).isEmpty();
+            assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,t))
+                .isEqualTo("BLOCKED");
+        } finally {jobs.yieldProgress(c);}
+        UUID other=activeTenant();enqueue(other,"NIGHT",0,1);
+        assertThat(jobs.claimNext(worker,java.util.Map.of(other,from.plusDays(1)),1,30)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,other))
+            .isEqualTo("BLOCKED");
+    }
+
+    @Test void schedulerDefaultOffAndMissingCalendarPg() {
+        assertThat(context.getBeansOfType(AnalyticalLifecycleScheduler.class)).isEmpty();
+        var org=organizations.saveAndFlush(new kz.rm.iam.OrganizationEntity(UUID.randomUUID(),"No calendar LLP","No calendar","KZ"));
+        UUID t=workspaces.saveAndFlush(kz.rm.iam.WorkspaceEntity.organization(UUID.randomUUID(),org.getId())).getId();
+        jdbc.update("UPDATE public.org_organization SET status='ACTIVE' WHERE id=?",org.getId());
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",t);
+        assertThat(jobs.planNight(t,LocalDate.of(2026,11,1)).state()).isEqualTo(AnalyticalJobRepository.PlanState.NO_CALENDAR);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_analytics_job_run WHERE tenant_id=?",Integer.class,t)).isZero();
+    }
+
+    @Test void schedulerNightGapShiftsForward() {
+        var policy=new PeriodResolver.Policy(java.time.ZoneId.of("America/Havana"),1);
+        var before=AnalyticalJobService.latestNight(java.time.Instant.parse("2026-03-08T05:14:59Z"),policy);
+        var after=AnalyticalJobService.latestNight(java.time.Instant.parse("2026-03-08T05:15:00Z"),policy);
+        assertThat(before.until()).isEqualTo(LocalDate.of(2026,3,7));
+        assertThat(after.until()).isEqualTo(LocalDate.of(2026,3,8));
+        assertThat(after.slot()).isEqualTo(java.time.Instant.parse("2026-03-08T05:15:00Z"));
     }
 
 }

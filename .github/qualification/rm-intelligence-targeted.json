@@ -292,6 +292,18 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerRetryBudgetAndPolicyDriftPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerRejectsWrongPilotAndForgedClaimPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerDefaultOffAndMissingCalendarPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerNightGapShiftsForward"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
