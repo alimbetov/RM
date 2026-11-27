@@ -7035,3 +7035,128 @@ CREATE CONSTRAINT TRIGGER trg_int_activation_pointer AFTER INSERT OR UPDATE OR D
 REVOKE ALL ON FUNCTION crm.int_assert_active_pointer() FROM PUBLIC;
 REVOKE ALL ON crm.int_active_generation,crm.int_projection_lifecycle FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_ACTIVATION_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0224-int-analytics-job-run dbms:postgresql splitStatements:false
+-- R1.1A storage only; no scheduler execution or runtime grants.
+CREATE TABLE crm.int_analytics_job_run (
+  tenant_id uuid NOT NULL,
+  job_id uuid NOT NULL,
+  job_type varchar(16) NOT NULL CHECK (job_type IN ('NIGHT','INTRADAY')),
+  scheduled_slot timestamptz NOT NULL,
+  scheduled_at timestamptz NOT NULL,
+  business_day date NOT NULL,
+  calendar_version bigint NOT NULL,
+  zone_id varchar(64) NOT NULL,
+  from_day date,
+  until_day date,
+  generation_id uuid, -- allocated before generation creation; verify binding at execution
+  expected_previous uuid,
+  active_proof_id uuid,
+  source_revision bigint CHECK (source_revision >= 0),
+  actual_as_of timestamptz,
+  status varchar(16) NOT NULL CHECK (status IN
+    ('PENDING','RUNNING','COMPLETED','FAILED','BLOCKED','SKIPPED')),
+  next_attempt_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  lease_owner uuid,
+  lease_until timestamptz,
+  cluster_slot smallint CHECK (cluster_slot BETWEEN 1 AND 4),
+  attempt_token bigint NOT NULL DEFAULT 0 CHECK (attempt_token >= 0),
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  consecutive_failures integer NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0),
+  last_error_code varchar(96),
+  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (tenant_id,job_id),
+  UNIQUE (tenant_id,job_type,scheduled_slot),
+  FOREIGN KEY (tenant_id,calendar_version)
+    REFERENCES crm.int_calendar_policy(tenant_id,version),
+  FOREIGN KEY (tenant_id,generation_id,active_proof_id)
+    REFERENCES crm.int_dim_coverage_proof(tenant_id,generation_id,proof_id),
+  CHECK ((job_type='NIGHT' AND generation_id IS NOT NULL
+       AND from_day IS NOT NULL AND until_day IS NOT NULL AND from_day < until_day)
+      OR (job_type='INTRADAY' AND generation_id IS NULL AND from_day IS NULL
+       AND until_day IS NULL AND expected_previous IS NULL AND active_proof_id IS NULL)),
+  CHECK ((status='RUNNING' AND lease_owner IS NOT NULL AND lease_until IS NOT NULL
+       AND cluster_slot IS NOT NULL)
+      OR (status<>'RUNNING' AND lease_owner IS NULL AND lease_until IS NULL
+       AND cluster_slot IS NULL)),
+  CHECK (active_proof_id IS NULL OR status='COMPLETED'),
+  CHECK (status<>'COMPLETED' OR (actual_as_of IS NOT NULL
+       AND source_revision IS NOT NULL
+       AND (job_type<>'NIGHT' OR active_proof_id IS NOT NULL)))
+);
+CREATE INDEX idx_int_analytics_job_due
+ ON crm.int_analytics_job_run(next_attempt_at,scheduled_slot,tenant_id)
+ WHERE status='PENDING';
+-- Hard DB ceiling = four logical slots; initial admission uses slots 1..2 only.
+-- Expired RUNNING retains its slot until reclaimed or fenced terminal transition.
+CREATE UNIQUE INDEX uq_int_analytics_job_running_slot
+ ON crm.int_analytics_job_run(cluster_slot) WHERE status='RUNNING';
+-- At most one logical RUNNING job per tenant, across NIGHT and INTRADAY.
+CREATE UNIQUE INDEX uq_int_analytics_job_tenant_running
+ ON crm.int_analytics_job_run(tenant_id) WHERE status='RUNNING';
+CREATE INDEX idx_int_analytics_job_expired
+ ON crm.int_analytics_job_run(lease_until,cluster_slot) WHERE status='RUNNING';
+-- Prevent two nightly runs for the same logical business day even across calendar revisions.
+CREATE UNIQUE INDEX uq_int_analytics_job_night_day
+ ON crm.int_analytics_job_run(tenant_id,business_day)
+ WHERE job_type='NIGHT' AND status<>'SKIPPED';
+-- Never run two unfinished NIGHT generations for one tenant.
+CREATE UNIQUE INDEX uq_int_analytics_job_night_open
+ ON crm.int_analytics_job_run(tenant_id)
+ WHERE job_type='NIGHT' AND status IN ('PENDING','RUNNING','BLOCKED','FAILED');
+REVOKE ALL ON crm.int_analytics_job_run FROM PUBLIC;
+
+CREATE FUNCTION crm.int_analytics_job_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.status<>'PENDING' OR NEW.attempt_token<>0 OR NEW.attempts<>0
+      OR NEW.consecutive_failures<>0 THEN
+     RAISE EXCEPTION 'INT_JOB_INITIAL_STATE' USING ERRCODE='23514';
+   END IF;
+   RETURN NEW;
+ END IF;
+ IF (OLD.tenant_id,OLD.job_id,OLD.job_type,OLD.scheduled_slot,OLD.scheduled_at,
+     OLD.business_day,OLD.calendar_version,OLD.zone_id,OLD.from_day,OLD.until_day,
+     OLD.generation_id,OLD.expected_previous,OLD.created_at)
+    IS DISTINCT FROM
+    (NEW.tenant_id,NEW.job_id,NEW.job_type,NEW.scheduled_slot,NEW.scheduled_at,
+     NEW.business_day,NEW.calendar_version,NEW.zone_id,NEW.from_day,NEW.until_day,
+     NEW.generation_id,NEW.expected_previous,NEW.created_at) THEN
+   RAISE EXCEPTION 'INT_JOB_SCOPE_IMMUTABLE' USING ERRCODE='23514';
+ END IF;
+ IF OLD.status IN ('COMPLETED','SKIPPED') THEN
+   RAISE EXCEPTION 'INT_JOB_TERMINAL_IMMUTABLE' USING ERRCODE='23514';
+ END IF;
+ IF NEW.status='RUNNING' AND (OLD.status<>'RUNNING'
+      OR NEW.attempt_token<>OLD.attempt_token) THEN
+   IF OLD.status NOT IN ('PENDING','RUNNING')
+      OR (OLD.status='RUNNING' AND (OLD.lease_until>clock_timestamp()
+          OR NEW.cluster_slot<>OLD.cluster_slot))
+      OR NEW.attempt_token<>OLD.attempt_token+1
+      OR NEW.attempts<>OLD.attempts+1
+      OR NEW.lease_until<=clock_timestamp() THEN
+     RAISE EXCEPTION 'INT_JOB_CLAIM_FENCE' USING ERRCODE='23514';
+   END IF;
+ ELSIF NEW.attempt_token<>OLD.attempt_token OR NEW.attempts<>OLD.attempts
+      OR (NEW.status='RUNNING' AND
+          (NEW.lease_owner IS DISTINCT FROM OLD.lease_owner
+           OR NEW.cluster_slot IS DISTINCT FROM OLD.cluster_slot
+           OR OLD.lease_until<=clock_timestamp()
+           OR NEW.lease_until<=clock_timestamp())) THEN
+   RAISE EXCEPTION 'INT_JOB_ATTEMPT_FENCE' USING ERRCODE='23514';
+ END IF;
+ IF NEW.status='COMPLETED' AND (OLD.status<>'RUNNING'
+      OR OLD.lease_until<=clock_timestamp()) THEN
+   RAISE EXCEPTION 'INT_JOB_COMPLETION_FENCE' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION crm.int_analytics_job_guard() FROM PUBLIC;
+CREATE TRIGGER trg_int_analytics_job_guard BEFORE INSERT OR UPDATE ON crm.int_analytics_job_run
+ FOR EACH ROW EXECUTE FUNCTION crm.int_analytics_job_guard();
+--rollback DO $$ BEGIN IF EXISTS(SELECT 1 FROM crm.int_analytics_job_run) THEN RAISE EXCEPTION 'INT_JOB_ROLLBACK_UNSAFE'; END IF; END; $$;
+--rollback DROP TABLE crm.int_analytics_job_run;
+--rollback DROP FUNCTION crm.int_analytics_job_guard();

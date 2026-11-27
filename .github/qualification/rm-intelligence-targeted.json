@@ -248,6 +248,22 @@
     {
       "classname": "kz.rm.intelligence.BusinessConclusionQualificationTest",
       "name": "missingAndOpenPeriodHaveExplicitReasons"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "durableJobScheduleIdentityPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "durableJobSlotAndTenantFencesPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "durableJobScopeAndAttemptFencesPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "durableJobPublicPrivilegesPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
