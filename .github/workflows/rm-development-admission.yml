@@ -1,0 +1,47 @@
+name: RM Development Admission Qualification
+on:
+  push:
+    branches: [base_dev]
+    paths:
+      - '.github/**'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: rm-development-admission-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  development-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify contract and negative evidence scenarios
+        run: |
+          python3 .github/scripts/verify_rm_ci_workflow_inventory.py
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_development_admission.py' -v
+      - name: Verify independent live GitHub evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 160); do
+            if python3 .github/scripts/verify_rm_development_admission.py > rm-development-admission.json; then
+              cat rm-development-admission.json
+              exit 0
+            fi
+            cat rm-development-admission.json
+            python3 -c 'import json; import sys; sys.exit(0 if json.load(open("rm-development-admission.json")).get("retryable") is True else 1)'
+            if [ "$attempt" -lt 160 ]; then sleep 30; fi
+          done
+          exit 1
+      - name: Publish development-only observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-development-admission-${{ github.sha }}
+          path: rm-development-admission.json
+          if-no-files-found: error

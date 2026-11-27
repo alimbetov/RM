@@ -166,6 +166,19 @@
       "decision": "EXECUTE_REQUIRED"
     },
     {
+      "path": ".github/workflows/rm-development-admission.yml",
+      "reviewedBlob": "9fdd4500ac845adfa54a47773ec1526d2d444b6d",
+      "domainHint": "CI",
+      "mandatoryRelease": false,
+      "directReview": [
+        "DEVELOPMENT_ONLY",
+        "LIVE_API_METADATA",
+        "NO_SELECTIVE_EXECUTION"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
       "path": ".github/workflows/rm-exact-sha-admission.yml",
       "reviewedBlob": "e1b80fa201f2c7379af488c50ec9e354b8414529",
       "domainHint": "CI",

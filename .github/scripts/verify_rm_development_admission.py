@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Development-only execution evidence. No selective execution or release authorization."""
 import json
+from datetime import datetime
 import os
 import re
 import subprocess
@@ -61,6 +62,9 @@ def check_gate(row, run, jobs, artifacts, sha):
             and run["path"] == row["path"] and run["name"] == row["name"], "RUN_IDENTITY")
     require(run["status"] == "completed" and run["conclusion"] == "success"
             and type(run["run_attempt"]) is int and run["run_attempt"] > 0, "RUN_NOT_SUCCESS")
+    # GitHub artifacts are run-scoped, not attempt-scoped. Never infer rerun provenance.
+    require(run["run_attempt"] == 1, "RERUN_PROVENANCE_UNAVAILABLE")
+    require(run["repository"]["id"] == run["head_repository"]["id"], "FOREIGN_HEAD_REPOSITORY")
     require(bool(jobs) and all(j["status"] == "completed" and j["conclusion"] == "success"
                                and j["head_sha"] == sha and j["run_id"] == run["id"]
                                and j["run_attempt"] == run["run_attempt"] for j in jobs), "JOB_NOT_SUCCESS")
@@ -71,6 +75,18 @@ def check_gate(row, run, jobs, artifacts, sha):
         a = matches[0]
         require(a["expired"] is False and type(a["id"]) is int and a["id"] > 0
                 and a["size_in_bytes"] > 0 and a["id"] not in ids, "ARTIFACT_INVALID")
+        provenance = a["workflow_run"]
+        require(provenance["id"] == run["id"] and provenance["head_sha"] == sha
+                and provenance["head_branch"] == "base_dev"
+                and provenance["repository_id"] == run["repository"]["id"]
+                and provenance["head_repository_id"] == run["head_repository"]["id"], "ARTIFACT_PROVENANCE")
+        require(re.fullmatch(r"sha256:[0-9a-f]{64}", a["digest"]), "ARTIFACT_DIGEST_MISSING")
+        def instant(value):
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            require(parsed.tzinfo is not None, "INVALID_TIMESTAMP")
+            return parsed
+        require(instant(run["run_started_at"]) <= instant(a["created_at"])
+                <= instant(a["updated_at"]) <= instant(run["updated_at"]), "ARTIFACT_TIME_SCOPE")
         ids.add(a["id"])
     return {"path": row["path"], "runId": run["id"], "attempt": run["run_attempt"], "artifactIds": sorted(ids)}
 
@@ -80,17 +96,32 @@ def evaluate(get, required, sha, repo):
     branch = prefix + "/branches/base_dev"
     require(get(branch)["commit"]["sha"] == sha, "STALE_SHA")
     evidence = []
+    observed = []
+    require(bool(required) and len({r["path"] for r in required}) == len(required), "INVALID_REQUIRED_SET")
     for row in required:
         workflow = urllib.parse.quote(row["path"].rsplit("/", 1)[1], safe="")
         runs = pages(get, prefix + "/actions/workflows/" + workflow + "/runs?branch=base_dev&event=push&head_sha=" + sha, "workflow_runs")
         require(bool(runs), "RUN_MISSING")
         run = max(runs, key=lambda r: r["id"])
+        require(run["status"] == "completed", "RUN_PENDING")
+        require(run["conclusion"] == "success", "RUN_NOT_SUCCESS")
+        require(run["run_attempt"] == 1, "RERUN_PROVENANCE_UNAVAILABLE")
         run_path = prefix + "/actions/runs/" + str(run["id"])
         jobs = pages(get, run_path + "/attempts/" + str(run["run_attempt"]) + "/jobs", "jobs")
         artifacts = pages(get, run_path + "/artifacts", "artifacts")
         evidence.append(check_gate(row, run, jobs, artifacts, sha))
+        observed.append((row, run, run_path, workflow))
+    # Revisit ALL gates after collection, not only immediately after each gate.
+    # This detects observed changes but is not an atomic GitHub snapshot.
+    for row, run, run_path, workflow in observed:
+        latest = pages(get, prefix + "/actions/workflows/" + workflow + "/runs?branch=base_dev&event=push&head_sha=" + sha, "workflow_runs")
+        require(bool(latest) and max(latest, key=lambda r: r["id"])["id"] == run["id"], "RUN_CHANGED")
         fresh = get(run_path)
-        require(all(fresh[k] == run[k] for k in ("id", "run_attempt", "status", "conclusion", "head_sha")), "RUN_CHANGED")
+        require(all(fresh[k] == run[k] for k in ("id", "run_attempt", "status", "conclusion", "head_sha", "updated_at")), "RUN_CHANGED")
+        artifacts = pages(get, run_path + "/artifacts", "artifacts")
+        prior = next(e for e in evidence if e["path"] == row["path"])
+        names = {x.format(sha=sha) for x in row["artifacts"]}
+        require(sorted(a["id"] for a in artifacts if a["name"] in names and a["expired"] is False) == prior["artifactIds"], "ARTIFACT_CHANGED")
     require(get(branch)["commit"]["sha"] == sha, "STALE_SHA")
     return evidence
 
@@ -109,6 +140,7 @@ def main():
         result["developmentAdmission"] = "PASS"
     except Exception as exc:
         result["reason"] = type(exc).__name__ + ": " + str(exc)
+        result["retryable"] = isinstance(exc, ValueError) and str(exc) in {"RUN_MISSING", "RUN_PENDING"}
     print(json.dumps(result, indent=2))
     return int(result["developmentAdmission"] != "PASS")
 
