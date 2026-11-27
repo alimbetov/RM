@@ -595,20 +595,44 @@ class AnalyticalJobFoundationQualificationTest {
     }
 
     @Test void schedulerRealOwnerFactsResumeAfterCrashPg() throws Exception {
-        var f=ownerFacts();UUID t=f.tenant();
+        String zone=currentIntradayZone();
+        var f=ownerFacts(zone);UUID t=f.tenant();
+        var tz=java.time.ZoneId.of(zone);
+        LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).atZoneSameInstant(tz).toLocalDate();
+        IntradayResultStore.Stored intraday;
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID account=serviceMember(t,issuer);
+            var actor=issuer.resolveService(jdbc,users,account,kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID);
+            var scope=new IntradayResultStore.Scope(t,account,1,day,7);
+            UUID job=intradayStore.plan(scope).orElseThrow();
+            var claim=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),1,300).orElseThrow();
+            assertThat(claim.job()).isEqualTo(job);
+            assertThat(intradayStore.execute(claim,scope,actor)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+            intraday=intradayStore.completed(claim,scope,actor).orElseThrow();
+        }
+        assertThat(intraday.value()).isEqualTo(2L);
+        assertThat(intraday.quality()).isEqualTo("PARTIAL");
+        // This tenant has no further business writes. Assert the entire day
+        // contains exactly the orders visible at the persisted intraday cutoff.
+        var bounds=new Object[]{t,day.atStartOfDay(tz).toOffsetDateTime(),day.plusDays(1).atStartOfDay(tz).toOffsetDateTime()};
+        Long oracle=jdbc.queryForObject("""
+            SELECT count(DISTINCT order_id) FROM crm.sales_order_status_event
+            WHERE tenant_id=? AND event_type='PLACED' AND occurred_at>=? AND occurred_at<?
+            """,Long.class,bounds);
+        assertThat(oracle).isEqualTo(intraday.value());
         long facts=jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE tenant_id=?",Long.class,t);
         assertThat(facts).isGreaterThan(2);
         var now=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).toInstant();
         LocalDate first=jdbc.queryForObject("SELECT min(occurred_at) FROM crm.int_canonical_fact WHERE tenant_id=?",
-            OffsetDateTime.class,t).atZoneSameInstant(java.time.ZoneOffset.UTC).toLocalDate();
+            OffsetDateTime.class,t).atZoneSameInstant(tz).toLocalDate();
         LocalDate last=jdbc.queryForObject("SELECT max(occurred_at) FROM crm.int_canonical_fact WHERE tenant_id=?",
-            OffsetDateTime.class,t).atZoneSameInstant(java.time.ZoneOffset.UTC).toLocalDate();
+            OffsetDateTime.class,t).atZoneSameInstant(tz).toLocalDate();
         LocalDate from=first.minusDays(6),until=last.plusDays(1);
         // Test-only explicit job scope includes the day of freshly generated
         // service facts; this is NOT evidence of automatic closed-day planning.
         var slot=now.minusSeconds(1);
         var spec=new AnalyticalJobRepository.NightSpec(t,UUID.randomUUID(),UUID.randomUUID(),slot,slot,
-            until.minusDays(1),1,"Etc/UTC",from,until,null);
+            until.minusDays(1),1,zone,from,until,null);
         assertThat(jobs.enqueueNight(spec).outcome()).isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
         var pilot=java.util.Map.of(t,from);
         var abandoned=jobs.claimNext(UUID.randomUUID(),pilot,1,1).orElseThrow();
@@ -673,6 +697,23 @@ class AnalyticalJobFoundationQualificationTest {
             """,Long.class,t,gen)).isEqualTo(2L);
         UUID activeProof=jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND generation_id=? AND projection_code='L3'",UUID.class,t,gen);
         assertThat(coverage.status(t,gen,activeProof)).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+        // Compare exactly one civil day, and reject a changed source revision.
+        assertThat(jdbc.queryForObject("""
+            SELECT source_revision FROM crm.int_dim_coverage_proof
+            WHERE tenant_id=? AND generation_id=? AND proof_id=?
+            """,Long.class,t,gen,activeProof)).isEqualTo(intraday.revision());
+        assertThat(jdbc.queryForObject("""
+            SELECT count(DISTINCT o.order_id) FROM crm.int_l3_cell_order o
+            JOIN crm.int_l3_cell x USING(tenant_id,generation_id,period_code,from_day,cell_id)
+            WHERE o.tenant_id=? AND o.generation_id=? AND o.period_code='D'
+              AND o.from_day=? AND x.stream_code='BOOKED'
+            """,Long.class,t,gen,day)).isEqualTo(oracle);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM crm.sales_order_status_event
+            WHERE tenant_id=? AND event_type='PLACED' AND occurred_at>=? AND occurred_at<?
+            """,Long.class,t,intraday.cutoff().atOffset(java.time.ZoneOffset.UTC),
+            day.plusDays(1).atStartOfDay(tz).toOffsetDateTime())).isZero();
+
         kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc,t,f.warehouse(),f.sku(),2,"375",2,1,1,"10","3","7");
         assertThat(jobService.runNext(UUID.randomUUID(),pilot,limits)).isEqualTo(AnalyticalJobService.RunResult.NO_WORK);
     }
