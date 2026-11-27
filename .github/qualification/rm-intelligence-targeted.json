@@ -328,6 +328,18 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerRemovedPilotDoesNotStrandExpiredSlotPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerRealOwnerFactsResumeAfterCrashPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerUntrustedRoleCannotAccessRegistryPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerShutdownReleasesClaimBeforeStartingStepPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

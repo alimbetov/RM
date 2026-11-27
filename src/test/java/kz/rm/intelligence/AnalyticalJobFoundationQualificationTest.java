@@ -12,7 +12,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.assertj.core.api.Assertions.*;
 
 @EnabledIfEnvironmentVariable(named="RM_TEST_DB_URL",matches="jdbc:postgresql:.*")
-@SpringBootTest
+@SpringBootTest(properties={
+    "rm.mvp.service-mode.enabled=true",
+    "rm.currency.commerce-admission.enabled=true"
+})
 class AnalyticalJobFoundationQualificationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired kz.rm.iam.OrganizationRepository organizations;
@@ -511,6 +514,227 @@ class AnalyticalJobFoundationQualificationTest {
         assertThat(next.tenant()).isEqualTo(remaining);
         assertThat(next.slot()).isEqualTo(old.slot());
         assertThat(jobs.yieldProgress(next)).isTrue();
+    }
+
+
+    private record OwnerFacts(UUID tenant,UUID warehouse,UUID sku) {}
+
+    // Same actual owner commands and signed actor/email fixtures as BUS-MVP.
+    // No direct mutation of SALES, INVENTORY, facts, receipts or projection rows.
+    private OwnerFacts ownerFacts() throws Exception {
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID ownerId=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(UUID.randomUUID(),
+                "night-owner-"+UUID.randomUUID(),"Owner")).getId();
+            UUID staffId=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(UUID.randomUUID(),
+                "night-staff-"+UUID.randomUUID(),"Staff")).getId();
+            var owner=issuer.resolve(jdbc,users,ownerId);
+            var staff=issuer.resolve(jdbc,users,staffId);
+            kz.rm.iam.VerifiedBuyerEmailFixture.registerAndVerify(
+                context.getBean(kz.rm.iam.EmailIdentityService.class),
+                context.getBean(kz.rm.iam.EmailIdentityCrypto.class),jdbc,owner,
+                "night-owner-"+UUID.randomUUID()+"@example.kz");
+            UUID t=UUID.randomUUID();
+            var onboarding=context.getBean(kz.rm.iam.SelfServiceTenantOnboardingService.class);
+            assertThat(onboarding.createFirstTenant(owner,t,"Scheduler recovery LLP","Scheduler recovery","KZ").tenantId()).isEqualTo(t);
+            onboarding.selectTenant(owner,t);
+            var enrollment=context.getBean(kz.rm.iam.TenantMemberEnrollmentService.class);
+            enrollment.invite(owner,t,staffId);enrollment.accept(staff,t);
+            var roles=context.getBean(kz.rm.iam.VerifiedTenantRoleCommands.class);
+            var role=roles.createRole(owner,t,"SCH_"+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(java.util.Locale.ROOT),
+                "Scheduler owner facts fixture");
+            for(String permission:java.util.List.of("ORGANIZATION_LOCATION_WRITE","CATALOG_WRITE",
+                    "CATALOG_PRICE_MANAGE","CATALOG_PUBLISH","STOREFRONT_OFFER_MANAGE",
+                    "STOREFRONT_OFFER_PUBLISH","INVENTORY_RECEIVE","INVENTORY_STOCK_READ",
+                    "SALES_ORDER_CONFIRM","INVENTORY_RESERVE","SALES_ORDER_FULFILL",
+                    "INVENTORY_FULFILL","SALES_ORDER_READ","SALES_ORDER_CANCEL","INVENTORY_RELEASE"))
+                roles.grant(owner,t,role.id(),kz.rm.iam.DomainPermission.valueOf(permission));
+            roles.assign(owner,t,staffId,role.id());roles.enable(owner,t);
+            context.getBean(kz.rm.organization.TenantCurrencyPolicyService.class).initialize(owner,t);
+            context.getBean(kz.rm.security.kms.TenantKeyService.class).provision(t);
+            String kato=jdbc.queryForObject("""
+                SELECT code FROM public.ref_kato_territory
+                WHERE is_deleted=FALSE AND level_no<=3 ORDER BY code LIMIT 1
+                """,String.class);
+            var warehouse=context.getBean(kz.rm.organization.AuthenticatedOrganizationLocations.class)
+                .create(staff,t,kz.rm.organization.OrganizationLocationEntity.Type.WAREHOUSE,"Night stock",kato,"Night warehouse");
+            context.getBean(kz.rm.iam.WarehouseStaffScopeService.class).assign(owner,t,warehouse.id(),staffId);
+            var catalog=context.getBean(kz.rm.catalog.CatalogItemService.class);
+            var draft=catalog.createDraft(staff,t,"SCH-"+UUID.randomUUID(),kz.rm.catalog.CatalogItem.Kind.PRODUCT,"ru","Night product",null);
+            var priced=catalog.addPriceRevision(staff,t,draft.id(),new java.math.BigDecimal("50.0000"),"KZT",
+                java.time.Instant.now().minusSeconds(100),draft.rowVersion());
+            var sku=catalog.publish(staff,t,priced.id(),priced.rowVersion());
+            var stores=context.getBean(kz.rm.storefront.StorefrontManagementService.class);
+            var storeDraft=stores.createDraft(staff,t,"night-"+UUID.randomUUID());
+            var store=stores.publish(staff,t,storeDraft.id(),storeDraft.rowVersion());
+            var offers=context.getBean(kz.rm.storefront.StorefrontOfferService.class);
+            var offerDraft=offers.createDraft(staff,t,sku.id(),"Night product",new java.math.BigDecimal("75.0000"),"KZT");
+            var offer=offers.publish(staff,t,offerDraft.id(),offerDraft.rowVersion());
+            context.getBean(kz.rm.inventory.AuthenticatedInventoryCommands.class).receive(staff,t,warehouse.id(),sku.id(),
+                "night-receipt-"+UUID.randomUUID(),new java.math.BigDecimal("10"));
+            var checkout=context.getBean(kz.rm.autoorder.AutoOrderService.class);
+            var sales=context.getBean(kz.rm.sales.AuthenticatedSalesCommands.class);
+            UUID first=checkout.checkout(store.slug(),"night-buyer-"+UUID.randomUUID()+"@example.kz",
+                "night-order-"+UUID.randomUUID(),java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),3))).order().orderId();
+            assertThat(sales.confirm(staff,t,first,warehouse.id()).status()).isEqualTo("CONFIRMED");
+            assertThat(sales.fulfill(staff,t,first).status()).isEqualTo("COMPLETED");
+            UUID second=checkout.checkout(store.slug(),"night-buyer-"+UUID.randomUUID()+"@example.kz",
+                "night-cancel-"+UUID.randomUUID(),java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),2))).order().orderId();
+            assertThat(sales.confirm(staff,t,second,warehouse.id()).status()).isEqualTo("CONFIRMED");
+            assertThat(sales.cancel(staff,t,second).status()).isEqualTo("CANCELLED");
+            context.getBean(CalendarPolicyService.class).append(owner,t,"Etc/UTC",0);
+            kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc,t,warehouse.id(),sku.id(),
+                2,"375",2,1,1,"10","3","7");
+            return new OwnerFacts(t,warehouse.id(),sku.id());
+        }
+    }
+
+    @Test void schedulerRealOwnerFactsResumeAfterCrashPg() throws Exception {
+        var f=ownerFacts();UUID t=f.tenant();
+        long facts=jdbc.queryForObject("SELECT count(*) FROM crm.int_canonical_fact WHERE tenant_id=?",Long.class,t);
+        assertThat(facts).isGreaterThan(2);
+        var now=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).toInstant();
+        LocalDate first=jdbc.queryForObject("SELECT min(occurred_at) FROM crm.int_canonical_fact WHERE tenant_id=?",
+            OffsetDateTime.class,t).atZoneSameInstant(java.time.ZoneOffset.UTC).toLocalDate();
+        LocalDate last=jdbc.queryForObject("SELECT max(occurred_at) FROM crm.int_canonical_fact WHERE tenant_id=?",
+            OffsetDateTime.class,t).atZoneSameInstant(java.time.ZoneOffset.UTC).toLocalDate();
+        LocalDate from=first.minusDays(6),until=last.plusDays(1);
+        // Test-only explicit job scope includes the day of freshly generated
+        // service facts; this is NOT evidence of automatic closed-day planning.
+        var slot=now.minusSeconds(1);
+        var spec=new AnalyticalJobRepository.NightSpec(t,UUID.randomUUID(),UUID.randomUUID(),slot,slot,
+            until.minusDays(1),1,"Etc/UTC",from,until,null);
+        assertThat(jobs.enqueueNight(spec).outcome()).isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
+        var pilot=java.util.Map.of(t,from);
+        var abandoned=jobs.claimNext(UUID.randomUUID(),pilot,1,1).orElseThrow();
+        var req=new GenerationRebuildService.Request(t,abandoned.generation(),1,from,until);
+        var firstStep=rebuild.step(req,1,2);
+        assertThat(firstStep.state()).isEqualTo(GenerationRebuildService.State.REPLAY_PENDING);
+        var receipts=jdbc.queryForList("""
+            SELECT consumer_code,owner_module,source_kind,source_id,digest FROM crm.int_fact_consumer_receipt
+            WHERE tenant_id=? ORDER BY consumer_code,owner_module,source_kind,source_id
+            """,t);
+        assertThat(receipts).hasSize(2);
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while(Boolean.TRUE.equals(jdbc.queryForObject("SELECT lease_until>clock_timestamp() FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",
+                Boolean.class,t,abandoned.job()))){
+            if(System.nanoTime()>deadline)throw new AssertionError("lease did not expire");
+            Thread.sleep(25);
+        }
+        var resumed=jobs.claimNext(UUID.randomUUID(),pilot,1,300).orElseThrow();
+        assertThat(resumed.job()).isEqualTo(abandoned.job());
+        assertThat(resumed.generation()).isEqualTo(abandoned.generation());
+        assertThat(resumed.token()).isEqualTo(abandoned.token()+1);
+        var limits=new AnalyticalJobService.Limits(1,300,1,2);
+        assertThat(jobService.runNight(abandoned,limits)).isEqualTo(AnalyticalJobService.RunResult.LEASE_LOST);
+        assertThat(jdbc.queryForList("""
+            SELECT consumer_code,owner_module,source_kind,source_id,digest FROM crm.int_fact_consumer_receipt
+            WHERE tenant_id=? ORDER BY consumer_code,owner_module,source_kind,source_id
+            """,t)).isEqualTo(receipts);
+        var outcome=jobService.runNight(resumed,limits);
+        for(int i=0;i<40&&outcome==AnalyticalJobService.RunResult.YIELDED;i++){
+            jdbc.update("UPDATE crm.int_analytics_job_run SET next_attempt_at=clock_timestamp() WHERE tenant_id=? AND status='PENDING'",t);
+            outcome=jobService.runNext(UUID.randomUUID(),pilot,limits);
+        }
+        assertThat(outcome).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+        UUID gen=resumed.generation();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_projection_generation WHERE tenant_id=?",Integer.class,t)).isEqualTo(1);
+        var finalReceipts=jdbc.queryForList("""
+            SELECT consumer_code,owner_module,source_kind,source_id,digest FROM crm.int_fact_consumer_receipt
+            WHERE tenant_id=? ORDER BY consumer_code,owner_module,source_kind,source_id
+            """,t);
+        assertThat(finalReceipts).containsAll(receipts);
+        assertThat(finalReceipts).hasSize(Math.toIntExact(2*facts));
+        var delivery=context.getBean(CanonicalFactDeliveryService.class);
+        String l2Code=jdbc.queryForObject("SELECT consumer_code FROM crm.int_l2_consumer WHERE tenant_id=? AND generation_id=?",String.class,t,gen);
+        assertThat(delivery.consumerCoverage(t,"l1:"+gen).caughtUp()).isTrue();
+        assertThat(delivery.consumerCoverage(t,l2Code).caughtUp()).isTrue();
+        var totals=new java.util.EnumMap<MetricRegistry.Code,java.math.BigDecimal>(MetricRegistry.Code.class);
+        for(LocalDate d=from;d.isBefore(until);d=d.plusDays(1))
+            for(var b:l1.buckets(t,gen,d))totals.merge(b.metric(),b.amount(),java.math.BigDecimal::add);
+        var expected=java.util.Map.of(MetricRegistry.Code.PLACED_ORDERS,"2",MetricRegistry.Code.BOOKED_ORDER_AMOUNT,"375",
+            MetricRegistry.Code.CONFIRMED_ORDERS,"2",MetricRegistry.Code.FULFILLED_ORDERS,"1",MetricRegistry.Code.CANCELLED_ORDERS,"1",
+            MetricRegistry.Code.STOCK_IN_QTY,"10",MetricRegistry.Code.STOCK_OUT_QTY,"3");
+        for(var entry:expected.entrySet())assertThat(totals.get(entry.getKey())).as(entry.getKey().name()).isEqualByComparingTo(entry.getValue());
+        assertThat(jdbc.queryForObject("SELECT sum(amount) FROM crm.int_l2_contribution WHERE tenant_id=? AND generation_id=? AND stream_code='BOOKED'",
+            java.math.BigDecimal.class,t,gen)).isEqualByComparingTo("375");
+        assertThat(jdbc.queryForObject("""
+            SELECT sum(amount) FROM crm.int_l3_cell WHERE tenant_id=? AND generation_id=? AND period_code='D' AND stream_code='BOOKED'
+            """,java.math.BigDecimal.class,t,gen)).isEqualByComparingTo("375");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(DISTINCT o.order_id) FROM crm.int_l3_cell_order o
+              JOIN crm.int_l3_cell x USING(tenant_id,generation_id,period_code,from_day,cell_id)
+            WHERE o.tenant_id=? AND o.generation_id=? AND o.period_code='D' AND x.stream_code='BOOKED'
+            """,Long.class,t,gen)).isEqualTo(2L);
+        UUID activeProof=jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND generation_id=? AND projection_code='L3'",UUID.class,t,gen);
+        assertThat(coverage.status(t,gen,activeProof)).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+        kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc,t,f.warehouse(),f.sku(),2,"375",2,1,1,"10","3","7");
+        assertThat(jobService.runNext(UUID.randomUUID(),pilot,limits)).isEqualTo(AnalyticalJobService.RunResult.NO_WORK);
+    }
+
+    @Test void schedulerUntrustedRoleCannotAccessRegistryPg(){
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
+        // Test-only NOLOGIN roles; all creation/grants are rolled back.
+        // This is negative evidence, not an approved production scheduler role.
+        for(String statement:java.util.List.of(
+            "SELECT count(*) FROM crm.int_analytics_job_run",
+            "UPDATE crm.int_analytics_job_run SET status='COMPLETED' WHERE false",
+            "INSERT INTO crm.int_analytics_job_run(tenant_id) VALUES (NULL)",
+            "DELETE FROM crm.int_analytics_job_run WHERE false",
+            "TRUNCATE crm.int_analytics_job_run")){
+            String role="rm_sch_denied_"+UUID.randomUUID().toString().replace("-","");
+            assertThatThrownBy(()->tx.executeWithoutResult(status->{
+                jdbc.execute("CREATE ROLE "+role+" NOLOGIN");
+                jdbc.execute("GRANT USAGE ON SCHEMA crm TO "+role);
+                jdbc.execute("SET LOCAL ROLE "+role);
+                for(String privilege:java.util.List.of("SELECT","INSERT","UPDATE","DELETE","TRUNCATE"))
+                    assertThat(jdbc.queryForObject("SELECT has_table_privilege(current_user,'crm.int_analytics_job_run',?)",
+                        Boolean.class,privilege)).isFalse();
+                jdbc.execute(statement);
+            })).isInstanceOf(org.springframework.dao.DataAccessException.class).hasStackTraceContaining("permission denied");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_roles WHERE rolname=?",Integer.class,role)).isZero();
+        }
+    }
+
+    @Test void schedulerShutdownReleasesClaimBeforeStartingStepPg() throws Exception {
+        var service=org.mockito.Mockito.mock(AnalyticalJobService.class);
+        UUID tenant=UUID.randomUUID();
+        var from=LocalDate.of(2026,11,1);
+        var fake=new AnalyticalJobRepository.Claim(tenant,UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),1,1,
+            java.time.Instant.now().plusSeconds(300),1,from,from.plusDays(7),null);
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var finish=new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.when(service.planNight(tenant,from)).thenReturn(new AnalyticalJobRepository.Plan(
+            AnalyticalJobRepository.PlanState.EXISTING,fake.job(),fake.generation()));
+        org.mockito.Mockito.when(service.claimNext(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyMap(),
+            org.mockito.ArgumentMatchers.any())).thenAnswer(inv->{
+                entered.countDown();
+                if(!finish.await(5,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("claim gate timeout");
+                return java.util.Optional.of(fake);
+            });
+        var scheduler=new AnalyticalLifecycleScheduler(service,tenant+"="+from,true,1,300,100,16);
+        var stopper=new Thread(scheduler::stop,"test-scheduler-stop");
+        try{
+            scheduler.tick();
+            assertThat(entered.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            stopper.start();
+            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            while(stopper.getState()!=Thread.State.BLOCKED){
+                if(System.nanoTime()>deadline)throw new AssertionError("shutdown did not wait for admitted claim");
+                Thread.sleep(10);
+            }
+            finish.countDown();
+            stopper.join(5000);
+            assertThat(stopper.isAlive()).isFalse();
+            org.mockito.Mockito.verify(service).releaseUnstarted(fake);
+            org.mockito.Mockito.verify(service,org.mockito.Mockito.never()).runNight(
+                org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any());
+            scheduler.tick();
+            org.mockito.Mockito.verify(service,org.mockito.Mockito.times(1)).claimNext(
+                org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyMap(),org.mockito.ArgumentMatchers.any());
+        }finally{
+            finish.countDown();scheduler.stop();stopper.join(5000);
+        }
     }
 
 }
