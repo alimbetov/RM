@@ -68,11 +68,17 @@ class IntradayWorker {
          catch(java.io.IOException ex){throw new IllegalStateException("INT_SERVICE_TOKEN_TRANSPORT");}
     }
     AnalyticalJobService.RunResult run(AnalyticalJobRepository.Claim claim){
+        var scope=scopes.get(claim.tenant());
+        kz.rm.iam.VerifiedServiceActor actor=null;
         try{
-            var scope=scopes.get(claim.tenant());
             if(scope==null)throw new SecurityException("INT_INTRADAY_SCOPE_DENIED");
-            return store.execute(claim,scope,resolver.resolve(token()));
+            actor=resolver.resolve(token());
+            return store.execute(claim,scope,actor);
         }catch(RuntimeException ex){
+            if(actor!=null&&scope!=null){
+                try{if(store.completed(claim,scope,actor).isPresent())return AnalyticalJobService.RunResult.COMPLETED;}
+                catch(RuntimeException ignored){/* no success inferred from uncertain commit */}
+            }
             if(AnalyticalJobService.transientFailure(ex)||"INT_SERVICE_TOKEN_TRANSPORT".equals(ex.getMessage()))
                 return jobs.retry(claim,AnalyticalJobRepository.Failure.TRANSIENT)?AnalyticalJobService.RunResult.RETRY:AnalyticalJobService.RunResult.LEASE_LOST;
             return jobs.block(claim,AnalyticalJobRepository.Failure.EXECUTION_REJECTED)?AnalyticalJobService.RunResult.BLOCKED:AnalyticalJobService.RunResult.LEASE_LOST;

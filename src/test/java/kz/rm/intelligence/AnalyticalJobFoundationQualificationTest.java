@@ -521,7 +521,8 @@ class AnalyticalJobFoundationQualificationTest {
 
     // Same actual owner commands and signed actor/email fixtures as BUS-MVP.
     // No direct mutation of SALES, INVENTORY, facts, receipts or projection rows.
-    private OwnerFacts ownerFacts() throws Exception {
+    private OwnerFacts ownerFacts() throws Exception {return ownerFacts("Etc/UTC");}
+    private OwnerFacts ownerFacts(String zone) throws Exception {
         try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
             UUID ownerId=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(UUID.randomUUID(),
                 "night-owner-"+UUID.randomUUID(),"Owner")).getId();
@@ -581,7 +582,7 @@ class AnalyticalJobFoundationQualificationTest {
                 "night-cancel-"+UUID.randomUUID(),java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(offer.id(),2))).order().orderId();
             assertThat(sales.confirm(staff,t,second,warehouse.id()).status()).isEqualTo("CONFIRMED");
             assertThat(sales.cancel(staff,t,second).status()).isEqualTo("CANCELLED");
-            context.getBean(CalendarPolicyService.class).append(owner,t,"Etc/UTC",0);
+            context.getBean(CalendarPolicyService.class).append(owner,t,zone,0);
             kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc,t,warehouse.id(),sku.id(),
                 2,"375",2,1,1,"10","3","7");
             return new OwnerFacts(t,warehouse.id(),sku.id());
@@ -735,6 +736,129 @@ class AnalyticalJobFoundationQualificationTest {
         }finally{
             finish.countDown();scheduler.stop();stopper.join(5000);
         }
+    }
+
+
+    @Autowired IntradayResultStore intradayStore;
+
+    private String currentIntradayZone(){
+        var now=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).toInstant();
+        for(String zone:java.util.List.of("Etc/UTC","Asia/Kathmandu","Asia/Almaty","Pacific/Kiritimati","America/Los_Angeles")){
+            var due=AnalyticalJobService.latestIntraday(now,new PeriodResolver.Policy(java.time.ZoneId.of(zone),1));
+            if(due.isPresent()&&due.get().deadline().isAfter(now.plusSeconds(600)))return zone;
+        }
+        throw new AssertionError("No safe fixture slot");
+    }
+    private UUID serviceMember(UUID tenant,kz.rm.iam.JourneySignedActorFixture issuer) {
+        UUID account=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(UUID.randomUUID(),
+            "scheduler-service-"+UUID.randomUUID(),"Test service")).getId();
+        UUID ownerId=jdbc.queryForObject("""
+            SELECT m.user_id FROM public.iam_org_membership m JOIN public.iam_workspace w ON w.organization_id=m.organization_id
+            WHERE w.id=? AND m.role='OWNER' AND m.status='ACTIVE'
+            """,UUID.class,tenant);
+        var owner=issuer.resolve(jdbc,users,ownerId);
+        var humanFixture=issuer.resolve(jdbc,users,account);
+        var members=context.getBean(kz.rm.iam.TenantMemberEnrollmentService.class);
+        members.invite(owner,tenant,account);members.accept(humanFixture,tenant);
+        var roles=context.getBean(kz.rm.iam.VerifiedTenantRoleCommands.class);
+        var role=roles.createRole(owner,tenant,"INT_SERVICE_"+UUID.randomUUID().toString().substring(0,8).replace("-",""),
+            "Intraday qualification");
+        roles.grant(owner,tenant,role.id(),kz.rm.iam.DomainPermission.SALES_ORDER_READ);
+        roles.assign(owner,tenant,account,role.id());
+        // Controlled test fixture only. No production provisioning or credentials.
+        jdbc.update("UPDATE public.iam_user_account SET principal_kind='SERVICE' WHERE id=?",account);
+        return account;
+    }
+
+    @Test void schedulerIntradayCalendarSlotsPg(){
+        var p=new PeriodResolver.Policy(java.time.ZoneId.of("Asia/Almaty"),1);
+        var d=LocalDate.of(2026,11,27);
+        assertThat(AnalyticalJobService.latestIntraday(d.atTime(2,59).atZone(p.zone()).toInstant(),p)).isEmpty();
+        for(int h=3;h<=21;h+=3){
+            var due=AnalyticalJobService.latestIntraday(d.atTime(h,17).atZone(p.zone()).toInstant(),p).orElseThrow();
+            assertThat(due.slot()).isEqualTo(d.atTime(h,0).atZone(p.zone()).toInstant());
+            assertThat(due.day()).isEqualTo(d);
+            assertThat(due.deadline()).isEqualTo(h==21?d.plusDays(1).atStartOfDay(p.zone()).toInstant():
+                d.atTime(h+3,0).atZone(p.zone()).toInstant());
+        }
+        var berlin=new PeriodResolver.Policy(java.time.ZoneId.of("Europe/Berlin"),1);
+        var spring=AnalyticalJobService.latestIntraday(java.time.Instant.parse("2026-03-29T01:00:01Z"),berlin).orElseThrow();
+        assertThat(java.time.Duration.between(spring.period().startInclusive(),spring.period().endExclusive()).toHours()).isEqualTo(23);
+        var autumn=AnalyticalJobService.latestIntraday(java.time.Instant.parse("2026-10-25T02:00:01Z"),berlin).orElseThrow();
+        assertThat(java.time.Duration.between(autumn.period().startInclusive(),autumn.period().endExclusive()).toHours()).isEqualTo(25);
+    }
+
+    @Test void schedulerIntradaySignedIdentityAndAtomicResultPg() throws Exception {
+        String zone=currentIntradayZone();
+        var facts=ownerFacts(zone);UUID t=facts.tenant();
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID account=serviceMember(t,issuer);
+            var tokenKind=kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID;
+            var actor=issuer.resolveService(jdbc,users,account,tokenKind);
+            for(var invalid:kz.rm.iam.JourneySignedActorFixture.ServiceToken.values()){
+                if(invalid==tokenKind)continue;
+                assertThatThrownBy(()->issuer.resolveService(jdbc,users,account,invalid)).isInstanceOf(SecurityException.class);
+            }
+            assertThatThrownBy(()->issuer.resolve(jdbc,users,account)).isInstanceOf(SecurityException.class);
+            assertThatThrownBy(()->jdbc.update("UPDATE public.iam_user_account SET principal_kind='HUMAN' WHERE id=?",account))
+                .isInstanceOf(DataIntegrityViolationException.class);
+            LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
+            var scope=new IntradayResultStore.Scope(t,account,1,day,7);
+            UUID job=intradayStore.plan(scope).orElseThrow();
+            assertThat(intradayStore.plan(scope)).contains(job);
+            var c=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),1,300).orElseThrow();
+            assertThat(c.type()).isEqualTo("INTRADAY");
+            assertThat(c.job()).isEqualTo(job);
+            assertThat(c.generation()).isNull();
+            var foreign=new IntradayResultStore.Scope(UUID.randomUUID(),account,1,day,7);
+            assertThatThrownBy(()->intradayStore.execute(c,foreign,actor)).isInstanceOf(SecurityException.class);
+            String fault="intraday_fault_"+job.toString().replace("-","");
+            jdbc.execute("CREATE FUNCTION crm."+fault+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.job_id='"
+                +job+"'::uuid AND NEW.status='COMPLETED' THEN RAISE EXCEPTION 'INTRADAY_COMPLETION_FAULT'; END IF; RETURN NEW; END; $$");
+            jdbc.execute("CREATE TRIGGER "+fault+" BEFORE UPDATE ON crm.int_analytics_job_run FOR EACH ROW EXECUTE FUNCTION crm."+fault+"()");
+            try{
+                assertThatThrownBy(()->intradayStore.execute(c,scope,actor)).hasStackTraceContaining("INTRADAY_COMPLETION_FAULT");
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id=? AND acknowledged_at IS NOT NULL",Integer.class,t)).isZero();
+                assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",String.class,t,job)).isEqualTo("RUNNING");
+            }finally{
+                jdbc.execute("DROP TRIGGER "+fault+" ON crm.int_analytics_job_run");
+                jdbc.execute("DROP FUNCTION crm."+fault+"()");
+            }
+            assertThat(intradayStore.execute(c,scope,actor)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+            var stored=intradayStore.completed(c,scope,actor).orElseThrow();
+            assertThat(stored.value()).isEqualTo(2L);
+            assertThat(stored.quality()).isEqualTo("PARTIAL");
+            var oracle=jdbc.queryForObject("""
+                SELECT count(DISTINCT l.order_id) FROM crm.sales_order_line l
+                JOIN (SELECT tenant_id,order_id,min(occurred_at) AS event_at
+                      FROM crm.sales_order_status_event WHERE tenant_id=? AND event_type='PLACED'
+                      GROUP BY tenant_id,order_id HAVING count(*)=1) e
+                  ON (e.tenant_id,e.order_id)=(l.tenant_id,l.order_id)
+                WHERE l.tenant_id=? AND e.event_at>=? AND e.event_at<?
+                """,Long.class,t,t,day.atStartOfDay(java.time.ZoneId.of(zone)).toOffsetDateTime(),stored.cutoff().atOffset(java.time.ZoneOffset.UTC));
+            assertThat(stored.value()).isEqualTo(oracle);
+            assertThat(intradayStore.completed(c,scope,actor)).contains(stored);
+            assertThatThrownBy(()->intradayStore.execute(c,scope,actor)).hasMessage("INT_JOB_LEASE_LOST");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_projection_generation WHERE tenant_id=?",Integer.class,t)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_fact_consumer_receipt WHERE tenant_id=?",Integer.class,t)).isZero();
+            assertThatThrownBy(()->jdbc.update("UPDATE crm.int_intraday_result SET metric_value=3 WHERE tenant_id=? AND job_id=?",t,job))
+                .isInstanceOf(DataIntegrityViolationException.class);
+            jdbc.update("UPDATE public.iam_user_account SET status='SUSPENDED' WHERE id=?",account);
+            assertThatThrownBy(()->intradayStore.completed(c,scope,actor)).isInstanceOf(SecurityException.class);
+        }
+    }
+
+    @Test void schedulerIntradayDirectCompletionRequiresAckPg(){
+        UUID t=activeTenant();UUID job=enqueue(t,"INTRADAY",3,1);
+        claim(t,job,1);
+        try{
+            assertThatThrownBy(()->jdbc.update("""
+                UPDATE crm.int_analytics_job_run SET status='COMPLETED',actual_as_of=clock_timestamp(),source_revision=0,
+                  lease_owner=NULL,lease_until=NULL,cluster_slot=NULL WHERE tenant_id=? AND job_id=?
+                """,t,job)).hasStackTraceContaining("INT_INTRADAY_ATOMIC_PAIR");
+            assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",String.class,t,job)).isEqualTo("RUNNING");
+        }finally{release(t,job);}
     }
 
 }

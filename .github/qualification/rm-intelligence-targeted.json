@@ -340,6 +340,18 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerShutdownReleasesClaimBeforeStartingStepPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayCalendarSlotsPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradaySignedIdentityAndAtomicResultPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayDirectCompletionRequiresAckPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

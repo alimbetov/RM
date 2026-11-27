@@ -15,6 +15,10 @@ import org.springframework.stereotype.Service;
 public class OidcActorResolver {
     private final JwtDecoder decoder;
     private final UserAccountRepository users;
+    @org.springframework.beans.factory.annotation.Value("${rm.intelligence.scheduler.service-audience:}")
+    private String serviceAudience="";
+    @org.springframework.beans.factory.annotation.Value("${rm.intelligence.scheduler.service-client-id:}")
+    private String serviceClient="";
 
     public OidcActorResolver(JwtDecoder decoder,UserAccountRepository users) {
         this.decoder=decoder;this.users=users;
@@ -25,6 +29,9 @@ public class OidcActorResolver {
             throw new SecurityException("Verified bearer token required");
         try {
             var jwt=decoder.decode(accessToken);
+            if((!serviceAudience.isBlank()&&java.util.Objects.requireNonNullElse(jwt.getAudience(),java.util.List.<String>of()).contains(serviceAudience))
+               ||(!serviceClient.isBlank()&&serviceClient.equals(jwt.getClaimAsString("azp"))))
+                throw new SecurityException("Service token cannot use user admission");
             String subject=jwt.getSubject();
             if(subject==null || subject.isBlank() || jwt.getExpiresAt()==null)
                 throw new SecurityException("OIDC principal subject or expiry missing");

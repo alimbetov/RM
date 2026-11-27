@@ -7171,6 +7171,16 @@ ALTER TABLE public.iam_user_account ADD CONSTRAINT ck_iam_principal_kind CHECK(p
 --rollback ALTER TABLE public.iam_user_account DROP COLUMN principal_kind;
 
 --changeset rm:0226-int-intraday-result dbms:postgresql splitStatements:false
+CREATE FUNCTION public.iam_principal_kind_guard() RETURNS trigger LANGUAGE plpgsql
+ SET search_path=pg_catalog,pg_temp AS $
+BEGIN
+ IF OLD.principal_kind='SERVICE' AND NEW.principal_kind<>'SERVICE'
+ THEN RAISE EXCEPTION 'IAM_SERVICE_CLASSIFICATION_IMMUTABLE' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $;
+REVOKE ALL ON FUNCTION public.iam_principal_kind_guard() FROM PUBLIC;
+CREATE TRIGGER trg_iam_principal_kind BEFORE UPDATE OF principal_kind ON public.iam_user_account
+ FOR EACH ROW EXECUTE FUNCTION public.iam_principal_kind_guard();
 -- No runtime GRANT or service account provisioning in this changeset.
 CREATE TABLE crm.int_intraday_result (
  tenant_id uuid NOT NULL,job_id uuid NOT NULL,
@@ -7252,6 +7262,8 @@ CREATE CONSTRAINT TRIGGER trg_int_intraday_result_pair AFTER INSERT OR UPDATE OR
 CREATE FUNCTION crm.int_intraday_register(t uuid,j uuid,actor uuid,v bigint,d text,b timestamptz,e timestamptz)
  RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.iam_user_account u WHERE u.id=actor AND u.status='ACTIVE' AND u.principal_kind='SERVICE')
+ THEN RAISE EXCEPTION 'INT_INTRADAY_SERVICE_ACCOUNT' USING ERRCODE='23514'; END IF;
  INSERT INTO crm.int_intraday_result(tenant_id,job_id,service_account_id,scope_version,scope_digest,day_start,day_end)
  VALUES(t,j,actor,v,d,b,e);
  RETURN true;

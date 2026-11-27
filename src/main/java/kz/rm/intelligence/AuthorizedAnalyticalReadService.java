@@ -106,9 +106,8 @@ public class AuthorizedAnalyticalReadService {
     record IntradayObservation(Result result,Instant readObservedAt){}
     /** Called only after the outer service IAM and job fences are held.
      * Current-day BOOKED_ORDERS only, same ownerValue and result factory. */
-    IntradayObservation readIntraday(UUID tenant,long calendar,LocalDate day){
-        if(!TransactionSynchronizationManager.isActualTransactionActive())
-            throw new IllegalStateException("INT_INTRADAY_ADMISSION_REQUIRED");
+    IntradayObservation readIntraday(kz.rm.iam.TenantAuthorization.IntradayReadPermit permit,UUID tenant,long calendar,LocalDate day){
+        Objects.requireNonNull(permit).assertCurrent(tenant);
         var tx=new TransactionTemplate(manager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);

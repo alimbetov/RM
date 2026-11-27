@@ -66,5 +66,28 @@ public final class JourneySignedActorFixture implements AutoCloseable {
             return joined+"."+b64(signature);
         }catch(Exception e){throw new IllegalStateException("Signed journey token creation failed",e);}
     }
+    public enum ServiceToken { VALID, WRONG_CLIENT, DUAL_AUDIENCE, USER_AUDIENCE, WRONG_ISSUER, EXPIRED, ID_TOKEN, BAD_SIGNATURE }
+    public VerifiedServiceActor resolveService(JdbcTemplate jdbc,UserAccountRepository users,UUID user,ServiceToken variant){
+        try{
+            String subject=jdbc.queryForObject("SELECT external_subject FROM public.iam_user_account WHERE id=?",String.class,user);
+            long now=Instant.now().getEpochSecond();
+            String header="{\"alg\":\"RS256\",\"typ\":\"JWT\"}";
+            String aud=variant==ServiceToken.DUAL_AUDIENCE?"\"rm-service\",\"rm-api\"":
+                variant==ServiceToken.USER_AUDIENCE?"\"rm-api\"":"\"rm-service\"";
+            String body="{\"iss\":\""+(variant==ServiceToken.WRONG_ISSUER?"https://foreign-issuer.test":ISSUER)+
+                "\",\"aud\":["+aud+"],\"sub\":\""+subject+"\",\"azp\":\""+
+                (variant==ServiceToken.WRONG_CLIENT?"wrong-client":"rm-intraday")+"\",\"typ\":\""+
+                (variant==ServiceToken.ID_TOKEN?"ID":"Bearer")+"\",\"iat\":"+(now-600)+
+                ",\"nbf\":"+(now-600)+",\"exp\":"+(variant==ServiceToken.EXPIRED?now-300:now+600)+"}";
+            String joined=b64(header.getBytes(StandardCharsets.UTF_8))+"."+b64(body.getBytes(StandardCharsets.UTF_8));
+            Signature signer=Signature.getInstance("SHA256withRSA");signer.initSign(key.getPrivate());
+            signer.update(joined.getBytes(StandardCharsets.US_ASCII));byte[] signature=signer.sign();
+            if(variant==ServiceToken.BAD_SIGNATURE)signature[0]^=1;
+            var serviceDecoder=NimbusJwtDecoder.withPublicKey((RSAPublicKey)key.getPublic()).build();
+            OidcJwtConfiguration.configureValidation(serviceDecoder,ISSUER,"rm-service");
+            return new OidcServiceActorResolver(serviceDecoder,users,"rm-service","rm-intraday").resolve(joined+"."+b64(signature));
+        }catch(SecurityException ex){throw ex;}
+        catch(Exception ex){throw new IllegalStateException("Service fixture failed",ex);}
+    }
     @Override public void close(){server.stop(0);}
 }

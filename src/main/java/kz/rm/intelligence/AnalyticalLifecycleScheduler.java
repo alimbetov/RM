@@ -68,7 +68,7 @@ class AnalyticalLifecycleScheduler {
         if(stopping.get())return;
         var counts=new EnumMap<AnalyticalJobRepository.PlanState,Integer>(AnalyticalJobRepository.PlanState.class);
         int failures=0;
-        for(int i=0;i<Math.min(50,pilots.size());i++){
+        for(int i=0;i<Math.min(intraday==null?50:25,pilots.size());i++){
             if(stopping.get())return;
             var pilot=pilots.get(cursor);
             cursor=(cursor+1)%pilots.size();
@@ -85,7 +85,7 @@ class AnalyticalLifecycleScheduler {
         }
         if(intraday!=null){
             var tenants=intraday.tenants();
-            for(int i=0;i<Math.min(50,tenants.size());i++){
+            for(int i=0;i<Math.min(25,tenants.size());i++){
                 if(stopping.get())return;
                 UUID tenant=tenants.get(intradayCursor);
                 intradayCursor=(intradayCursor+1)%tenants.size();

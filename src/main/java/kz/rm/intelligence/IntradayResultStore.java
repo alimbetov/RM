@@ -132,7 +132,7 @@ class IntradayResultStore {
             throw new SecurityException("INT_INTRADAY_SCOPE_DENIED");
         return tx(180,()->{
             jobs.lockClaimForActivation(claim);
-            authorization.requireIntradayRead(actor,scope.tenant());
+            var permit=authorization.requireIntradayRead(actor,scope.tenant());
             var org=jdbc.query("""
                 SELECT o.id FROM public.org_organization o JOIN public.iam_workspace w ON w.organization_id=o.id
                 WHERE w.id=? AND o.status='ACTIVE' FOR SHARE OF o NOWAIT
@@ -149,7 +149,19 @@ class IntradayResultStore {
                 jobs.skipIntraday(claim);return AnalyticalJobService.RunResult.SKIPPED;
             }
             if(!compatible(r,scope,cal,due.get()))throw new SecurityException("INT_INTRADAY_SCOPE_CHANGED");
-            var observation=read.readIntraday(r.tenant(),r.calendar(),r.day());var result=observation.result();
+            if(Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_type='NIGHT'
+                  AND status IN ('PENDING','RUNNING','BLOCKED','FAILED'))
+                """,Boolean.class,r.tenant()))){
+                jobs.deferIntraday(claim);return AnalyticalJobService.RunResult.YIELDED;
+            }
+            AuthorizedAnalyticalReadService.IntradayObservation observation;
+            try{observation=read.readIntraday(permit,r.tenant(),r.calendar(),r.day());}
+            catch(IllegalStateException ex){
+                if(!"INT_INTRADAY_DAY_DRIFT".equals(ex.getMessage()))throw ex;
+                jobs.skipIntraday(claim);return AnalyticalJobService.RunResult.SKIPPED;
+            }
+            var result=observation.result();
             Instant ack=now();
             if(!ack.isBefore(due.get().deadline())){jobs.skipIntraday(claim);return AnalyticalJobService.RunResult.SKIPPED;}
             actor.accountId();
@@ -167,19 +179,54 @@ class IntradayResultStore {
                 SELECT crm.int_intraday_ack(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,Boolean.class,r.tenant(),r.job(),claim.worker(),claim.token(),claim.slot(),scope.account(),scope.digest(),
                 utc(result.observedAt()),utc(observation.readObservedAt()),result.sourceRevision(),value,result.quality().name(),
-                result.qualityReason(),digest,utc(ack),utc(due.get().deadline()))))
+                result.qualityReason(),digest,utc(ack),utc(due.get().deadline().isBefore(actor.expiresAt())?due.get().deadline():actor.expiresAt()))))
                 throw new IllegalStateException("INT_INTRADAY_ACK_FAILED");
             return AnalyticalJobService.RunResult.COMPLETED;
         });
     }
+    record Stored(UUID job,Long value,String quality,String reason,Instant cutoff,Instant observed,long revision,Instant ack,String digest){}
+    /** Exact committed outcome, reauthorized. No recomputation or public endpoint. */
+    Optional<Stored> completed(AnalyticalJobRepository.Claim claim,Scope scope,VerifiedServiceActor actor){
+        if(!"INTRADAY".equals(claim.type())||!scope.tenant().equals(claim.tenant())||!scope.account().equals(actor.accountId()))
+            throw new SecurityException("INT_INTRADAY_SCOPE_DENIED");
+        return tx(10,()->{
+            authorization.requireIntradayRead(actor,scope.tenant());
+            var r=jdbc.query(REQUEST_SQL+" AND j.job_id=?",rs->rs.next()?request(rs):null,claim.tenant(),claim.job());
+            if(r==null||!r.account().equals(scope.account())||r.scopeVersion()!=scope.version()||!r.scopeDigest().equals(scope.digest()))
+                return Optional.<Stored>empty();
+            var cal=calendar(r.tenant(),now());
+            if(cal==null||cal.version()!=r.calendar()||!cal.zone().equals(r.zone()))return Optional.<Stored>empty();
+            if(!Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM public.iam_workspace w JOIN public.org_organization o ON o.id=w.organization_id
+                WHERE w.id=? AND o.status='ACTIVE')
+                """,Boolean.class,r.tenant())))throw new SecurityException("INT_INTRADAY_ORG_DENIED");
+            var stored=jdbc.query("""
+                SELECT x.metric_value,x.quality,x.quality_reason,x.actual_as_of,x.read_observed_at,x.source_revision,
+                    x.acknowledged_at,x.result_digest
+                FROM crm.int_intraday_result x JOIN crm.int_analytics_job_run j USING(tenant_id,job_id)
+                WHERE x.tenant_id=? AND x.job_id=? AND j.status='COMPLETED' AND x.acknowledged_at IS NOT NULL
+                  AND (j.actual_as_of,j.source_revision)=(x.actual_as_of,x.source_revision)
+                """,rs->rs.next()?new Stored(r.job(),rs.getObject(1,Long.class),rs.getString(2),rs.getString(3),
+                    rs.getObject(4,OffsetDateTime.class).toInstant(),rs.getObject(5,OffsetDateTime.class).toInstant(),
+                    rs.getLong(6),rs.getObject(7,OffsetDateTime.class).toInstant(),rs.getString(8)):null,
+                r.tenant(),r.job());
+            if(stored!=null&&!stored.digest().equals(resultDigest(r,stored.cutoff(),stored.observed(),stored.revision(),
+                stored.value(),stored.quality(),stored.reason(),stored.ack())))
+                throw new IllegalStateException("INT_INTRADAY_DIGEST_MISMATCH");
+            actor.accountId();
+            return Optional.ofNullable(stored);
+        });
+    }
+    private static final java.time.format.DateTimeFormatter MICROS=new java.time.format.DateTimeFormatterBuilder().appendInstant(6).toFormatter();
+    private static String instant(Instant i){return MICROS.format(i);}
     // Fixed-order, unambiguous ASCII fields (all variable text comes from
     // constrained enums/IANA zone or hex); pipe separator forbidden in fields.
     static String resultDigest(Request r,Instant cutoff,Instant observed,long revision,Long value,String quality,String reason,Instant ack){
         return hash(String.join("|","1","INTRADAY_SNAPSHOT_STORE_V1",r.tenant().toString(),r.job().toString(),
             r.account().toString(),Long.toString(r.scopeVersion()),r.scopeDigest(),Long.toString(r.calendar()),r.zone(),
-            r.day().toString(),r.slot().toString(),r.start().toString(),r.end().toString(),"BOOKED_ORDERS","1","COUNT","L0",
-            "null","null","null","null","null","null","null",cutoff.toString(),observed.toString(),Long.toString(revision),
-            value==null?"null":value.toString(),quality,reason,ack.toString()));
+            r.day().toString(),instant(r.slot()),instant(r.start()),instant(r.end()),"BOOKED_ORDERS","1","COUNT","L0",
+            "null","null","null","null","null","null","null",instant(cutoff),instant(observed),Long.toString(revision),
+            value==null?"null":value.toString(),quality,reason,instant(ack)));
     }
     static String hash(String text){
         try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}

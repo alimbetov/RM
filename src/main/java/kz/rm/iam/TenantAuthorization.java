@@ -172,8 +172,6 @@ public class TenantAuthorization {
         } else {
             lockActorAndTenant(actorId,tenantId);
         }
-        if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT principal_kind='HUMAN' FROM public.iam_user_account WHERE id=?",Boolean.class,actorId)))
-            throw new SecurityException("Human principal required");
         record ReadAdmission(OrganizationMembershipEntity.Role role,boolean enforced,boolean granted) {}
         ReadAdmission admission=jdbc.query("""
                 SELECT m.role,
@@ -191,6 +189,7 @@ public class TenantAuthorization {
                   ON m.organization_id=w.organization_id AND m.user_id=?
                 WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
                   AND m.status='ACTIVE'
+                  AND EXISTS(SELECT 1 FROM public.iam_user_account u WHERE u.id=m.user_id AND u.principal_kind='HUMAN')
                 """,rs->rs.next()?new ReadAdmission(
                     OrganizationMembershipEntity.Role.valueOf(rs.getString(1)),
                     rs.getBoolean(2),rs.getBoolean(3)):null,
@@ -251,8 +250,23 @@ public class TenantAuthorization {
 
     /** Narrow service-only admission. Reuse the actor -> workspace lock protocol,
      * fresh DB membership and effective role grants, not a synthetic VerifiedActor. */
+    public static final class IntradayReadPermit {
+        private final UUID tenant;
+        private final VerifiedServiceActor actor;
+        private final TransactionSynchronization marker;
+        private IntradayReadPermit(UUID tenant,VerifiedServiceActor actor,TransactionSynchronization marker){
+            this.tenant=tenant;this.actor=actor;this.marker=marker;
+        }
+        public void assertCurrent(UUID expectedTenant){
+            actor.accountId();
+            if(!tenant.equals(expectedTenant)||!TransactionSynchronizationManager.isActualTransactionActive()
+               ||!TransactionSynchronizationManager.isSynchronizationActive()
+               ||!TransactionSynchronizationManager.getSynchronizations().contains(marker))
+                throw new SecurityException("INT_INTRADAY_PERMIT_REQUIRED");
+        }
+    }
     @Transactional(propagation=Propagation.MANDATORY)
-    public void requireIntradayRead(VerifiedServiceActor actor,UUID tenantId) {
+    public IntradayReadPermit requireIntradayRead(VerifiedServiceActor actor,UUID tenantId) {
         UUID id=actor.accountId();
         lockActorAndTenant(id,tenantId);
         boolean allowed=Boolean.TRUE.equals(jdbc.queryForObject("""
@@ -275,6 +289,9 @@ public class TenantAuthorization {
             """,Boolean.class,tenantId,id,actor.subject()));
         if(!allowed)throw new SecurityException("INT_SERVICE_SCOPE_DENIED");
         actor.accountId();
+        TransactionSynchronization marker=new TransactionSynchronization(){};
+        TransactionSynchronizationManager.registerSynchronization(marker);
+        return new IntradayReadPermit(tenantId,actor,marker);
     }
 
     private boolean permitted(DomainPermission permission, OrganizationMembershipEntity.Role role) {

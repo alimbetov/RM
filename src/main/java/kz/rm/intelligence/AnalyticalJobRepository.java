@@ -385,6 +385,11 @@ class AnalyticalJobRepository {
             (rs,n)->rs.getObject(1,UUID.class),fenceArgs(c)).size()!=1)
             throw new IllegalStateException("INT_JOB_LEASE_LOST");
     }
+    void deferIntraday(Claim c){
+        requireActivationTransaction();
+        if(!"INTRADAY".equals(c.type())||!release(c,"PENDING",null))
+            throw new IllegalStateException("INT_JOB_LEASE_LOST");
+    }
     void skipIntraday(Claim c){
         requireActivationTransaction();
         if(!"INTRADAY".equals(c.type())||!release(c,"SKIPPED",Failure.OBSOLETE_SLOT))

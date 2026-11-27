@@ -33,7 +33,7 @@ public class RmOidcHttpSecurity {
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth->oauth.jwt(jwt->jwt.jwtAuthenticationConverter(token->{
                 String subject=token.getSubject();
-                boolean service=(!serviceAudience.isBlank()&&token.getAudience().contains(serviceAudience))
+                boolean service=(!serviceAudience.isBlank()&&java.util.Objects.requireNonNullElse(token.getAudience(),java.util.List.<String>of()).contains(serviceAudience))
                     ||(!serviceClient.isBlank()&&serviceClient.equals(token.getClaimAsString("azp")))
                     ||(subject!=null&&users.findByExternalSubject(subject).map(u->
                         u.getPrincipalKind()!=UserAccountEntity.PrincipalKind.HUMAN).orElse(false));
