@@ -26,6 +26,22 @@
           "EXTERNAL_ENVIRONMENT_UNQUALIFIED",
           "BRANCH_PROTECTION_UNAVAILABLE"
         ]
+      },
+      "planningOverlay": {
+        "schema": "RM-CI-R3.6C.2/overlay-v1",
+        "parentSha": "0eecb9bca9021939c6b28924cdb1c540a1fb6571",
+        "changes": [
+          {
+            "path": ".github/workflows/rm-ci-impact-shadow.yml",
+            "reviewedBlob": "31dcd42dccd2fe2a123d633a2cf52cc303120210",
+            "planningBlob": "089e05c7e03b3c13c082b9d97ee84fe28fbc99d6"
+          },
+          {
+            "path": ".github/qualification/rm-ci-workflow-dependencies.json",
+            "reviewedBlob": "a890778b555b23ea97113d2f9d4e7839ee4390e9",
+            "planningBlob": "7f2e3fd7e05c58c5a5553768929989f3ede949d1"
+          }
+        ]
       }
     }
   ],

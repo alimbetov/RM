@@ -2,6 +2,7 @@
 """R3.6C.1: bounded dependency audit. Does not grant selective execution."""
 import json
 import hashlib
+import argparse
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
@@ -33,7 +34,7 @@ def load_contract(root):
     require(len(qualified) == 1, "PILOT_SCOPE")
     row = qualified[0]
     require(set(row) == {"path", "mode", "scope", "dependencyClosure", "executionAllowed",
-                         "reviewedSha", "reviewedDependencyFingerprint", "reviewedDependencyCount", "evidence"}
+                         "reviewedSha", "reviewedDependencyFingerprint", "reviewedDependencyCount", "evidence", "planningOverlay"}
             and row["path"] == "docs/reviews/RM-B2-1R-CI-RECOVERY.md"
             and row["mode"] == "FAST_DOC" and row["scope"] == "SHADOW_PLANNING_ONLY"
             and row["dependencyClosure"] == "BOUNDED_STATIC_REVIEW"
@@ -50,6 +51,17 @@ def load_contract(root):
                     ("dependencyAuditRun", "dependencyAuditJob", "dependencyAuditArtifact", "fullExactShaRun"))
             and set(evidence["limitations"]) == {"DYNAMIC_TRANSITIVE_READS_NOT_PROVEN",
                     "EXTERNAL_ENVIRONMENT_UNQUALIFIED", "BRANCH_PROTECTION_UNAVAILABLE"}, "EVIDENCE_CONTRACT")
+    overlay = row["planningOverlay"]
+    require(set(overlay) == {"schema", "parentSha", "changes"}
+            and overlay["schema"] == "RM-CI-R3.6C.2/overlay-v1"
+            and re.fullmatch(r"[0-9a-f]{40}", overlay["parentSha"]), "OVERLAY_CONTRACT")
+    changes = overlay["changes"]
+    require(len(changes) == 2 and {x["path"] for x in changes} == {
+            ".github/workflows/rm-ci-impact-shadow.yml",
+            ".github/qualification/rm-ci-workflow-dependencies.json"}, "OVERLAY_SCOPE")
+    require(all(set(x) == {"path", "reviewedBlob", "planningBlob"}
+                and all(re.fullmatch(r"[0-9a-f]{40}", x[k]) for k in ("reviewedBlob", "planningBlob"))
+                and x["reviewedBlob"] != x["planningBlob"] for x in changes), "OVERLAY_BLOBS")
     require(all(x["path"] != row["path"] for x in data["rejected"]), "REJECTED_CANDIDATE")
     return row
 
@@ -80,9 +92,22 @@ def dependency_fingerprint(entries, candidate):
     payload = json.dumps(rows, ensure_ascii=True, separators=(",", ":")).encode("ascii")
     return len(rows), hashlib.sha256(payload).hexdigest()
 
+def reviewed_fingerprint(entries, row):
+    normalized = dict(entries)
+    # Only the exact reviewed C.2 integration blobs may normalize to C.1.
+    # A third version, missing file or mode drift invalidates the review.
+    for change in row.get("planningOverlay", {}).get("changes", []):
+        p = change["path"]
+        require(normalized.get(p) == ("100644", change["planningBlob"]), "OVERLAY_DRIFT")
+        normalized[p] = ("100644", change["reviewedBlob"])
+    return dependency_fingerprint(normalized, row["path"])
+
 def review_matches(entries, row):
-    count, digest = dependency_fingerprint(entries, row["path"])
-    return count == row["reviewedDependencyCount"] and digest == row["reviewedDependencyFingerprint"]
+    try:
+        count, digest = reviewed_fingerprint(entries, row)
+        return count == row["reviewedDependencyCount"] and digest == row["reviewedDependencyFingerprint"]
+    except ValueError:
+        return False
 
 def inspect_diff(root, before, head, candidate):
     """Candidate only when both committed trees differ in one regular existing Markdown blob."""
@@ -139,6 +164,7 @@ def audit(root, commit, candidate):
     require(qualification["path"] == candidate, "CANDIDATE_MISMATCH")
     count, digest = dependency_fingerprint(entries, candidate)
     fingerprint_matches = review_matches(entries, qualification)
+    normalized_digest = reviewed_fingerprint(entries, qualification)[1] if fingerprint_matches else None
     direct = [line for line in machine if candidate in line or path.name in line]
     planning = fingerprint_matches and not direct and not docs
     blockers = list(qualification["evidence"]["limitations"])
@@ -153,13 +179,82 @@ def audit(root, commit, candidate):
                 reviewedSha=qualification["reviewedSha"],
                 reviewedDependencyFingerprint=qualification["reviewedDependencyFingerprint"],
                 actualDependencyFingerprint=digest, actualDependencyCount=count,
+                normalizedReviewedFingerprint=normalized_digest,
                 reviewFingerprintMatches=fingerprint_matches,
                 qualifiedForShadowPlanning=planning,
                 executionAllowed=False, decision="FULL_REQUIRED", blockers=blockers)
 
+def build_plan(root, before, head, row, gates, impact, event, ref, release=False):
+    """Deterministic advisory result. No trigger, release or evidence-reuse authority."""
+    gates = sorted(gates)
+    require(len(gates) == 12 and len(set(gates)) == 12, "MANDATORY_GATE_SET")
+    result = {"schema": "RM-CI-R3.6C.2/v1", "before": before, "head": head,
+              "event": event, "ref": ref, "releaseRequested": release,
+              "shadowOnly": True, "executionAllowed": False,
+              "actualDecision": "FULL_REQUIRED", "releasePolicy": "FULL_EXACT_SHA",
+              "releaseAdmission": "DENIED", "evidenceReuse": "FORBIDDEN",
+              "otherWorkflowPolicy": "EXISTING_TRIGGERS_UNCHANGED",
+              "planMode": "FULL_REQUIRED", "reason": "UNVERIFIED_PLAN_INPUT",
+              "plannedGates": gates, "deferredCandidates": [],
+              "requiredExecutedGates": gates, "candidate": row["path"],
+              "reviewedDependencyFingerprint": row["reviewedDependencyFingerprint"]}
+    try:
+        if release or event != "push" or ref != "refs/heads/base_dev":
+            result["reason"] = "NON_DEVELOPMENT_PUSH_OR_RELEASE"
+        elif not inspect_diff(root, before, head, row["path"]):
+            result["reason"] = "NOT_EXACT_SINGLE_DOCUMENT_CHANGE"
+        elif (impact.get("schema") != "RM-CI-R3-SHADOW/v1"
+              or impact.get("before") != before or impact.get("head") != head
+              or impact.get("shadowOnly") is not True
+              or impact.get("admission") != "UNCHANGED_FULL_REQUIRED"
+              or impact.get("detail") != "VERIFIED_ANCESTOR_DIFF"
+              or impact.get("paths") != [row["path"]]
+              or sorted(impact.get("requiredExecutedGates", [])) != gates):
+            result["reason"] = "LEGACY_IMPACT_MISMATCH"
+        else:
+            anchor = row.get("planningOverlay", {}).get("parentSha", row["reviewedSha"])
+            git(root, "merge-base", "--is-ancestor", anchor, before)
+            require(not git(root, "status", "--porcelain", "--untracked-files=no").strip(), "DIRTY_CHECKOUT")
+            if not all(review_matches(tracked(root, c), row) for c in (before, head)):
+                result["reason"] = "REVIEW_DEPENDENCY_DRIFT"
+            else:
+                observation = audit(root, head, row["path"])
+                if (observation.get("qualifiedForShadowPlanning") is True
+                    and observation.get("executionAllowed") is False
+                    and observation.get("sha") == head):
+                    result.update(planMode="FAST_DOC_SHADOW", reason="BOUNDED_DOCUMENT_PILOT",
+                                  plannedGates=[], deferredCandidates=gates)
+                else:
+                    result["reason"] = "ALLOWLIST_AUDIT_DENIED"
+    except (ValueError, subprocess.CalledProcessError, OSError, KeyError, TypeError, AttributeError):
+        result["reason"] = "UNVERIFIED_PLAN_INPUT"
+    # This digest covers the entire plan including the always-full execution policy.
+    result["planDigest"] = hashlib.sha256(json.dumps(result, sort_keys=True,
+        ensure_ascii=True, separators=(",", ":")).encode("ascii")).hexdigest()
+    return result
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--plan", nargs=2, metavar=("BEFORE", "HEAD"))
+    parser.add_argument("--impact", type=Path)
+    parser.add_argument("--event", default="")
+    parser.add_argument("--ref", default="")
+    parser.add_argument("--release", action="store_true")
+    args = parser.parse_args()
     row = load_contract(ROOT)
-    print(json.dumps(audit(ROOT, sha(ROOT, "HEAD"), row["path"]), indent=2))
+    if not args.plan:
+        print(json.dumps(audit(ROOT, sha(ROOT, "HEAD"), row["path"]), indent=2))
+        return
+    # Existing exact gate contract validates inventory identities and artifact sets.
+    # Invalid gate inventory aborts the job rather than publishing an incomplete plan.
+    from verify_rm_development_admission import load_contract as load_gates
+    gates = [r["name"] for r in load_gates(ROOT)]
+    try:
+        impact = json.loads(args.impact.read_text(encoding="utf-8")) if args.impact else {}
+    except (OSError, ValueError):
+        impact = {}
+    print(json.dumps(build_plan(ROOT, *args.plan, row, gates, impact,
+                                args.event, args.ref, args.release), indent=2, sort_keys=True))
 
 if __name__ == "__main__":
     main()

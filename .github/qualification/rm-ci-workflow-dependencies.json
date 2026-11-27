@@ -109,11 +109,12 @@
     },
     {
       "path": ".github/workflows/rm-ci-impact-shadow.yml",
-      "reviewedBlob": "31dcd42dccd2fe2a123d633a2cf52cc303120210",
+      "reviewedBlob": "089e05c7e03b3c13c082b9d97ee84fe28fbc99d6",
       "domainHint": "CI",
       "mandatoryRelease": false,
       "directReview": [
-        "TREE_INVENTORY_ONLY"
+        "TREE_INVENTORY_ONLY",
+        "SHADOW_EXECUTION_PLAN_ONLY"
       ],
       "closure": "UNQUALIFIED",
       "decision": "EXECUTE_REQUIRED"

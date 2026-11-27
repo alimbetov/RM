@@ -2,9 +2,10 @@ import json
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from verify_rm_ci_selective_allowlist import (ROOT, load_contract, audit, inspect_diff,
-    tracked, dependency_fingerprint, review_matches, REGISTRY)
+    tracked, dependency_fingerprint, review_matches, REGISTRY, build_plan)
 
 class SelectiveAllowlistTest(unittest.TestCase):
     def setUp(self):
@@ -94,6 +95,83 @@ class SelectiveAllowlistTest(unittest.TestCase):
         self.write(self.candidate, "changed note")
         self.write(REGISTRY, "{}")
         self.assertFalse(inspect_diff(self.root, self.base, self.commit(), self.candidate))
+
+    def plan_fixture(self):
+        count, digest = dependency_fingerprint(tracked(self.root, self.base), self.candidate)
+        row = {"path": self.candidate, "reviewedSha": self.base,
+               "reviewedDependencyCount": count, "reviewedDependencyFingerprint": digest}
+        gates = [f"Gate {i:02d}" for i in range(12)]
+        self.write(self.candidate, "changed note")
+        head = self.commit()
+        impact = {"schema": "RM-CI-R3-SHADOW/v1", "before": self.base, "head": head,
+                  "shadowOnly": True, "admission": "UNCHANGED_FULL_REQUIRED",
+                  "detail": "VERIFIED_ANCESTOR_DIFF", "paths": [self.candidate],
+                  "requiredExecutedGates": gates}
+        return head, row, gates, impact
+
+    def plan(self, head, row, gates, impact, event="push", ref="refs/heads/base_dev", release=False):
+        return build_plan(self.root, self.base, head, row, gates, impact, event, ref, release)
+
+    def test_plan_is_deterministic_and_never_authorizes_execution(self):
+        head, row, gates, impact = self.plan_fixture()
+        observation = {"sha": head, "qualifiedForShadowPlanning": True, "executionAllowed": False}
+        with patch("verify_rm_ci_selective_allowlist.audit", return_value=observation):
+            a = self.plan(head, row, gates, impact)
+            b = self.plan(head, row, list(reversed(gates)), impact)
+        self.assertEqual(a, b)
+        self.assertEqual("FAST_DOC_SHADOW", a["planMode"])
+        self.assertEqual(gates, a["deferredCandidates"])
+        self.assertEqual([], a["plannedGates"])
+        self.assertEqual(gates, a["requiredExecutedGates"])
+        self.assertEqual("FULL_REQUIRED", a["actualDecision"])
+        self.assertFalse(a["executionAllowed"])
+        self.assertEqual(64, len(a["planDigest"]))
+
+    def test_plan_release_and_non_push_are_full(self):
+        head, row, gates, impact = self.plan_fixture()
+        for event, ref, release in (("push", "refs/heads/base_dev", True),
+                                    ("workflow_dispatch", "refs/heads/base_dev", False),
+                                    ("push", "refs/heads/main", False)):
+            with self.subTest(event=event, ref=ref, release=release):
+                a = self.plan(head, row, gates, impact, event, ref, release)
+                self.assertEqual("FULL_REQUIRED", a["planMode"])
+                self.assertEqual(gates, a["plannedGates"])
+                self.assertEqual([], a["deferredCandidates"])
+
+    def test_plan_legacy_mismatch_is_full(self):
+        head, row, gates, impact = self.plan_fixture()
+        impact["head"] = "0"*40
+        a = self.plan(head, row, gates, impact)
+        self.assertEqual("LEGACY_IMPACT_MISMATCH", a["reason"])
+        self.assertEqual(gates, a["plannedGates"])
+
+    def test_plan_dependency_drift_and_audit_denial_are_full(self):
+        head, row, gates, impact = self.plan_fixture()
+        with patch("verify_rm_ci_selective_allowlist.audit", return_value={"sha":head,
+                   "qualifiedForShadowPlanning": False, "executionAllowed": False}):
+            self.assertEqual("ALLOWLIST_AUDIT_DENIED", self.plan(head, row, gates, impact)["reason"])
+        row["reviewedDependencyFingerprint"] = "0"*64
+        self.assertEqual("REVIEW_DEPENDENCY_DRIFT", self.plan(head, row, gates, impact)["reason"])
+
+    def test_plan_invalid_range_and_mixed_change_are_full(self):
+        head, row, gates, impact = self.plan_fixture()
+        self.assertEqual("FULL_REQUIRED", self.plan("0"*40, row, gates, impact)["planMode"])
+        self.write("src/Main.java", "class Main { int z; }")
+        changed = self.commit()
+        self.assertEqual("NOT_EXACT_SINGLE_DOCUMENT_CHANGE", self.plan(changed, row, gates, impact)["reason"])
+
+    def test_overlay_accepts_exact_planning_blob_only(self):
+        entries = {self.candidate: ("100644", "a"*40), "workflow": ("100644", "b"*40)}
+        count, digest = dependency_fingerprint(entries, self.candidate)
+        row = {"path": self.candidate, "reviewedDependencyCount": count,
+               "reviewedDependencyFingerprint": digest, "planningOverlay": {"changes": [
+                   {"path":"workflow", "reviewedBlob":"b"*40, "planningBlob":"c"*40}]}}
+        entries["workflow"] = ("100644", "c"*40)
+        self.assertTrue(review_matches(entries, row))
+        entries["workflow"] = ("100644", "d"*40)
+        self.assertFalse(review_matches(entries, row))
+        entries["workflow"] = ("100755", "c"*40)
+        self.assertFalse(review_matches(entries, row))
 
 if __name__ == "__main__":
     unittest.main()
