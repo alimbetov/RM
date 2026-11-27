@@ -48,10 +48,15 @@ class AnalyticalJobService {
         return repository.planNight(tenant,approvedFrom);
     }
     RunResult runNext(UUID worker,Map<UUID,LocalDate> pilot,Limits limits){
-        var claimed=repository.claimNext(worker,pilot,limits.cluster(),limits.leaseSeconds());
-        if(claimed.isEmpty())return RunResult.NO_WORK;
-        var c=claimed.get();
-        return runNight(c,limits);
+        return claimNext(worker,pilot,limits).map(c->runNight(c,limits)).orElse(RunResult.NO_WORK);
+    }
+
+    Optional<AnalyticalJobRepository.Claim> claimNext(UUID worker,Map<UUID,LocalDate> pilot,Limits limits){
+        return repository.claimNext(worker,pilot,limits.cluster(),limits.leaseSeconds());
+    }
+
+    void releaseUnstarted(AnalyticalJobRepository.Claim claim){
+        repository.yieldProgress(claim);
     }
 
     RunResult runNight(AnalyticalJobRepository.Claim c,Limits limits){

@@ -444,4 +444,73 @@ class AnalyticalJobFoundationQualificationTest {
         assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,t)).isEqualTo("COMPLETED");
     }
 
+
+    @Test void schedulerReplacementRollbackPreservesActiveGenerationPg() {
+        UUID t=activeTenant();
+        LocalDate from=LocalDate.of(2026,11,1),until=LocalDate.of(2026,11,26);
+        UUID previous=UUID.randomUUID();
+        var request=new GenerationRebuildService.Request(t,previous,1,from,until.minusDays(1));
+        UUID admission=null;
+        for(int i=0;i<10;i++){
+            var p=rebuild.step(request,100,128);
+            if(p.state()==GenerationRebuildService.State.READY){admission=p.proof();break;}
+        }
+        assertThat(admission).isNotNull();
+        var prior=coverage.activate(t,previous,admission,null);
+        var slot=java.time.Instant.parse("2026-11-26T00:15:00Z");
+        var spec=new AnalyticalJobRepository.NightSpec(t,UUID.randomUUID(),UUID.randomUUID(),slot,slot,
+            until.minusDays(1),1,"Asia/Almaty",from,until,previous);
+        assertThat(jobs.enqueueNight(spec).outcome()).isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
+        var c=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(t,from),1,300).orElseThrow();
+        UUID proof=ready(c);
+        String fault="sched_replace_"+c.job().toString().replace("-","");
+        jdbc.execute("CREATE FUNCTION crm."+fault+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.job_id='"
+            +c.job()+"'::uuid AND NEW.status='COMPLETED' THEN RAISE EXCEPTION 'SCHED_REPLACEMENT_FAULT'; END IF; RETURN NEW; END; $$");
+        jdbc.execute("CREATE TRIGGER "+fault+" BEFORE UPDATE ON crm.int_analytics_job_run FOR EACH ROW EXECUTE FUNCTION crm."+fault+"()");
+        try{
+            assertThatThrownBy(()->coverage.activateScheduled(c,proof,jobs)).hasStackTraceContaining("SCHED_REPLACEMENT_FAULT");
+            assertThat(l1.lifecycle(t,previous)).isEqualTo(new L1ProjectionService.Lifecycle("ACTIVE",1));
+            assertThat(l1.lifecycle(t,c.generation())).isEqualTo(new L1ProjectionService.Lifecycle("BUILDING",0));
+            assertThat(jdbc.queryForObject("SELECT generation_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,t))
+                .isEqualTo(previous);
+            assertThat(jdbc.queryForObject("SELECT dim_proof_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,t))
+                .isEqualTo(prior.activeProof());
+            assertThat(coverage.status(t,previous,prior.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_dim_coverage_proof WHERE tenant_id=? AND generation_id=? AND lifecycle_revision=1",Integer.class,t,c.generation())).isZero();
+        }finally{
+            jdbc.execute("DROP TRIGGER "+fault+" ON crm.int_analytics_job_run");
+            jdbc.execute("DROP FUNCTION crm."+fault+"()");
+        }
+        var replaced=coverage.activateScheduled(c,proof,jobs);
+        assertThat(l1.lifecycle(t,previous)).isEqualTo(new L1ProjectionService.Lifecycle("RETIRED",2));
+        assertThat(l1.lifecycle(t,replaced.generation())).isEqualTo(new L1ProjectionService.Lifecycle("ACTIVE",1));
+        assertThat(jdbc.queryForObject("SELECT generation_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",UUID.class,t))
+            .isEqualTo(c.generation());
+        assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,t)).isEqualTo("COMPLETED");
+    }
+
+    @Test void schedulerRemovedPilotDoesNotStrandExpiredSlotPg() throws Exception {
+        UUID removed=activeTenant(),remaining=activeTenant();
+        enqueue(removed,"NIGHT",0,1);enqueue(remaining,"NIGHT",0,1);
+        LocalDate from=LocalDate.of(2026,11,1);
+        var old=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(removed,from),1,1).orElseThrow();
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while(Boolean.TRUE.equals(jdbc.queryForObject("SELECT lease_until>clock_timestamp() FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",Boolean.class,removed,old.job()))){
+            if(System.nanoTime()>deadline)throw new AssertionError("lease did not expire");
+            Thread.sleep(25);
+        }
+        var remainingScope=java.util.Map.of(remaining,from);
+        UUID worker=UUID.randomUUID();
+        assertThat(jobs.claimNext(worker,remainingScope,1,30)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,removed)).isEqualTo("BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT attempt_token FROM crm.int_analytics_job_run WHERE tenant_id=?",Long.class,removed)).isEqualTo(old.token()+1);
+        assertThat(jobs.renew(old,30)).isEmpty();
+        assertThat(jobs.yieldProgress(old)).isFalse();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_projection_generation WHERE tenant_id=?",Integer.class,removed)).isZero();
+        var next=jobs.claimNext(worker,remainingScope,1,30).orElseThrow();
+        assertThat(next.tenant()).isEqualTo(remaining);
+        assertThat(next.slot()).isEqualTo(old.slot());
+        assertThat(jobs.yieldProgress(next)).isTrue();
+    }
+
 }

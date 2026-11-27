@@ -320,6 +320,14 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerLeaseExpiryDuringActivationRollsBackPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerReplacementRollbackPreservesActiveGenerationPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerRemovedPilotDoesNotStrandExpiredSlotPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

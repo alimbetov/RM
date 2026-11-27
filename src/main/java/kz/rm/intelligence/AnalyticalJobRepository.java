@@ -224,15 +224,15 @@ class AnalyticalJobRepository {
             SELECT EXISTS(SELECT 1 FROM crm.int_analytics_job_run
                 WHERE status='RUNNING' AND cluster_slot>?)
             """,Boolean.class,limit)))throw new IllegalStateException("INT_JOB_CLUSTER_DRAIN_REQUIRED");
-        var args=new ArrayList<Object>();args.add(limit);args.addAll(tenants);
+        // All expired NIGHT rows must be reconciled even if the tenant was
+        // removed from the uniformly configured pilot. No execution outside
+        // that pilot: after takeover the existing scope check blocks the row.
         var expired=jdbc.query("""
             SELECT tenant_id,job_id,cluster_slot,attempt_token FROM crm.int_analytics_job_run
             WHERE status='RUNNING' AND job_type='NIGHT' AND lease_until<=clock_timestamp()
-              AND cluster_slot<=? AND tenant_id IN (
-            """+in+"""
-            )
+              AND cluster_slot<=?
             ORDER BY lease_until,tenant_id,job_id LIMIT 1 FOR UPDATE SKIP LOCKED
-            """,(rs,n)->key(rs),args.toArray()).stream().findFirst();
+            """,(rs,n)->key(rs),limit).stream().findFirst();
         JobKey chosen;
         String oldState;
         if(expired.isPresent()){chosen=expired.get();oldState="RUNNING";}

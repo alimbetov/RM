@@ -26,6 +26,8 @@ class AnalyticalLifecycleScheduler {
     private final AnalyticalJobService.Limits limits;
     private final UUID worker=UUID.randomUUID();
     private final AtomicBoolean stopping=new AtomicBoolean();
+    // Admission is serialized with shutdown, never with the compute step.
+    private final Object admission=new Object();
     private final ThreadPoolExecutor executor=new ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,
         new SynchronousQueue<>(),r->{Thread t=new Thread(r,"rm-intelligence-night");t.setDaemon(true);return t;});
     private int cursor;
@@ -67,8 +69,11 @@ class AnalyticalLifecycleScheduler {
             var pilot=pilots.get(cursor);
             cursor=(cursor+1)%pilots.size();
             try{
-                var plan=service.planNight(pilot.getKey(),pilot.getValue());
-                counts.merge(plan.state(),1,Integer::sum);
+                synchronized(admission){
+                    if(stopping.get())return;
+                    var plan=service.planNight(pilot.getKey(),pilot.getValue());
+                    counts.merge(plan.state(),1,Integer::sum);
+                }
             }catch(RuntimeException ex){
                 failures++;
                 log.warn("RM analytical planning failed tenant={} type={}",pilot.getKey(),ex.getClass().getSimpleName());
@@ -76,13 +81,37 @@ class AnalyticalLifecycleScheduler {
         }
         log.info("RM analytical planning outcomes={} failures={}",counts,failures);
         if(executionEnabled&&!stopping.get()){
-            try{log.info("RM analytical NIGHT result={}",service.runNext(worker,scope,limits));}
-            catch(RuntimeException ex){log.warn("RM analytical worker failed type={}",ex.getClass().getSimpleName());}
+            try{
+                Optional<AnalyticalJobRepository.Claim> claimed;
+                synchronized(admission){
+                    if(stopping.get())return;
+                    claimed=service.claimNext(worker,scope,limits);
+                }
+                if(claimed.isEmpty())return;
+                var claim=claimed.get();
+                if(stopping.get()){
+                    service.releaseUnstarted(claim);
+                    return;
+                }
+                long started=System.nanoTime();
+                try{
+                    var result=service.runNight(claim,limits);
+                    log.info("RM analytical NIGHT tenant={} job={} generation={} token={} slot={} result={} elapsedMs={}",
+                        claim.tenant(),claim.job(),claim.generation(),claim.token(),claim.slot(),result,
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started));
+                }catch(RuntimeException ex){
+                    log.warn("RM analytical NIGHT tenant={} job={} generation={} elapsedMs={} type={}",
+                        claim.tenant(),claim.job(),claim.generation(),TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started),
+                        ex.getClass().getSimpleName());
+                }
+            }catch(RuntimeException ex){log.warn("RM analytical worker failed type={}",ex.getClass().getSimpleName());}
         }
     }
     @PreDestroy void stop(){
         stopping.set(true);
-        executor.shutdown();
+        // Wait only for a short admitted discovery/claim to exit. A compute
+        // step never holds this monitor; uncertain work keeps its lease.
+        synchronized(admission){executor.shutdown();}
         // Never release a lease for a still-running step or interrupt its DB
         // transaction. A hard process stop leaves expiry/takeover to PostgreSQL.
         try{
