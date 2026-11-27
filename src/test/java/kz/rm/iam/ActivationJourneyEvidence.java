@@ -42,11 +42,14 @@ final class ActivationJourneyEvidence {
             L3RollupService l3,MultidimensionalCoverageService coverage,CanonicalFactAppender appender,
             UUID tenant,UUID otherTenant,UUID first,MultidimensionalCoverageService.Activation firstActivation,
             long calendar,long otherCalendar,LocalDate from,LocalDate until,ZoneId zone,UUID order,
-            AuthorizedAnalyticalReadService reader,VerifiedActor staff,AuthorizedAnalyticalReadService.Query stockQuery,BusinessConclusionService conclusions){
+            AuthorizedAnalyticalReadService reader,VerifiedActor staff,AuthorizedAnalyticalReadService.Query stockQuery,BusinessConclusionService conclusions,
+            org.springframework.context.ApplicationContext context){
         // Select a definitely closed daily interval within the generation.
         var readQuery=new AuthorizedAnalyticalReadService.Query(stockQuery.metric(),calendar,PeriodResolver.Code.D,
             from,stockQuery.region(),stockQuery.group(),stockQuery.sku(),stockQuery.warehouses(),stockQuery.currency());
         assertThat(reader.read(staff,tenant,readQuery).route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
+        var reuse=new SnapshotProofReuseEvidence(context,jdbc,manager);
+        reuse.verify(staff,tenant,readQuery,first,firstActivation.activeProof(),MultidimensionalCoverageService.Status.CURRENT);
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),foreign=UUID.randomUUID();
         var pa=prepare(l1,l2,l3,coverage,tenant,a,calendar,from,until,zone);
         var pb=prepare(l1,l2,l3,coverage,tenant,b,calendar,from,until,zone);
@@ -136,6 +139,7 @@ final class ActivationJourneyEvidence {
                 assertThat(fallback.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
                 assertThat(fallback.reason()).isEqualTo("PROOF_STALE");
                 assertThat(fallback.generation()).isNull();assertThat(fallback.proof()).isNull();
+                reuse.verify(staff,tenant,readQuery,winner,activeProof,MultidimensionalCoverageService.Status.STALE);
                 // B4.7: rebuild from a fresh generation, interrupt after a committed
                 // bounded step, then resume with a new service instance.
                 UUID rebuild=UUID.randomUUID();
@@ -254,6 +258,7 @@ final class ActivationJourneyEvidence {
                 assertThat(afterSwitch.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L3);
                 assertThat(afterSwitch.generation()).isEqualTo(rebuild);
                 assertThat(afterSwitch.proof()).isEqualTo(recovered.activeProof());
+                reuse.verify(staff,tenant,readQuery,rebuild,recovered.activeProof(),MultidimensionalCoverageService.Status.CURRENT);
                 for(var value:List.of(concurrentRead,afterSwitch)){
                     if(beforeSwitch.value()==null)assertThat(value.value()).isNull();
                     else assertThat(value.value()).isEqualByComparingTo(beforeSwitch.value());

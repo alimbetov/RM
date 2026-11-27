@@ -46,6 +46,7 @@ public class AuthorizedAnalyticalReadService {
                          DataQuality quality,Route route,String reason,String qualityReason,String unit,String currency,
                          UUID generation,UUID proof,long sourceRevision,Instant observedAt){}
     private record Pointer(UUID generation,UUID proof,L3DerivedSeriesService.Snapshot snapshot){}
+    private record ProofKey(UUID tenant,UUID generation,UUID proof){}
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final L3DerivedSeriesService l3;
@@ -87,17 +88,23 @@ public class AuthorizedAnalyticalReadService {
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             snapshot.setReadOnly(true);snapshot.setTimeout(120);
-            List<List<Result>> result=snapshot.execute(inner->qs.stream().map(query->{
-                var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
-                var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
-                return dates.stream().map(anchor->readSnapshot(tenant,new Query(query.metric(),query.calendarVersion(),
-                    query.period(),anchor,query.region(),query.group(),query.sku(),query.warehouses(),query.currency()),m,f)).toList();
-            }).toList());
+            List<List<Result>> result=snapshot.execute(inner->{
+                // Reuse only within this read-only RR snapshot; every new request
+                // still runs the full independent proof validation.
+                var checkedProofs=new HashMap<ProofKey,MultidimensionalCoverageService.Status>();
+                return qs.stream().map(query->{
+                    var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
+                    var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
+                    return dates.stream().map(anchor->readSnapshot(tenant,new Query(query.metric(),query.calendarVersion(),
+                        query.period(),anchor,query.region(),query.group(),query.sku(),query.warehouses(),query.currency()),m,f,checkedProofs)).toList();
+                }).toList();
+            });
             actor.userId();
             return result;
         });
     }
-    private Result readSnapshot(UUID tenant,Query q,L3DerivedSeriesService.Metric m,L3DerivedSeriesService.Filter f){
+    private Result readSnapshot(UUID tenant,Query q,L3DerivedSeriesService.Metric m,L3DerivedSeriesService.Filter f,
+            Map<ProofKey,MultidimensionalCoverageService.Status> checkedProofs){
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
             c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
             throw new IllegalStateException("ANALYTICAL_POSTGRESQL_REQUIRED");
@@ -140,7 +147,8 @@ public class AuthorizedAnalyticalReadService {
                 reason="OUTSIDE_GENERATION";
             else if(period.endExclusive().isAfter(now))reason="OPEN_PERIOD";
             else{
-                var status=coverage.statusInSnapshot(tenant,pointer.generation(),pointer.proof());
+                var key=new ProofKey(tenant,pointer.generation(),pointer.proof());
+                var status=checkedProofs.computeIfAbsent(key,k->coverage.statusInSnapshot(k.tenant(),k.generation(),k.proof()));
                 reason="PROOF_"+status.name();
                 if(status==MultidimensionalCoverageService.Status.CURRENT){
                     var obs=l3.readPeriods(tenant,pointer.generation(),m,f,q.period(),List.of(period),pointer.snapshot()).getFirst();
