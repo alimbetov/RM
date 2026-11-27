@@ -372,6 +372,42 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerIntradayTwoRealTenantsIsolationPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "independentDesignGoldenM12"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "decimalNormalizationAndNullAreDistinct"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "tenantDatasetAndEvidenceBoundToDigest"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "dimensionsCanonicalOrderAndDuplicates"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "sequenceAndFinalizationFailClosed"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "rejectsInvalidCanonicalInputs"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "actualStoredBytesAndTenantFencePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "mismatchedObservedDigestNeverSealsPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "consumerRegistrationAndClaimAreTenantAndStateScopedPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
