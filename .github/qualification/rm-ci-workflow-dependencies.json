@@ -1,0 +1,508 @@
+{
+  "schema": "RM-CI-R3.6A/v1",
+  "reviewedSha": "19bcf7f29379f5760b9c3677ebd5635838912325",
+  "admission": "ADVISORY_ONLY",
+  "executionPolicy": "UNCHANGED",
+  "reuse": "FORBIDDEN",
+  "commonDependencyCandidates": [
+    "src/main/java/**",
+    "src/main/resources/**",
+    "src/test/**",
+    "pom.xml",
+    ".mvn/**",
+    ".github/**",
+    "docs/operations/**"
+  ],
+  "unresolved": [
+    "transitive Java and Spring context closure",
+    "effective Maven resolution and plugins",
+    "immutable runner JDK and infrastructure identities",
+    "authenticated prior evidence",
+    "branch protection and release orchestration"
+  ],
+  "fallback": "EXECUTE_REQUIRED",
+  "workflows": [
+    {
+      "path": ".github/workflows/crm-r12-populated-upgrade.yml",
+      "reviewedBlob": "cf330ac8c0db3029bdcfd71b2b633c0a739190c9",
+      "domainHint": "CRM",
+      "mandatoryRelease": true,
+      "workflowName": "CRM R1.2 Populated PostgreSQL Upgrade Qualification",
+      "directReview": [
+        "HISTORICAL_UPGRADE",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/crm-r21b-exact-sha.yml",
+      "reviewedBlob": "7e0bf924060ac9ee29abd739dd5a505a66fbba68",
+      "domainHint": "CRM",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/crm-r22-buyer-link-pg.yml",
+      "reviewedBlob": "ddbac02f052325ddb49b5bc1281bc2b71dcbbb61",
+      "domainHint": "CRM",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/crm-r22c-populated-upgrade.yml",
+      "reviewedBlob": "55feba0e4b7e6149ef530a5950767653c1716fdd",
+      "domainHint": "CRM",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/iam-r22f-oidc-revocation-pg.yml",
+      "reviewedBlob": "3c2bb57de4751b7c4d203bb1daca681b2baf7262",
+      "domainHint": "SECURITY",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/inventory-0081-populated-upgrade.yml",
+      "reviewedBlob": "f98f7738fe416da029e95a0c3f96ec62b16fed0a",
+      "domainHint": "INVENTORY",
+      "mandatoryRelease": true,
+      "workflowName": "INVENTORY 0081 Populated PostgreSQL Upgrade Qualification",
+      "directReview": [
+        "HISTORICAL_UPGRADE",
+        "CROSS_DOMAIN_JOURNEY",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/kms-r1-qualification.yml",
+      "reviewedBlob": "00296fdac31534599f60077e724faf906586887e",
+      "domainHint": "SECURITY",
+      "mandatoryRelease": true,
+      "workflowName": "RM Domain Security and PostgreSQL Qualification",
+      "directReview": [
+        "FULL_MAVEN_VERIFY",
+        "ROLE_SQL",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-ci-impact-shadow.yml",
+      "reviewedBlob": "31dcd42dccd2fe2a123d633a2cf52cc303120210",
+      "domainHint": "CI",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-cur-r1c-commerce-admission.yml",
+      "reviewedBlob": "ff1d3446f33a78e9e8cb59b49fe7c6053b612a52",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-cur-r2a-fx-approval.yml",
+      "reviewedBlob": "c0ae1101affc20291ee40c0ad8135794e6919f19",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-cur-r2c-policy-postgresql.yml",
+      "reviewedBlob": "82ddafdb18de798b44ac0b5108e99fef9e7b186e",
+      "domainHint": "FX",
+      "mandatoryRelease": true,
+      "workflowName": "RM CUR-R2C Policy Schema PostgreSQL Qualification",
+      "directReview": [
+        "HISTORICAL_UPGRADE",
+        "ROLE_SQL",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-currency-r1a-pg.yml",
+      "reviewedBlob": "619980d2025ca3d4ac498995d14580edf55082e7",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-exact-sha-admission.yml",
+      "reviewedBlob": "e1b80fa201f2c7379af488c50ec9e354b8414529",
+      "domainHint": "CI",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-fc40-order-execution-pg.yml",
+      "reviewedBlob": "8d0213678bf8bbb7b938463764fb74e3bb82b89d",
+      "domainHint": "COMMERCIAL",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-fx-r0-mock-qualification.yml",
+      "reviewedBlob": "5e0e4846efa523d97faa4d8b901b9bead24aeb67",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-fx-r1a-rate-persistence.yml",
+      "reviewedBlob": "eb96727ed89294dc18df67d05cf2ccfddf40253d",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-fx-r1a2-nbrk-xml-qualification.yml",
+      "reviewedBlob": "1773837a834db0adec0c28dcc4dc6418ea075319",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-fx-r1a3-trusted-nbrk.yml",
+      "reviewedBlob": "dc0e44729b93f2778657da55d1f5c19d281ec33d",
+      "domainHint": "FX",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-iam-seller-r0-postgresql.yml",
+      "reviewedBlob": "d6f64d6dba6d0700f55b3240b01a0cd2b0d7bab3",
+      "domainHint": "SECURITY",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-intelligence-a1-schema.yml",
+      "reviewedBlob": "4c1fb343c640e5487eeebe88a5a96753c8e84804",
+      "domainHint": "INTELLIGENCE",
+      "mandatoryRelease": true,
+      "workflowName": "RM Intelligence A1 PostgreSQL Source Schema",
+      "directReview": [
+        "HISTORICAL_UPGRADE",
+        "SOURCE_INVENTORY",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-intelligence-targeted-pg.yml",
+      "reviewedBlob": "438038466c8e6abf77f7b2911365cdb5681bb2e2",
+      "domainHint": "INTELLIGENCE",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-manual-module-tests.yml",
+      "reviewedBlob": "f60731bb103198124c55c2aee67ab0f824c70b7c",
+      "domainHint": "CI",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-mvp-w23-service-strict-pg.yml",
+      "reviewedBlob": "c24837ff4a8776c9c84fb8c55a2497d21fccc0e6",
+      "domainHint": "CROSS_DOMAIN",
+      "mandatoryRelease": true,
+      "workflowName": "RM MVP W2-W5 Service Journeys PostgreSQL Qualification",
+      "directReview": [
+        "FULL_MAVEN_TEST",
+        "ROLE_PREFLIGHT",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-qr06b-pg.yml",
+      "reviewedBlob": "45a43f1b4b9bb2c99f7db0d2eb5fb7a20ff09b67",
+      "domainHint": "COMMERCIAL",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-qr07-r0-pg.yml",
+      "reviewedBlob": "d08a5657cb62a352c91f73cc73dd3e03b71d778f",
+      "domainHint": "COMMERCIAL",
+      "mandatoryRelease": true,
+      "workflowName": "RM QR-07 R0-R2 Physical Return PostgreSQL Qualification",
+      "directReview": [
+        "FULL_MAVEN_TEST",
+        "EVIDENCE_VERIFIERS",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-qr08-r0-pg.yml",
+      "reviewedBlob": "1433735ecb3b0b1e05d77c12bd317eb5b2c109ac",
+      "domainHint": "COMMERCIAL",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01a-exact-timing.yml",
+      "reviewedBlob": "05eaf766ac3920060670ca1eeb7c7db438644aa1",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01b-overdue.yml",
+      "reviewedBlob": "d3fce78f7a1ad53209d7e1a8a91baf957dfd4920",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01c1-service.yml",
+      "reviewedBlob": "71d8ebe9ec06269a9c27394a952390a9d36df8c2",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01c2-pg.yml",
+      "reviewedBlob": "15ff1b910ad830ee0f0e0121355912fe68ef7077",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01c2b-sql.yml",
+      "reviewedBlob": "a4dec7135a071745d4eeaf7161204c5732707da1",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01c3-performance.yml",
+      "reviewedBlob": "0655f88b8b93a31ec267d46ca3a911ebadfedd5b",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01e-completion.yml",
+      "reviewedBlob": "9a5cf43b5f536b8724b3708d9aa2cf1b0287f659",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01f-calendar.yml",
+      "reviewedBlob": "0627446026378d3eefc5645eb4e19917399489b3",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-radar-r01f2-pg.yml",
+      "reviewedBlob": "f08845dffed00826af6f25c49f2c13f5cbbe4edb",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-seller-edit-r0-postgresql.yml",
+      "reviewedBlob": "923d98fa4e6d7b562cf3ef17292b5c4adbf79bc7",
+      "domainHint": "SECURITY",
+      "mandatoryRelease": false,
+      "directReview": [
+        "TREE_INVENTORY_ONLY"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-task-r2-service.yml",
+      "reviewedBlob": "6caae174ebf8cc7b174c3bb3f09cd9cf3407a91a",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": true,
+      "workflowName": "RM TASK R2 Service Qualification",
+      "directReview": [
+        "H2_AND_PG",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-task-r32a-populated-upgrade.yml",
+      "reviewedBlob": "581c06a82ffb1dd7740abf0a70d39ee96af58916",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": true,
+      "workflowName": "RM TASK R3.2A Populated PostgreSQL Upgrade Qualification",
+      "directReview": [
+        "HISTORICAL_UPGRADE",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rm-task-r32b-t00-postgresql.yml",
+      "reviewedBlob": "7bb914c821c8d34f0640d1d0307ae349a36f7c55",
+      "domainHint": "TASK_RADAR",
+      "mandatoryRelease": true,
+      "workflowName": "RM TASK R32B T00 PostgreSQL Contract Qualification",
+      "directReview": [
+        "CRM_INTERACTION_TEST",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/rustfs-real-infra-e2e.yml",
+      "reviewedBlob": "165a00dc81b6fed74b6a471897fb517d79a0d1c6",
+      "domainHint": "FILES",
+      "mandatoryRelease": true,
+      "workflowName": "RustFS Real Infrastructure E2E",
+      "directReview": [
+        "EXTERNAL_INFRASTRUCTURE",
+        "RESTART_RESTORE",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    },
+    {
+      "path": ".github/workflows/sales-084-populated-upgrade.yml",
+      "reviewedBlob": "2fdaacb4d3c32e34fd6d8e97bc5ab9056b0395b1",
+      "domainHint": "SALES",
+      "mandatoryRelease": true,
+      "workflowName": "SALES 08.4 Populated PostgreSQL Upgrade Qualification",
+      "directReview": [
+        "HISTORICAL_UPGRADE",
+        "SHARED_CONTEXT"
+      ],
+      "closure": "UNQUALIFIED",
+      "decision": "EXECUTE_REQUIRED"
+    }
+  ]
+}
