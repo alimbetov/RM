@@ -156,4 +156,110 @@ class AnalyticalJobFoundationQualificationTest {
             .isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
     }
 
+
+    private UUID activeTenant() {
+        UUID t=tenant();
+        jdbc.update("UPDATE public.org_organization SET status='ACTIVE' WHERE id=(SELECT organization_id FROM public.iam_workspace WHERE id=?)",t);
+        jdbc.update("UPDATE public.iam_workspace SET status='ACTIVE' WHERE id=?",t);
+        return t;
+    }
+
+    @Test void schedulerNightSlotsRespectCalendar() {
+        var almaty=new PeriodResolver.Policy(java.time.ZoneId.of("Asia/Almaty"),1);
+        var berlin=new PeriodResolver.Policy(java.time.ZoneId.of("Europe/Berlin"),2);
+        var now=java.time.Instant.parse("2026-11-26T19:14:59Z");
+        assertThat(AnalyticalJobService.latestNight(now,almaty).until()).isEqualTo(LocalDate.of(2026,11,26));
+        var due=AnalyticalJobService.latestNight(now.plusSeconds(1),almaty);
+        assertThat(due.until()).isEqualTo(LocalDate.of(2026,11,27));
+        assertThat(due.slot()).isEqualTo(java.time.Instant.parse("2026-11-26T19:15:00Z"));
+        assertThat(AnalyticalJobService.latestNight(now.plusSeconds(1),berlin).until())
+            .isEqualTo(LocalDate.of(2026,11,26));
+        var havana=new PeriodResolver.Policy(java.time.ZoneId.of("America/Havana"),1);
+        // Midnight overlap: choose the earlier offset; repeated hour cannot create a new slot.
+        var early=AnalyticalJobService.latestNight(java.time.Instant.parse("2026-11-01T04:20:00Z"),havana);
+        var late=AnalyticalJobService.latestNight(java.time.Instant.parse("2026-11-01T05:20:00Z"),havana);
+        assertThat(early).isEqualTo(late);
+        assertThat(early.slot()).isEqualTo(java.time.Instant.parse("2026-11-01T04:15:00Z"));
+    }
+
+    @Test void schedulerPlansOnlyActivePilotAndEffectiveCalendarPg() {
+        UUID t=activeTenant(),inactive=tenant();
+        var now=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).toInstant();
+        var due=AnalyticalJobService.latestNight(now,new PeriodResolver.Policy(java.time.ZoneId.of("Asia/Almaty"),1));
+        LocalDate from=due.until().minusDays(10);
+        assertThat(jobs.planNight(inactive,from).state()).isEqualTo(AnalyticalJobRepository.PlanState.INELIGIBLE);
+        jdbc.update("""
+            INSERT INTO crm.int_calendar_policy(tenant_id,version,zone_id,effective_from,created_by,created_at)
+            SELECT tenant_id,2,'Europe/Berlin',effective_from+interval '2 days',created_by,created_at+interval '2 days'
+            FROM crm.int_calendar_policy WHERE tenant_id=? AND version=1
+            """,t);
+        var first=jobs.planNight(t,from);
+        assertThat(first.state()).isEqualTo(AnalyticalJobRepository.PlanState.INSERTED);
+        var replay=jobs.planNight(t,from);
+        assertThat(replay.state()).isEqualTo(AnalyticalJobRepository.PlanState.EXISTING);
+        assertThat(replay.job()).isEqualTo(first.job());
+        assertThat(replay.generation()).isEqualTo(first.generation());
+        assertThat(jdbc.queryForObject("SELECT calendar_version FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",
+            Long.class,t,first.job())).isEqualTo(1L);
+        assertThat(jobs.planNight(t,from.minusDays(32)).state()).isEqualTo(AnalyticalJobRepository.PlanState.OUTSIDE_PILOT);
+    }
+
+    @Test void schedulerConcurrentClaimsAndExpiredTakeoverPg() throws Exception {
+        UUID t=activeTenant(),other=activeTenant(),a=UUID.randomUUID(),b=UUID.randomUUID();
+        enqueue(t,"NIGHT",0,1);enqueue(other,"NIGHT",0,1);
+        // Existing fixture slots are historically dated; use DB clock for claim eligibility.
+        var tenants=java.util.Set.of(t,other);
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var x=pool.submit(()->{start.await();return jobs.claimNext(a,tenants,2,30);});
+            var y=pool.submit(()->{start.await();return jobs.claimNext(b,tenants,2,30);});
+            start.countDown();
+            var first=x.get(20,java.util.concurrent.TimeUnit.SECONDS).orElseThrow();
+            var second=y.get(20,java.util.concurrent.TimeUnit.SECONDS).orElseGet(()->jobs.claimNext(b,tenants,2,30).orElseThrow());
+            assertThat(first.tenant()).isNotEqualTo(second.tenant());
+            assertThat(first.slot()).isNotEqualTo(second.slot());
+            assertThat(jobs.claimNext(UUID.randomUUID(),tenants,2,30)).isEmpty();
+            assertThat(jobs.yieldProgress(first)).isTrue();
+            assertThat(jobs.yieldProgress(second)).isTrue();
+        } finally {pool.shutdownNow();}
+        // Separate tenant, cap 1: expired claim must be reclaimed even with no free slot.
+        UUID recovery=activeTenant();enqueue(recovery,"NIGHT",0,1);
+        var scope=java.util.Set.of(recovery);
+        var old=jobs.claimNext(a,scope,1,1).orElseThrow();
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while(Boolean.TRUE.equals(jdbc.queryForObject("SELECT lease_until>clock_timestamp() FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",Boolean.class,recovery,old.job()))){
+            if(System.nanoTime()>deadline)throw new AssertionError("lease did not expire");
+            Thread.sleep(25);
+        }
+        var next=jobs.claimNext(b,scope,1,30).orElseThrow();
+        assertThat(next.job()).isEqualTo(old.job());
+        assertThat(next.generation()).isEqualTo(old.generation());
+        assertThat(next.slot()).isEqualTo(old.slot());
+        assertThat(next.token()).isEqualTo(old.token()+1);
+        assertThat(jobs.renew(old,30)).isEmpty();
+        assertThat(jobs.yieldProgress(old)).isFalse();
+        assertThat(jobs.retry(old,AnalyticalJobRepository.Failure.TRANSIENT)).isFalse();
+        assertThat(jobs.renew(next,30)).isPresent();
+        assertThat(jobs.yieldProgress(next)).isTrue();
+    }
+
+    @Test void schedulerRetryBudgetAndPolicyDriftPg() {
+        UUID t=activeTenant();enqueue(t,"NIGHT",0,1);
+        var scope=java.util.Set.of(t);
+        UUID worker=UUID.randomUUID();
+        for(int i=0;i<4;i++){
+            var c=jobs.claimNext(worker,scope,1,30).orElseThrow();
+            assertThat(jobs.retry(c,AnalyticalJobRepository.Failure.TRANSIENT)).isTrue();
+            assertThat(jdbc.queryForObject("SELECT consecutive_failures FROM crm.int_analytics_job_run WHERE tenant_id=?",Integer.class,t)).isEqualTo(i+1);
+            if(i<3)jdbc.update("UPDATE crm.int_analytics_job_run SET next_attempt_at=clock_timestamp() WHERE tenant_id=?",t);
+        }
+        assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,t)).isEqualTo("FAILED");
+        assertThat(jobs.claimNext(worker,scope,1,30)).isEmpty();
+        UUID other=activeTenant();enqueue(other,"NIGHT",0,1);
+        jdbc.update("UPDATE public.iam_workspace SET status='SUSPENDED' WHERE id=?",other);
+        assertThat(jobs.claimNext(worker,java.util.Set.of(other),1,30)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,other)).isEqualTo("BLOCKED");
+    }
+
 }

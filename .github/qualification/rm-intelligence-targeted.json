@@ -276,6 +276,22 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "repositoryRejectsUnknownCalendarScopePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerNightSlotsRespectCalendar"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerPlansOnlyActivePilotAndEffectiveCalendarPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerConcurrentClaimsAndExpiredTakeoverPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerRetryBudgetAndPolicyDriftPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
