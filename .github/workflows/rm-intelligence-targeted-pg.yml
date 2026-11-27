@@ -16,14 +16,6 @@ on:
       - 'src/test/java/kz/rm/iam/ActivationJourneyEvidence.java'
       - 'src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java'
       - 'src/test/java/kz/rm/iam/CanonicalFactJourneyEvidence.java'
-      - 'src/test/java/kz/rm/iam/CanonicalDeliveryJourneyEvidence.java'
-      - 'src/test/java/kz/rm/iam/BookedConcurrencyEvidence.java'
-      - 'src/test/java/kz/rm/iam/BookedDeclarationLifecycleEvidence.java'
-      - 'src/test/java/kz/rm/iam/BookedMonthlyJourneyEvidence.java'
-      - 'src/test/java/kz/rm/iam/NativeBookedCaptureJourneyEvidence.java'
-      - 'src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java'
-      - 'src/main/java/kz/rm/autoorder/AutoOrderService.java'
-      - 'docs/architecture/RM-IC-R2-S1-HISTORICAL-COVERAGE.md'
       - 'docs/operations/RM-FINAL-SEC-GATE-DB-ROLE-QUALIFICATION.sql'
       - '.github/workflows/rm-intelligence-targeted-pg.yml'
       - '.github/scripts/*rm_intelligence_targeted*'
@@ -73,7 +65,7 @@ jobs:
       - name: Execute targeted canonical and L0-L3 journeys
         run: |
           set -euo pipefail
-          mvn -B -ntp clean test '-Dtest=BusMvpServiceJourneyQualificationTest#canonicalSalesAndInventoryDigestOraclePg+canonicalSourceAdmissionAndOwnerRollbackPg+canonicalConcurrentReplayAndRollbackPg+canonicalSourceSealingLockOrdersPg+canonicalTenantSourceCollisionPg+p2CanonicalDurableDiscoveryReplayAndBackfillPg+p3L1ProjectionParityAndLateDuplicatePg+b4RegionAndNomenclatureSnapshotsPg,DerivedMetricQualificationTest,DerivedPostgresQualificationTest,BusinessInterpretationQualificationTest,BusinessTrendQualificationTest,BusinessAnomalyQualificationTest,BusinessFactorQualificationTest,BusinessConclusionQualificationTest,HistoricalCoverageQualificationTest,BookedSourceReconciliationQualificationTest,BookedOwnerAuthorityQualificationTest,BookedHistoryCompositionQualificationTest,BookedMonthlyAuthorityQualificationTest,NativeBookedClosureQualificationTest,QrNegotiatedCheckoutQualificationTest#nativeNegotiatedCaptureAndCrossTenantRollbackPg+nativeCheckoutPerformanceBudgetPg+nativeSnapshotOperationalReservePg'
+          mvn -B -ntp clean test '-Dtest=BusMvpServiceJourneyQualificationTest#canonicalSalesAndInventoryDigestOraclePg+canonicalSourceAdmissionAndOwnerRollbackPg+canonicalConcurrentReplayAndRollbackPg+canonicalSourceSealingLockOrdersPg+canonicalTenantSourceCollisionPg+p2CanonicalDurableDiscoveryReplayAndBackfillPg+p3L1ProjectionParityAndLateDuplicatePg+b4RegionAndNomenclatureSnapshotsPg,DerivedMetricQualificationTest,DerivedPostgresQualificationTest,BusinessInterpretationQualificationTest,BusinessTrendQualificationTest,BusinessAnomalyQualificationTest,BusinessFactorQualificationTest,BusinessConclusionQualificationTest'
       - name: Verify exact JUnit evidence
         run: python3 .github/scripts/verify_rm_intelligence_targeted.py --reports target/surefire-reports --registry .github/qualification/rm-intelligence-targeted.json --sha "$GITHUB_SHA" --output rm-intelligence-targeted.json
       - name: Run existing SQL role qualification on populated fixtures

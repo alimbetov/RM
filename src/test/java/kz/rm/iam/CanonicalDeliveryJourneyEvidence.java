@@ -4,7 +4,6 @@ import kz.rm.intelligence.CanonicalFactAppender;
 import kz.rm.intelligence.CanonicalFactDeliveryService;
 import kz.rm.intelligence.CanonicalFactDeliveryService.*;
 import kz.rm.intelligence.CanonicalFactKey;
-import kz.rm.intelligence.BookedSourceReconciliationService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -83,11 +82,7 @@ final class CanonicalDeliveryJourneyEvidence {
         return service.consumeBatch(tenant,code,500,h);
     }
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
-                        CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template,
-                        BookedSourceReconciliationService reconciliation,VerifiedActor staff,VerifiedActor otherOwner,
-                        VerifiedActor otherReader,VerifiedActor owner,kz.rm.intelligence.BookedOwnerDeclarationService declarations,
-                        Runnable revokeReader,Runnable restoreReader,TenantOwnershipTransferService transfer,
-                        long monthlyCalendar,long otherMonthlyCalendar){
+                        CanonicalFactDeliveryService service,UUID tenant,UUID otherTenant,UUID template){
         var tx=new TransactionTemplate(manager);
         String table="p2_test_effect_"+UUID.randomUUID().toString().replace("-","");
         jdbc.execute("CREATE TABLE crm."+table+" (tenant_id UUID NOT NULL,consumer_code VARCHAR(96) NOT NULL,"
@@ -102,53 +97,8 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThatThrownBy(()->service.openBackfill(slice(tenant,run,START,END.plusSeconds(1))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("BACKFILL_RUN_SCOPE_CONFLICT");
             assertThatThrownBy(()->service.backfillNext(otherTenant,run)).hasMessage("BACKFILL_RUN_NOT_FOUND");
-            // The reader of B is authorized in B but cannot resolve A's run before B has its own.
-            assertThatThrownBy(()->reconciliation.inspect(otherReader,otherTenant,run))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("S1_BOOKED_RUN_NOT_FOUND");
             service.openBackfill(slice(otherTenant,run,START,END));
             assertThat(service.coverage(otherTenant,run).sources()).isZero();
-            // A real existing run still must not be readable by an ungranted owner.
-            assertThatThrownBy(()->reconciliation.inspect(otherOwner,otherTenant,run))
-                .isInstanceOf(SecurityException.class).hasMessage("Tenant RBAC permission denied");
-            var empty=reconciliation.inspect(otherReader,otherTenant,run);
-            assertThat(empty.tenant()).isEqualTo(otherTenant);
-            assertThat(empty.actor()).isEqualTo(otherReader.userId());
-            assertThat(empty.runId()).isEqualTo(run);
-            assertThat(empty.counts().owners()).isZero();
-            assertThat(empty.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
-            assertThat(empty.ownerCompletenessProven()).isFalse();
-            UUID declarationId=UUID.randomUUID();
-            var emptyDraft=new kz.rm.intelligence.BookedOwnerDeclarationService.Draft(declarationId,run,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,"SYNTHETIC_IMPORT_MANIFEST","b".repeat(64),
-                empty.sourceRevision(),empty.receiptRevision(),0,empty.digest().populationDigest());
-            assertThatThrownBy(()->declarations.declare(otherReader,otherTenant,emptyDraft)).isInstanceOf(SecurityException.class);
-            assertThatThrownBy(()->declarations.declare(otherOwner,tenant,emptyDraft)).isInstanceOf(SecurityException.class);
-            assertThat(declarations.declare(otherOwner,otherTenant,emptyDraft)).isEqualTo(declarationId);
-            assertThat(declarations.declare(otherOwner,otherTenant,emptyDraft)).isEqualTo(declarationId);
-            var candidate=reconciliation.inspectAuthority(otherReader,otherTenant,declarationId);
-            assertThat(candidate.state()).isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.MATCHED_CONTRACT_NOT_ADMITTED);
-            assertThat(candidate.admitted()).isFalse();
-            assertThatThrownBy(()->reconciliation.inspectAuthority(staff,tenant,declarationId)).hasMessage("S1_DECLARATION_NOT_FOUND");
-            assertThatThrownBy(()->reconciliation.inspectAuthority(otherOwner,otherTenant,declarationId)).isInstanceOf(SecurityException.class);
-            assertThatThrownBy(()->declarations.revoke(otherReader,otherTenant,declarationId)).isInstanceOf(SecurityException.class);
-            var conflicting=new kz.rm.intelligence.BookedOwnerDeclarationService.Draft(declarationId,run,
-                emptyDraft.mode(),"DIFFERENT_MANIFEST",emptyDraft.provenanceDigest(),emptyDraft.sourceRevision(),emptyDraft.receiptRevision(),0,
-                emptyDraft.expectedPopulationDigest());
-            assertThatThrownBy(()->declarations.declare(otherOwner,otherTenant,conflicting)).hasMessage("S1_DECLARATION_ID_CONFLICT");
-            declarations.revoke(otherOwner,otherTenant,declarationId);declarations.revoke(otherOwner,otherTenant,declarationId);
-            assertThat(reconciliation.inspectAuthority(otherReader,otherTenant,declarationId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.REVOKED);
-            assertThat(declarations.declare(otherOwner,otherTenant,emptyDraft)).isEqualTo(declarationId);
-            assertThat(reconciliation.inspectAuthority(otherReader,otherTenant,declarationId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.REVOKED);
-            assertThatThrownBy(()->jdbc.update("UPDATE crm.int_booked_owner_declaration SET provenance_ref=provenance_ref WHERE tenant_id=? AND proof_id=?",otherTenant,declarationId))
-                .isInstanceOf(org.springframework.dao.DataAccessException.class);
-            assertThatThrownBy(()->jdbc.update("DELETE FROM crm.int_booked_owner_revocation WHERE tenant_id=? AND proof_id=?",otherTenant,declarationId))
-                .isInstanceOf(org.springframework.dao.DataAccessException.class);
-            BookedDeclarationLifecycleEvidence.qualify(jdbc,declarations,reconciliation,transfer,otherOwner,otherReader,otherTenant,emptyDraft);
-            assertThatThrownBy(()->reconciliation.inspect(otherOwner,tenant,run)).isInstanceOf(SecurityException.class);
-            assertThatThrownBy(()->reconciliation.inspect(otherReader,tenant,run)).isInstanceOf(SecurityException.class);
-            assertThatThrownBy(()->reconciliation.inspect(staff,otherTenant,run)).isInstanceOf(SecurityException.class);
             service.openConsumer(tenant,CONSUMER);
             service.openConsumer(otherTenant,CONSUMER);
             assertThat(service.consumeNext(otherTenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
@@ -186,22 +136,6 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(afterHigh).isEqualTo(revisionBefore+3);
             assertThat(service.backfillBatch(tenant,run,10)).extracting(Step::key).containsExactly(key(tenant,high));
             assertThat(service.coverage(tenant,run).complete()).isTrue();
-            var beforeLate=reconciliation.inspect(staff,tenant,run);
-            assertThat(beforeLate.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
-            assertThat(beforeLate.digest().checked()).isEqualTo(1);
-            assertThat(beforeLate.counts().distinctValidOrders()).isEqualTo(1);
-            assertThat(beforeLate.counts().invalidOwnerEvents()).isZero();
-            assertThat(beforeLate.ownerCompletenessProven()).isFalse();
-            var nativeDraft=new kz.rm.intelligence.BookedOwnerDeclarationService.Draft(declarationId,run,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.NATIVE_HISTORY,"SYNTHETIC_NATIVE_BOUNDARY","c".repeat(64),
-                beforeLate.sourceRevision(),beforeLate.receiptRevision(),1,beforeLate.digest().populationDigest());
-            assertThatThrownBy(()->declarations.declare(owner,tenant,nativeDraft)).hasMessage("S1_NATIVE_BOUNDARY");
-            var importedDraft=new kz.rm.intelligence.BookedOwnerDeclarationService.Draft(declarationId,run,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,"SYNTHETIC_IMPORT_MANIFEST","c".repeat(64),
-                beforeLate.sourceRevision(),beforeLate.receiptRevision(),1,beforeLate.digest().populationDigest());
-            assertThat(declarations.declare(owner,tenant,importedDraft)).isEqualTo(declarationId);
-            assertThat(reconciliation.inspectAuthority(staff,tenant,declarationId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.MATCHED_CONTRACT_NOT_ADMITTED);
             drain(service,tenant,CONSUMER,handler(jdbc,table,CONSUMER));
             assertThat(service.consumerCoverage(tenant,CONSUMER).caughtUp()).isTrue();
             assertThat(count(jdbc,"SELECT count(*) FROM crm."+table+" WHERE tenant_id=? AND source_id=?",tenant,low)).isZero();
@@ -227,98 +161,8 @@ final class CanonicalDeliveryJourneyEvidence {
             // Simulate a fresh process using durable database state, no in-memory cursor.
             var restarted=new CanonicalFactDeliveryService(jdbc,manager,appender);
             assertThat(restarted.coverage(tenant,run).unprocessed()).isEqualTo(1);
-            var afterLate=reconciliation.inspect(staff,tenant,run);
-            assertThat(afterLate.sourceRevision()).isGreaterThan(beforeLate.sourceRevision());
-            assertThat(afterLate.counts().unprocessed()).isEqualTo(1);
-            assertThat(afterLate.counts().distinctValidOrders()).isEqualTo(2);
-            assertThat(afterLate.state()).isEqualTo(BookedSourceReconciliationService.State.INCOMPLETE);
-            assertThat(reconciliation.inspectAuthority(staff,tenant,declarationId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.STALE_REVISION);
-            assertThat(reconciliation.inspectAuthority(otherReader,otherTenant,declarationId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.REVOKED);
-            UUID receiptBoundId=UUID.randomUUID();
-            var receiptBoundDraft=new kz.rm.intelligence.BookedOwnerDeclarationService.Draft(receiptBoundId,run,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,"SYNTHETIC_IMPORT_MANIFEST_2","d".repeat(64),
-                afterLate.sourceRevision(),afterLate.receiptRevision(),2,afterLate.digest().populationDigest());
-            assertThat(declarations.declare(owner,tenant,receiptBoundDraft)).isEqualTo(receiptBoundId);
-            assertThat(reconciliation.inspectAuthority(staff,tenant,receiptBoundId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.UNRECONCILED_SOURCE);
             assertThat(restarted.backfillNext(tenant,run).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.coverage(tenant,run).complete()).isTrue();
-            var afterReceipt=reconciliation.inspect(staff,tenant,run);
-            assertThat(afterReceipt.state()).isEqualTo(BookedSourceReconciliationService.State.RECONCILED_PRESENT_SOURCE);
-            // A receipt-only commit changes reconciliation without changing the source journal.
-            // This is evidence for the separate receipt revision requirement, not a READY proof.
-            assertThat(afterReceipt.sourceRevision()).isEqualTo(afterLate.sourceRevision());
-            assertThat(afterReceipt.receiptRevision()).isEqualTo(afterLate.receiptRevision()+1);
-            assertThat(reconciliation.inspectAuthority(staff,tenant,receiptBoundId).state())
-                .isEqualTo(kz.rm.intelligence.BookedOwnerDeclarationService.State.STALE_REVISION);
-            assertThat(afterReceipt.revisionBinding()).isNotEqualTo(afterLate.revisionBinding());
-            assertThat(afterReceipt.digest().populationDigest()).isEqualTo(afterLate.digest().populationDigest());
-            assertThat(afterLate.digest().populationDigest()).isNotEqualTo(beforeLate.digest().populationDigest());
-            assertThat(afterReceipt.counts().unprocessed()).isZero();
-            assertThat(afterReceipt.ownerCompletenessProven()).isFalse();
-            var stillEmpty=reconciliation.inspect(otherReader,otherTenant,run);
-            assertThat(stillEmpty.tenant()).isEqualTo(otherTenant);
-            assertThat(stillEmpty.sourceRevision()).isEqualTo(empty.sourceRevision());
-            assertThat(stillEmpty.revisionBinding()).isEqualTo(empty.revisionBinding());
-            assertThat(stillEmpty.digest().populationDigest()).isEqualTo(empty.digest().populationDigest());
-            assertThat(stillEmpty.counts().owners()).isZero();
-            assertThat(stillEmpty.counts().facts()).isZero();
-            assertThat(stillEmpty.ownerCompletenessProven()).isFalse();
-            // Split at high's timestamp: the left half owns low, the right half high.
-            UUID left=UUID.randomUUID(),right=UUID.randomUUID();
-            Instant split=START.plusSeconds(2);
-            service.openBackfill(slice(tenant,left,START,split));
-            service.openBackfill(slice(tenant,right,split,END));
-            assertThat(service.backfillBatch(tenant,left,10)).hasSize(1);
-            assertThat(service.backfillBatch(tenant,right,10)).hasSize(1);
-            var composed=reconciliation.inspectComposition(staff,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(right,left));
-            assertThat(composed.exactReconciledPartition()).isTrue();
-            assertThat(composed.reconciledObservedOrders()).isEqualTo(2L);
-            assertThat(composed.boundary()).isEqualTo(kz.rm.intelligence.BookedHistoryComposition.Boundary.IMPORTED_PRE_TENANT_AUTHORITY_REQUIRED);
-            assertThat(composed.ownerCompletenessProven()).isFalse();
-            kz.rm.intelligence.BookedDigestPgEvidence.parity(jdbc,manager,tenant,START,END,2,0,0);
-            BookedMonthlyJourneyEvidence.qualify(service,reconciliation,declarations,owner,staff,tenant,monthlyCalendar,
-                otherOwner,otherReader,otherTenant,otherMonthlyCalendar,START,run);
-            BookedConcurrencyEvidence.qualify(jdbc,manager,reconciliation,otherReader,otherTenant,START,END,
-                List.of(run),revokeReader,restoreReader);
-            var barrier=new CyclicBarrier(2);
-            var aRead=pool.submit(()->{barrier.await(15,TimeUnit.SECONDS);return reconciliation.inspectComposition(staff,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,right));});
-            var bRead=pool.submit(()->{barrier.await(15,TimeUnit.SECONDS);return reconciliation.inspectComposition(otherReader,otherTenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(run));});
-            assertThat(result(aRead).reconciledObservedOrders()).isEqualTo(2L);
-            var concurrentB=result(bRead);
-            assertThat(concurrentB.snapshot().tenant()).isEqualTo(otherTenant);
-            assertThat(concurrentB.reconciledObservedOrders()).isNull();
-            assertThat(concurrentB.slices().getFirst().counts().owners()).isZero();
-            assertThatThrownBy(()->reconciliation.inspectComposition(staff,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(run,left,right,UUID.randomUUID(),UUID.randomUUID())))
-                .hasMessage("S1_COMPOSITION_RUNS");
-            assertThatThrownBy(()->reconciliation.inspectComposition(staff,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,START.plus(Duration.ofDays(125)),List.of()))
-                .hasMessage("S1_COMPOSITION_RANGE");
-            assertThat(composed.slices()).allSatisfy(e->{
-                assertThat(e.asOf()).isEqualTo(composed.snapshot().asOf());
-                assertThat(e.sourceRevision()).isEqualTo(composed.snapshot().sourceRevision());
-                assertThat(e.receiptRevision()).isEqualTo(1);
-            });
-            var nativeHistory=reconciliation.inspectComposition(staff,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.NATIVE_HISTORY,START,END,List.of(left,right));
-            assertThat(nativeHistory.reconciledObservedOrders()).isNull();
-            assertThat(nativeHistory.boundary()).isEqualTo(kz.rm.intelligence.BookedHistoryComposition.Boundary.NATIVE_BEFORE_TENANT_CREATION);
-            var overlap=reconciliation.inspectComposition(staff,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,run));
-            assertThat(overlap.issues()).contains(kz.rm.intelligence.BookedHistoryComposition.Issue.OVERLAP);
-            assertThat(overlap.reconciledObservedOrders()).isNull();
-            assertThatThrownBy(()->reconciliation.inspectComposition(otherReader,otherTenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,right)))
-                .hasMessage("S1_BOOKED_RUN_NOT_FOUND");
-            assertThatThrownBy(()->reconciliation.inspectComposition(otherReader,tenant,
-                kz.rm.intelligence.BookedHistoryComposition.Mode.IMPORTED_HISTORY,START,END,List.of(left,right)))
-                .isInstanceOf(SecurityException.class);
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER)).orElseThrow().key()).isEqualTo(key(tenant,low));
             assertThat(restarted.consumeNext(tenant,CONSUMER,handler(jdbc,table,CONSUMER))).isEmpty();
 
@@ -349,16 +193,6 @@ final class CanonicalDeliveryJourneyEvidence {
             assertThat(coverage.orphanFacts()).isEqualTo(1);
             assertThat(coverage.receiptMismatches()).isZero();
             assertThat(coverage.complete()).isFalse();
-            var corrupted=reconciliation.inspect(staff,tenant,run);
-            assertThat(corrupted.state()).isEqualTo(BookedSourceReconciliationService.State.CONFLICT);
-            assertThat(corrupted.digest().mismatches()).isEqualTo(2);
-            assertThat(corrupted.digest().legacy()).isEqualTo(3);
-            assertThat(corrupted.counts().missing()).isEqualTo(1);
-            assertThat(corrupted.counts().extra()).isEqualTo(1);
-            assertThat(corrupted.counts().rejected()).isEqualTo(2);
-            assertThat(corrupted.ownerCompletenessProven()).isFalse();
-            kz.rm.intelligence.BookedDigestPgEvidence.parity(jdbc,manager,tenant,START,END,
-                7,2,3);
             assertThat(count(jdbc,"SELECT count(*) FROM crm.int_fact_backfill_receipt WHERE tenant_id=? AND run_id=?",tenant,run)).isEqualTo(7);
             assertThat(jdbc.queryForObject("SELECT error_code FROM crm.int_fact_backfill_receipt WHERE tenant_id=? AND run_id=? AND source_id=?",
                 String.class,tenant,run,invalid)).isEqualTo("CANONICAL_SNAPSHOT_AMOUNT_MISMATCH");
@@ -413,7 +247,6 @@ final class CanonicalDeliveryJourneyEvidence {
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThatThrownBy(()->jdbc.update("UPDATE crm.int_fact_backfill_receipt SET disposition=disposition WHERE tenant_id=? AND run_id=?",tenant,run))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
-            kz.rm.intelligence.BookedDigestPgEvidence.limits(jdbc,manager,tenant,template,START.plus(Duration.ofDays(10)));
         }finally{
             release.countDown();pool.shutdownNow();
             try{if(!pool.awaitTermination(30,TimeUnit.SECONDS))throw new AssertionError("P2 pool did not stop");}

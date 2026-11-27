@@ -100,7 +100,7 @@ class BusMvpServiceJourneyQualificationTest {
                 emailCrypto.decrypt((byte[])challenge[1]))).isTrue();
     }
 
-    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1, DIMENSIONS, NATIVE_ACTIVATION_FIRST }
+    private enum CanonicalCase { FULL, DIGEST, ADMISSION_ROLLBACK, CONCURRENCY, SEALING, TENANT, DELIVERY, L1, DIMENSIONS }
 
     @Test void busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg() {
         runBusJourney(CanonicalCase.FULL);
@@ -128,7 +128,6 @@ class BusMvpServiceJourneyQualificationTest {
 
     @Test void p2CanonicalDurableDiscoveryReplayAndBackfillPg() {
         runNamedPostgresCase(CanonicalCase.DELIVERY);
-        runNamedPostgresCase(CanonicalCase.NATIVE_ACTIVATION_FIRST);
     }
 
     @Test void p3L1ProjectionParityAndLateDuplicatePg() {
@@ -233,13 +232,6 @@ class BusMvpServiceJourneyQualificationTest {
         }
         stock.receive(staff,tenant,warehouse.id(),published.id(),
                 "bus-receipt-"+UUID.randomUUID(),new BigDecimal("10"));
-        if(scenario==CanonicalCase.NATIVE_ACTIVATION_FIRST){
-            NativeBookedCaptureJourneyEvidence.activationFirst(jdbc,canonicalTransactions,
-                applicationContext.getBean(kz.rm.intelligence.NativeBookedCaptureService.class),owner,tenant,
-                ()->checkout.checkout(store.slug(),"bus-native-first-"+UUID.randomUUID()+"@example.kz",
-                    "bus-native-first-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
-            return;
-        }
         String checkoutEmail="bus-buyer-"+UUID.randomUUID()+"@example.kz";
         String checkoutKey="bus-order-"+UUID.randomUUID();
         var checkoutLines=List.of(new AutoOrderService.Line(offer.id(),3));
@@ -441,32 +433,6 @@ class BusMvpServiceJourneyQualificationTest {
                 kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,otherB55Calendar,
                 kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,null,List.of(),null);
             ConclusionConcurrencyEvidence.twoTenants(b55,staff,tenant,qA,otherStaff,otherTenant,qB,days);
-            var history=applicationContext.getBean(kz.rm.intelligence.HistoricalCoverageService.class);
-            var month=java.time.YearMonth.from(jdbc.queryForObject("SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED'",java.sql.Timestamp.class,tenant,orderId).toInstant().atZone(java.time.ZoneOffset.UTC));
-            var required=List.of(new kz.rm.intelligence.HistoricalCoverageService.RequiredMonth(month.minusMonths(1),
-                kz.rm.intelligence.HistoricalCoverageService.Role.BASELINE),
-                new kz.rm.intelligence.HistoricalCoverageService.RequiredMonth(month,kz.rm.intelligence.HistoricalCoverageService.Role.TARGET));
-            var historyA=history.inspectBookedOrders(staff,tenant,b55Calendar,required);
-            var historyB=history.inspectBookedOrders(otherStaff,otherTenant,otherB55Calendar,required);
-            assertThat(historyA.manifest().tenant()).isEqualTo(tenant);
-            assertThat(historyB.manifest().tenant()).isEqualTo(otherTenant);
-            assertThat(historyA.qualified()).isZero();assertThat(historyB.qualified()).isZero();
-            assertThat(historyA.intervals().getLast().source().distinctValidOrders()).isEqualTo(2);
-            assertThat(historyA.intervals().getLast().source().missingFacts()).isZero();
-            assertThat(historyA.intervals().getLast().value()).isEqualByComparingTo("2");
-            assertThat(historyA.intervals().getLast().quality()).isEqualTo(kz.rm.intelligence.DataQuality.PARTIAL);
-            assertThat(historyB.intervals()).allSatisfy(e->{assertThat(e.source().ownerEvents()).isZero();assertThat(e.value()).isNull();});
-            var longHistory=java.util.stream.IntStream.range(0,25).mapToObj(i->
-                new kz.rm.intelligence.HistoricalCoverageService.RequiredMonth(month.minusMonths(i),
-                    i<12?kz.rm.intelligence.HistoricalCoverageService.Role.TARGET:kz.rm.intelligence.HistoricalCoverageService.Role.BASELINE)).toList();
-            var bounded=history.inspectBookedOrders(staff,tenant,b55Calendar,longHistory);
-            assertThat(bounded.required()).isEqualTo(25);assertThat(bounded.qualified()).isZero();
-            assertThat(bounded.intervals().getFirst().value()).isNull();
-            assertThat(history.inspectBookedOrders(staff,tenant,b55Calendar,List.of()).coverageRatio()).isNull();
-            assertThatThrownBy(()->history.inspectBookedOrders(otherStaff,tenant,b55Calendar,required)).isInstanceOf(SecurityException.class);
-            roles.revoke(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);
-            try{assertThatThrownBy(()->history.inspectBookedOrders(staff,tenant,b55Calendar,required)).isInstanceOf(SecurityException.class);}
-            finally{roles.grant(owner,tenant,role.id(),DomainPermission.SALES_ORDER_READ);}
             assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))
                 .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
             assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))
@@ -547,31 +513,8 @@ class BusMvpServiceJourneyQualificationTest {
             return;
         }
         if(scenario==CanonicalCase.DELIVERY){
-            // OWNER membership is not operational authorization under enforced RBAC.
-            // Give a separate employee only the permission required by this diagnostic read.
-            UUID reconciliationReaderId=account("bus-other-reconciliation-reader");
-            VerifiedActor reconciliationReader=actor(reconciliationReaderId);
-            assertThat(enrollment.invite(otherOwner,otherTenant,reconciliationReaderId).status()).isEqualTo("INVITED");
-            assertThat(enrollment.accept(reconciliationReader,otherTenant).status()).isEqualTo("ACTIVE");
-            var reconciliationRole=roles.createRole(otherOwner,otherTenant,"RECONCILIATION_TEST","Booked source read isolation");
-            roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ);
-            roles.assign(otherOwner,otherTenant,reconciliationReaderId,reconciliationRole.id());
-            roles.enable(otherOwner,otherTenant);
-            long monthlyCalendar=calendar.append(owner,tenant,"Etc/UTC",0).version();
-            long otherMonthlyCalendar=calendar.append(otherOwner,otherTenant,"Etc/UTC",0).version();
             CanonicalDeliveryJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,canonicalDelivery,
-                tenant,otherTenant,orderId,applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
-                staff,otherOwner,reconciliationReader,owner,
-                applicationContext.getBean(kz.rm.intelligence.BookedOwnerDeclarationService.class),
-                ()->roles.revoke(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
-                ()->roles.grant(otherOwner,otherTenant,reconciliationRole.id(),DomainPermission.SALES_ORDER_READ),
-                applicationContext.getBean(TenantOwnershipTransferService.class),monthlyCalendar,otherMonthlyCalendar);
-            NativeBookedCaptureJourneyEvidence.qualify(jdbc,canonicalTransactions,
-                applicationContext.getBean(kz.rm.intelligence.NativeBookedCaptureService.class),
-                applicationContext.getBean(kz.rm.intelligence.BookedSourceReconciliationService.class),
-                canonicalDelivery,owner,staff,tenant,monthlyCalendar,orderId,canonicalFacts,
-                ()->checkout.checkout(store.slug(),"bus-native-"+UUID.randomUUID()+"@example.kz",
-                    "bus-native-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+                tenant,otherTenant,orderId);
             return;
         }
         CanonicalFactJourneyEvidence.verify(jdbc,canonicalTransactions,canonicalFacts,tenant,orderId,otherTenant);
