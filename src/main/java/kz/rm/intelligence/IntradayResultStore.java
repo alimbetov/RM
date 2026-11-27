@@ -22,6 +22,7 @@ class IntradayResultStore {
             Objects.requireNonNull(tenant);Objects.requireNonNull(account);Objects.requireNonNull(expires);
             if(version<1||maxRows<1||maxRows>217)throw new IllegalArgumentException("INT_INTRADAY_SCOPE");
         }
+        boolean admits(LocalDate day){return !day.isAfter(expires)&&!day.isBefore(expires.minusDays(30));}
         String digest(){return hash("1|"+tenant+"|"+account+"|"+version+"|"+expires+"|"+maxRows+"|BOOKED_ORDERS|1|INTRADAY_SNAPSHOT_STORE_V1");}
     }
     record Request(UUID tenant,UUID job,UUID account,long scopeVersion,String scopeDigest,long calendar,
@@ -66,7 +67,7 @@ class IntradayResultStore {
             Instant at=now();var cal=calendar(tenant,at);
             if(cal==null)return Optional.<Request>empty();
             var due=AnalyticalJobService.latestIntraday(at,policy(cal));
-            if(due.isEmpty()||due.get().day().isAfter(scope.expires()))return Optional.<Request>empty();
+            if(due.isEmpty()||!scope.admits(due.get().day()))return Optional.<Request>empty();
             var d=due.get();var start=d.period().startInclusive();var end=d.period().endExclusive();
             if(Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS(SELECT 1 FROM crm.int_intraday_result r JOIN crm.int_analytics_job_run j USING(tenant_id,job_id)
@@ -140,7 +141,7 @@ class IntradayResultStore {
             if(cal==null||cal.version()!=r.calendar()||!cal.zone().equals(r.zone()))
                 throw new SecurityException("INT_INTRADAY_CALENDAR_CHANGED");
             var due=AnalyticalJobService.latestIntraday(at,policy(cal));
-            if(due.isEmpty()||!due.get().slot().equals(r.slot())||due.get().day().isAfter(scope.expires())){
+            if(due.isEmpty()||!due.get().slot().equals(r.slot())||!scope.admits(due.get().day())){
                 jobs.skipIntraday(claim);return AnalyticalJobService.RunResult.SKIPPED;
             }
             if(!compatible(r,scope,cal,due.get()))throw new SecurityException("INT_INTRADAY_SCOPE_CHANGED");
@@ -195,6 +196,12 @@ class IntradayResultStore {
                 SELECT EXISTS(SELECT 1 FROM public.iam_workspace w JOIN public.org_organization o ON o.id=w.organization_id
                 WHERE w.id=? AND o.status='ACTIVE')
                 """,Boolean.class,r.tenant())))throw new SecurityException("INT_INTRADAY_ORG_DENIED");
+            var stored=loadStored(r);
+            actor.accountId();
+            return stored;
+        });
+    }
+    private Optional<Stored> loadStored(Request r){
             var stored=jdbc.query("""
                 SELECT x.metric_value,x.quality,x.quality_reason,x.actual_as_of,x.read_observed_at,x.source_revision,
                     x.acknowledged_at,x.result_digest
@@ -208,8 +215,35 @@ class IntradayResultStore {
             if(stored!=null&&!stored.digest().equals(resultDigest(r,stored.cutoff(),stored.observed(),stored.revision(),
                 stored.value(),stored.quality(),stored.reason(),stored.ack())))
                 throw new IllegalStateException("INT_INTRADAY_DIGEST_MISMATCH");
-            actor.accountId();
             return Optional.ofNullable(stored);
+    }
+    /** Current-day latest outcome, not latest historical success. Recheck
+     * scope, authorization, compatible calendar and civil day. MISSING is
+     * a real outcome and must not fall back to an older positive value. */
+    Optional<Stored> latest(Scope scope,VerifiedServiceActor actor){
+        if(!scope.account().equals(actor.accountId()))throw new SecurityException("INT_INTRADAY_SCOPE_DENIED");
+        return tx(10,()->{
+            authorization.requireIntradayRead(actor,scope.tenant());
+            Instant at=now();var cal=calendar(scope.tenant(),at);
+            if(cal==null)return Optional.<Stored>empty();
+            LocalDate day=at.atZone(ZoneId.of(cal.zone())).toLocalDate();
+            if(!scope.admits(day))return Optional.<Stored>empty();
+            var period=PeriodResolver.resolve(PeriodResolver.Code.D,day,policy(cal));
+            var r=jdbc.query(REQUEST_SQL+"""
+                 AND j.status='COMPLETED' AND j.calendar_version=? AND j.zone_id=? AND j.business_day=?
+                 AND r.service_account_id=? AND r.scope_version=? AND r.scope_digest=?
+                 AND r.day_start=? AND r.day_end=? AND r.acknowledged_at IS NOT NULL
+                 AND r.actual_as_of<=?
+                 AND (j.actual_as_of,j.source_revision)=(r.actual_as_of,r.source_revision)
+                 ORDER BY r.actual_as_of DESC,j.scheduled_slot DESC,j.job_id DESC LIMIT 1
+                """,rs->rs.next()?request(rs):null,scope.tenant(),cal.version(),cal.zone(),day,
+                scope.account(),scope.version(),scope.digest(),utc(period.startInclusive()),utc(period.endExclusive()),utc(at));
+            if(r==null)return Optional.<Stored>empty();
+            var result=loadStored(r);
+            Instant end=now();actor.accountId();
+            if(end.isBefore(at)||!end.atZone(ZoneId.of(cal.zone())).toLocalDate().equals(day))
+                return Optional.<Stored>empty();
+            return result;
         });
     }
     private static final java.time.format.DateTimeFormatter MICROS=new java.time.format.DateTimeFormatterBuilder().appendInstant(6).toFormatter();

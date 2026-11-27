@@ -517,7 +517,7 @@ class AnalyticalJobFoundationQualificationTest {
     }
 
 
-    private record OwnerFacts(UUID tenant,UUID warehouse,UUID sku) {}
+    private record OwnerFacts(UUID tenant,UUID warehouse,UUID sku,String slug,UUID offer) {}
 
     // Same actual owner commands and signed actor/email fixtures as BUS-MVP.
     // No direct mutation of SALES, INVENTORY, facts, receipts or projection rows.
@@ -575,7 +575,7 @@ class AnalyticalJobFoundationQualificationTest {
                 "night-receipt-"+UUID.randomUUID(),new java.math.BigDecimal("10"));
             if(!createOrders){
                 context.getBean(CalendarPolicyService.class).append(owner,t,zone,0);
-                return new OwnerFacts(t,warehouse.id(),sku.id());
+                return new OwnerFacts(t,warehouse.id(),sku.id(),store.slug(),offer.id());
             }
             var checkout=context.getBean(kz.rm.autoorder.AutoOrderService.class);
             var sales=context.getBean(kz.rm.sales.AuthenticatedSalesCommands.class);
@@ -590,7 +590,7 @@ class AnalyticalJobFoundationQualificationTest {
             context.getBean(CalendarPolicyService.class).append(owner,t,zone,0);
             kz.rm.iam.IntelligenceSourceOracle.assertTenantFacts(jdbc,t,warehouse.id(),sku.id(),
                 2,"375",2,1,1,"10","3","7");
-            return new OwnerFacts(t,warehouse.id(),sku.id());
+            return new OwnerFacts(t,warehouse.id(),sku.id(),store.slug(),offer.id());
         }
     }
 
@@ -843,6 +843,9 @@ class AnalyticalJobFoundationQualificationTest {
                 """,Long.class,t,t,day.atStartOfDay(java.time.ZoneId.of(zone)).toOffsetDateTime(),stored.cutoff().atOffset(java.time.ZoneOffset.UTC));
             assertThat(stored.value()).isEqualTo(oracle);
             assertThat(intradayStore.completed(c,scope,actor)).contains(stored);
+            assertThat(intradayStore.latest(scope,actor)).contains(stored);
+            assertThat(intradayStore.latest(new IntradayResultStore.Scope(t,account,2,day,7),actor)).isEmpty();
+            assertThat(intradayStore.latest(new IntradayResultStore.Scope(t,account,1,day.plusDays(31),7),actor)).isEmpty();
             assertThatThrownBy(()->intradayStore.execute(c,scope,actor)).hasMessage("INT_JOB_LEASE_LOST");
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_projection_generation WHERE tenant_id=?",Integer.class,t)).isZero();
@@ -892,6 +895,7 @@ class AnalyticalJobFoundationQualificationTest {
             assertThat(result.value()).isNull();
             assertThat(result.quality()).isEqualTo("MISSING");
             assertThat(result.reason()).isEqualTo("NO_QUALIFIED_OBSERVATION");
+            assertThat(intradayStore.latest(scope,actor)).contains(result);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
         }
     }
@@ -946,6 +950,62 @@ class AnalyticalJobFoundationQualificationTest {
                 assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",String.class,t,job)).isEqualTo("RUNNING");
             }finally{
                 assertThat(jobs.block(claim,AnalyticalJobRepository.Failure.SOURCE_INCOMPLETE)).isTrue();
+            }
+        }
+    }
+
+
+    @Test void schedulerIntradayLateVisibilityAndDistinctOraclePg() throws Exception {
+        String zone=currentIntradayZone();var f=ownerFacts(zone);UUID t=f.tenant();
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID account=serviceMember(t,issuer);
+            var actor=issuer.resolveService(jdbc,users,account,kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID);
+            var manager=context.getBean(org.springframework.transaction.PlatformTransactionManager.class);
+            var tx=new org.springframework.transaction.support.TransactionTemplate(manager);
+            tx.setTimeout(30);
+            var auth=context.getBean(kz.rm.iam.TenantAuthorization.class);
+            var reader=context.getBean(AuthorizedAnalyticalReadService.class);
+            LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class)
+                .atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
+            var checkout=context.getBean(kz.rm.autoorder.AutoOrderService.class);
+            var written=new java.util.concurrent.CountDownLatch(1);
+            var allowCommit=new java.util.concurrent.CountDownLatch(1);
+            var executor=java.util.concurrent.Executors.newSingleThreadExecutor();
+            var pending=executor.submit(()->tx.execute(status->{
+                UUID order=checkout.checkout(f.slug(),"late-"+UUID.randomUUID()+"@example.kz",
+                    "late-"+UUID.randomUUID(),java.util.List.of(new kz.rm.autoorder.AutoOrderService.Line(f.offer(),1))).order().orderId();
+                written.countDown();
+                try{
+                    if(!allowCommit.await(20,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("late visibility timeout");
+                }catch(InterruptedException ex){Thread.currentThread().interrupt();throw new IllegalStateException(ex);}
+                return order;
+            }));
+            try{
+                assertThat(written.await(15,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                var before=tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actor,t),t,1,day));
+                assertThat(before.result().value()).isEqualByComparingTo("2");
+                assertThat(before.result().quality()).isEqualTo(DataQuality.PARTIAL);
+                allowCommit.countDown();
+                UUID late=pending.get(15,java.util.concurrent.TimeUnit.SECONDS);
+                var after=tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actor,t),t,1,day));
+                assertThat(after.result().value()).isEqualByComparingTo("3");
+                assertThat(after.result().sourceRevision()).isGreaterThan(before.result().sourceRevision());
+                assertThat(after.result().observedAt()).isAfterOrEqualTo(before.result().observedAt());
+                var eventAt=jdbc.queryForObject("""
+                    SELECT occurred_at FROM crm.sales_order_status_event WHERE tenant_id=? AND order_id=? AND event_type='PLACED'
+                    """,OffsetDateTime.class,t,late).toInstant();
+                assertThat(eventAt).isBefore(before.result().observedAt());
+                Long actualInterval=jdbc.queryForObject("""
+                    SELECT count(DISTINCT order_id) FROM crm.sales_order_status_event
+                    WHERE tenant_id=? AND event_type='PLACED' AND occurred_at>=? AND occurred_at<?
+                    """,Long.class,t,before.result().observedAt().atOffset(java.time.ZoneOffset.UTC),
+                    after.result().observedAt().atOffset(java.time.ZoneOffset.UTC));
+                assertThat(actualInterval).isZero();
+                assertThat(after.result().value().subtract(before.result().value())).isEqualByComparingTo("1");
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_projection_generation WHERE tenant_id=?",Integer.class,t)).isZero();
+            }finally{
+                allowCommit.countDown();executor.shutdownNow();
+                executor.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS);
             }
         }
     }

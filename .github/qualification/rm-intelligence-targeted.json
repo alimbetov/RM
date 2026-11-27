@@ -364,6 +364,10 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerIntradayAmbiguousSourceOutsideCutoffPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayLateVisibilityAndDistinctOraclePg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

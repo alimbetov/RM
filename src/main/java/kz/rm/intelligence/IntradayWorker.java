@@ -1,7 +1,7 @@
 package kz.rm.intelligence;
 
 import kz.rm.iam.OidcServiceActorResolver;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.*;
@@ -80,8 +80,10 @@ class IntradayWorker {
                 .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials&client_id="+encode(client)+"&client_secret="+encode(secret))).build();
             var response=http.send(request,info->boundedBody());
             if(response.statusCode()!=200||response.body().length>65536)throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
-            var token=mapper.readTree(response.body()).path("access_token").asText();
-            if(token.isBlank())throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
+            var node=mapper.readTree(response.body()).path("access_token");
+            if(!node.isString())throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
+            var token=node.asText();
+            if(token.isBlank()||token.length()>16384)throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
             return token;
         }catch(InterruptedException ex){Thread.currentThread().interrupt();throw new IllegalStateException("INT_SERVICE_TOKEN_INTERRUPTED");}
          catch(java.io.IOException ex){throw new IllegalStateException("INT_SERVICE_TOKEN_TRANSPORT");}
@@ -100,7 +102,11 @@ class IntradayWorker {
             }
             if(AnalyticalJobService.transientFailure(ex)||"INT_SERVICE_TOKEN_TRANSPORT".equals(ex.getMessage()))
                 return jobs.retry(claim,AnalyticalJobRepository.Failure.TRANSIENT)?AnalyticalJobService.RunResult.RETRY:AnalyticalJobService.RunResult.LEASE_LOST;
-            return jobs.block(claim,AnalyticalJobRepository.Failure.EXECUTION_REJECTED)?AnalyticalJobService.RunResult.BLOCKED:AnalyticalJobService.RunResult.LEASE_LOST;
+            var failure="INT_INTRADAY_SOURCE_AMBIGUOUS".equals(ex.getMessage())?
+                AnalyticalJobRepository.Failure.SOURCE_INCOMPLETE:
+                ex instanceof SecurityException?AnalyticalJobRepository.Failure.POLICY_CHANGED:
+                AnalyticalJobRepository.Failure.EXECUTION_REJECTED;
+            return jobs.block(claim,failure)?AnalyticalJobService.RunResult.BLOCKED:AnalyticalJobService.RunResult.LEASE_LOST;
         }
     }
 }
