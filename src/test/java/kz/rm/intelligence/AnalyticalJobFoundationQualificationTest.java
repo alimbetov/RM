@@ -400,4 +400,48 @@ class AnalyticalJobFoundationQualificationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
     }
 
+
+    @Test void schedulerLeaseExpiryDuringActivationRollsBackPg() {
+        UUID t=activeTenant();enqueue(t,"NIGHT",0,1);
+        var pilot=java.util.Map.of(t,LocalDate.of(2026,11,1));
+        var prepared=jobs.claimNext(UUID.randomUUID(),pilot,1,300).orElseThrow();
+        UUID proof=ready(prepared);
+        assertThat(jobs.yieldProgress(prepared)).isTrue();
+        jdbc.update("UPDATE crm.int_analytics_job_run SET next_attempt_at=clock_timestamp() WHERE tenant_id=?",t);
+        var old=jobs.claimNext(UUID.randomUUID(),pilot,1,5).orElseThrow();
+        String fault="sched_expiry_"+old.job().toString().replace("-","");
+        // The existing activation writes the pointer before completing the job.
+        // Wait against the persisted DB deadline, not the test JVM clock.
+        jdbc.execute("CREATE FUNCTION crm."+fault+"() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            +"DECLARE deadline timestamptz; BEGIN IF NEW.tenant_id='"+t+"'::uuid "
+            +"AND NEW.generation_id='"+old.generation()+"'::uuid THEN "
+            +"SELECT lease_until INTO deadline FROM crm.int_analytics_job_run "
+            +"WHERE tenant_id=NEW.tenant_id AND job_id='"+old.job()+"'::uuid; "
+            +"PERFORM pg_sleep(greatest(0,extract(epoch FROM deadline-clock_timestamp())+0.1)); "
+            +"END IF; RETURN NEW; END; $$");
+        jdbc.execute("CREATE TRIGGER "+fault+" BEFORE INSERT ON crm.int_active_generation FOR EACH ROW EXECUTE FUNCTION crm."+fault+"()");
+        try{
+            assertThatThrownBy(()->coverage.activateScheduled(old,proof,jobs))
+                .hasMessage("INT_JOB_COMPLETION_FENCE");
+            assertThat(l1.lifecycle(t,old.generation()).state()).isEqualTo("BUILDING");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
+            assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM crm.int_dim_coverage_proof WHERE tenant_id=? AND generation_id=? AND lifecycle_revision=1
+                """,Integer.class,t,old.generation())).isZero();
+            assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,t)).isEqualTo("RUNNING");
+        }finally{
+            jdbc.execute("DROP TRIGGER "+fault+" ON crm.int_active_generation");
+            jdbc.execute("DROP FUNCTION crm."+fault+"()");
+        }
+        var takeover=jobs.claimNext(UUID.randomUUID(),pilot,1,300).orElseThrow();
+        assertThat(takeover.job()).isEqualTo(old.job());
+        assertThat(takeover.generation()).isEqualTo(old.generation());
+        assertThat(takeover.slot()).isEqualTo(old.slot());
+        assertThat(takeover.token()).isEqualTo(old.token()+1);
+        assertThatThrownBy(()->coverage.activateScheduled(old,proof,jobs)).hasMessage("INT_JOB_LEASE_LOST");
+        var active=coverage.activateScheduled(takeover,proof,jobs);
+        assertThat(active.generation()).isEqualTo(old.generation());
+        assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=?",String.class,t)).isEqualTo("COMPLETED");
+    }
+
 }

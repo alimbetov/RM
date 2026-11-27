@@ -316,6 +316,10 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerActivationRejectsCalendarDriftAndLostLeasePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerLeaseExpiryDuringActivationRollsBackPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
