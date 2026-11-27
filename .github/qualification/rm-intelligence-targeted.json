@@ -368,6 +368,10 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerIntradayLateVisibilityAndDistinctOraclePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayTwoRealTenantsIsolationPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

@@ -7172,12 +7172,12 @@ ALTER TABLE public.iam_user_account ADD CONSTRAINT ck_iam_principal_kind CHECK(p
 
 --changeset rm:0226-int-intraday-result dbms:postgresql splitStatements:false
 CREATE FUNCTION public.iam_principal_kind_guard() RETURNS trigger LANGUAGE plpgsql
- SET search_path=pg_catalog,pg_temp AS $
+ SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
  IF OLD.principal_kind='SERVICE' AND (NEW.principal_kind<>'SERVICE' OR NEW.external_subject IS DISTINCT FROM OLD.external_subject)
  THEN RAISE EXCEPTION 'IAM_SERVICE_CLASSIFICATION_IMMUTABLE' USING ERRCODE='23514'; END IF;
  RETURN NEW;
-END $;
+END $$;
 REVOKE ALL ON FUNCTION public.iam_principal_kind_guard() FROM PUBLIC;
 CREATE TRIGGER trg_iam_principal_kind BEFORE UPDATE OF principal_kind,external_subject ON public.iam_user_account
  FOR EACH ROW EXECUTE FUNCTION public.iam_principal_kind_guard();
@@ -7269,7 +7269,24 @@ CREATE CONSTRAINT TRIGGER trg_int_intraday_result_pair AFTER INSERT OR UPDATE OR
 CREATE FUNCTION crm.int_intraday_register(t uuid,j uuid,actor uuid,v bigint,d text,b timestamptz,e timestamptz)
  RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
- IF NOT EXISTS(SELECT 1 FROM public.iam_user_account u WHERE u.id=actor AND u.status='ACTIVE' AND u.principal_kind='SERVICE')
+ -- Registration is not authorization to read. Nevertheless reject any
+ -- foreign or overprivileged service account before creating a request.
+ IF NOT EXISTS(SELECT 1 FROM public.iam_user_account u
+    JOIN public.iam_workspace x ON x.id=t
+    JOIN public.org_organization org ON org.id=x.organization_id
+    JOIN public.iam_org_membership m ON m.organization_id=x.organization_id AND m.user_id=u.id
+    JOIN public.iam_tenant_rbac_config cfg ON cfg.tenant_id=x.id
+    WHERE u.id=actor AND u.status='ACTIVE' AND u.principal_kind='SERVICE'
+      AND x.kind='ORGANIZATION' AND x.status='ACTIVE' AND org.status='ACTIVE'
+      AND m.status='ACTIVE' AND m.role='MEMBER' AND cfg.enforced
+      AND EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+        JOIN public.iam_tenant_role rr ON rr.tenant_id=a.tenant_id AND rr.id=a.role_id
+        JOIN public.iam_tenant_role_permission p ON p.tenant_id=rr.tenant_id AND p.role_id=rr.id
+        WHERE a.tenant_id=t AND a.user_id=actor AND rr.active AND p.permission_code='SALES_ORDER_READ')
+      AND NOT EXISTS(SELECT 1 FROM public.iam_tenant_user_role a
+        JOIN public.iam_tenant_role rr ON rr.tenant_id=a.tenant_id AND rr.id=a.role_id
+        JOIN public.iam_tenant_role_permission p ON p.tenant_id=rr.tenant_id AND p.role_id=rr.id
+        WHERE a.tenant_id=t AND a.user_id=actor AND rr.active AND p.permission_code<>'SALES_ORDER_READ'))
  THEN RAISE EXCEPTION 'INT_INTRADAY_SERVICE_ACCOUNT' USING ERRCODE='23514'; END IF;
  INSERT INTO crm.int_intraday_result(tenant_id,job_id,service_account_id,scope_version,scope_digest,day_start,day_end)
  VALUES(t,j,actor,v,d,b,e);

@@ -1028,4 +1028,66 @@ class AnalyticalJobFoundationQualificationTest {
         }
     }
 
+
+    @Test void schedulerIntradayTwoRealTenantsIsolationPg() throws Exception {
+        String zone=currentIntradayZone();
+        var first=ownerFacts(zone);var second=ownerFacts(zone,false);
+        UUID a=first.tenant(),b=second.tenant();
+        assertThat(a).isNotEqualTo(b);
+        context.getBean(kz.rm.autoorder.AutoOrderService.class).checkout(
+            second.slug(),"isolation-"+UUID.randomUUID()+"@example.kz",
+            "isolation-"+UUID.randomUUID(),java.util.List.of(
+                new kz.rm.autoorder.AutoOrderService.Line(second.offer(),1)));
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID aa=serviceMember(a,issuer),bb=serviceMember(b,issuer);
+            var valid=kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID;
+            var actorA=issuer.resolveService(jdbc,users,aa,valid);
+            var actorB=issuer.resolveService(jdbc,users,bb,valid);
+            LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class)
+                .atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
+            var scopeA=new IntradayResultStore.Scope(a,aa,1,day,7);
+            var scopeB=new IntradayResultStore.Scope(b,bb,1,day,7);
+            var forged=new IntradayResultStore.Scope(b,aa,1,day,7);
+            // Existing real tenant, not a random nonexistent tenant. The
+            // planner transaction must roll back both parent and request.
+            assertThatThrownBy(()->intradayStore.plan(forged))
+                .hasStackTraceContaining("INT_INTRADAY_SERVICE_ACCOUNT");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_type='INTRADAY'",Integer.class,b)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id=?",Integer.class,b)).isZero();
+            UUID ja=intradayStore.plan(scopeA).orElseThrow();
+            UUID jb=intradayStore.plan(scopeB).orElseThrow();
+            var ca=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(a),2,300).orElseThrow();
+            var cb=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(b),2,300).orElseThrow();
+            try{
+                assertThat(ca.job()).isEqualTo(ja);assertThat(cb.job()).isEqualTo(jb);
+                assertThat(ca.slot()).isNotEqualTo(cb.slot());
+                assertThatThrownBy(()->intradayStore.execute(cb,forged,actorA)).isInstanceOf(SecurityException.class);
+                assertThatThrownBy(()->intradayStore.execute(ca,scopeA,actorB)).isInstanceOf(SecurityException.class);
+                assertThatThrownBy(()->intradayStore.latest(forged,actorA)).isInstanceOf(SecurityException.class);
+                var tx=new org.springframework.transaction.support.TransactionTemplate(
+                    context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
+                var auth=context.getBean(kz.rm.iam.TenantAuthorization.class);
+                var reader=context.getBean(AuthorizedAnalyticalReadService.class);
+                assertThatThrownBy(()->tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actorA,a),b,1,day)))
+                    .isInstanceOf(SecurityException.class);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id IN (?,?) AND acknowledged_at IS NOT NULL",Integer.class,a,b)).isZero();
+                assertThat(intradayStore.execute(ca,scopeA,actorA)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+                assertThat(intradayStore.execute(cb,scopeB,actorB)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+                var ra=intradayStore.latest(scopeA,actorA).orElseThrow();
+                var rb=intradayStore.latest(scopeB,actorB).orElseThrow();
+                assertThat(ra.job()).isEqualTo(ja);assertThat(ra.value()).isEqualTo(2L);
+                assertThat(rb.job()).isEqualTo(jb);assertThat(rb.value()).isEqualTo(1L);
+                assertThat(ra.digest()).isNotEqualTo(rb.digest());
+                assertThatThrownBy(()->intradayStore.completed(cb,forged,actorA)).isInstanceOf(SecurityException.class);
+                assertThatThrownBy(()->intradayStore.latest(scopeA,actorB)).isInstanceOf(SecurityException.class);
+                assertThat(intradayStore.latest(scopeA,actorA)).contains(ra);
+                assertThat(intradayStore.latest(scopeB,actorB)).contains(rb);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id IN (?,?)",Integer.class,a,b)).isZero();
+            }finally{
+                // Fenced release is harmless for already completed jobs.
+                jobs.yieldProgress(ca);jobs.yieldProgress(cb);
+            }
+        }
+    }
+
 }
