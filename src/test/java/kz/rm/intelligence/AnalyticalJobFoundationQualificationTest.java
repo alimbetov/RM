@@ -1071,12 +1071,43 @@ class AnalyticalJobFoundationQualificationTest {
                 assertThatThrownBy(()->tx.execute(status->reader.readIntraday(auth.requireIntradayRead(actorA,a),b,1,day)))
                     .isInstanceOf(SecurityException.class);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id IN (?,?) AND acknowledged_at IS NOT NULL",Integer.class,a,b)).isZero();
-                assertThat(intradayStore.execute(ca,scopeA,actorA)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
-                assertThat(intradayStore.execute(cb,scopeB,actorB)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+                // Independent worker identities and transactions, started together.
+                var workers=java.util.concurrent.Executors.newFixedThreadPool(2);
+                var start=new java.util.concurrent.CountDownLatch(1);
+                try {
+                    var fa=workers.submit(()->{start.await();return intradayStore.execute(ca,scopeA,actorA);});
+                    var fb=workers.submit(()->{start.await();return intradayStore.execute(cb,scopeB,actorB);});
+                    start.countDown();
+                    assertThat(fa.get(60,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+                    assertThat(fb.get(60,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+                } finally {
+                    workers.shutdownNow();
+                    assertThat(workers.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                }
                 var ra=intradayStore.latest(scopeA,actorA).orElseThrow();
                 var rb=intradayStore.latest(scopeB,actorB).orElseThrow();
                 assertThat(ra.job()).isEqualTo(ja);assertThat(ra.value()).isEqualTo(2L);
                 assertThat(rb.job()).isEqualTo(jb);assertThat(rb.value()).isEqualTo(1L);
+                // Independent owner-event oracle, without production projection or view.
+                for(var entry:java.util.Map.of(a,ra,b,rb).entrySet()){
+                    var observed=entry.getValue();
+                    Long expected=jdbc.queryForObject("""
+                        SELECT count(*) FROM (
+                          SELECT e.order_id FROM crm.sales_order_status_event e
+                          WHERE e.tenant_id=? AND e.event_type='PLACED'
+                            AND e.occurred_at>=? AND e.occurred_at<?
+                            AND EXISTS(SELECT 1 FROM crm.sales_order_line l
+                              WHERE l.tenant_id=e.tenant_id AND l.order_id=e.order_id)
+                          GROUP BY e.order_id
+                        ) orders
+                        """,Long.class,entry.getKey(),day.atStartOfDay(java.time.ZoneId.of(zone)).toOffsetDateTime(),
+                        observed.cutoff().atOffset(java.time.ZoneOffset.UTC));
+                    assertThat(observed.value()).isEqualTo(expected);
+                    assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM crm.int_intraday_result
+                        WHERE tenant_id=? AND job_id=? AND acknowledged_at IS NOT NULL
+                        """,Long.class,entry.getKey(),observed.job())).isEqualTo(1L);
+                }
                 assertThat(ra.digest()).isNotEqualTo(rb.digest());
                 assertThatThrownBy(()->intradayStore.completed(cb,forged,actorA)).isInstanceOf(SecurityException.class);
                 assertThatThrownBy(()->intradayStore.latest(scopeA,actorB)).isInstanceOf(SecurityException.class);
