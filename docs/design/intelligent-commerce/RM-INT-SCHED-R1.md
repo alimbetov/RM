@@ -221,3 +221,7 @@ Owner agreed to create mini spec and direction only. Explicit approval required 
 
 ### v1.1 change control — multi-pod
 Owner requested multi-pod design refinement. Single-running global index in v1 replaced in proposed SQL, not retained in runtime. No new service, table or dependency beyond original proposal. Cluster capacity 2/4, one worker/pod and same-tenant serialization are proposed defaults, require approval; exact DB/PG qualification pending. No claim of exactly-once physical execution or production-scale throughput. Existing B4/API FREEZE and COR-01.8 prerequisite preserved.
+
+## R1.3 contract refinement — 2026-11-27
+
+[Intraday Authorization & Durable Cumulative Result](RM-INT-SCHED-R1.3-INTRADAY-CONTRACTS.md) records the two missing contracts proposed against base_dev eeb01b3 (25/25 Full Exact-SHA, 80/80 targeted). R1.2 integrated with runtime OFF. Explicit service identity, durable result/ack and cross-boundary changes require owner approval before implementation. No schema or runtime change; historical readiness, report/Radar and production HOLD remain.
