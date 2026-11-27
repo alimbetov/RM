@@ -89,37 +89,51 @@ jobs:
               "BusinessConclusionQualificationTest", "AnalyticalJobFoundationQualificationTest"
           }
           tests = {"src/test/java/kz/rm/intelligence/" + s + ".java" for s in suites}
-          raw = git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", base, head, "--")
-          records = raw.split(b"\0")
-          require(records[-1] == b"" and len(records[:-1]) % 2 == 0, "INVALID_DIFF")
-          changed = []
-          for header, name in zip(records[:-1:2], records[1:-1:2]):
-              old, new, old_oid, new_oid, status = header.decode("ascii").split()
-              path = name.decode("utf-8", errors="strict")
-              require(new == "100644" and status in ("A", "M")
-                      and ((status == "A" and old == ":000000")
-                           or (status == "M" and old == ":100644")), "UNSUPPORTED_CHANGE: " + path)
-              source = re.fullmatch(r"src/main/java/kz/rm/intelligence/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+\.java", path)
-              require(bool(source) or (path in tests and status == "M")
-                      or (path == registry and status == "M"), "OUT_OF_SCOPE: " + path)
-              changed.append(path)
-          require(bool(changed), "NO_DEVELOPMENT_DIFF")
-          require(len(changed) == len(set(changed)), "DUPLICATE_PATH")
-          if registry in changed:
-              old = json.loads(git("show", base + ":" + registry))
-              new = json.loads(git("show", head + ":" + registry))
-              old_cases = old.pop("requiredCases")
-              new_cases = new.pop("requiredCases")
-              require(old == new and old.get("admission") == "DIAGNOSTIC_ONLY", "REGISTRY_POLICY_DRIFT")
-              def keys(rows):
-                  require(all(set(r) == {"classname", "name"} for r in rows), "INVALID_CASE")
-                  result = {(r["classname"], r["name"]) for r in rows}
-                  require(len(result) == len(rows), "DUPLICATE_CASE")
-                  return result
-              before, after = keys(old_cases), keys(new_cases)
-              require(before <= after, "CASE_REMOVAL")
-              require(all(c in {"kz.rm.intelligence." + s for s in suites}
-                          and isinstance(n, str) and bool(n) for c, n in after - before), "CASE_OUT_OF_SCOPE")
+          def validate_diff(base, head):
+              raw = git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", base, head, "--")
+              records = raw.split(b"\0")
+              require(records[-1] == b"" and len(records[:-1]) % 2 == 0, "INVALID_DIFF")
+              changed = []
+              for header, name in zip(records[:-1:2], records[1:-1:2]):
+                  old, new, old_oid, new_oid, status = header.decode("ascii").split()
+                  path = name.decode("utf-8", errors="strict")
+                  require(new == "100644" and status in ("A", "M")
+                          and ((status == "A" and old == ":000000")
+                               or (status == "M" and old == ":100644")), "UNSUPPORTED_CHANGE: " + path)
+                  source = re.fullmatch(r"src/main/java/kz/rm/intelligence/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+\.java", path)
+                  require(bool(source) or (path in tests and status == "M")
+                          or (path == registry and status == "M"), "OUT_OF_SCOPE: " + path)
+                  changed.append(path)
+              require(bool(changed), "NO_DEVELOPMENT_DIFF")
+              require(len(changed) == len(set(changed)), "DUPLICATE_PATH")
+              if registry in changed:
+                  old = json.loads(git("show", base + ":" + registry))
+                  new = json.loads(git("show", head + ":" + registry))
+                  old_cases = old.pop("requiredCases")
+                  new_cases = new.pop("requiredCases")
+                  require(old == new and old.get("admission") == "DIAGNOSTIC_ONLY", "REGISTRY_POLICY_DRIFT")
+                  def keys(rows):
+                      require(all(set(r) == {"classname", "name"} for r in rows), "INVALID_CASE")
+                      result = {(r["classname"], r["name"]) for r in rows}
+                      require(len(result) == len(rows), "DUPLICATE_CASE")
+                      return result
+                  before, after = keys(old_cases), keys(new_cases)
+                  require(before <= after, "CASE_REMOVAL")
+                  require(all(c in {"kz.rm.intelligence." + s for s in suites}
+                              and isinstance(n, str) and bool(n) for c, n in after - before), "CASE_OUT_OF_SCOPE")
+              return changed
+
+          history = git("rev-list", "--reverse", "--parents", "--max-count=129",
+                        base + ".." + head).decode("ascii").splitlines()
+          require(0 < len(history) <= 128, "UNSUPPORTED_HISTORY_LENGTH")
+          parent = base
+          for line in history:
+              parts = line.split()
+              require(len(parts) == 2 and parts[1] == parent, "NON_LINEAR_HISTORY")
+              validate_diff(parent, parts[0])
+              parent = parts[0]
+          require(parent == head, "HISTORY_HEAD_MISMATCH")
+          changed = validate_diff(base, head)
           print(json.dumps({"scope": "INTELLIGENCE_DIAGNOSTIC_ONLY", "baseSha": base,
                             "headSha": head, "changedPaths": sorted(changed),
                             "developmentAdmission": "NOT_GRANTED", "releaseAdmission": "DENIED"}))
