@@ -4,3 +4,5 @@ Failed SHA 82452bbb0f869d31af6c5f3b073079453e482483. Reviewed GitHub jobs 139163
 - Domain Security PostgreSQL: Maven Central HTTP 429 resolving maven-dependency-plugin 3.9.0 before tests. Added bounded rate-limit-only retry (30s/60s) to classpath resolution, fail closed on other errors/exhaustion, require nonempty classpath. Full clean verify and DB role qualification unchanged.
 - Exact-SHA admission: correctly failed on mandatory Domain Security workflow failure. No changes to aggregator, required checks or test selection.
 New SHA requires independent CI evidence; no claim of PostgreSQL qualification or B2.1R completion.
+
+This is a historical recovery record for the failed SHA and recovery described above, not a verdict on the current branch head or an authorization to omit qualification checks.
