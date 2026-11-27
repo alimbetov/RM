@@ -110,16 +110,23 @@ class AnalyticalJobRepository {
     private record Active(UUID generation,long calendar,LocalDate from,LocalDate until) {}
     private record JobKey(UUID tenant,UUID job,int slot,long token) {}
     record Claim(UUID tenant,UUID job,UUID generation,UUID worker,long token,int slot,
-                 Instant leaseUntil,long calendar,LocalDate from,LocalDate until,UUID expectedPrevious) {}
-    enum Failure { TRANSIENT, STALE_PROOF, SOURCE_INCOMPLETE, POLICY_CHANGED, EXECUTION_REJECTED }
+                 Instant leaseUntil,long calendar,LocalDate from,LocalDate until,UUID expectedPrevious,String type) {
+        Claim(UUID tenant,UUID job,UUID generation,UUID worker,long token,int slot,Instant leaseUntil,
+              long calendar,LocalDate from,LocalDate until,UUID expectedPrevious){
+            this(tenant,job,generation,worker,token,slot,leaseUntil,calendar,from,until,expectedPrevious,"NIGHT");
+        }
+        Claim { if(!Set.of("NIGHT","INTRADAY").contains(type))throw new IllegalArgumentException("INT_JOB_TYPE"); }
+    }
+    enum Failure { TRANSIENT, STALE_PROOF, SOURCE_INCOMPLETE, POLICY_CHANGED, EXECUTION_REJECTED, OBSOLETE_SLOT }
     private static final String CLAIM_COLUMNS = """
         tenant_id,job_id,generation_id,lease_owner,attempt_token,cluster_slot,
-        lease_until,calendar_version,from_day,until_day,expected_previous
+        lease_until,calendar_version,from_day,until_day,expected_previous,job_type
         """;
     private static final String FENCE = """
-        WHERE tenant_id=? AND job_id=? AND job_type='NIGHT' AND status='RUNNING' AND lease_owner=?
+        WHERE tenant_id=? AND job_id=? AND job_type=? AND status='RUNNING' AND lease_owner=?
           AND attempt_token=? AND cluster_slot=? AND lease_until>clock_timestamp()
-          AND generation_id=? AND calendar_version=? AND from_day=? AND until_day=?
+          AND generation_id IS NOT DISTINCT FROM CAST(? AS uuid) AND calendar_version=?
+          AND from_day IS NOT DISTINCT FROM CAST(? AS date) AND until_day IS NOT DISTINCT FROM CAST(? AS date)
           AND expected_previous IS NOT DISTINCT FROM CAST(? AS uuid)
         """;
     // Use the persisted job's scope and current owner records in the same
@@ -133,14 +140,14 @@ class AnalyticalJobRepository {
             ORDER BY p.version DESC LIMIT 1)
         """;
     private static final String CURRENT_POLICY = CURRENT_OWNER_POLICY+"""
-        AND j.expected_previous IS NOT DISTINCT FROM (SELECT a.generation_id
-            FROM crm.int_active_generation a WHERE a.tenant_id=j.tenant_id AND a.projection_code='L3')
+        AND (j.job_type='INTRADAY' OR j.expected_previous IS NOT DISTINCT FROM (SELECT a.generation_id
+            FROM crm.int_active_generation a WHERE a.tenant_id=j.tenant_id AND a.projection_code='L3'))
         """;
 
     private static Object[] fenceArgs(Claim c,Object... prefix){
         Objects.requireNonNull(c);
         var args=new ArrayList<Object>(Arrays.asList(prefix));
-        Collections.addAll(args,c.tenant(),c.job(),c.worker(),c.token(),c.slot(),c.generation(),
+        Collections.addAll(args,c.tenant(),c.job(),c.type(),c.worker(),c.token(),c.slot(),c.generation(),
             c.calendar(),c.from(),c.until(),c.expectedPrevious());
         return args.toArray();
     }
@@ -203,15 +210,22 @@ class AnalyticalJobRepository {
     /** Expired NIGHT first, then one due PENDING in a free numbered slot.
      * The unique indexes, not the pre-read, arbitrate concurrent claims. */
     Optional<Claim> claimNext(UUID worker,Map<UUID,LocalDate> pilot,int clusterLimit,int leaseSeconds) {
-        Objects.requireNonNull(worker);Objects.requireNonNull(pilot);
-        if(pilot.isEmpty()||pilot.size()>1000||clusterLimit<1||clusterLimit>4||leaseSeconds<1||leaseSeconds>900)
+        return claimNext(worker,pilot,Set.of(),clusterLimit,leaseSeconds);
+    }
+    Optional<Claim> claimNext(UUID worker,Map<UUID,LocalDate> pilot,Set<UUID> intraday,int clusterLimit,int leaseSeconds) {
+        Objects.requireNonNull(worker);Objects.requireNonNull(pilot);Objects.requireNonNull(intraday);
+        if((pilot.isEmpty()&&intraday.isEmpty())||pilot.size()>1000||intraday.size()>1000||clusterLimit<1||clusterLimit>4||leaseSeconds<1||leaseSeconds>900)
             throw new IllegalArgumentException("INT_JOB_CLAIM_LIMIT");
         var scopes=Map.copyOf(pilot);
         var tenants=scopes.keySet().stream().sorted().toList();
-        String in=String.join(",",Collections.nCopies(tenants.size(),"?"));
+        var intra=Set.copyOf(intraday);
+        var intraTenants=intra.stream().sorted().toList();
+        String in=tenants.isEmpty()?"NULL":String.join(",",Collections.nCopies(tenants.size(),"?"));
+        String intraIn=intraTenants.isEmpty()?"NULL":String.join(",",Collections.nCopies(intraTenants.size(),"?"));
+        var pendingArgs=new ArrayList<Object>(tenants);pendingArgs.addAll(intraTenants);
         for(int attempt=0;attempt<2;attempt++){
             try {
-                return ownTx(()->claimOnce(worker,scopes,tenants,in,clusterLimit,leaseSeconds));
+                return ownTx(()->claimOnce(worker,scopes,intra,in,intraIn,pendingArgs,clusterLimit,leaseSeconds));
             } catch(DuplicateKeyException e) {
                 if(!knownClaimRace(e))throw e;
                 // Rollback occurred before retry; never continue an aborted transaction.
@@ -219,7 +233,7 @@ class AnalyticalJobRepository {
         }
         return Optional.empty();
     }
-    private Optional<Claim> claimOnce(UUID worker,Map<UUID,LocalDate> scopes,List<UUID> tenants,String in,int limit,int seconds) {
+    private Optional<Claim> claimOnce(UUID worker,Map<UUID,LocalDate> scopes,Set<UUID> intra,String in,String intraIn,List<Object> pendingArgs,int limit,int seconds) {
         if(Boolean.TRUE.equals(jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM crm.int_analytics_job_run
                 WHERE status='RUNNING' AND cluster_slot>?)
@@ -229,7 +243,7 @@ class AnalyticalJobRepository {
         // that pilot: after takeover the existing scope check blocks the row.
         var expired=jdbc.query("""
             SELECT tenant_id,job_id,cluster_slot,attempt_token FROM crm.int_analytics_job_run
-            WHERE status='RUNNING' AND job_type='NIGHT' AND lease_until<=clock_timestamp()
+            WHERE status='RUNNING' AND lease_until<=clock_timestamp()
               AND cluster_slot<=?
             ORDER BY lease_until,tenant_id,job_id LIMIT 1 FOR UPDATE SKIP LOCKED
             """,(rs,n)->key(rs),limit).stream().findFirst();
@@ -246,16 +260,22 @@ class AnalyticalJobRepository {
             if(free.isEmpty())return Optional.empty();
             var pending=jdbc.query("""
                 SELECT j.tenant_id,j.job_id,j.attempt_token FROM crm.int_analytics_job_run j
-                WHERE j.status='PENDING' AND j.job_type='NIGHT'
+                WHERE j.status='PENDING'
                   AND j.next_attempt_at<=clock_timestamp() AND j.scheduled_at<=clock_timestamp()
-                  AND j.tenant_id IN (
+                  AND ((j.job_type='NIGHT' AND j.tenant_id IN (
                 """+in+"""
-                ) AND NOT EXISTS(SELECT 1 FROM crm.int_analytics_job_run r
+                )) OR (j.job_type='INTRADAY' AND j.tenant_id IN (
+                """+intraIn+"""
+                ) AND EXISTS(SELECT 1 FROM crm.int_intraday_result x WHERE x.tenant_id=j.tenant_id AND x.job_id=j.job_id
+                       AND x.acknowledged_at IS NULL)
+                  AND NOT EXISTS(SELECT 1 FROM crm.int_analytics_job_run n WHERE n.tenant_id=j.tenant_id
+                    AND n.job_type='NIGHT' AND n.status IN ('PENDING','RUNNING','BLOCKED','FAILED'))))
+                AND NOT EXISTS(SELECT 1 FROM crm.int_analytics_job_run r
                       WHERE r.tenant_id=j.tenant_id AND r.status='RUNNING')
                 ORDER BY j.next_attempt_at,j.scheduled_slot,j.tenant_id,j.job_id
                 LIMIT 1 FOR UPDATE OF j SKIP LOCKED
                 """,(rs,n)->new JobKey(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
-                      free.get(),rs.getLong(3)),tenants.toArray()).stream().findFirst();
+                      free.get(),rs.getLong(3)),pendingArgs.toArray()).stream().findFirst();
             if(pending.isEmpty())return Optional.empty();
             chosen=pending.get();oldState="PENDING";
         }
@@ -270,8 +290,16 @@ class AnalyticalJobRepository {
                 chosen.job(),oldState,chosen.token()).stream().findFirst();
         if(claimed.isEmpty())throw new IllegalStateException("INT_JOB_LOCKED_CLAIM_LOST");
         Claim c=claimed.get();
-        long days=ChronoUnit.DAYS.between(c.from(),c.until());
-        if(!Objects.equals(scopes.get(c.tenant()),c.from())||days<7||days>31||!currentPolicy(c)){
+        boolean scopeAllowed;
+        if("NIGHT".equals(c.type())){
+            long days=ChronoUnit.DAYS.between(c.from(),c.until());
+            scopeAllowed=Objects.equals(scopes.get(c.tenant()),c.from())&&days>=7&&days<=31;
+        }else{
+            scopeAllowed=intra.contains(c.tenant())&&Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM crm.int_intraday_result WHERE tenant_id=? AND job_id=? AND acknowledged_at IS NULL)
+                """,Boolean.class,c.tenant(),c.job()));
+        }
+        if(!scopeAllowed||!currentPolicy(c)){
             if(!release(c,"BLOCKED",Failure.POLICY_CHANGED))throw new IllegalStateException("INT_JOB_POLICY_FENCE_LOST");
             return Optional.empty();
         }
@@ -289,7 +317,7 @@ class AnalyticalJobRepository {
         return new Claim(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
             rs.getObject(4,UUID.class),rs.getLong(5),rs.getInt(6),
             rs.getObject(7,OffsetDateTime.class).toInstant(),rs.getLong(8),
-            rs.getObject(9,LocalDate.class),rs.getObject(10,LocalDate.class),rs.getObject(11,UUID.class));
+            rs.getObject(9,LocalDate.class),rs.getObject(10,LocalDate.class),rs.getObject(11,UUID.class),rs.getString(12));
     }
     private static boolean knownClaimRace(DuplicateKeyException ex) {
         for(Throwable x=ex;x!=null;x=x.getCause()){
@@ -357,6 +385,11 @@ class AnalyticalJobRepository {
             (rs,n)->rs.getObject(1,UUID.class),fenceArgs(c)).size()!=1)
             throw new IllegalStateException("INT_JOB_LEASE_LOST");
     }
+    void skipIntraday(Claim c){
+        requireActivationTransaction();
+        if(!"INTRADAY".equals(c.type())||!release(c,"SKIPPED",Failure.OBSOLETE_SLOT))
+            throw new IllegalStateException("INT_JOB_LEASE_LOST");
+    }
     void verifyScheduledScope(Claim c){
         requireActivationTransaction();
         // Workspace UPDATE fence is already held by activateInternal. Lock
@@ -386,7 +419,7 @@ class AnalyticalJobRepository {
     }
     void completeNight(Claim c,MultidimensionalCoverageService.Activation activation){
         requireActivationTransaction();
-        if(activation.replay()||!c.generation().equals(activation.generation()))
+        if(!"NIGHT".equals(c.type())||activation.replay()||!c.generation().equals(activation.generation()))
             throw new IllegalStateException("INT_JOB_ACTIVATION_IDENTITY");
         record Evidence(OffsetDateTime observed,long revision){}
         var proof=jdbc.query("""

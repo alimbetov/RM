@@ -12,6 +12,20 @@ import org.springframework.stereotype.Service;
 @Service
 class AnalyticalJobService {
     record NightDue(Instant slot,LocalDate until) {}
+    record IntradayDue(Instant slot,Instant deadline,LocalDate day,PeriodResolver.Period period){}
+    static Optional<IntradayDue> latestIntraday(Instant now,PeriodResolver.Policy policy){
+        var day=now.atZone(policy.zone()).toLocalDate();
+        var period=PeriodResolver.resolve(PeriodResolver.Code.D,day,policy);
+        var slots=new TreeSet<Instant>();
+        for(int hour=3;hour<=21;hour+=3){
+            var slot=day.atTime(hour,0).atZone(policy.zone()).withEarlierOffsetAtOverlap().toInstant();
+            if(!slot.isBefore(period.startInclusive())&&slot.isBefore(period.endExclusive()))slots.add(slot);
+        }
+        var due=slots.floor(now);
+        if(due==null)return Optional.empty();
+        var next=slots.higher(due);
+        return Optional.of(new IntradayDue(due,next==null?period.endExclusive():next,day,period));
+    }
     private static final Logger log=LoggerFactory.getLogger(AnalyticalJobService.class);
     private final AnalyticalJobRepository repository;
     private final GenerationRebuildService rebuild;
@@ -20,7 +34,7 @@ class AnalyticalJobService {
                          MultidimensionalCoverageService coverage){
         this.repository=repository;this.rebuild=rebuild;this.coverage=coverage;
     }
-    enum RunResult { NO_WORK, YIELDED, RETRY, BLOCKED, COMPLETED, LEASE_LOST }
+    enum RunResult { NO_WORK, YIELDED, RETRY, BLOCKED, COMPLETED, LEASE_LOST, SKIPPED }
     record Limits(int cluster,int leaseSeconds,int facts,int periods){
         Limits{
             if(cluster<1||cluster>4||leaseSeconds<130||leaseSeconds>900||facts<1||facts>500||periods<1||periods>128)
@@ -55,11 +69,16 @@ class AnalyticalJobService {
         return repository.claimNext(worker,pilot,limits.cluster(),limits.leaseSeconds());
     }
 
+    Optional<AnalyticalJobRepository.Claim> claimNext(UUID worker,Map<UUID,LocalDate> pilot,Set<UUID> intraday,Limits limits){
+        return repository.claimNext(worker,pilot,intraday,limits.cluster(),limits.leaseSeconds());
+    }
+
     void releaseUnstarted(AnalyticalJobRepository.Claim claim){
         repository.yieldProgress(claim);
     }
 
     RunResult runNight(AnalyticalJobRepository.Claim c,Limits limits){
+        if(!"NIGHT".equals(c.type()))throw new IllegalArgumentException("INT_JOB_TYPE");
         try{
             if(repository.renew(c,limits.leaseSeconds()).isEmpty())return RunResult.LEASE_LOST;
             var progress=rebuild.step(new GenerationRebuildService.Request(
@@ -91,7 +110,7 @@ class AnalyticalJobService {
             return repository.block(c,AnalyticalJobRepository.Failure.EXECUTION_REJECTED)?RunResult.BLOCKED:RunResult.LEASE_LOST;
         }
     }
-    private static boolean transientFailure(RuntimeException ex){
+    static boolean transientFailure(RuntimeException ex){
         if(ex instanceof TransientDataAccessException)return true;
         for(Throwable t=ex;t!=null;t=t.getCause()){
             if(t instanceof SQLException sql){

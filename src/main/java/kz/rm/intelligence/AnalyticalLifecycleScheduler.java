@@ -31,6 +31,10 @@ class AnalyticalLifecycleScheduler {
     private final ThreadPoolExecutor executor=new ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,
         new SynchronousQueue<>(),r->{Thread t=new Thread(r,"rm-intelligence-night");t.setDaemon(true);return t;});
     private int cursor;
+    private int intradayCursor;
+    private IntradayWorker intraday;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    void configureIntraday(IntradayWorker worker){this.intraday=worker;}
     AnalyticalLifecycleScheduler(AnalyticalJobService service,
             @Value("${rm.intelligence.scheduler.pilot-scopes:}") String scopes,
             @Value("${rm.intelligence.scheduler.execution-enabled:false}") boolean executionEnabled,
@@ -79,13 +83,24 @@ class AnalyticalLifecycleScheduler {
                 log.warn("RM analytical planning failed tenant={} type={}",pilot.getKey(),ex.getClass().getSimpleName());
             }
         }
+        if(intraday!=null){
+            var tenants=intraday.tenants();
+            for(int i=0;i<Math.min(50,tenants.size());i++){
+                if(stopping.get())return;
+                UUID tenant=tenants.get(intradayCursor);
+                intradayCursor=(intradayCursor+1)%tenants.size();
+                try{synchronized(admission){if(stopping.get())return;intraday.plan(tenant);}}
+                catch(RuntimeException ex){log.warn("RM INTRADAY planning failed tenant={} type={}",tenant,ex.getClass().getSimpleName());}
+            }
+        }
         log.info("RM analytical planning outcomes={} failures={}",counts,failures);
         if(executionEnabled&&!stopping.get()){
             try{
                 Optional<AnalyticalJobRepository.Claim> claimed;
                 synchronized(admission){
                     if(stopping.get())return;
-                    claimed=service.claimNext(worker,scope,limits);
+                    claimed=intraday==null?service.claimNext(worker,scope,limits):
+                        service.claimNext(worker,scope,Set.copyOf(intraday.tenants()),limits);
                 }
                 if(claimed.isEmpty())return;
                 var claim=claimed.get();
@@ -95,9 +110,10 @@ class AnalyticalLifecycleScheduler {
                 }
                 long started=System.nanoTime();
                 try{
-                    var result=service.runNight(claim,limits);
-                    log.info("RM analytical NIGHT tenant={} job={} generation={} token={} slot={} result={} elapsedMs={}",
-                        claim.tenant(),claim.job(),claim.generation(),claim.token(),claim.slot(),result,
+                    var result="NIGHT".equals(claim.type())?service.runNight(claim,limits):
+                        Objects.requireNonNull(intraday).run(claim);
+                    log.info("RM analytical {} tenant={} job={} generation={} token={} slot={} result={} elapsedMs={}",
+                        claim.type(),claim.tenant(),claim.job(),claim.generation(),claim.token(),claim.slot(),result,
                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started));
                 }catch(RuntimeException ex){
                     log.warn("RM analytical NIGHT tenant={} job={} generation={} elapsedMs={} type={}",
