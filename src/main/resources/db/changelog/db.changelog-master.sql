@@ -7683,3 +7683,184 @@ $$;
 REVOKE ALL ON ALL TABLES IN SCHEMA reporting FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_BUILD_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0229-int-report-resource-batch-catalog dbms:postgresql splitStatements:false
+-- Dormant owner-only experiment. No runtime grants or DROP. Storage budget
+-- is conservative, not physical heap/TOAST size or canonical digest length.
+-- Existing 0227/0228 checksums remain unchanged.
+CREATE FUNCTION reporting.int_report_row_budget(metric text,u text,r text,dims jsonb,v numeric)
+ RETURNS integer LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
+DECLARE x jsonb; n integer; text_value text;
+BEGIN
+ IF metric IS NULL OR u IS NULL OR dims IS NULL OR jsonb_typeof(dims)<>'array'
+ OR length(metric)>64 OR length(u)>64 OR length(r)>128
+ OR metric !~ '^[A-Za-z0-9_.:-]+$' OR u !~ '^[A-Za-z0-9_.:-]+$'
+ OR (r IS NOT NULL AND r !~ '^[A-Za-z0-9_.:-]+$')
+ THEN RAISE EXCEPTION 'INT_REPORT_ROW_BUDGET'; END IF;
+ IF jsonb_array_length(dims)>32 THEN RAISE EXCEPTION 'INT_REPORT_DIMENSION_BUDGET'; END IF;
+ FOR x IN SELECT value FROM jsonb_array_elements(dims) LOOP
+   IF jsonb_typeof(x)<>'array' THEN RAISE EXCEPTION 'INT_REPORT_DIMENSION_SHAPE'; END IF;
+   IF jsonb_array_length(x)<>3 OR jsonb_typeof(x->0) IS DISTINCT FROM 'string'
+    OR jsonb_typeof(x->1) IS DISTINCT FROM 'string' OR jsonb_typeof(x->2) IS DISTINCT FROM 'string'
+    OR length(x->>0)>128 OR length(x->>1)>128
+    OR (x->>0) !~ '^[A-Za-z0-9_.:-]+$' OR (x->>1) !~ '^[A-Za-z0-9_.:-]+$'
+    OR (x->>2) !~ '^[1-9][0-9]{0,18}$'
+   THEN RAISE EXCEPTION 'INT_REPORT_DIMENSION_SHAPE'; END IF;
+   IF (x->>2)::numeric>9223372036854775807::numeric THEN RAISE EXCEPTION 'INT_REPORT_DIMENSION_VERSION'; END IF;
+ END LOOP;
+ IF v IS NOT NULL THEN
+   IF v IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)
+   THEN RAISE EXCEPTION 'INT_REPORT_DECIMAL_BUDGET'; END IF;
+   -- Conservative bound on PostgreSQL numeric output BEFORE text conversion.
+   -- Reject extreme stored scale even if trailing zeros would normalize away.
+   IF scale(v)>16384 OR abs(v)>=1e16384::numeric THEN RAISE EXCEPTION 'INT_REPORT_DECIMAL_BUDGET'; END IF;
+   text_value:=v::text;
+   IF length(text_value)>16384 THEN RAISE EXCEPTION 'INT_REPORT_DECIMAL_BUDGET'; END IF;
+ END IF;
+ -- 512 bytes covers row key, method, timestamps, quality, currency,
+ -- JSON punctuation and frame. JSONB display spaces and original numeric
+ -- scale overestimate canonical v1 for admitted ASCII fields.
+ n:=512+octet_length(metric)+octet_length(u)+coalesce(octet_length(r),0)
+     +octet_length(dims::text)+coalesce(octet_length(text_value),0);
+ IF n>16384 THEN RAISE EXCEPTION 'INT_REPORT_ROW_BYTE_BUDGET'; END IF;
+ RETURN n;
+END $$;
+
+-- Store an independently computed conservative per-row budget; do not trust
+-- caller-supplied byte counts. Backfill is deliberately not implicit.
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM reporting.int_report_dataset_attempt)
+ THEN RAISE EXCEPTION 'INT_REPORT_RESOURCE_UPGRADE_REQUIRES_EMPTY_ATTEMPTS'; END IF;
+END $$;
+ALTER TABLE reporting.int_report_dataset ADD COLUMN storage_budget_bytes integer
+ GENERATED ALWAYS AS (reporting.int_report_row_budget(metric_code,unit_code,quality_reason,dimensions,metric_value)) STORED;
+ALTER TABLE reporting.int_report_dataset ADD CONSTRAINT ck_int_report_storage_budget
+ CHECK(storage_budget_bytes BETWEEN 1 AND 16384);
+
+-- Catalog guard: verify exact daily bound, no DEFAULT, valid attached PK
+-- and no explicit non-owner child ACL. Parent owner is not a runtime role.
+-- DateStyle normalized so catalog bound rendering is deterministic.
+CREATE OR REPLACE FUNCTION reporting.int_report_assert_day(d date) RETURNS void
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp SET DateStyle='ISO, YMD' AS $$
+DECLARE child oid; parent_oid oid:='reporting.int_report_dataset'::regclass; bound text;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ SELECT child_oid INTO child FROM reporting.int_report_partition_day WHERE staging_date=d AND retired_at IS NULL;
+ IF NOT FOUND OR child IS DISTINCT FROM to_regclass(format('reporting.%I','int_report_dataset_'||to_char(d,'YYYYMMDD')))::oid
+    OR NOT EXISTS(SELECT 1 FROM pg_inherits WHERE inhparent=parent_oid AND inhrelid=child)
+ THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_UNAVAILABLE'; END IF;
+ SELECT pg_get_expr(relpartbound,oid) INTO bound FROM pg_class WHERE oid=child AND relkind='r' AND relispartition;
+ IF bound IS DISTINCT FROM format('FOR VALUES FROM (%L) TO (%L)',d::text,(d+1)::text)
+ OR EXISTS(SELECT 1 FROM pg_partitioned_table WHERE partrelid=parent_oid AND partdefid<>0)
+ THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_BOUNDS'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_index pi JOIN pg_inherits inh ON inh.inhparent=pi.indexrelid
+ JOIN pg_index ci ON ci.indexrelid=inh.inhrelid
+ WHERE pi.indrelid=parent_oid AND pi.indisprimary AND pi.indisvalid AND pi.indisready
+ AND ci.indrelid=child AND ci.indisprimary AND ci.indisvalid AND ci.indisready)
+ THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_INDEX'; END IF;
+ IF EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+ WHERE c.oid IN (child,parent_oid) AND acl.grantee<>c.relowner)
+ THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_ACL'; END IF;
+ IF EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) acl
+ JOIN pg_class c ON c.oid=att.attrelid
+ WHERE att.attrelid IN (child,parent_oid) AND acl.grantee<>c.relowner)
+ THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_COLUMN_ACL'; END IF;
+END $$;
+
+-- Keep one maintenance authority. Existing routine is now private to the
+-- owner; wrapper validates the result under its exclusive date fence.
+ALTER FUNCTION reporting.int_report_ensure_day(date) RENAME TO int_report_ensure_day_internal;
+CREATE FUNCTION reporting.int_report_ensure_day(d date) RETURNS boolean
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp SET DateStyle='ISO, YMD' AS $$
+DECLARE created boolean;
+BEGIN
+ created:=reporting.int_report_ensure_day_internal(d);
+ PERFORM reporting.int_report_assert_day(d);
+ RETURN created;
+END $$;
+
+-- Canonical SQL ingress format: strict array of objects (no tenant/date
+-- fields), exact numeric strings, UTC timestamp text with <=6 fractions.
+-- Bounds are checked before expanding the recordset. No ON CONFLICT DO NOTHING.
+CREATE FUNCTION reporting.int_report_append_batch(t uuid,a uuid,d date,w uuid,tok bigint, payload jsonb)
+ RETURNS integer LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; n integer; inserted integer;
+ existing_bytes bigint; new_bytes bigint;
+BEGIN
+ IF payload IS NULL OR jsonb_typeof(payload)<>'array' THEN RAISE EXCEPTION 'INT_REPORT_BATCH_SHAPE'; END IF;
+ IF jsonb_array_length(payload) NOT BETWEEN 1 AND 256 OR octet_length(payload::text)>4194304
+ THEN RAISE EXCEPTION 'INT_REPORT_BATCH_BUDGET'; END IF;
+ b:=reporting.int_report_lock_build(t,a,d,w,tok,'BUILDING');
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(payload) e(x)
+ WHERE CASE WHEN jsonb_typeof(x)<>'object' THEN true ELSE
+   NOT (x ?& ARRAY['row_key','metric_code','method_version','from_inclusive','until_exclusive',
+       'dimensions','unit_code','currency','metric_value','quality_code','quality_reason'])
+   OR (x - ARRAY['row_key','metric_code','method_version','from_inclusive','until_exclusive',
+       'dimensions','unit_code','currency','metric_value','quality_code','quality_reason'])<>'{}'::jsonb
+   OR jsonb_typeof(x->'row_key') IS DISTINCT FROM 'number'
+   OR jsonb_typeof(x->'method_version') IS DISTINCT FROM 'number'
+   OR jsonb_typeof(x->'metric_code') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(x->'unit_code') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(x->'quality_code') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(x->'currency') NOT IN ('null','string')
+   OR jsonb_typeof(x->'quality_reason') NOT IN ('null','string')
+   OR jsonb_typeof(x->'metric_value') NOT IN ('null','string')
+   OR (x->>'metric_value' IS NOT NULL AND (length(x->>'metric_value')>16384
+       OR (x->>'metric_value') !~ '^-?[0-9]+(\.[0-9]+)?$'))
+   OR jsonb_typeof(x->'from_inclusive') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(x->'until_exclusive') IS DISTINCT FROM 'string'
+   OR (x->>'from_inclusive') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$'
+   OR (x->>'until_exclusive') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$'
+ END) THEN RAISE EXCEPTION 'INT_REPORT_BATCH_SHAPE'; END IF;
+ SELECT count(DISTINCT (x->>'row_key')::bigint) INTO n FROM jsonb_array_elements(payload) e(x);
+ IF n<>jsonb_array_length(payload) THEN RAISE EXCEPTION 'INT_REPORT_BATCH_DUPLICATE_KEY'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_to_recordset(payload) AS x(row_key bigint)
+ WHERE row_key IS NULL OR row_key<1 OR row_key>b.expected_rows)
+ THEN RAISE EXCEPTION 'INT_REPORT_ROW_RANGE'; END IF;
+ -- Compare typed values, including NULL; numeric equality ignores scale.
+ IF EXISTS(SELECT 1 FROM jsonb_to_recordset(payload) AS x(row_key bigint,metric_code text,method_version bigint,
+ from_inclusive timestamptz,until_exclusive timestamptz,dimensions jsonb,unit_code text,currency text,
+ metric_value numeric,quality_code text,quality_reason text)
+ JOIN reporting.int_report_dataset y ON y.staging_date=d AND y.tenant_id=t AND y.dataset_id=a AND y.row_key=x.row_key
+ WHERE (y.metric_code,y.method_version,y.from_inclusive,y.until_exclusive,y.dimensions,y.unit_code,y.currency,
+ y.metric_value,y.quality_code,y.quality_reason) IS DISTINCT FROM
+ (x.metric_code,x.method_version,x.from_inclusive,x.until_exclusive,x.dimensions,x.unit_code,x.currency,
+ x.metric_value,x.quality_code,x.quality_reason))
+ THEN RAISE EXCEPTION 'INT_REPORT_ROW_REPLAY_CONFLICT'; END IF;
+ SELECT coalesce(sum(storage_budget_bytes),0) INTO existing_bytes FROM reporting.int_report_dataset
+ WHERE staging_date=d AND tenant_id=t AND dataset_id=a;
+ SELECT coalesce(sum(reporting.int_report_row_budget(x.metric_code,x.unit_code,x.quality_reason,x.dimensions,x.metric_value)),0)
+ INTO new_bytes FROM jsonb_to_recordset(payload) AS x(row_key bigint,metric_code text,unit_code text,quality_reason text,dimensions jsonb,metric_value numeric)
+ WHERE NOT EXISTS(SELECT 1 FROM reporting.int_report_dataset y WHERE y.staging_date=d AND y.tenant_id=t AND y.dataset_id=a AND y.row_key=x.row_key);
+ IF existing_bytes+new_bytes+1024>33554432 THEN RAISE EXCEPTION 'INT_REPORT_DATASET_BYTE_BUDGET'; END IF;
+ INSERT INTO reporting.int_report_dataset(staging_date,tenant_id,dataset_id,row_key,metric_code,method_version,
+ from_inclusive,until_exclusive,dimensions,unit_code,currency,metric_value,quality_code,quality_reason)
+ SELECT d,t,a,x.row_key,x.metric_code,x.method_version,x.from_inclusive,x.until_exclusive,x.dimensions,x.unit_code,x.currency,
+ x.metric_value,x.quality_code,x.quality_reason
+ FROM jsonb_to_recordset(payload) AS x(row_key bigint,metric_code text,method_version bigint,from_inclusive timestamptz,
+ until_exclusive timestamptz,dimensions jsonb,unit_code text,currency text,metric_value numeric,quality_code text,quality_reason text)
+ WHERE NOT EXISTS(SELECT 1 FROM reporting.int_report_dataset y WHERE y.staging_date=d AND y.tenant_id=t AND y.dataset_id=a AND y.row_key=x.row_key)
+ ORDER BY x.row_key;
+ GET DIAGNOSTICS inserted=ROW_COUNT;
+ IF b.build_until<=clock_timestamp() THEN RAISE EXCEPTION 'INT_REPORT_BUILD_FENCE'; END IF;
+ RETURN inserted;
+END $$;
+
+-- Legacy owner-side append delegates to the same bounded ingress. Timestamp
+-- formatting fixed to UTC microseconds; v::text retains exact numeric value.
+CREATE OR REPLACE FUNCTION reporting.int_report_append(t uuid,a uuid,d date,w uuid,tok bigint,
+ k bigint,metric text,method bigint,lo timestamptz,hi timestamptz,dims jsonb,u text,c text,v numeric,q text,r text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ PERFORM reporting.int_report_row_budget(metric,u,r,dims,v);
+ RETURN reporting.int_report_append_batch(t,a,d,w,tok,jsonb_build_array(jsonb_build_object(
+ 'row_key',k,'metric_code',metric,'method_version',method,
+ 'from_inclusive',to_char(lo AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+ 'until_exclusive',to_char(hi AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+ 'dimensions',dims,'unit_code',u,'currency',c,'metric_value',v::text,'quality_code',q,'quality_reason',r)))=1;
+END $$;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
+-- Owner DML remains outside admitted API; cumulative budget enforced by
+-- serialized ingress, not a claim of enforcement against the database owner.
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_BATCH_FORWARD_ONLY'; END; $$;

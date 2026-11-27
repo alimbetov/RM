@@ -69,7 +69,22 @@ class ReportStorageQualificationTest {
         assertThatThrownBy(()->append(t,a,d,w,2,BigDecimal.ONE)).isInstanceOf(DataAccessException.class);
         assertThatThrownBy(()->append(t,a,d,UUID.randomUUID(),1,BigDecimal.ONE)).isInstanceOf(DataAccessException.class);
         assertThatThrownBy(()->freeze(t,a,d,w)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->append(t,a,d,w,1,new BigDecimal("1E+20000"))).isInstanceOf(DataAccessException.class);
         assertThat(append(t,a,d,w,1,new BigDecimal("10.5000"))).isTrue();
+        String batch = """
+            [{"row_key":1,"metric_code":"BOOKED_AMOUNT","method_version":1,
+            "from_inclusive":"2026-10-01T00:00:00Z","until_exclusive":"2026-11-01T00:00:00Z",
+            "dimensions":[],"unit_code":"CURRENCY","currency":"KZT","metric_value":"10.5",
+            "quality_code":"PARTIAL","quality_reason":"HISTORICAL_COVERAGE_UNQUALIFIED"}]
+            """;
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_append_batch(?,?,?,?,?,?::jsonb)",
+            Integer.class,t,a,d,w,1L,batch)).isZero();
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_append_batch(?,?,?,?,?,?::jsonb)",
+            Integer.class,other,a,d,w,1L,batch)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_append_batch(?,?,?,?,?,?::jsonb)",
+            Integer.class,t,a,d,w,2L,batch)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_append_batch(?,?,?,?,?,?::jsonb)",
+            Integer.class,t,a,d,w,1L,batch.replace("10.5","11.5"))).isInstanceOf(DataAccessException.class);
         assertThat(append(t,a,d,w,1,new BigDecimal("10.5"))).isFalse();
         assertThatThrownBy(()->append(t,a,d,w,1,BigDecimal.TEN)).isInstanceOf(DataAccessException.class);
         freeze(t,a,d,w);
