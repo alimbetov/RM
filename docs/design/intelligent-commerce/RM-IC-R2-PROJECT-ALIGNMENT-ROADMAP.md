@@ -65,3 +65,7 @@ Owner agreed to [RM-DEV-GOV-R1](RM-DEV-GOV-R1.md), [single engine contract](RM-I
 
 ## COR-01.1–01.2 source review — 2026-11-27
 [Actual aggregate and DQR responsibility audit](RM-IC-R2-COR-01.1-01.2-AUDIT.md) records full changed-file inventory and inspected methods. Restored base_dev a2fdfb0 matches B5.5 tree; targeted PASS, exact-SHA pending at entry. Critical pre-existing B4 issue: current proof status reruns independent whole-tenant parity for each eligible anchor/metric. No disabling forged-proof protection; B4 change control required. Historical completeness distinct. COR-01.3 next: proof identity/lock/query-cost and migration compatibility review; COR-01.4 minimal integration proposal before owner approval. No runtime changes.
+
+
+## COR-01.3 — minimal correction proposal (2026-11-27)
+[Source trust/lock/resource review and first candidate](RM-IC-R2-COR-01.3-MINIMAL-READ-CORRECTION.md): reuse existing full parity evaluation once per distinct proof inside the same authorized read-only RR snapshot, never across requests. No new service, DDL, roles, cache infrastructure, bulk limit, quality/READY change. Activation and forged-proof protection intact. COR-01.4 candidate for owner review; no implementation approval yet. Actual deployment roles, applied changesets and measured query cost remain OPEN. B4 change control, API freeze, production HOLD.
