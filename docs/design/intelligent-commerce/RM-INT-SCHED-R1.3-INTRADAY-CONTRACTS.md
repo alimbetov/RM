@@ -92,3 +92,7 @@ B. One separate immutable result/ack table and atomic storage-consumer contract,
 C. Initial BOOKED_ORDERS only, seven current-day slots, coalescing/skip semantics, no historical readiness or report/Radar publication. Scope/version config changes require drain.
 D. Cross-boundary implementation in base_dev under existing Full Exact-SHA, not change diagnostic guard.
 Owner may reject/adjust A–D. Until explicitly agreed, design only: no code, DDL, token issuance, grants, tenant data access or runtime enablement. Actual deployment migration compatibility, COR-01.8 status, R1.4 and production admission remain open.
+
+## 7. Vertical/horizontal/statistical review refinement
+
+[RM-INT-SCHED-R1.3-VHS-AUDIT](RM-INT-SCHED-R1.3-VHS-AUDIT.md) records source-level trace, P0/P1 gaps, exact distinct and event/visibility semantics, hand-calculated oracle fixtures and comparative/ML HOLD. Proposed refinement to A–D, pending owner approval; no new calculation, runtime or statistical inference admission. Read both documents together; if approved the explicit VHS requirements govern R1.3 implementation.
