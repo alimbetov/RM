@@ -94,6 +94,18 @@ final class ReportDatasetDigest {
         Objects.requireNonNull(row);
         if (rows >= MAX_ROWS) throw new IllegalArgumentException("REPORT_ROW_BUDGET");
         if (row.rowKey() != Math.addExact(rows, 1)) throw new IllegalArgumentException("REPORT_ROW_SEQUENCE");
+        String encoded = canonicalRow(row);
+        long framedBytes = encoded.length() + Integer.toString(encoded.length()).length() + 1L;
+        int footerLength = Long.toString(rows + 1).length();
+        long footerBytes = footerLength + Integer.toString(footerLength).length() + 1L;
+        if (bytes + framedBytes + footerBytes > MAX_DATASET_BYTES)
+            throw new IllegalArgumentException("REPORT_DATASET_BYTE_BUDGET");
+        frame(encoded);
+        rows++;
+    }
+
+    static String canonicalRow(Row row) {
+        Objects.requireNonNull(row);
         var dimensions = new StringBuilder("[");
         for (var d : row.dimensions()) {
             if (dimensions.length() > 1) dimensions.append(',');
@@ -107,13 +119,7 @@ final class ReportDatasetDigest {
             + "," + quote(row.reason()) + "]";
         // All row fields are restricted to ASCII; length is exact UTF-8 length.
         if (encoded.length() > MAX_ROW_BYTES) throw new IllegalArgumentException("REPORT_ROW_BYTE_BUDGET");
-        long framedBytes = encoded.length() + Integer.toString(encoded.length()).length() + 1L;
-        int footerLength = Long.toString(rows + 1).length();
-        long footerBytes = footerLength + Integer.toString(footerLength).length() + 1L;
-        if (bytes + framedBytes + footerBytes > MAX_DATASET_BYTES)
-            throw new IllegalArgumentException("REPORT_DATASET_BYTE_BUDGET");
-        frame(encoded);
-        rows++;
+        return encoded;
     }
 
     Result finish() {
@@ -148,7 +154,7 @@ final class ReportDatasetDigest {
         return result;
     }
 
-    private static String decimal(BigDecimal value) {
+    static String decimal(BigDecimal value) {
         if (value == null) return null;
         if (value.signum() == 0) return "0";
         // Bound precision before stripping and compute plain length in long

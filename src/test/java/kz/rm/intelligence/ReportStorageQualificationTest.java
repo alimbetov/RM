@@ -70,7 +70,14 @@ class ReportStorageQualificationTest {
         assertThatThrownBy(()->append(t,a,d,UUID.randomUUID(),1,BigDecimal.ONE)).isInstanceOf(DataAccessException.class);
         assertThatThrownBy(()->freeze(t,a,d,w)).isInstanceOf(DataAccessException.class);
         assertThatThrownBy(()->append(t,a,d,w,1,new BigDecimal("1E+20000"))).isInstanceOf(DataAccessException.class);
-        assertThat(append(t,a,d,w,1,new BigDecimal("10.5000"))).isTrue();
+        var batchStore=new ReportDatasetBatchStore(jdbc,transactions);
+        var typed=new ReportDatasetDigest.Row(1,"BOOKED_AMOUNT",1,LO.toInstant(),HI.toInstant(),
+            List.of(),"CURRENCY","KZT",new BigDecimal("10.5000"),DataQuality.PARTIAL,"HISTORICAL_COVERAGE_UNQUALIFIED");
+        assertThat(batchStore.append(t,a,d,w,1,List.of(typed))).isEqualTo(1);
+        assertThat(batchStore.append(t,a,d,w,1,List.of(typed))).isZero();
+        assertThatThrownBy(()->batchStore.append(other,a,d,w,1,List.of(typed))).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->batchStore.append(t,a,d,w,2,List.of(typed))).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->batchStore.append(t,a,d,w,1,List.of(typed,typed))).isInstanceOf(IllegalArgumentException.class);
         String batch = """
             [{"row_key":1,"metric_code":"BOOKED_AMOUNT","method_version":1,
             "from_inclusive":"2026-10-01T00:00:00Z","until_exclusive":"2026-11-01T00:00:00Z",
@@ -107,6 +114,22 @@ class ReportStorageQualificationTest {
         assertThatThrownBy(()->new ReportDatasetValidationStore(jdbc,transactions).validateAndSeal(t,a,d,w,1L))
             .isInstanceOf(IllegalStateException.class).hasMessage("REPORT_VALIDATION_MISMATCH");
         assertThat(state(t,a)).isEqualTo("VALIDATING");
+        // Separate attempt: conflict on an existing ordinal must prevent
+        // insertion of the other valid ordinal from the same batch.
+        UUID b=UUID.randomUUID();
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_allocate(?,?,?,?,?,?,?,?)",Boolean.class,
+            t,b,d,w,SCOPE,SOURCE,2L,"2".repeat(64))).isTrue();
+        append(t,b,d,w,1,BigDecimal.ONE);
+        var conflicting=new ReportDatasetDigest.Row(1,"BOOKED_AMOUNT",1,LO.toInstant(),HI.toInstant(),
+            List.of(),"CURRENCY","KZT",BigDecimal.TEN,DataQuality.PARTIAL,"HISTORICAL_COVERAGE_UNQUALIFIED");
+        var second=new ReportDatasetDigest.Row(2,"BOOKED_AMOUNT",1,LO.toInstant(),HI.toInstant(),
+            List.of(),"CURRENCY","KZT",BigDecimal.ONE,DataQuality.PARTIAL,"HISTORICAL_COVERAGE_UNQUALIFIED");
+        var batchStore=new ReportDatasetBatchStore(jdbc,transactions);
+        assertThatThrownBy(()->batchStore.append(t,b,d,w,1,List.of(second,conflicting))).isInstanceOf(DataAccessException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.int_report_dataset WHERE staging_date=? AND tenant_id=? AND dataset_id=?",
+            Long.class,d,t,b)).isEqualTo(1L);
+        assertThat(batchStore.append(t,b,d,w,1,List.of(second))).isEqualTo(1);
+        assertThat(batchStore.append(t,b,d,w,1,List.of(second))).isZero();
         assertThat(jdbc.queryForObject("SELECT observed_digest IS NULL AND ready_at IS NULL FROM reporting.int_report_dataset_attempt WHERE tenant_id=? AND dataset_id=?",
             Boolean.class,t,a)).isTrue();
     }
