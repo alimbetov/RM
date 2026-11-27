@@ -3,7 +3,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from verify_rm_ci_selective_allowlist import ROOT, load_contract, audit, inspect_diff
+from verify_rm_ci_selective_allowlist import (ROOT, load_contract, audit, inspect_diff,
+    tracked, dependency_fingerprint, review_matches, REGISTRY)
 
 class SelectiveAllowlistTest(unittest.TestCase):
     def setUp(self):
@@ -37,6 +38,11 @@ class SelectiveAllowlistTest(unittest.TestCase):
         report = audit(ROOT, head, row["path"])
         self.assertFalse(report["executionAllowed"])
         self.assertEqual("FULL_REQUIRED", report["decision"])
+        self.assertEqual("SHADOW_PLANNING_ONLY", row["scope"])
+        self.assertEqual(report["reviewFingerprintMatches"] and not report["documentationReferences"]
+                         and not any(row["path"] in line or Path(row["path"]).name in line
+                                     for line in report["machineReferences"]),
+                         report["qualifiedForShadowPlanning"])
         print("RM-CI-R3.6C.1 AUDIT " + json.dumps(report, ensure_ascii=True), flush=True)
 
     def test_only_existing_regular_document_candidate(self):
@@ -72,6 +78,22 @@ class SelectiveAllowlistTest(unittest.TestCase):
         self.write(self.candidate, "second")
         with self.assertRaises(subprocess.CalledProcessError):
             inspect_diff(self.root, other, self.commit(), self.candidate)
+
+    def test_review_fingerprint_changes_on_dependency_drift(self):
+        initial = tracked(self.root, self.base)
+        count, digest = dependency_fingerprint(initial, self.candidate)
+        row = {"path": self.candidate, "reviewedDependencyCount": count,
+               "reviewedDependencyFingerprint": digest}
+        self.write(self.candidate, "changed document")
+        doc_head = self.commit()
+        self.assertTrue(review_matches(tracked(self.root, doc_head), row))
+        self.write("src/Main.java", "class Main { int y; }")
+        self.assertFalse(review_matches(tracked(self.root, self.commit()), row))
+
+    def test_control_change_never_eligible(self):
+        self.write(self.candidate, "changed note")
+        self.write(REGISTRY, "{}")
+        self.assertFalse(inspect_diff(self.root, self.base, self.commit(), self.candidate))
 
 if __name__ == "__main__":
     unittest.main()

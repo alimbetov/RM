@@ -4,15 +4,32 @@
   "defaultDecision": "FULL_REQUIRED",
   "releasePolicy": "FULL_EXACT_SHA",
   "evidenceReuse": "FORBIDDEN",
-  "qualifiedAllowlist": [],
-  "candidateAllowlist": [
+  "qualifiedAllowlist": [
     {
       "path": "docs/reviews/RM-B2-1R-CI-RECOVERY.md",
       "mode": "FAST_DOC",
-      "dependencyClosure": "UNQUALIFIED",
-      "executionAllowed": false
+      "scope": "SHADOW_PLANNING_ONLY",
+      "dependencyClosure": "BOUNDED_STATIC_REVIEW",
+      "executionAllowed": false,
+      "reviewedSha": "23f20e563096420def5d9ac17da44d083c8d932c",
+      "reviewedDependencyFingerprint": "6fe6cb8248d060caa22d300c56e38b04fd4097d74becd49fd038e60c8b6ffa2d",
+      "reviewedDependencyCount": 830,
+      "evidence": {
+        "dependencyAuditRun": 45978296609,
+        "dependencyAuditJob": 140435633042,
+        "dependencyAuditArtifact": 15187614065,
+        "fullExactShaRun": 45978296438,
+        "testsPassed": 8,
+        "mandatoryWorkflowReviewCount": 12,
+        "limitations": [
+          "DYNAMIC_TRANSITIVE_READS_NOT_PROVEN",
+          "EXTERNAL_ENVIRONMENT_UNQUALIFIED",
+          "BRANCH_PROTECTION_UNAVAILABLE"
+        ]
+      }
     }
   ],
+  "candidateAllowlist": [],
   "rejected": [
     {
       "path": "docs/ideas/README.md",

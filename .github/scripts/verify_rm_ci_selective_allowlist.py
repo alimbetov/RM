@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """R3.6C.1: bounded dependency audit. Does not grant selective execution."""
 import json
+import hashlib
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
@@ -27,12 +28,28 @@ def load_contract(root):
     data = json.loads((root / REGISTRY).read_text(encoding="utf-8"))
     require(set(data) == set(POLICY) | {"qualifiedAllowlist", "candidateAllowlist", "rejected"}
             and all(data[k] == v for k, v in POLICY.items()), "POLICY_DRIFT")
-    require(data["qualifiedAllowlist"] == [], "PREMATURE_QUALIFICATION")
-    candidates = data["candidateAllowlist"]
-    require(len(candidates) == 1, "PILOT_SCOPE")
-    row = candidates[0]
-    require(row == {"path": "docs/reviews/RM-B2-1R-CI-RECOVERY.md", "mode": "FAST_DOC",
-                    "dependencyClosure": "UNQUALIFIED", "executionAllowed": False}, "PILOT_CONTRACT")
+    require(data["candidateAllowlist"] == [], "PILOT_SCOPE")
+    qualified = data["qualifiedAllowlist"]
+    require(len(qualified) == 1, "PILOT_SCOPE")
+    row = qualified[0]
+    require(set(row) == {"path", "mode", "scope", "dependencyClosure", "executionAllowed",
+                         "reviewedSha", "reviewedDependencyFingerprint", "reviewedDependencyCount", "evidence"}
+            and row["path"] == "docs/reviews/RM-B2-1R-CI-RECOVERY.md"
+            and row["mode"] == "FAST_DOC" and row["scope"] == "SHADOW_PLANNING_ONLY"
+            and row["dependencyClosure"] == "BOUNDED_STATIC_REVIEW"
+            and row["executionAllowed"] is False, "PILOT_CONTRACT")
+    require(re.fullmatch(r"[0-9a-f]{40}", row["reviewedSha"])
+            and re.fullmatch(r"[0-9a-f]{64}", row["reviewedDependencyFingerprint"])
+            and type(row["reviewedDependencyCount"]) is int and row["reviewedDependencyCount"] > 0,
+            "BASELINE_CONTRACT")
+    evidence = row["evidence"]
+    require(set(evidence) == {"dependencyAuditRun", "dependencyAuditJob", "dependencyAuditArtifact",
+                              "fullExactShaRun", "testsPassed", "mandatoryWorkflowReviewCount", "limitations"}
+            and evidence["testsPassed"] == 8 and evidence["mandatoryWorkflowReviewCount"] == 12
+            and all(type(evidence[k]) is int and evidence[k] > 0 for k in
+                    ("dependencyAuditRun", "dependencyAuditJob", "dependencyAuditArtifact", "fullExactShaRun"))
+            and set(evidence["limitations"]) == {"DYNAMIC_TRANSITIVE_READS_NOT_PROVEN",
+                    "EXTERNAL_ENVIRONMENT_UNQUALIFIED", "BRANCH_PROTECTION_UNAVAILABLE"}, "EVIDENCE_CONTRACT")
     require(all(x["path"] != row["path"] for x in data["rejected"]), "REJECTED_CANDIDATE")
     return row
 
@@ -50,6 +67,22 @@ def tracked(root, commit):
         result[path] = (mode, oid)
     require(bool(result), "EMPTY_TREE")
     return result
+
+# The three C.1 audit/control files are excluded only from the historical
+# review fingerprint so this acceptance commit can record the review.
+# inspect_diff excludes NONE of them: changes to any control file require FULL.
+REVIEW_CONTROL = {REGISTRY, ".github/scripts/verify_rm_ci_selective_allowlist.py",
+                  ".github/scripts/test_verify_rm_ci_selective_allowlist.py"}
+
+def dependency_fingerprint(entries, candidate):
+    rows = [[p, mode, oid] for p, (mode, oid) in sorted(entries.items())
+            if p != candidate and p not in REVIEW_CONTROL]
+    payload = json.dumps(rows, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+    return len(rows), hashlib.sha256(payload).hexdigest()
+
+def review_matches(entries, row):
+    count, digest = dependency_fingerprint(entries, row["path"])
+    return count == row["reviewedDependencyCount"] and digest == row["reviewedDependencyFingerprint"]
 
 def inspect_diff(root, before, head, candidate):
     """Candidate only when both committed trees differ in one regular existing Markdown blob."""
@@ -102,11 +135,27 @@ def audit(root, commit, candidate):
                  [r"docs/\*|docs/\*\*|glob\(|rglob\(|Files\.walk|git ls-files|git archive|find[[:space:]]+docs|readFileSync\("],
                  [".github", "scripts", "src", "pom.xml"], fixed=False)
     broad = [line for line in broad if external(line)]
+    qualification = load_contract(root)
+    require(qualification["path"] == candidate, "CANDIDATE_MISMATCH")
+    count, digest = dependency_fingerprint(entries, candidate)
+    fingerprint_matches = review_matches(entries, qualification)
+    direct = [line for line in machine if candidate in line or path.name in line]
+    planning = fingerprint_matches and not direct and not docs
+    blockers = list(qualification["evidence"]["limitations"])
+    if not fingerprint_matches:
+        blockers.append("REVIEW_DEPENDENCY_DRIFT")
+    if direct or docs:
+        blockers.append("NEW_DIRECT_REFERENCE")
     return dict(POLICY, sha=commit, candidate=candidate, trackedFiles=len(entries),
                 machineReferences=machine, documentationReferences=docs,
-                broadReaderCandidates=broad, dependencyClosure="UNQUALIFIED",
-                executionAllowed=False, decision="FULL_REQUIRED",
-                blockers=["MANUAL_TRANSITIVE_REVIEW_REQUIRED", "EXTERNAL_ENVIRONMENT_UNQUALIFIED"])
+                broadReaderCandidates=broad,
+                dependencyClosure="BOUNDED_STATIC_REVIEW" if planning else "UNQUALIFIED",
+                reviewedSha=qualification["reviewedSha"],
+                reviewedDependencyFingerprint=qualification["reviewedDependencyFingerprint"],
+                actualDependencyFingerprint=digest, actualDependencyCount=count,
+                reviewFingerprintMatches=fingerprint_matches,
+                qualifiedForShadowPlanning=planning,
+                executionAllowed=False, decision="FULL_REQUIRED", blockers=blockers)
 
 def main():
     row = load_contract(ROOT)
