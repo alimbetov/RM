@@ -1061,7 +1061,12 @@
       "TPL-02",
       "TPL-05"
     ],
-    "implementation_admission": false
+    "implementation_admission": false,
+    "design_qualification": "RM-ARS-R1-DESIGN-QUALIFICATION.md",
+    "storage_ready_is_analytical_ready": false,
+    "publication_consumer_cas": true,
+    "publication_ack_required_for_cleanup": true,
+    "canonical_encoding": "RM-ARS-DATASET-1"
   },
   "report_mockup_artifacts": {
     "document": "report-templates/README.md",
@@ -1303,5 +1308,410 @@
     ],
     "runtime_tests_executed": false,
     "implementation_admission": false
+  },
+  "ars_design_qualification": {
+    "document": "RM-ARS-R1-DESIGN-QUALIFICATION.md",
+    "storage_contract": "../RM-ARS-R1-TENANT-AWARE-ANALYTICAL-REPORTING-STORAGE.md",
+    "review_date": "2026-11-28",
+    "timezone": "Asia/Almaty",
+    "source_sha": "2113d898fa6388926286233ea09275f27b16841f",
+    "design_input_sha": "f42898a8cccc45d2978c130106fe8c36ec865a65",
+    "status": "DESIGN_CORRECTED_RUNTIME_GATES_OPEN",
+    "implementation_admission": false,
+    "runtime_tests_executed": false,
+    "postgresql_qualification_executed": false,
+    "multi_pod_qualification_executed": false,
+    "production_admission": "HOLD",
+    "findings_semantics": "Review findings refine existing cases, not new acceptance families or deployed defect claims",
+    "source_inventory": [
+      {
+        "path": "src/main/java/kz/rm/intelligence/AuthorizedAnalyticalReadService.java",
+        "blob_sha": "5b277d247331cde81cb108459175472339e24e99",
+        "inspected_symbols_or_sections": [
+          "readMetricWindows",
+          "readSnapshot",
+          "result",
+          "ownerValue"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/intelligence/L3DerivedSeriesService.java",
+        "blob_sha": "16ad70bb766efc1dab1faf92c300968a9db99d6f",
+        "inspected_symbols_or_sections": [
+          "admit",
+          "readPeriods"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/intelligence/DataQuality.java",
+        "blob_sha": "0598f22fd59a387a66769ac7c19e50ca567c2b42",
+        "inspected_symbols_or_sections": [
+          "enum"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/iam/TenantAuthorization.java",
+        "blob_sha": "812dbed1121cee7354a914ce2ee962f57bd34887",
+        "inspected_symbols_or_sections": [
+          "requireForCommand",
+          "lockActorAndTenant"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java",
+        "blob_sha": "a024d13b8b3fe31cd0c252a5d58ffa134a452345",
+        "inspected_symbols_or_sections": [
+          "requireAssigned",
+          "assign",
+          "revoke"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/iam/DomainPermission.java",
+        "blob_sha": "ea2d30de7f3403ca8eac44120091d497662db501",
+        "inspected_symbols_or_sections": [
+          "enum"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/files/FileOwnerAccessPort.java",
+        "blob_sha": "bd74d9d2fc38ac284255f860d78f19b7d3c62089",
+        "inspected_symbols_or_sections": [
+          "interface"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/files/FileAttachmentService.java",
+        "blob_sha": "d622f856b99b05f180b8323f72b1af1e8848bc47",
+        "inspected_symbols_or_sections": [
+          "attachCustomer",
+          "detachCustomer",
+          "authorizeCustomerBinaryRead"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/intelligence/AnalyticalLifecycleScheduler.java",
+        "blob_sha": "e1ce906a82eb97933560879d99a771bb789bce2e",
+        "inspected_symbols_or_sections": [
+          "boundedTick",
+          "constructor"
+        ]
+      },
+      {
+        "path": "src/main/java/kz/rm/intelligence/AnalyticalJobRepository.java",
+        "blob_sha": "97e28b70b7ddf8a55058ced84ed51d9d7ba69c89",
+        "inspected_symbols_or_sections": [
+          "Claim",
+          "lease and token guards"
+        ]
+      },
+      {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "blob_sha": "40f66bbc23658617ae6dc3a5f9b1d4fea24c1d5a",
+        "inspected_symbols_or_sections": [
+          "status",
+          "P1-P8"
+        ]
+      },
+      {
+        "path": ".github/workflows/rm-intelligence-targeted-pg.yml",
+        "blob_sha": "f705746dbb8af2eea4f894ae1284ca6c536df37b",
+        "inspected_symbols_or_sections": [
+          "PostgreSQL image"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "id": "ARS-DQ-01",
+        "priority": "P0",
+        "subject": "Coherent full-plan extraction",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-02",
+          "UAP-04",
+          "UAP-10"
+        ]
+      },
+      {
+        "id": "ARS-DQ-02",
+        "priority": "P0",
+        "subject": "Storage integrity versus analytical quality",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-02",
+          "CC-10",
+          "UAP-04",
+          "UAP-08"
+        ]
+      },
+      {
+        "id": "ARS-DQ-03",
+        "priority": "P0",
+        "subject": "Source-loss extraction identity",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-11",
+          "JOB-01",
+          "JOB-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-04",
+        "priority": "P0",
+        "subject": "Frozen validation and expected manifest",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-02",
+          "CC-11",
+          "UAP-10"
+        ]
+      },
+      {
+        "id": "ARS-DQ-05",
+        "priority": "P0",
+        "subject": "Publication and abandonment CAS",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-10",
+          "CC-11",
+          "CC-12",
+          "JOB-01",
+          "JOB-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-06",
+        "priority": "P0",
+        "subject": "Post-lock fencing and complete retention conjunction",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-11",
+          "CC-12",
+          "JOB-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-07",
+        "priority": "P0",
+        "subject": "Report IAM and File Service owner integration",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-10",
+          "SEC-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-08",
+        "priority": "P1",
+        "subject": "Parent relation DDL locks",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-11",
+          "CC-12",
+          "PERF-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-09",
+        "priority": "P1",
+        "subject": "Nested connection admission budget",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "PERF-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-10",
+        "priority": "P1",
+        "subject": "Retention recovery and historical admission status",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-12",
+          "JOB-02"
+        ]
+      },
+      {
+        "id": "ARS-DQ-11",
+        "priority": "P0",
+        "subject": "Independent mathematical and byte vectors",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-02",
+          "CC-10",
+          "UAP-04",
+          "UAP-08",
+          "TPL-02",
+          "TPL-05"
+        ]
+      },
+      {
+        "id": "ARS-DQ-12",
+        "priority": "P0",
+        "subject": "File publication and orphan GC fence",
+        "design_status": "CORRECTED_IN_PLACE",
+        "runtime_status": "PENDING",
+        "existing_cases": [
+          "CC-10",
+          "CC-11",
+          "SEC-02",
+          "JOB-01",
+          "JOB-02"
+        ]
+      }
+    ],
+    "reference_execution": {
+      "script": "qualification/rm_ars_r1_reference_oracles.py",
+      "sha256": "2407f5d406349fa8ef654bfeb0c05ba8636654c4934351ba4dbdaf7770ca97d2",
+      "command": "python3 docs/design/intelligent-commerce/qualification/rm_ars_r1_reference_oracles.py",
+      "result": {
+        "scope": "DESIGN_REFERENCE_ONLY",
+        "runtime_qualified": false,
+        "vectors": [
+          {
+            "id": "M01",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "union_orders": 3,
+              "incorrect_sum": 4
+            }
+          },
+          {
+            "id": "M02",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "ratio_of_sums": "250",
+              "incorrect_mean_of_ratios": "200"
+            }
+          },
+          {
+            "id": "M03",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "weighted_mean": "17.5"
+            }
+          },
+          {
+            "id": "M04",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "mean": "5",
+              "variance_pop": "4",
+              "stddev_pop": "2",
+              "cv": "0.4",
+              "variance_sample": "32/7"
+            }
+          },
+          {
+            "id": "M05",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "latest_cumulative": 6,
+              "incorrect_sum": 17,
+              "correction_delta": -1
+            }
+          },
+          {
+            "id": "M06",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "earliest_time_if_all_other_guards_pass": "2026-11-29T10:00:00+00:00"
+            }
+          },
+          {
+            "id": "M07",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "distinct_cases": [
+                [
+                  null,
+                  "MISSING"
+                ],
+                [
+                  0,
+                  "PARTIAL"
+                ],
+                [
+                  0,
+                  "READY"
+                ]
+              ]
+            }
+          },
+          {
+            "id": "M08",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "raw_sum": "0.008",
+              "displayed_total": "0.01",
+              "sum_of_displayed_rows": "0.00",
+              "rounding": "HALF_UP_for_this_fixture_only"
+            }
+          },
+          {
+            "id": "M09",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "civil_hours": [
+                23,
+                25
+              ],
+              "utc_staging_date": "2026-11-27",
+              "almaty_date": "2026-11-28"
+            }
+          },
+          {
+            "id": "M10",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "same_scalar_revision_proves_same_manifest": false
+            }
+          },
+          {
+            "id": "M11",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "zero_denominator": "UNDEFINED_DENOMINATOR",
+              "mixed_scope": "SCOPE_MISMATCH"
+            }
+          },
+          {
+            "id": "M12",
+            "status": "REFERENCE_PASS",
+            "expected": {
+              "canonical_bytes": 484,
+              "sha256": "f54eae406408e614c77b222932179052d01819dbaa7757d2e0f2470601293995"
+            }
+          }
+        ],
+        "atomic_consumer_model": {
+          "schedules": 720,
+          "dropped": 152,
+          "published": 480,
+          "abandoned": 240
+        }
+      }
+    },
+    "reference_limits": [
+      "Pure synthetic exact arithmetic, semantic and canonical-byte examples",
+      "Atomic consumer model assumes guarded transitions; no SQL/FK/lock implementation",
+      "No RM Java, PostgreSQL, object store, renderer or real pod tests executed"
+    ],
+    "primary_references": [
+      "https://www.postgresql.org/docs/17/ddl-partitioning.html",
+      "https://www.postgresql.org/docs/17/explicit-locking.html",
+      "https://www.postgresql.org/docs/17/transaction-iso.html"
+    ]
   }
 }
