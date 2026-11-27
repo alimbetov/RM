@@ -876,13 +876,28 @@ class AnalyticalJobFoundationQualificationTest {
             UUID account=serviceMember(t,issuer);
             var actor=issuer.resolveService(jdbc,users,account,kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID);
             LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
-            var scope=new IntradayResultStore.Scope(t,account,1,day,7);
+            var scope=new IntradayResultStore.Scope(t,account,1,day,1);
             UUID job=intradayStore.plan(scope).orElseThrow();
+            // Fill the bounded pilot with this one current-slot result, then
+            // verify that the same request remains idempotent at the limit.
             UUID night=enqueue(t,"NIGHT",0,1);
             claim(t,night,1);
             try{
                 assertThat(jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),2,300)).isEmpty();
+                // A terminal failure is not permission to bypass the NIGHT fence.
+                jdbc.update("""
+                    UPDATE crm.int_analytics_job_run SET status='BLOCKED',last_error_code='SOURCE_INCOMPLETE',
+                      lease_owner=NULL,lease_until=NULL,cluster_slot=NULL
+                    WHERE tenant_id=? AND job_id=?
+                    """,t,night);
+                assertThat(jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),2,300)).isEmpty();
+                jdbc.update("UPDATE crm.int_analytics_job_run SET status='FAILED' WHERE tenant_id=? AND job_id=?",t,night);
+                assertThat(jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),2,300)).isEmpty();
+                assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id=? AND acknowledged_at IS NOT NULL
+                    """,Long.class,t)).isZero();
             }finally{
+                // Explicit test-only operator disposition, not automatic recovery.
                 jdbc.update("""
                     UPDATE crm.int_analytics_job_run SET status='SKIPPED',lease_owner=NULL,lease_until=NULL,cluster_slot=NULL
                     WHERE tenant_id=? AND job_id=?
@@ -897,6 +912,12 @@ class AnalyticalJobFoundationQualificationTest {
             assertThat(result.reason()).isEqualTo("NO_QUALIFIED_OBSERVATION");
             assertThat(intradayStore.latest(scope,actor)).contains(result);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
+            // An expired or reduced scope must not allocate another request,
+            // mutate the acknowledged result or make MISSING into a zero.
+            assertThat(intradayStore.plan(new IntradayResultStore.Scope(t,account,2,day.minusDays(1),1))).isEmpty();
+            assertThat(intradayStore.plan(scope)).contains(job);
+            assertThat(intradayStore.latest(scope,actor)).contains(result);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_intraday_result WHERE tenant_id=?",Long.class,t)).isEqualTo(1L);
         }
     }
 
