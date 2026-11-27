@@ -21,8 +21,9 @@
     {
       "path": "src/main/java/kz/rm/iam/TenantAuthorization.java",
       "designBlob": "358a01f06b6bf31f049565d2fadd86be7a96cd13",
-      "baselineBlob": "358a01f06b6bf31f049565d2fadd86be7a96cd13",
-      "status": "UNCHANGED"
+      "baselineBlob": "812dbed1121cee7354a914ce2ee962f57bd34887",
+      "status": "DRIFT",
+      "priorBaselineBlob": "358a01f06b6bf31f049565d2fadd86be7a96cd13"
     },
     {
       "path": "src/main/java/kz/rm/iam/VerifiedActor.java",
@@ -46,9 +47,9 @@
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
       "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "baselineBlob": "f92da4f917bd6f7b66c120bd330c01a8051e1adb",
+      "baselineBlob": "be42fcd6c5e578e3f7e2a50fd0de31fd796fbc92",
       "status": "DRIFT",
-      "priorBaselineBlob": "6d6d29ddf5780ad71532e1f8c16766e748aabe8a",
+      "priorBaselineBlob": "f92da4f917bd6f7b66c120bd330c01a8051e1adb",
       "previousBaselineBlob": "432077b62aed127f9131b84c7b58710bb6c28971"
     },
     {
@@ -211,8 +212,9 @@
     {
       "path": "src/main/java/kz/rm/iam/OidcActorResolver.java",
       "designBlob": "60ae68a4421709a9bb7ad3ba2eb6dd4040ea430f",
-      "baselineBlob": "60ae68a4421709a9bb7ad3ba2eb6dd4040ea430f",
-      "status": "UNCHANGED"
+      "baselineBlob": "c4a61b3530b99d3bce9473793e7b7af7c1256c30",
+      "status": "DRIFT",
+      "priorBaselineBlob": "60ae68a4421709a9bb7ad3ba2eb6dd4040ea430f"
     },
     {
       "path": "src/test/java/kz/rm/inventory/InventoryReservationQualificationTest.java",
@@ -778,5 +780,5 @@
   "runtimeQualification": "NOT_EXECUTED",
   "admission": "HOLD",
   "lastObservedChangeset": "c130139e78d63379d0bdcfbfdea899c609cfe46a",
-  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded; B4.0 inventory qualification fixture repair at 7d818c62: reject booked PRODUCT retyping and separately exercise genuine SERVICE reservation admission; prior blob preserved; B4.1A exact source FK and PostgreSQL insert guards; previous migration blob retained; B4.1B/C generation lifecycle and KATO audit; prior blob retained; B4.1B KATO administrative release 2026-11-17; append-only migration, legacy source IDs retained; B4.2/B4.3 transactional revision fences and inactive pointer; prior blob retained; DEC-B4-GEO-02 explicit administrative semantics and regional admission; B4.3R append-only source revision events to preserve independent late commits; B4.3R2 least-privilege journal trigger repair; B4.3R3 restricted projection receipt and bucket revision triggers, prior migration blob retained; runtime qualification pending; B4.4A/B4.5 storage and dirty revision foundation; previous migration blob retained; runtime pending; B4.4B dedicated consumer binding, source provenance and L3 stamp invalidation; runtime pending; B4.5A/B exact order membership and transactional L3 rollup; runtime pending; B4.5C independent proof and materialization/receipt fences; runtime pending; B4.5D/B4.5E append-only 0214–0220: product units, observation journal, immutable feature candidates, evidence metadata, uniqueness, SHA-256 and payload binding; prior baseline retained; runtime qualification pending; B4.6 append-only controlled L3 activation; source fingerprint updated; runtime pending; B4.8 warehouse location-before-scope lock order with original authorization error precedence; previous baseline and intermediate observed blob retained; runtime pending; RM-INT-SCHED-R1.1A append-only 0224 durable job foundation; previous migration blob retained; runtime qualification pending"
+  "sourceInventoryRevision": "B2.1R snapshot sealing and source truncate fences; prior blob recorded; B4.0 inventory qualification fixture repair at 7d818c62: reject booked PRODUCT retyping and separately exercise genuine SERVICE reservation admission; prior blob preserved; B4.1A exact source FK and PostgreSQL insert guards; previous migration blob retained; B4.1B/C generation lifecycle and KATO audit; prior blob retained; B4.1B KATO administrative release 2026-11-17; append-only migration, legacy source IDs retained; B4.2/B4.3 transactional revision fences and inactive pointer; prior blob retained; DEC-B4-GEO-02 explicit administrative semantics and regional admission; B4.3R append-only source revision events to preserve independent late commits; B4.3R2 least-privilege journal trigger repair; B4.3R3 restricted projection receipt and bucket revision triggers, prior migration blob retained; runtime qualification pending; B4.4A/B4.5 storage and dirty revision foundation; previous migration blob retained; runtime pending; B4.4B dedicated consumer binding, source provenance and L3 stamp invalidation; runtime pending; B4.5A/B exact order membership and transactional L3 rollup; runtime pending; B4.5C independent proof and materialization/receipt fences; runtime pending; B4.5D/B4.5E append-only 0214–0220: product units, observation journal, immutable feature candidates, evidence metadata, uniqueness, SHA-256 and payload binding; prior baseline retained; runtime qualification pending; B4.6 append-only controlled L3 activation; source fingerprint updated; runtime pending; B4.8 warehouse location-before-scope lock order with original authorization error precedence; previous baseline and intermediate observed blob retained; runtime pending; RM-INT-SCHED-R1.1A append-only 0224 durable job foundation; previous migration blob retained; runtime qualification pending; RM-INT-SCHED-R1.3-Q1 static review of HUMAN/SERVICE admission, tenant-scoped permit, append-only 0225/0226 and typed INTRADAY result; previous baselines retained; PostgreSQL and statistical runtime qualification pending; no admission granted"
 }
