@@ -7454,3 +7454,232 @@ REVOKE ALL ON FUNCTION reporting.int_report_ensure_day(date) FROM PUBLIC;
 -- statement timeouts; full bounds/index/grant reconciliation and pin/consumer
 -- lifecycle are prerequisites for admission.
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_STORAGE_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0228-int-report-dataset-build-consumer dbms:postgresql splitStatements:false
+-- Dormant owner-only build primitives. No runtime IAM grants, publication,
+-- terminal abandonment, pin API or DROP admission. 10k rows/attempt and 10min
+-- build lease are bounded experiment limits, not production SLA/configuration.
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM reporting.int_report_dataset_attempt)
+ THEN RAISE EXCEPTION 'INT_REPORT_LEGACY_ATTEMPT_REQUIRES_RECONCILIATION'; END IF;
+END $$;
+ALTER TABLE reporting.int_report_dataset_attempt
+ ADD COLUMN source_manifest_digest varchar(64) NOT NULL CHECK(source_manifest_digest ~ '^[0-9a-f]{64}$'),
+ ADD COLUMN expected_rows bigint NOT NULL CHECK(expected_rows BETWEEN 0 AND 10000),
+ ADD COLUMN expected_digest varchar(64) NOT NULL CHECK(expected_digest ~ '^[0-9a-f]{64}$'),
+ ADD COLUMN build_state varchar(16) NOT NULL CHECK(build_state IN ('BUILDING','VALIDATING','READY')),
+ ADD COLUMN build_owner uuid NOT NULL,
+ ADD COLUMN build_token bigint NOT NULL CHECK(build_token=1),
+ ADD COLUMN build_until timestamptz NOT NULL,
+ ADD COLUMN observed_rows bigint,
+ ADD COLUMN observed_digest varchar(64),
+ ADD COLUMN ready_at timestamptz,
+ ADD CONSTRAINT ck_int_report_build_evidence CHECK(
+ (build_state IN ('BUILDING','VALIDATING') AND observed_rows IS NULL AND observed_digest IS NULL AND ready_at IS NULL)
+ OR (build_state='READY' AND observed_rows IS NOT NULL AND observed_digest IS NOT NULL
+     AND observed_rows=expected_rows AND observed_digest=expected_digest AND ready_at IS NOT NULL));
+DROP TRIGGER trg_int_report_attempt_immutable ON reporting.int_report_dataset_attempt;
+CREATE TRIGGER trg_int_report_attempt_identity BEFORE UPDATE OF tenant_id,dataset_id,staging_date,allocated_at,
+ scope_digest,source_manifest_digest,expected_rows,expected_digest,build_owner,build_token,build_until
+ OR DELETE ON reporting.int_report_dataset_attempt FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+CREATE FUNCTION reporting.int_report_build_transition() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.build_state<>'BUILDING' OR NEW.build_until<=clock_timestamp()
+   THEN RAISE EXCEPTION 'INT_REPORT_BUILD_INITIAL'; END IF;
+ ELSE
+   IF NOT ((OLD.build_state='BUILDING' AND NEW.build_state='VALIDATING')
+       OR (OLD.build_state='VALIDATING' AND NEW.build_state='READY'))
+      OR OLD.build_until<=clock_timestamp()
+   THEN RAISE EXCEPTION 'INT_REPORT_BUILD_TRANSITION'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_build_transition BEFORE INSERT OR UPDATE ON reporting.int_report_dataset_attempt
+ FOR EACH ROW EXECUTE FUNCTION reporting.int_report_build_transition();
+
+-- All admitted callers must take the shared day fence in a separate SQL
+-- statement BEFORE touching staging relations; no runtime caller admitted yet.
+CREATE FUNCTION reporting.int_report_assert_day(d date) RETURNS void
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE child oid;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ SELECT child_oid INTO child FROM reporting.int_report_partition_day
+ WHERE staging_date=d AND retired_at IS NULL;
+ IF NOT FOUND OR child IS DISTINCT FROM to_regclass(format('reporting.%I','int_report_dataset_'||to_char(d,'YYYYMMDD')))::oid
+    OR NOT EXISTS(SELECT 1 FROM pg_inherits WHERE inhparent='reporting.int_report_dataset'::regclass AND inhrelid=child)
+ THEN RAISE EXCEPTION 'INT_REPORT_PARTITION_UNAVAILABLE'; END IF;
+END $$;
+
+CREATE FUNCTION reporting.int_report_allocate(t uuid,a uuid,d date,w uuid,s text,src text,n bigint,dig text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE now_at timestamptz;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ now_at:=clock_timestamp();
+ IF d<>(now_at AT TIME ZONE 'UTC')::date THEN RAISE EXCEPTION 'INT_REPORT_ALLOCATION_DATE'; END IF;
+ INSERT INTO reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date,allocated_at,scope_digest,
+ source_manifest_digest,expected_rows,expected_digest,build_state,build_owner,build_token,build_until)
+ VALUES(t,a,d,now_at,s,src,n,dig,'BUILDING',w,1,now_at+interval '10 minutes');
+ RETURN true;
+END $$;
+
+CREATE FUNCTION reporting.int_report_lock_build(t uuid,a uuid,d date,w uuid,tok bigint,required_state text)
+ RETURNS reporting.int_report_dataset_attempt LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt WHERE tenant_id=t AND dataset_id=a AND staging_date=d FOR NO KEY UPDATE;
+ IF NOT FOUND OR b.build_state IS DISTINCT FROM required_state OR b.build_owner IS DISTINCT FROM w
+ OR b.build_token IS DISTINCT FROM tok OR b.build_until<=clock_timestamp()
+ THEN RAISE EXCEPTION 'INT_REPORT_BUILD_FENCE'; END IF;
+ RETURN b;
+END $$;
+
+CREATE FUNCTION reporting.int_report_row_insert_guard() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE;
+BEGIN
+ -- Direct owner INSERT is not a supported API. This last-line guard prevents
+ -- mutation after freeze; owner-only append routine supplies the worker fence.
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt
+ WHERE tenant_id=NEW.tenant_id AND dataset_id=NEW.dataset_id AND staging_date=NEW.staging_date FOR NO KEY UPDATE;
+ IF NOT FOUND OR b.build_state<>'BUILDING' OR b.build_until<=clock_timestamp()
+ OR NEW.row_key>b.expected_rows THEN RAISE EXCEPTION 'INT_REPORT_ROW_BUILD_STATE'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_row_insert BEFORE INSERT ON reporting.int_report_dataset
+ FOR EACH ROW EXECUTE FUNCTION reporting.int_report_row_insert_guard();
+
+CREATE FUNCTION reporting.int_report_append(t uuid,a uuid,d date,w uuid,tok bigint,
+ k bigint,metric text,method bigint,lo timestamptz,hi timestamptz,dims jsonb,u text,c text,v numeric,q text,r text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; oldrow reporting.int_report_dataset%ROWTYPE;
+BEGIN
+ b:=reporting.int_report_lock_build(t,a,d,w,tok,'BUILDING');
+ IF k IS NULL OR k<1 OR k>b.expected_rows THEN RAISE EXCEPTION 'INT_REPORT_ROW_RANGE'; END IF;
+ SELECT * INTO oldrow FROM reporting.int_report_dataset
+ WHERE staging_date=d AND tenant_id=t AND dataset_id=a AND row_key=k;
+ IF FOUND THEN
+   IF (oldrow.metric_code,oldrow.method_version,oldrow.from_inclusive,oldrow.until_exclusive,oldrow.dimensions,
+       oldrow.unit_code,oldrow.currency,oldrow.metric_value,oldrow.quality_code,oldrow.quality_reason)
+      IS DISTINCT FROM (metric,method,lo,hi,dims,u,c,v,q,r)
+   THEN RAISE EXCEPTION 'INT_REPORT_ROW_REPLAY_CONFLICT'; END IF;
+   RETURN false;
+ END IF;
+ INSERT INTO reporting.int_report_dataset(staging_date,tenant_id,dataset_id,row_key,metric_code,method_version,
+ from_inclusive,until_exclusive,dimensions,unit_code,currency,metric_value,quality_code,quality_reason)
+ VALUES(d,t,a,k,metric,method,lo,hi,dims,u,c,v,q,r);
+ RETURN true;
+END $$;
+
+CREATE FUNCTION reporting.int_report_freeze(t uuid,a uuid,d date,w uuid,tok bigint)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; n bigint;
+BEGIN
+ b:=reporting.int_report_lock_build(t,a,d,w,tok,'BUILDING');
+ SELECT count(*) INTO n FROM reporting.int_report_dataset WHERE staging_date=d AND tenant_id=t AND dataset_id=a;
+ -- Unique ordinal and 1..expected_rows bound make equal count sufficient
+ -- for ordinal completeness, not for analytical/source completeness.
+ IF n<>b.expected_rows THEN RAISE EXCEPTION 'INT_REPORT_ROW_COUNT'; END IF;
+ UPDATE reporting.int_report_dataset_attempt SET build_state='VALIDATING' WHERE tenant_id=t AND dataset_id=a;
+ RETURN true;
+END $$;
+
+-- Trusted owner-side validator only: observed digest must be independently
+-- recomputed by Java from frozen typed rows; SQL does not calculate the digest.
+CREATE FUNCTION reporting.int_report_seal(t uuid,a uuid,d date,w uuid,tok bigint,n bigint,dig text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE;
+BEGIN
+ b:=reporting.int_report_lock_build(t,a,d,w,tok,'VALIDATING');
+ IF n IS DISTINCT FROM b.expected_rows OR dig IS DISTINCT FROM b.expected_digest
+ THEN RAISE EXCEPTION 'INT_REPORT_VALIDATION_MISMATCH'; END IF;
+ UPDATE reporting.int_report_dataset_attempt SET build_state='READY',observed_rows=n,observed_digest=dig,
+ ready_at=clock_timestamp() WHERE tenant_id=t AND dataset_id=a;
+ RETURN true;
+END $$;
+
+CREATE TABLE reporting.int_report_consumer (
+ tenant_id uuid NOT NULL,instance_id uuid NOT NULL,consumer_id uuid NOT NULL,
+ dataset_id uuid NOT NULL,staging_date date NOT NULL,
+ state varchar(24) NOT NULL DEFAULT 'REGISTERED' CHECK(state IN ('REGISTERED','ACTIVE','PUBLISHED_PENDING_ACK','PUBLISHED_ACK','ABANDONED')),
+ token bigint NOT NULL DEFAULT 0 CHECK(token>=0),
+ lease_owner uuid,lease_until timestamptz,
+ publication_digest varchar(64) CHECK(publication_digest ~ '^[0-9a-f]{64}$'),
+ published_at timestamptz,terminal_at timestamptz,
+ PRIMARY KEY(tenant_id,instance_id,consumer_id),
+ FOREIGN KEY(tenant_id,instance_id) REFERENCES reporting.int_report_instance(tenant_id,instance_id),
+ FOREIGN KEY(tenant_id,dataset_id,staging_date) REFERENCES reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date),
+ CHECK((state='REGISTERED' AND token=0 AND lease_owner IS NULL AND lease_until IS NULL)
+ OR (state='ACTIVE' AND token>0 AND lease_owner IS NOT NULL AND lease_until IS NOT NULL)
+ OR (state IN ('PUBLISHED_PENDING_ACK','PUBLISHED_ACK','ABANDONED') AND lease_owner IS NULL AND lease_until IS NULL)),
+ CHECK((state IN ('PUBLISHED_PENDING_ACK','PUBLISHED_ACK') AND publication_digest IS NOT NULL AND published_at IS NOT NULL)
+ OR (state IN ('REGISTERED','ACTIVE','ABANDONED') AND publication_digest IS NULL AND published_at IS NULL)),
+ CHECK((state IN ('PUBLISHED_ACK','ABANDONED') AND terminal_at IS NOT NULL)
+ OR (state IN ('REGISTERED','ACTIVE','PUBLISHED_PENDING_ACK') AND terminal_at IS NULL))
+);
+CREATE INDEX idx_int_report_consumer_dataset ON reporting.int_report_consumer(staging_date,tenant_id,dataset_id);
+CREATE TRIGGER trg_int_report_consumer_identity BEFORE UPDATE OF tenant_id,instance_id,consumer_id,dataset_id,staging_date
+ OR DELETE ON reporting.int_report_consumer FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+CREATE FUNCTION reporting.int_report_register_consumer(t uuid,i uuid,c uuid,a uuid,d date)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt WHERE tenant_id=t AND dataset_id=a AND staging_date=d FOR NO KEY UPDATE;
+ IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM reporting.int_report_instance
+ WHERE tenant_id=t AND instance_id=i AND scope_digest=b.scope_digest)
+ THEN RAISE EXCEPTION 'INT_REPORT_CONSUMER_SCOPE'; END IF;
+ INSERT INTO reporting.int_report_consumer(tenant_id,instance_id,consumer_id,dataset_id,staging_date)
+ VALUES(t,i,c,a,d);
+ RETURN true;
+END $$;
+
+-- Claim is not a render pin or publication permit. Those APIs remain gated.
+CREATE FUNCTION reporting.int_report_claim_consumer(t uuid,i uuid,c uuid,a uuid,d date,w uuid)
+ RETURNS bigint LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; x reporting.int_report_consumer%ROWTYPE; now_at timestamptz;
+BEGIN
+ IF d IS NULL OR w IS NULL THEN RAISE EXCEPTION 'INT_REPORT_CLAIM_INPUT'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt WHERE tenant_id=t AND dataset_id=a AND staging_date=d FOR NO KEY UPDATE;
+ IF NOT FOUND OR b.build_state<>'READY' THEN RAISE EXCEPTION 'INT_REPORT_DATASET_NOT_READY'; END IF;
+ SELECT * INTO x FROM reporting.int_report_consumer WHERE tenant_id=t AND instance_id=i AND consumer_id=c
+ AND dataset_id=a AND staging_date=d FOR NO KEY UPDATE;
+ now_at:=clock_timestamp();
+ IF NOT FOUND OR NOT (x.state='REGISTERED' OR (x.state='ACTIVE' AND x.lease_until<=now_at))
+ THEN RAISE EXCEPTION 'INT_REPORT_CONSUMER_FENCE'; END IF;
+ UPDATE reporting.int_report_consumer SET state='ACTIVE',token=token+1,lease_owner=w,lease_until=now_at+interval '5 minutes'
+ WHERE tenant_id=t AND instance_id=i AND consumer_id=c RETURNING token INTO x.token;
+ RETURN x.token;
+END $$;
+
+-- Diagnostic only. Never use as a deletion permit: publication ACK, pins,
+-- abandonment policy, holds, orphan reconciliation and catalog certification
+-- have not been implemented. Therefore no partition is eligible in this slice.
+CREATE FUNCTION reporting.int_report_retention_blockers(d date) RETURNS text[]
+ LANGUAGE sql STABLE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT array_remove(ARRAY[
+ 'RETENTION_NOT_ADMITTED',
+ CASE WHEN d IS NULL OR d>=(statement_timestamp() AT TIME ZONE 'UTC')::date THEN 'NOT_SEALED' END,
+ CASE WHEN EXISTS(SELECT 1 FROM reporting.int_report_dataset_attempt a WHERE a.staging_date=d AND a.build_state<>'READY') THEN 'BUILD_INCOMPLETE' END,
+ CASE WHEN EXISTS(SELECT 1 FROM reporting.int_report_consumer c WHERE c.staging_date=d AND c.state NOT IN ('PUBLISHED_ACK','ABANDONED')) THEN 'CONSUMER_PENDING' END,
+ CASE WHEN EXISTS(SELECT 1 FROM reporting.int_report_dataset_attempt a WHERE a.staging_date=d
+ AND NOT EXISTS(SELECT 1 FROM reporting.int_report_consumer c WHERE c.tenant_id=a.tenant_id AND c.dataset_id=a.dataset_id AND c.staging_date=d)) THEN 'NO_CONSUMER_DISPOSITION' END
+ ]::text[],NULL)
+$$;
+REVOKE ALL ON ALL TABLES IN SCHEMA reporting FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_BUILD_FORWARD_ONLY'; END; $$;
