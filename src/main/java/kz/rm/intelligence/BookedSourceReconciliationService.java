@@ -14,6 +14,7 @@ import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.SQLException;
@@ -62,9 +63,11 @@ public class BookedSourceReconciliationService {
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     private final TenantAuthorization authorization;
-    // A pair consumes two connections. Preserve independent tenant concurrency
-    // on a four-connection pool, but never admit more than two pairs per JVM.
-    // This is an admission ceiling, not a reservation against unrelated users.
+    // A pair consumes two connections. Leave two connections outside the
+    // reconciliation budget; two simultaneous pairs require a pool of six.
+    // This is a local admission ceiling, not a reservation against other users.
+    private static final int SNAPSHOT_OPERATIONAL_RESERVE=2;
+    private static final int SNAPSHOT_ADMISSION_WAIT_SECONDS=10;
     private Semaphore snapshotAdmission;
     private int snapshotPairs;
     private final Set<UUID> nativeInFlight=ConcurrentHashMap.newKeySet();
@@ -73,13 +76,13 @@ public class BookedSourceReconciliationService {
         try{
             var pool=Objects.requireNonNull(jdbc.getDataSource()).unwrap(HikariDataSource.class);
             int capacity=pool.getMaximumPoolSize();
-            if(capacity<2)throw new IllegalStateException("S1_SNAPSHOT_POOL_CAPACITY");
+            if(capacity<SNAPSHOT_OPERATIONAL_RESERVE+2)throw new IllegalStateException("S1_SNAPSHOT_POOL_CAPACITY");
             if(snapshotAdmission==null){
-                snapshotPairs=Math.min(2,capacity/2);
-                snapshotAdmission=new Semaphore(snapshotPairs);
+                snapshotPairs=Math.min(2,(capacity-SNAPSHOT_OPERATIONAL_RESERVE)/2);
+                snapshotAdmission=new Semaphore(snapshotPairs,true);
             }
             // Fail closed on an online shrink below the established pair budget.
-            if(capacity<2*snapshotPairs)throw new IllegalStateException("S1_SNAPSHOT_POOL_CAPACITY");
+            if(capacity<SNAPSHOT_OPERATIONAL_RESERVE+2*snapshotPairs)throw new IllegalStateException("S1_SNAPSHOT_POOL_CAPACITY");
             return snapshotAdmission;
         }catch(SQLException e){throw new IllegalStateException("S1_SNAPSHOT_POOL_UNSUPPORTED",e);}
     }
@@ -232,8 +235,16 @@ public class BookedSourceReconciliationService {
         if(nativeFence&&!nativeInFlight.add(tenant))throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_BUSY");
         boolean acquired=false;
         try {
-        acquired=budget.tryAcquire();
+        // Wait outside both JDBC transactions. Preserve legitimate simultaneous
+        // callers on constrained pools without allowing pool-owning waiters.
+        try{
+            acquired=budget.tryAcquire(SNAPSHOT_ADMISSION_WAIT_SECONDS,TimeUnit.SECONDS);
+        }catch(InterruptedException e){
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_INTERRUPTED",e);
+        }
         if(!acquired)throw new IllegalStateException("S1_SNAPSHOT_ADMISSION_BUSY");
+        snapshotBudget(); // recheck capacity after waiting, before opening JDBC
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(outer->{

@@ -392,6 +392,10 @@
     {
       "classname": "kz.rm.sales.QrNegotiatedCheckoutQualificationTest",
       "name": "nativeCheckoutPerformanceBudgetPg"
+    },
+    {
+      "classname": "kz.rm.sales.QrNegotiatedCheckoutQualificationTest",
+      "name": "nativeSnapshotOperationalReservePg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

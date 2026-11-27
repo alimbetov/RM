@@ -280,7 +280,7 @@ class QrNegotiatedCheckoutQualificationTest {
     }
 
     private record PerfSample(String phase,int operations,double p50,double p95,double p99,
-                              double ordersPerSecond,int peakActive,int peakAwaiting){}
+                              double ordersPerSecond,double checkoutOrdersPerSecond,int peakActive,int peakAwaiting){}
     private static double percentile(List<Long> sorted,double quantile){
         return sorted.get((int)Math.ceil(quantile*sorted.size())-1)/1_000_000.0;
     }
@@ -292,6 +292,7 @@ class QrNegotiatedCheckoutQualificationTest {
         var sampler=Executors.newSingleThreadScheduledExecutor();
         var workers=Executors.newFixedThreadPool(concurrentRead==null?2:3);
         var samples=Collections.synchronizedList(new ArrayList<Long>());
+        var checkoutFinished=new java.util.concurrent.atomic.AtomicLong();
         var start=new CountDownLatch(1);
         try{
             sampler.scheduleAtFixedRate(()->{
@@ -310,6 +311,7 @@ class QrNegotiatedCheckoutQualificationTest {
                         samples.add(System.nanoTime()-before);
                         assertThat(placed.order().orderId()).isNotNull();
                     }
+                    checkoutFinished.accumulateAndGet(System.nanoTime(),Math::max);
                     return null;
                 }));
             }
@@ -324,11 +326,11 @@ class QrNegotiatedCheckoutQualificationTest {
             var sorted=samples.stream().sorted().toList();
             assertThat(sorted).hasSize(count);
             var result=new PerfSample(phase,count,percentile(sorted,.50),percentile(sorted,.95),
-                percentile(sorted,.99),count/seconds,active.get(),awaiting.get());
+                percentile(sorted,.99),count/seconds,count/((checkoutFinished.get()-begin)/1_000_000_000.0),active.get(),awaiting.get());
             System.out.printf(Locale.ROOT,
-                "S1_NATIVE_PERF phase=%s n=%d p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f phase_orders_per_sec=%.3f pool_max=%d peak_active=%d peak_awaiting=%d%n",
+                "S1_NATIVE_PERF phase=%s n=%d p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f phase_orders_per_sec=%.3f checkout_orders_per_sec=%.3f pool_max=%d peak_active=%d peak_awaiting=%d%n",
                 result.phase(),result.operations(),result.p50(),result.p95(),result.p99(),
-                result.ordersPerSecond(),hikari.getMaximumPoolSize(),result.peakActive(),result.peakAwaiting());
+                result.ordersPerSecond(),result.checkoutOrdersPerSecond(),hikari.getMaximumPoolSize(),result.peakActive(),result.peakAwaiting());
             return result;
         }finally{
             start.countDown();workers.shutdownNow();sampler.shutdownNow();
@@ -336,6 +338,90 @@ class QrNegotiatedCheckoutQualificationTest {
             assertThat(sampler.awaitTermination(10,TimeUnit.SECONDS)).isTrue();
         }
     }
+    // Under a four-connection pool: one blocked RR read consumes two connections,
+    // the lock monitor consumes one. The second tenant's read must wait outside
+    // JDBC, allowing a third tenant's real checkout to use the remaining operational connection.
+    @Test void nativeSnapshotOperationalReservePg() throws Exception{
+        requirePostgres();
+        var hikari=dataSource.unwrap(HikariDataSource.class);
+        // Exercise the actual configured pool. The targeted workflow uses four;
+        // other suites may run with a larger pool and two concurrent pairs.
+        int capacity=hikari.getMaximumPoolSize();
+        var a=setup(true);var b=setup(true);var c=setup(true);
+        var ba=nativeCapture.activate(a.owner(),a.tenant());
+        var bb=nativeCapture.activate(b.owner(),b.tenant());
+        nativeCapture.activate(c.owner(),c.tenant());
+        UUID runA=nativeRun(a,ba.startedAt(),nativeClock());
+        UUID runB=nativeRun(b,bb.startedAt(),nativeClock());
+        var workers=Executors.newFixedThreadPool(3);
+        try(var connection=dataSource.getConnection()){
+            connection.setAutoCommit(false);
+            var monitor=new JdbcTemplate(new org.springframework.jdbc.datasource.SingleConnectionDataSource(connection,true));
+            monitor.setQueryTimeout(5);
+            try{
+                monitor.execute("LOCK TABLE crm.int_fact_backfill_run IN ACCESS EXCLUSIVE MODE");
+                int blocker=monitor.queryForObject("SELECT pg_backend_pid()",Integer.class);
+                var reading=workers.submit(()->reconciliation.inspectNativeRange(a.seller(),a.tenant(),runA));
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+                Integer snapshot=null;
+                while(System.nanoTime()<deadline&&snapshot==null){
+                    if(reading.isDone()){reading.get();throw new AssertionError("S1_RESERVE_READ_CROSSED_FENCE");}
+                    snapshot=monitor.query("""
+                        SELECT l.pid FROM pg_locks l WHERE l.locktype='relation'
+                          AND l.relation='crm.int_fact_backfill_run'::regclass AND NOT l.granted
+                          AND ?=ANY(pg_blocking_pids(l.pid)) ORDER BY l.pid LIMIT 1
+                        """,rs->rs.next()?rs.getInt(1):null,blocker);
+                    if(snapshot==null)Thread.sleep(20);
+                }
+                assertThat(snapshot).isNotNull();
+                var started=new CountDownLatch(1);
+                var waiting=workers.submit(()->{
+                    started.countDown();
+                    return reconciliation.inspectNativeRange(b.seller(),b.tenant(),runB);
+                });
+                assertThat(started.await(2,TimeUnit.SECONDS)).isTrue();
+                if(capacity<6){
+                    assertThatThrownBy(()->waiting.get(200,TimeUnit.MILLISECONDS)).isInstanceOf(java.util.concurrent.TimeoutException.class);
+                    assertThat(hikari.getHikariPoolMXBean().getActiveConnections()).isEqualTo(3);
+                    assertThat(hikari.getHikariPoolMXBean().getThreadsAwaitingConnection()).isZero();
+                }else{
+                    long secondDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+                    int blocked=0;
+                    while(System.nanoTime()<secondDeadline&&blocked<2){
+                        if(waiting.isDone()){waiting.get();throw new AssertionError("S1_RESERVE_SECOND_READ_CROSSED_FENCE");}
+                        blocked=monitor.queryForObject("""
+                            SELECT count(DISTINCT l.pid) FROM pg_locks l WHERE l.locktype='relation'
+                              AND l.relation='crm.int_fact_backfill_run'::regclass AND NOT l.granted
+                              AND ?=ANY(pg_blocking_pids(l.pid))
+                            """,Integer.class,blocker);
+                        if(blocked<2)Thread.sleep(20);
+                    }
+                    assertThat(blocked).isEqualTo(2);
+                }
+                // A different tenant's checkout must commit before the analytical fence is released.
+                var sale=workers.submit(()->checkout.checkout(c.slug(),c.buyer().email(),key(),
+                    List.of(new AutoOrderService.Line(c.offer(),1))).order().orderId());
+                UUID order=sale.get(5,TimeUnit.SECONDS);
+                assertThat(order).isNotNull();
+                assertThat(reading.isDone()).isFalse();
+                assertThat(waiting.isDone()).isFalse();
+                connection.commit();
+                var first=reading.get(10,TimeUnit.SECONDS);
+                var second=waiting.get(10,TimeUnit.SECONDS);
+                assertThat(first.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_ZERO);
+                assertThat(second.state()).isEqualTo(NativeBookedClosure.State.SHADOW_QUALIFIED_ZERO);
+                assertThat(first.shadowValue()).isZero();assertThat(second.shadowValue()).isZero();
+                assertThat(first.admitted()).isFalse();assertThat(second.admitted()).isFalse();
+                assertThat(orders(a)).isZero();assertThat(orders(b)).isZero();
+                assertThat(orders(c)).isEqualTo(1);
+                System.out.printf("S1_NATIVE_OPERATIONAL_RESERVE_PASS pool=%d constrained=%s%n",capacity,capacity<6);
+            }finally{connection.rollback();}
+        }finally{
+            workers.shutdownNow();
+            assertThat(workers.awaitTermination(60,TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     @Test void nativeCheckoutPerformanceBudgetPg() throws Exception{
         requirePostgres();
         var f=setup(true);
