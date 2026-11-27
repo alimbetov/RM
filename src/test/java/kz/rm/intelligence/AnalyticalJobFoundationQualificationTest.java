@@ -1,6 +1,7 @@
 package kz.rm.intelligence;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -85,5 +86,54 @@ class AnalyticalJobFoundationQualificationTest {
             CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
             WHERE n.nspname='crm' AND c.relname='int_analytics_job_run' AND a.grantee=0
             """,Integer.class)).isZero();
+    }
+
+    @Autowired AnalyticalJobRepository jobs;
+
+    private AnalyticalJobRepository.NightSpec spec(UUID t, int hour, LocalDate from) {
+        var slot=java.time.Instant.parse("2026-11-26T00:15:00Z").plusSeconds(hour*3600L);
+        return new AnalyticalJobRepository.NightSpec(t,UUID.randomUUID(),UUID.randomUUID(),
+            slot,slot,LocalDate.of(2026,11,25),1,"Asia/Almaty",from,
+            LocalDate.of(2026,11,26),null);
+    }
+
+    @Test void repositoryAdoptsWinningImmutableScopePg() {
+        UUID t=tenant();
+        var from=LocalDate.of(2026,11,1);
+        var first=spec(t,0,from);
+        var saved=jobs.enqueueNight(first);
+        assertThat(saved.outcome()).isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
+        var replay=jobs.enqueueNight(spec(t,0,from));
+        assertThat(replay.outcome()).isEqualTo(AnalyticalJobRepository.Outcome.EXISTING);
+        assertThat(replay.job()).isEqualTo(first.job());
+        assertThat(replay.generation()).isEqualTo(first.generation());
+        assertThat(jobs.enqueueNight(spec(t,0,from.plusDays(1))).outcome())
+            .isEqualTo(AnalyticalJobRepository.Outcome.CONFLICT);
+        assertThat(jobs.enqueueNight(spec(t,1,from)).outcome())
+            .isEqualTo(AnalyticalJobRepository.Outcome.CONFLICT);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_analytics_job_run WHERE tenant_id=?",
+            Integer.class,t)).isEqualTo(1);
+        assertThat(jobs.enqueueNight(spec(tenant(),0,from)).outcome())
+            .isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
+    }
+
+    @Test void repositoryConcurrentEnqueuePg() throws Exception {
+        UUID t=tenant();
+        var from=LocalDate.of(2026,11,1);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var a=pool.submit(()->{start.await();return jobs.enqueueNight(spec(t,0,from));});
+            var b=pool.submit(()->{start.await();return jobs.enqueueNight(spec(t,0,from));});
+            start.countDown();
+            var x=a.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            var y=b.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(java.util.List.of(x.outcome(),y.outcome())).containsExactlyInAnyOrder(
+                AnalyticalJobRepository.Outcome.INSERTED,AnalyticalJobRepository.Outcome.EXISTING);
+            assertThat(x.job()).isEqualTo(y.job());
+            assertThat(x.generation()).isEqualTo(y.generation());
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_analytics_job_run WHERE tenant_id=?",
+                Integer.class,t)).isEqualTo(1);
+        } finally {pool.shutdownNow();}
     }
 }

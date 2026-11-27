@@ -264,6 +264,14 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "durableJobPublicPrivilegesPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "repositoryAdoptsWinningImmutableScopePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "repositoryConcurrentEnqueuePg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
