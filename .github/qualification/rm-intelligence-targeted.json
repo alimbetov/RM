@@ -272,6 +272,10 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "repositoryConcurrentEnqueuePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "repositoryRejectsUnknownCalendarScopePg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

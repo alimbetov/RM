@@ -136,4 +136,24 @@ class AnalyticalJobFoundationQualificationTest {
                 Integer.class,t)).isEqualTo(1);
         } finally {pool.shutdownNow();}
     }
+
+    @Test void repositoryRejectsUnknownCalendarScopePg() {
+        UUID t=tenant();
+        var valid=spec(t,0,LocalDate.of(2026,11,1));
+        var unknownVersion=new AnalyticalJobRepository.NightSpec(t,UUID.randomUUID(),UUID.randomUUID(),
+            valid.slot(),valid.scheduledAt(),valid.businessDay(),2,"Asia/Almaty",
+            valid.fromDay(),valid.untilDay(),null);
+        var wrongZone=new AnalyticalJobRepository.NightSpec(t,UUID.randomUUID(),UUID.randomUUID(),
+            valid.slot(),valid.scheduledAt(),valid.businessDay(),1,"UTC",
+            valid.fromDay(),valid.untilDay(),null);
+        assertThat(jobs.enqueueNight(unknownVersion).outcome())
+            .isEqualTo(AnalyticalJobRepository.Outcome.CONFLICT);
+        assertThat(jobs.enqueueNight(wrongZone).outcome())
+            .isEqualTo(AnalyticalJobRepository.Outcome.CONFLICT);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_analytics_job_run WHERE tenant_id=?",
+            Integer.class,t)).isZero();
+        assertThat(jobs.enqueueNight(valid).outcome())
+            .isEqualTo(AnalyticalJobRepository.Outcome.INSERTED);
+    }
+
 }
