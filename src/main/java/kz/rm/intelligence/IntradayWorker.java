@@ -54,12 +54,31 @@ class IntradayWorker {
     List<UUID> tenants(){return List.copyOf(scopes.keySet());}
     void plan(UUID tenant){store.plan(Objects.requireNonNull(scopes.get(tenant)));}
     private static String encode(String s){return URLEncoder.encode(s,StandardCharsets.UTF_8);}
+    private static HttpResponse.BodySubscriber<byte[]> boundedBody(){
+        var delegate=HttpResponse.BodySubscribers.ofByteArray();
+        return new HttpResponse.BodySubscriber<byte[]>(){
+            private java.util.concurrent.Flow.Subscription subscription;
+            private long received;
+            private boolean failed;
+            public java.util.concurrent.CompletionStage<byte[]> getBody(){return delegate.getBody();}
+            public void onSubscribe(java.util.concurrent.Flow.Subscription s){subscription=s;delegate.onSubscribe(s);}
+            public void onNext(List<java.nio.ByteBuffer> buffers){
+                if(failed)return;
+                for(var buffer:buffers)received+=buffer.remaining();
+                if(received>65536){
+                    failed=true;subscription.cancel();delegate.onError(new java.io.IOException("INT_SERVICE_TOKEN_RESPONSE_LIMIT"));
+                }else delegate.onNext(buffers);
+            }
+            public void onError(Throwable error){if(!failed)delegate.onError(error);}
+            public void onComplete(){if(!failed)delegate.onComplete();}
+        };
+    }
     private String token(){
         try{
             var request=HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(10))
                 .header("Content-Type","application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials&client_id="+encode(client)+"&client_secret="+encode(secret))).build();
-            var response=http.send(request,HttpResponse.BodyHandlers.ofByteArray());
+            var response=http.send(request,info->boundedBody());
             if(response.statusCode()!=200||response.body().length>65536)throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");
             var token=mapper.readTree(response.body()).path("access_token").asText();
             if(token.isBlank())throw new IllegalStateException("INT_SERVICE_TOKEN_RESPONSE");

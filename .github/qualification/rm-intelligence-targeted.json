@@ -352,6 +352,14 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerIntradayDirectCompletionRequiresAckPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayMissingAndSharedNightFencePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerIntradayUntrustedRoleDeniedPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

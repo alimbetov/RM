@@ -522,7 +522,8 @@ class AnalyticalJobFoundationQualificationTest {
     // Same actual owner commands and signed actor/email fixtures as BUS-MVP.
     // No direct mutation of SALES, INVENTORY, facts, receipts or projection rows.
     private OwnerFacts ownerFacts() throws Exception {return ownerFacts("Etc/UTC");}
-    private OwnerFacts ownerFacts(String zone) throws Exception {
+    private OwnerFacts ownerFacts(String zone) throws Exception {return ownerFacts(zone,true);}
+    private OwnerFacts ownerFacts(String zone,boolean createOrders) throws Exception {
         try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
             UUID ownerId=users.saveAndFlush(new kz.rm.iam.UserAccountEntity(UUID.randomUUID(),
                 "night-owner-"+UUID.randomUUID(),"Owner")).getId();
@@ -572,6 +573,10 @@ class AnalyticalJobFoundationQualificationTest {
             var offer=offers.publish(staff,t,offerDraft.id(),offerDraft.rowVersion());
             context.getBean(kz.rm.inventory.AuthenticatedInventoryCommands.class).receive(staff,t,warehouse.id(),sku.id(),
                 "night-receipt-"+UUID.randomUUID(),new java.math.BigDecimal("10"));
+            if(!createOrders){
+                context.getBean(CalendarPolicyService.class).append(owner,t,zone,0);
+                return new OwnerFacts(t,warehouse.id(),sku.id());
+            }
             var checkout=context.getBean(kz.rm.autoorder.AutoOrderService.class);
             var sales=context.getBean(kz.rm.sales.AuthenticatedSalesCommands.class);
             UUID first=checkout.checkout(store.slug(),"night-buyer-"+UUID.randomUUID()+"@example.kz",
@@ -761,7 +766,7 @@ class AnalyticalJobFoundationQualificationTest {
         var members=context.getBean(kz.rm.iam.TenantMemberEnrollmentService.class);
         members.invite(owner,tenant,account);members.accept(humanFixture,tenant);
         var roles=context.getBean(kz.rm.iam.VerifiedTenantRoleCommands.class);
-        var role=roles.createRole(owner,tenant,"INT_SERVICE_"+UUID.randomUUID().toString().substring(0,8).replace("-",""),
+        var role=roles.createRole(owner,tenant,"INT_SERVICE_"+UUID.randomUUID().toString().substring(0,8).toUpperCase(java.util.Locale.ROOT),
             "Intraday qualification");
         roles.grant(owner,tenant,role.id(),kz.rm.iam.DomainPermission.SALES_ORDER_READ);
         roles.assign(owner,tenant,account,role.id());
@@ -859,6 +864,59 @@ class AnalyticalJobFoundationQualificationTest {
                 """,t,job)).hasStackTraceContaining("INT_INTRADAY_ATOMIC_PAIR");
             assertThat(jdbc.queryForObject("SELECT status FROM crm.int_analytics_job_run WHERE tenant_id=? AND job_id=?",String.class,t,job)).isEqualTo("RUNNING");
         }finally{release(t,job);}
+    }
+
+
+    @Test void schedulerIntradayMissingAndSharedNightFencePg() throws Exception {
+        String zone=currentIntradayZone();UUID t=ownerFacts(zone,false).tenant();
+        try(var issuer=new kz.rm.iam.JourneySignedActorFixture()){
+            UUID account=serviceMember(t,issuer);
+            var actor=issuer.resolveService(jdbc,users,account,kz.rm.iam.JourneySignedActorFixture.ServiceToken.VALID);
+            LocalDate day=jdbc.queryForObject("SELECT clock_timestamp()",OffsetDateTime.class).atZoneSameInstant(java.time.ZoneId.of(zone)).toLocalDate();
+            var scope=new IntradayResultStore.Scope(t,account,1,day,7);
+            UUID job=intradayStore.plan(scope).orElseThrow();
+            UUID night=enqueue(t,"NIGHT",0,1);
+            claim(t,night,1);
+            try{
+                assertThat(jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),2,300)).isEmpty();
+            }finally{
+                jdbc.update("""
+                    UPDATE crm.int_analytics_job_run SET status='SKIPPED',lease_owner=NULL,lease_until=NULL,cluster_slot=NULL
+                    WHERE tenant_id=? AND job_id=?
+                    """,t,night);
+            }
+            var c=jobs.claimNext(UUID.randomUUID(),java.util.Map.of(),java.util.Set.of(t),1,300).orElseThrow();
+            assertThat(c.job()).isEqualTo(job);
+            assertThat(intradayStore.execute(c,scope,actor)).isEqualTo(AnalyticalJobService.RunResult.COMPLETED);
+            var result=intradayStore.completed(c,scope,actor).orElseThrow();
+            assertThat(result.value()).isNull();
+            assertThat(result.quality()).isEqualTo("MISSING");
+            assertThat(result.reason()).isEqualTo("NO_QUALIFIED_OBSERVATION");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM crm.int_active_generation WHERE tenant_id=?",Integer.class,t)).isZero();
+        }
+    }
+
+    @Test void schedulerIntradayUntrustedRoleDeniedPg(){
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
+        String role="rm_intra_denied_"+UUID.randomUUID().toString().replace("-","");
+        assertThatThrownBy(()->tx.executeWithoutResult(status->{
+            jdbc.execute("CREATE ROLE "+role+" NOLOGIN");
+            jdbc.execute("GRANT USAGE ON SCHEMA crm TO "+role);
+            jdbc.execute("SET LOCAL ROLE "+role);
+            for(String privilege:java.util.List.of("SELECT","INSERT","UPDATE","DELETE","TRUNCATE"))
+                assertThat(jdbc.queryForObject("SELECT has_table_privilege(current_user,'crm.int_intraday_result',?)",Boolean.class,privilege)).isFalse();
+            assertThat(jdbc.queryForObject("""
+                SELECT has_function_privilege(current_user,
+                  'crm.int_intraday_register(uuid,uuid,uuid,bigint,text,timestamptz,timestamptz)','EXECUTE')
+                """,Boolean.class)).isFalse();
+            assertThat(jdbc.queryForObject("""
+                SELECT has_function_privilege(current_user,
+                  'crm.int_intraday_ack(uuid,uuid,uuid,bigint,integer,uuid,text,timestamptz,timestamptz,bigint,bigint,text,text,text,timestamptz,timestamptz)','EXECUTE')
+                """,Boolean.class)).isFalse();
+            jdbc.execute("SELECT count(*) FROM crm.int_intraday_result");
+        })).hasStackTraceContaining("permission denied");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_roles WHERE rolname=?",Integer.class,role)).isZero();
     }
 
 }

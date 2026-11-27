@@ -7174,12 +7174,12 @@ ALTER TABLE public.iam_user_account ADD CONSTRAINT ck_iam_principal_kind CHECK(p
 CREATE FUNCTION public.iam_principal_kind_guard() RETURNS trigger LANGUAGE plpgsql
  SET search_path=pg_catalog,pg_temp AS $
 BEGIN
- IF OLD.principal_kind='SERVICE' AND NEW.principal_kind<>'SERVICE'
+ IF OLD.principal_kind='SERVICE' AND (NEW.principal_kind<>'SERVICE' OR NEW.external_subject IS DISTINCT FROM OLD.external_subject)
  THEN RAISE EXCEPTION 'IAM_SERVICE_CLASSIFICATION_IMMUTABLE' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $;
 REVOKE ALL ON FUNCTION public.iam_principal_kind_guard() FROM PUBLIC;
-CREATE TRIGGER trg_iam_principal_kind BEFORE UPDATE OF principal_kind ON public.iam_user_account
+CREATE TRIGGER trg_iam_principal_kind BEFORE UPDATE OF principal_kind,external_subject ON public.iam_user_account
  FOR EACH ROW EXECUTE FUNCTION public.iam_principal_kind_guard();
 -- No runtime GRANT or service account provisioning in this changeset.
 CREATE TABLE crm.int_intraday_result (

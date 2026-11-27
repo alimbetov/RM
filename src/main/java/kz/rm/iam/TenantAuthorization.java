@@ -269,6 +269,11 @@ public class TenantAuthorization {
     public IntradayReadPermit requireIntradayRead(VerifiedServiceActor actor,UUID tenantId) {
         UUID id=actor.accountId();
         lockActorAndTenant(id,tenantId);
+        var org=jdbc.query("""
+            SELECT o.id FROM public.org_organization o JOIN public.iam_workspace w ON w.organization_id=o.id
+            WHERE w.id=? AND o.status='ACTIVE' FOR SHARE OF o NOWAIT
+            """,(rs,n)->rs.getObject(1,UUID.class),tenantId);
+        if(org.isEmpty())throw new SecurityException("INT_INTRADAY_ORG_DENIED");
         boolean allowed=Boolean.TRUE.equals(jdbc.queryForObject("""
             SELECT EXISTS(
               SELECT 1 FROM public.iam_user_account u

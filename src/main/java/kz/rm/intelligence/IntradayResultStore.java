@@ -133,12 +133,7 @@ class IntradayResultStore {
         return tx(180,()->{
             jobs.lockClaimForActivation(claim);
             var permit=authorization.requireIntradayRead(actor,scope.tenant());
-            var org=jdbc.query("""
-                SELECT o.id FROM public.org_organization o JOIN public.iam_workspace w ON w.organization_id=o.id
-                WHERE w.id=? AND o.status='ACTIVE' FOR SHARE OF o NOWAIT
-                """,(rs,n)->rs.getObject(1,UUID.class),scope.tenant());
-            if(org.isEmpty())throw new SecurityException("INT_INTRADAY_ORG_DENIED");
-            var r=jdbc.query(REQUEST_SQL+" AND j.job_id=?",rs->rs.next()?request(rs):null,claim.tenant(),claim.job());
+             var r=jdbc.query(REQUEST_SQL+" AND j.job_id=?",rs->rs.next()?request(rs):null,claim.tenant(),claim.job());
             if(r==null||!r.account().equals(scope.account())||r.scopeVersion()!=scope.version()||!r.scopeDigest().equals(scope.digest()))
                 throw new SecurityException("INT_INTRADAY_REQUEST_DENIED");
             Instant at=now();var cal=calendar(r.tenant(),at);
