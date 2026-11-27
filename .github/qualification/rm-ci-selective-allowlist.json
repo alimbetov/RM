@@ -1,0 +1,26 @@
+{
+  "schema": "RM-CI-R3.6C.1/v1",
+  "executionMode": "SHADOW_ONLY",
+  "defaultDecision": "FULL_REQUIRED",
+  "releasePolicy": "FULL_EXACT_SHA",
+  "evidenceReuse": "FORBIDDEN",
+  "qualifiedAllowlist": [],
+  "candidateAllowlist": [
+    {
+      "path": "docs/reviews/RM-B2-1R-CI-RECOVERY.md",
+      "mode": "FAST_DOC",
+      "dependencyClosure": "UNQUALIFIED",
+      "executionAllowed": false
+    }
+  ],
+  "rejected": [
+    {
+      "path": "docs/ideas/README.md",
+      "reason": "GOVERNANCE_AND_ADMISSION_DECISIONS"
+    },
+    {
+      "path": "docs/design/intelligent-commerce/RM-B4.5D.0-BUSINESS-SCENARIO-BANK.md",
+      "reason": "SCENARIO_CONTRACT_REQUIRES_SEPARATE_REVIEW"
+    }
+  ]
+}
