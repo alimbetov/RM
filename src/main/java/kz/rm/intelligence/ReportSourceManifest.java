@@ -33,6 +33,20 @@ final class ReportSourceManifest {
         Objects.requireNonNull(tenant);
         if(queries.isEmpty()||queries.size()>3||queries.size()!=windows.size())
             throw new IllegalArgumentException("REPORT_MANIFEST_SHAPE");
+        var inputQueries=List.copyOf(queries);
+        var inputWindows=windows.stream().map(List::copyOf).toList();
+        var order=java.util.stream.IntStream.range(0,inputQueries.size()).boxed()
+            .sorted(Comparator.comparing(i->inputQueries.get(i).metric().name())).toList();
+        queries=order.stream().map(inputQueries::get).toList();
+        windows=order.stream().map(inputWindows::get).toList();
+        var q0=queries.getFirst();
+        if(queries.stream().map(Query::metric).distinct().count()!=queries.size()
+            ||q0.anchor().getDayOfMonth()!=1
+            ||queries.stream().anyMatch(q->q.period()!=PeriodResolver.Code.M
+                ||q.calendarVersion()!=q0.calendarVersion()||!q.anchor().equals(q0.anchor())
+                ||!Objects.equals(q.region(),q0.region())||!Objects.equals(q.group(),q0.group())
+                ||!Objects.equals(q.sku(),q0.sku())||!q.warehouses().equals(q0.warehouses())))
+            throw new IllegalArgumentException("REPORT_MANIFEST_SCOPE");
         var scope=new FramedHash("RM-ARS-SCOPE-1");
         scope.add(tenant);
         scope.add(queries.size());
@@ -46,6 +60,7 @@ final class ReportSourceManifest {
         var first=windows.getFirst().getFirst();
         Instant observed=Objects.requireNonNull(first.observedAt());
         long revision=first.sourceRevision();
+        if(revision<0)throw new IllegalArgumentException("REPORT_MANIFEST_REVISION");
         var evidence=new FramedHash("RM-ARS-SOURCE-1");
         evidence.add(scopeDigest);evidence.add(observed);evidence.add(revision);
         UUID generation=null,proof=null;
@@ -64,6 +79,13 @@ final class ReportSourceManifest {
                     ||period.endExclusive().isAfter(observed)||previous!=null&&!previous.equals(period.startInclusive())
                     ||x.quality()!=(x.value()==null?DataQuality.MISSING:DataQuality.PARTIAL))
                     throw new IllegalArgumentException("REPORT_MANIFEST_INCONSISTENT");
+                String normalized=ReportDatasetDigest.decimal(x.value());
+                if(normalized!=null&&x.unit().equals("COUNT")&&
+                    (x.value().signum()<0||normalized.contains(".")))
+                    throw new IllegalArgumentException("REPORT_MANIFEST_COUNT");
+                String qualityReason=x.value()==null?"NO_QUALIFIED_OBSERVATION":"HISTORICAL_COVERAGE_UNQUALIFIED";
+                if(!qualityReason.equals(x.qualityReason())||x.reason()==null||!x.reason().matches("[A-Z0-9_]{1,128}"))
+                    throw new IllegalArgumentException("REPORT_MANIFEST_QUALITY_REASON");
                 if(x.route()==Route.L3){
                     if(x.generation()==null||x.proof()==null||generation!=null&&
                         (!generation.equals(x.generation())||!proof.equals(x.proof())))
@@ -74,7 +96,7 @@ final class ReportSourceManifest {
                 previous=period.endExclusive();
                 evidence.add(x.metric());evidence.add(x.methodVersion());evidence.add(period.startInclusive());
                 evidence.add(period.endExclusive());evidence.add(period.zoneId());evidence.add(period.calendarVersion());
-                evidence.add(x.unit());evidence.add(x.currency());evidence.add(ReportDatasetDigest.decimal(x.value()));
+                evidence.add(x.unit());evidence.add(x.currency());evidence.add(normalized);
                 evidence.add(x.quality());evidence.add(x.qualityReason());evidence.add(x.route());evidence.add(x.reason());
                 evidence.add(x.generation());evidence.add(x.proof());
             }

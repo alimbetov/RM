@@ -101,4 +101,43 @@ class ReportDatasetDigestTest {
         assertThrows(IllegalArgumentException.class, () -> new ReportDatasetDigest.Row(1, "BOOKED_AMOUNT", 1,
             UNTIL, FROM, List.of(), "CURRENCY", "KZT", BigDecimal.ONE, DataQuality.PARTIAL, null));
     }
+    private static AuthorizedAnalyticalReadService.Query salesQuery(AuthorizedAnalyticalReadService.Metric metric){
+        return new AuthorizedAnalyticalReadService.Query(metric,1,PeriodResolver.Code.M,java.time.LocalDate.of(2026,10,1),
+            null,null,null,List.of(),metric==AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT?"KZT":null);
+    }
+    private static List<AuthorizedAnalyticalReadService.Result> salesWindow(AuthorizedAnalyticalReadService.Query q,BigDecimal value){
+        return java.util.stream.IntStream.range(0,24).mapToObj(i->{
+            BigDecimal v=i==0?null:value;
+            return new AuthorizedAnalyticalReadService.Result(q.metric(),1,
+                PeriodResolver.resolve(PeriodResolver.Code.M,q.anchor().minusMonths(23-i),
+                    new PeriodResolver.Policy(java.time.ZoneId.of("Etc/UTC"),1)),v,
+                v==null?DataQuality.MISSING:DataQuality.PARTIAL,AuthorizedAnalyticalReadService.Route.L0,
+                "NO_MATCHING_ACTIVE_GENERATION",v==null?"NO_QUALIFIED_OBSERVATION":"HISTORICAL_COVERAGE_UNQUALIFIED",
+                q.currency()==null?"COUNT":"CURRENCY",q.currency(),null,null,7L,UNTIL);
+        }).toList();
+    }
+    @Test void r02ManifestAndDatasetMathematicalContract(){
+        var amount=salesQuery(AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT);
+        var orders=salesQuery(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS);
+        var av=salesWindow(amount,new BigDecimal("0.30"));
+        var ov=salesWindow(orders,new BigDecimal("2.00"));
+        var m=ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov));
+        var reversed=ReportSourceManifest.from(TENANT,List.of(orders,amount),List.of(ov,av));
+        assertEquals(m.scopeDigest(),reversed.scopeDigest());
+        assertEquals(m.sha256(),reversed.sha256());
+        var plan=SalesReportDatasetPlan.from(m,DATASET);
+        assertEquals(48,plan.expected().rows());
+        assertEquals(plan.expected(),SalesReportDatasetPlan.from(reversed,DATASET).expected());
+        assertNull(plan.rows().getFirst().value());
+        assertEquals(DataQuality.MISSING,plan.rows().getFirst().quality());
+        assertEquals(0,new BigDecimal("0.3").compareTo(plan.rows().get(1).value()));
+        assertEquals(0,new BigDecimal("2").compareTo(plan.rows().get(25).value()));
+        for(var bad:List.of(new BigDecimal("1.5"),new BigDecimal("-1")))
+            assertThrows(IllegalArgumentException.class,()->ReportSourceManifest.from(TENANT,
+                List.of(amount,orders),List.of(av,salesWindow(orders,bad))));
+        assertThrows(IllegalArgumentException.class,()->ReportSourceManifest.from(TENANT,List.of(amount,amount),List.of(av,av)));
+        assertNotEquals(m.sha256(),ReportSourceManifest.from(TENANT,List.of(amount,orders),
+            List.of(av,salesWindow(orders,BigDecimal.ZERO))).sha256());
+        assertNotEquals(m.sha256(),ReportSourceManifest.from(UUID.randomUUID(),List.of(amount,orders),List.of(av,ov)).sha256());
+    }
 }

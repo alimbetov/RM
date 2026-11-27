@@ -408,6 +408,10 @@
     {
       "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
       "name": "consumerRegistrationAndClaimAreTenantAndStateScopedPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
+      "name": "r02ManifestAndDatasetMathematicalContract"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
