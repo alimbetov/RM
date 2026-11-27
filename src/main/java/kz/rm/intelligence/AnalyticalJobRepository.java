@@ -93,7 +93,9 @@ class AnalyticalJobRepository {
                         && rs.getString(6).equals(s.zoneId())
                         && rs.getObject(7,LocalDate.class).equals(s.fromDay())
                         && rs.getObject(8,LocalDate.class).equals(s.untilDay())
-                        && Objects.equals(rs.getObject(9,UUID.class),s.expectedPrevious())
+                        && (Objects.equals(rs.getObject(9,UUID.class),s.expectedPrevious())
+                            || ("COMPLETED".equals(rs.getString(10))
+                                && Objects.equals(rs.getObject(2,UUID.class),s.expectedPrevious())))
                         && !"SKIPPED".equals(rs.getString(10));
                     if(!same)return new Registration(Outcome.CONFLICT,null,null);
                     return new Registration(inserted==1?Outcome.INSERTED:Outcome.EXISTING,
@@ -109,26 +111,28 @@ class AnalyticalJobRepository {
     private record JobKey(UUID tenant,UUID job,int slot,long token) {}
     record Claim(UUID tenant,UUID job,UUID generation,UUID worker,long token,int slot,
                  Instant leaseUntil,long calendar,LocalDate from,LocalDate until,UUID expectedPrevious) {}
-    enum Failure { TRANSIENT, STALE_PROOF, SOURCE_INCOMPLETE, POLICY_CHANGED }
+    enum Failure { TRANSIENT, STALE_PROOF, SOURCE_INCOMPLETE, POLICY_CHANGED, EXECUTION_REJECTED }
     private static final String CLAIM_COLUMNS = """
         tenant_id,job_id,generation_id,lease_owner,attempt_token,cluster_slot,
         lease_until,calendar_version,from_day,until_day,expected_previous
         """;
     private static final String FENCE = """
-        WHERE tenant_id=? AND job_id=? AND status='RUNNING' AND lease_owner=?
+        WHERE tenant_id=? AND job_id=? AND job_type='NIGHT' AND status='RUNNING' AND lease_owner=?
           AND attempt_token=? AND cluster_slot=? AND lease_until>clock_timestamp()
           AND generation_id=? AND calendar_version=? AND from_day=? AND until_day=?
           AND expected_previous IS NOT DISTINCT FROM CAST(? AS uuid)
         """;
     // Use the persisted job's scope and current owner records in the same
     // statement snapshot. R1.2 must repeat this under the activation locks.
-    private static final String CURRENT_POLICY = """
+    private static final String CURRENT_OWNER_POLICY = """
         AND EXISTS(SELECT 1 FROM public.iam_workspace w JOIN public.org_organization o
             ON o.id=w.organization_id WHERE w.id=j.tenant_id
               AND w.kind='ORGANIZATION' AND w.status='ACTIVE' AND o.status='ACTIVE')
         AND j.calendar_version=(SELECT p.version FROM crm.int_calendar_policy p
             WHERE p.tenant_id=j.tenant_id AND p.effective_from<=clock_timestamp()
             ORDER BY p.version DESC LIMIT 1)
+        """;
+    private static final String CURRENT_POLICY = CURRENT_OWNER_POLICY+"""
         AND j.expected_previous IS NOT DISTINCT FROM (SELECT a.generation_id
             FROM crm.int_active_generation a WHERE a.tenant_id=j.tenant_id AND a.projection_code='L3')
         """;
@@ -316,7 +320,7 @@ class AnalyticalJobRepository {
     }
     boolean yieldProgress(Claim c){return ownTx(()->release(c,"PENDING",null));}
     boolean block(Claim c,Failure reason){
-        if(reason!=Failure.SOURCE_INCOMPLETE&&reason!=Failure.POLICY_CHANGED)
+        if(reason!=Failure.SOURCE_INCOMPLETE&&reason!=Failure.POLICY_CHANGED&&reason!=Failure.EXECUTION_REJECTED)
             throw new IllegalArgumentException("INT_JOB_BLOCK_REASON");
         return ownTx(()->release(c,"BLOCKED",reason));
     }
@@ -339,6 +343,72 @@ class AnalyticalJobRepository {
               next_attempt_at=clock_timestamp()+interval '1 second',
               lease_owner=NULL,lease_until=NULL,cluster_slot=NULL,updated_at=clock_timestamp()
             """+FENCE,fenceArgs(c,state,reason==null?null:reason.name(),state))==1;
+    }
+
+    // These three methods are called exclusively inside the existing activation
+    // transaction (same manager and connection). No nested transaction.
+    private static void requireActivationTransaction(){
+        if(!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("INT_JOB_ACTIVATION_TRANSACTION_REQUIRED");
+    }
+    void lockClaimForActivation(Claim c){
+        requireActivationTransaction();
+        if(jdbc.query("SELECT job_id FROM crm.int_analytics_job_run "+FENCE+" FOR UPDATE",
+            (rs,n)->rs.getObject(1,UUID.class),fenceArgs(c)).size()!=1)
+            throw new IllegalStateException("INT_JOB_LEASE_LOST");
+    }
+    void verifyScheduledScope(Claim c){
+        requireActivationTransaction();
+        // Workspace UPDATE fence is already held by activateInternal. Lock
+        // organization without waiting on a reversed owner lock order.
+        var org=jdbc.query("""
+            SELECT o.id FROM public.org_organization o
+            JOIN public.iam_workspace w ON w.organization_id=o.id
+            WHERE w.id=? AND w.kind='ORGANIZATION' AND w.status='ACTIVE'
+              AND o.status='ACTIVE' FOR SHARE OF o NOWAIT
+            """,(rs,n)->rs.getObject(1,UUID.class),c.tenant());
+        if(org.size()!=1||!currentPolicy(c))
+            throw new IllegalStateException("INT_JOB_POLICY_CHANGED");
+        boolean scope=Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM crm.int_projection_generation g
+                WHERE g.tenant_id=? AND g.generation_id=? AND g.calendar_version=?
+                  AND g.from_day=? AND g.until_day=?)
+            """,Boolean.class,c.tenant(),c.generation(),c.calendar(),c.from(),c.until()));
+        if(!scope)throw new IllegalStateException("INT_JOB_GENERATION_SCOPE_CONFLICT");
+        // Do not shrink a predecessor even if the job was registered by a
+        // different internal producer rather than the normal planner.
+        if(c.expectedPrevious()!=null&&!Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM crm.int_projection_generation g
+              WHERE g.tenant_id=? AND g.generation_id=? AND g.calendar_version=?
+                AND g.from_day>=? AND g.until_day<=?)
+            """,Boolean.class,c.tenant(),c.expectedPrevious(),c.calendar(),c.from(),c.until())))
+            throw new IllegalStateException("INT_JOB_ACTIVE_SCOPE_CONFLICT");
+    }
+    void completeNight(Claim c,MultidimensionalCoverageService.Activation activation){
+        requireActivationTransaction();
+        if(activation.replay()||!c.generation().equals(activation.generation()))
+            throw new IllegalStateException("INT_JOB_ACTIVATION_IDENTITY");
+        record Evidence(OffsetDateTime observed,long revision){}
+        var proof=jdbc.query("""
+            SELECT observed_at,source_revision FROM crm.int_dim_coverage_proof
+            WHERE tenant_id=? AND generation_id=? AND proof_id=? AND lifecycle_revision=1
+            """,(rs,n)->new Evidence(rs.getObject(1,OffsetDateTime.class),rs.getLong(2)),
+            c.tenant(),c.generation(),activation.activeProof()).stream().findFirst()
+            .orElseThrow(()->new IllegalStateException("INT_JOB_ACTIVE_PROOF_MISSING"));
+        // The predecessor has already changed in this transaction. Check
+        // current owner/calendar again and the new exact pointer, not the old one.
+        var args=new ArrayList<Object>(Arrays.asList(fenceArgs(c,activation.activeProof(),
+            proof.observed(),proof.revision())));
+        args.add(activation.activeProof());args.add(activation.admissionProof());
+        if(jdbc.update("""
+            UPDATE crm.int_analytics_job_run j SET status='COMPLETED',active_proof_id=?,
+              actual_as_of=?,source_revision=?,consecutive_failures=0,last_error_code=NULL,
+              lease_owner=NULL,lease_until=NULL,cluster_slot=NULL,updated_at=clock_timestamp()
+            """+FENCE+CURRENT_OWNER_POLICY+"""
+            AND EXISTS(SELECT 1 FROM crm.int_active_generation a WHERE a.tenant_id=j.tenant_id
+              AND a.projection_code='L3' AND a.generation_id=j.generation_id
+              AND a.dim_proof_id=? AND a.admission_proof_id=?)
+            """,args.toArray())!=1)throw new IllegalStateException("INT_JOB_COMPLETION_FENCE");
     }
 
     private static OffsetDateTime utc(Instant value) {

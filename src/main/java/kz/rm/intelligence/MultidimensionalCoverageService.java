@@ -278,6 +278,14 @@ public class MultidimensionalCoverageService {
      */
     public record Activation(UUID generation,UUID admissionProof,UUID activeProof,boolean replay){}
     public Activation activate(UUID tenant,UUID generation,UUID proof,UUID expectedPrevious){
+        return activateInternal(tenant,generation,proof,expectedPrevious,null,null);
+    }
+    Activation activateScheduled(AnalyticalJobRepository.Claim claim,UUID proof,AnalyticalJobRepository jobs){
+        Objects.requireNonNull(claim);Objects.requireNonNull(jobs);
+        return activateInternal(claim.tenant(),claim.generation(),proof,claim.expectedPrevious(),claim,jobs);
+    }
+    private Activation activateInternal(UUID tenant,UUID generation,UUID proof,UUID expectedPrevious,
+            AnalyticalJobRepository.Claim claim,AnalyticalJobRepository jobs){
         Objects.requireNonNull(tenant);Objects.requireNonNull(generation);Objects.requireNonNull(proof);
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("INT_ACTIVATION_OWN_TRANSACTION");
@@ -287,14 +295,17 @@ public class MultidimensionalCoverageService {
             if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
                 c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
                 throw new IllegalStateException("INT_ACTIVATION_POSTGRESQL_REQUIRED");
+            if(claim!=null)jobs.lockClaimForActivation(claim);
             UUID fence=jdbc.query("SELECT id FROM public.iam_workspace WHERE id=? AND status='ACTIVE' FOR UPDATE",
                 rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
             if(fence==null)throw new IllegalArgumentException("INT_ACTIVATION_TENANT_NOT_FOUND");
+            if(claim!=null)jobs.verifyScheduledScope(claim);
             Activation current=jdbc.query("""
                 SELECT generation_id,admission_proof_id,dim_proof_id FROM crm.int_active_generation
                 WHERE tenant_id=? AND projection_code='L3' FOR UPDATE
                 """,rs->rs.next()?new Activation(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),true):null,tenant);
             if(current!=null&&current.generation().equals(generation)&&current.admissionProof().equals(proof)){
+                if(claim!=null)throw new IllegalStateException("INT_JOB_MANUAL_ACTIVATION_CONFLICT");
                 if(evaluate(tenant,generation,current.activeProof())!=Status.CURRENT)
                     throw new IllegalStateException("INT_ACTIVATION_PROOF_STALE");
                 return current;
@@ -337,7 +348,9 @@ public class MultidimensionalCoverageService {
                 INSERT INTO crm.int_active_generation(tenant_id,projection_code,generation_id,dim_proof_id,admission_proof_id,lifecycle_state)
                 VALUES (?,'L3',?,?,?,'ACTIVE')
                 """,tenant,generation,active,proof);
-            return new Activation(generation,proof,active,false);
+            var activation=new Activation(generation,proof,active,false);
+            if(claim!=null)jobs.completeNight(claim,activation);
+            return activation;
         });
     }
 }

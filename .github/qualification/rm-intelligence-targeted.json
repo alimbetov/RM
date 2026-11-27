@@ -304,6 +304,18 @@
     {
       "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
       "name": "schedulerNightGapShiftsForward"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerAtomicActivationAndCompletionRollbackPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerWorkerResumesBoundedGenerationPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.AnalyticalJobFoundationQualificationTest",
+      "name": "schedulerActivationRejectsCalendarDriftAndLostLeasePg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
