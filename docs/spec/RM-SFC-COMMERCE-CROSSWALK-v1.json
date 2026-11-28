@@ -1,0 +1,2340 @@
+{
+  "schema": "RM-SFC-COMMERCE-CROSSWALK-v1",
+  "reviewedSha": "f784f6f59a2b9adbc62b2fc33e8322d6a1f0b3e1",
+  "status": "SELECTED_SECTION_EXTRACTION_COMPLETE_SEMANTIC_REVIEW_PARTIAL",
+  "policy": "Draft QR rules preserved with scope review; links are candidate group relationships, not alias equality. Historical evidence does not transfer. No runtime/CI change.",
+  "counts": {
+    "qrRules": 50,
+    "coreScenarios": 37,
+    "r3": 26,
+    "dual": 12,
+    "sectionObligations": 9,
+    "findings": 6,
+    "variantFamilies": 8
+  },
+  "qrRules": [
+    {
+      "id": "BR-001",
+      "statement": "QR товара ссылается на конкретную seller store_offer, не на голый SKU",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-001"
+      },
+      "ownerCandidate": "STOREFRONT",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-01",
+        "BSR:CORE-QR-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-002",
+      "statement": "Только PUBLISHED store + offer + CATALOG PRODUCT допускают публичную покупку",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-002"
+      },
+      "ownerCandidate": "STOREFRONT",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-01",
+        "BSR:CORE-QR-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-003",
+      "statement": "Публичная карточка доступна без входа; личные сделки/заказы — после buyer proof",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-003"
+      },
+      "ownerCandidate": "STOREFRONT",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-01",
+        "BSR:CORE-QR-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-004",
+      "statement": "Цена/валюта с сервера; браузерная цена не authoritative",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-004"
+      },
+      "ownerCandidate": "STOREFRONT",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-01",
+        "BSR:CORE-QR-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-005",
+      "statement": "Изменение цены/фотографий не меняет стабильный публичный QR",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-005"
+      },
+      "ownerCandidate": "STOREFRONT",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-01",
+        "BSR:CORE-QR-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-006",
+      "statement": "Отзыв/ротация QR не переписывает ранее созданные заказы",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-006"
+      },
+      "ownerCandidate": "STOREFRONT",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-01",
+        "BSR:CORE-QR-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-007",
+      "statement": "Публичные FILES показываются лишь после owner publication + CLEAN/AVAILABLE/approved variant",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-007"
+      },
+      "ownerCandidate": "FILES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:BSR-FILES-01"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-008",
+      "statement": "Private original и EXIF/location не публиковать",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-008"
+      },
+      "ownerCandidate": "FILES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:BSR-FILES-01"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-009",
+      "statement": "Продукт может иметь безопасный placeholder при отсутствии фото",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-009"
+      },
+      "ownerCandidate": "FILES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:BSR-FILES-01"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-010",
+      "statement": "Locale kk/ru/en/zh-Hans, fallback к source_locale обозначается",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-010"
+      },
+      "ownerCandidate": "FILES",
+      "scope": "SCOPE_AND_POLICY_REVIEW",
+      "scenarioCandidates": [
+        "BSR:BSR-FILES-01"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-011",
+      "statement": "R1 quantity — integer 1..1000 per merged offer line",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-011"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-012",
+      "statement": "Unit of measure не подменяет правила integer quantity",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-012"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-013",
+      "statement": "Видимое наличие — indicative, не заказанный резерв",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-013"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-014",
+      "statement": "Поиск KATO exact match до подтверждения complete hierarchy",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-014"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "SCOPE_AND_POLICY_REVIEW",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-015",
+      "statement": "Разные продавцы и SKU не суммируются в публичное наличие",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-015"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-016",
+      "statement": "Наличие по региону ≠ обещание доставки",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-016"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-017",
+      "statement": "BUY_AT_LIST_PRICE использует price acknowledgement / version contract, не silent repricing",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-017"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-018",
+      "statement": "Email-first PLACED не доказывает завершённую идентификацию покупателя",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-018"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-019",
+      "statement": "Повторный checkout same tenant+key+fingerprint создаёт максимум один заказ",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-019"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-03",
+        "BSR:CORE-QR-04",
+        "BSR:CORE-SAL-01",
+        "BSR:CORE-SAL-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-020",
+      "statement": "Цена клиента после торга не изменяет STOREFRONT public price",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-020"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-021",
+      "statement": "Proposal фиксирует buyer, seller offer, qty, unit price, currency, expiry, revision",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-021"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-022",
+      "statement": "Ответить на последнюю ревизию может только противоположная сторона",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-022"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-023",
+      "statement": "Согласованная цена не создаёт автоматически заказ",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-023"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-024",
+      "statement": "AcceptedQuote может быть consumed не более одного раза",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-024"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-025",
+      "statement": "Negotiated order содержит immutable quote source и accepted agreed price",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-025"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-026",
+      "statement": "AcceptedQuote checkout соблюдает pending_email_identity_id и buyer ownership",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-026"
+      },
+      "ownerCandidate": "SALES",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-QR-05",
+        "BSR:CORE-QR-06",
+        "BSR:CORE-QR-07"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-027",
+      "statement": "Никакой reservation при PLACED или торге",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-027"
+      },
+      "ownerCandidate": "SALES/INVENTORY/ORG",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-SAL-03",
+        "BSR:CORE-SAL-04",
+        "BSR:CORE-SAL-05",
+        "BSR:CORE-ORG-01",
+        "BSR:CORE-ORG-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-028",
+      "statement": "CONFIRMED резервирует full lines на одном tenant ACTIVE WAREHOUSE",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-028"
+      },
+      "ownerCandidate": "SALES/INVENTORY/ORG",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-SAL-03",
+        "BSR:CORE-SAL-04",
+        "BSR:CORE-SAL-05",
+        "BSR:CORE-ORG-01",
+        "BSR:CORE-ORG-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-029",
+      "statement": "warehouse origin KATO/address/GPS фиксируется только при первом CONFIRMED",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-029"
+      },
+      "ownerCandidate": "SALES/INVENTORY/ORG",
+      "scope": "SCOPE_AND_POLICY_REVIEW",
+      "scenarioCandidates": [
+        "BSR:CORE-SAL-03",
+        "BSR:CORE-SAL-04",
+        "BSR:CORE-SAL-05",
+        "BSR:CORE-ORG-01",
+        "BSR:CORE-ORG-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-030",
+      "statement": "Исторический origin никогда не перезаписывается после редактирования склада",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-030"
+      },
+      "ownerCandidate": "SALES/INVENTORY/ORG",
+      "scope": "SCOPE_AND_POLICY_REVIEW",
+      "scenarioCandidates": [
+        "BSR:CORE-SAL-03",
+        "BSR:CORE-SAL-04",
+        "BSR:CORE-SAL-05",
+        "BSR:CORE-ORG-01",
+        "BSR:CORE-ORG-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-031",
+      "statement": "Старым CONFIRMED без origin не присваивать выдуманные координаты",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-031"
+      },
+      "ownerCandidate": "SALES/INVENTORY/ORG",
+      "scope": "SCOPE_AND_POLICY_REVIEW",
+      "scenarioCandidates": [
+        "BSR:CORE-SAL-03",
+        "BSR:CORE-SAL-04",
+        "BSR:CORE-SAL-05",
+        "BSR:CORE-ORG-01",
+        "BSR:CORE-ORG-02"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-032",
+      "statement": "PREPARING и READY не изменяют on_hand и не списывают reserved",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-032"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-033",
+      "statement": "READY разрешён только при всех полных ACTIVE reservations на выбранном складе",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-033"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-034",
+      "statement": "ORDER_REFERENCE допускает лишь authenticated owner/staff lookup",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-034"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-035",
+      "statement": "PICKUP_CREDENTIAL выпускается только verified buyer/delegate при READY",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-035"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "SCOPE_AND_POLICY_REVIEW",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-036",
+      "statement": "Raw pickup secret нигде не сохраняется и не логируется",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-036"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-037",
+      "statement": "Expired/revoked/consumed proof нельзя выполнить",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-037"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-038",
+      "statement": "Сканирование/preview не потребляют credential и не списывают товар",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-038"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-039",
+      "statement": "Handover требует свежих IAM grants, warehouse scope и explicit staff confirmation",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-039"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-040",
+      "statement": "Один successful handover = один receipt, один COMPLETED и один set stock movements",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-040"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-041",
+      "statement": "Failed handover откатывает весь cross-domain transaction",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-041"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-042",
+      "statement": "Два concurrent scans не создают второе списание",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-042"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-043",
+      "statement": "Истечение QR не отменяет заказ и не освобождает резерв",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-043"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-044",
+      "statement": "No-show из READY остаётся отдельным неутверждённым workflow",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-044"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "DECISION_REQUIRED_NO_SHOW",
+      "scenarioCandidates": [
+        "BSR:CORE-PICK-01",
+        "BSR:CORE-PICK-02",
+        "BSR:CORE-PICK-03",
+        "BSR:CORE-PICK-04",
+        "BSR:CORE-PICK-05",
+        "BSR:CORE-SAL-08",
+        "BSR:CORE-SAL-09",
+        "BSR:CORE-SAL-10"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-045",
+      "statement": "После handover RMA создаётся отдельно, original COMPLETED не изменяется",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-045"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-RET-01",
+        "BSR:CORE-RET-02",
+        "BSR:CORE-RET-03",
+        "BSR:CORE-RET-04",
+        "BSR:CORE-RET-05"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-046",
+      "statement": "Return qty ≤ ранее выданному minus уже принятому возврату",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-046"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-RET-01",
+        "BSR:CORE-RET-02",
+        "BSR:CORE-RET-03",
+        "BSR:CORE-RET-04",
+        "BSR:CORE-RET-05"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-047",
+      "statement": "Возврат без inspection не увеличивает sellable on_hand",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-047"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-RET-01",
+        "BSR:CORE-RET-02",
+        "BSR:CORE-RET-03",
+        "BSR:CORE-RET-04",
+        "BSR:CORE-RET-05"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-048",
+      "statement": "Повреждённое/карантинное не создаёт доступный для продажи stock",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-048"
+      },
+      "ownerCandidate": "SALES/INVENTORY",
+      "scope": "CORE_RELATED_REVIEW_REQUIRED",
+      "scenarioCandidates": [
+        "BSR:CORE-RET-01",
+        "BSR:CORE-RET-02",
+        "BSR:CORE-RET-03",
+        "BSR:CORE-RET-04",
+        "BSR:CORE-RET-05"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-049",
+      "statement": "SERVICE не отправлять в PRODUCT inventory reserve/fulfill",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-049"
+      },
+      "ownerCandidate": "INVENTORY/FINANCE",
+      "scope": "NEGATIVE_BOUNDARY",
+      "scenarioCandidates": [
+        "BSR:BSR-FIN-01"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "BR-050",
+      "statement": "QR payment/refund/courier delivery нельзя считать доказанными из COMPLETED склада",
+      "source": {
+        "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+        "section": "§4 BR-050"
+      },
+      "ownerCandidate": "INVENTORY/FINANCE",
+      "scope": "NEGATIVE_BOUNDARY",
+      "scenarioCandidates": [
+        "BSR:BSR-FIN-01"
+      ],
+      "relation": "RELATED_GROUP_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "coreScenarios": [
+    {
+      "key": "BSR:CORE-ORG-01",
+      "expected": "An active warehouse cannot be deactivated after reserved stock commits",
+      "requiredProofs": [
+        {
+          "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+          "test": "postgresConfirmedOrderWinsThenDeactivationIsBlockedByReservation"
+        }
+      ],
+      "openRequirement": "Разделить INACTIVE с остатком и CLOSED без остатка; нормативное расхождение §12.3.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-ORG-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-ORG-02",
+      "expected": "Deactivation first prevents later stock reservation",
+      "requiredProofs": [
+        {
+          "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+          "test": "postgresDeactivationWinsThenNewConfirmationRollsBackToPlaced"
+        }
+      ],
+      "openRequirement": "Дополнить остальные пары transfer/confirm/close из того же класса; сохранить остаток при законной деактивации.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-ORG-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-CAT-01",
+      "expected": "Published product SKU and price are tenant qualified",
+      "requiredProofs": [
+        {
+          "suite": "CatalogQualificationTest",
+          "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+        }
+      ],
+      "openRequirement": "Дополнить точные price/quantity bounds, invalid currency и negative zero-effect oracles.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CAT-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-CAT-02",
+      "expected": "Catalog version CAS prevents stale price revision and cross tenant write",
+      "requiredProofs": [
+        {
+          "suite": "CatalogQualificationTest",
+          "test": "draftTranslationsAndVersionCasCannotLeakOtherTenant"
+        }
+      ],
+      "openRequirement": "Catalog CAS сам по себе не доказывает коммерческую цену; проверить обе истории и old-order hash при drift.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CAT-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-CAT-03",
+      "expected": "Active sellable SKU cannot be archived across concurrent offers",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "postgresArchiveAndOfferPublicationAreSerializedInBothOrders"
+        }
+      ],
+      "openRequirement": "В том же классе есть receipt-first; stocktake race и обе стороны всех конфликтов требуют отдельной привязки.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CAT-03"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-STO-01",
+      "expected": "Seller storefront publish pause resume preserve revision and audit",
+      "requiredProofs": [
+        {
+          "suite": "StorefrontManagementQualificationTest",
+          "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+        }
+      ],
+      "openRequirement": "Resume выполняется publish с актуальной версией; отдельно revoked role, inactive workspace и tenant.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-STO-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-STO-02",
+      "expected": "Offer authoritative price version and accepted order snapshot are consistent",
+      "requiredProofs": [
+        {
+          "suite": "StorefrontManagementQualificationTest",
+          "test": "offerVersionCasAndCheckoutSnapshotStayImmutable"
+        }
+      ],
+      "openRequirement": "У price update CAS/no-op, а не универсальный request-key receipt; привязать hide и invalid product.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-STO-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-STO-03",
+      "expected": "Paused storefront cannot accept new checkout",
+      "requiredProofs": [
+        {
+          "suite": "StorefrontManagementQualificationTest",
+          "test": "postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder"
+        }
+      ],
+      "openRequirement": "Оба теста кандидаты; доказать именно publication и оба управляемых порядка pause × checkout.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-STO-03"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-01",
+      "expected": "Single seller checkout uses immutable accepted price and SKU snapshot",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+        }
+      ],
+      "openRequirement": "Сквозной happy path из старой карты не доказывает конфликт ключа; отдельно lost response и process restart.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-02",
+      "expected": "Price/pause change×checkout both orders → acknowledged version or reconfirm, no new order on deny",
+      "requiredProofs": [],
+      "openRequirement": "Старая привязка к duplicate checkout не покрывает stale price/pause; отдельно verified QR и обычный route.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-03",
+      "expected": "Full reserve only after seller confirmation",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+        }
+      ],
+      "openRequirement": "Кандидаты вызывают внутренние методы; нужен verified facade, multi-line snapshot и один склад в strict mode.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-03"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-04",
+      "expected": "Insufficient stock rolls back all reservations and status",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "insufficientStockRollsBackStatusAndEveryReservation"
+        }
+      ],
+      "openRequirement": "Shortage/outer rollback не равны hard crash; подтвердить last-line failure и отсутствие всех success-эффектов.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-04"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-05",
+      "expected": "Two orders compete for last units and reversed SKU ordering → no oversell/deadlock leak",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand"
+        },
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "opposingMultiSkuOrdersReserveWithoutDeadlock"
+        }
+      ],
+      "openRequirement": "Deterministic hot-SKU A/B winner schedules with exact insufficient inventory denial, replay and multi-line rollback; PostgreSQL execution and strict warehouse scope variants pending.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-05"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-06",
+      "expected": "Cancel×confirm and cancel×fulfill both orders → one valid final state/release/debit",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome"
+        }
+      ],
+      "openRequirement": "Four deterministic STANDARD order cancel/confirm and cancel/fulfill commit orders, exact loser denial and terminal replay; strict pickup route and durable SQL artifacts remain open.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-06"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-07",
+      "expected": "Cancellation before pick releases once and retries idempotently",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+        }
+      ],
+      "openRequirement": "Есть последовательный picked-deny; не найден самостоятельный детерминированный pick × cancel в обоих порядках.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-07"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-08",
+      "expected": "Proof-required QR order cannot use generic fulfillment",
+      "requiredProofs": [
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+        }
+      ],
+      "openRequirement": "SQL fixture proof-mode допустим для локального fence; полный путь должен создавать mode через verified QR checkout.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-08"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-09",
+      "expected": "Generic fulfill×secure pickup both orders → exactly one legal debit with proof",
+      "requiredProofs": [
+        {
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
+        },
+        {
+          "suite": "QrMvpServiceJourneyQualificationTest",
+          "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"
+        },
+        {
+          "suite": "SalesInventoryRbacQualificationTest",
+          "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+        }
+      ],
+      "openRequirement": "Strict QR list-price generic-first rollback and negotiated-price pickup-first commit schedules implemented with actual PostgreSQL blocking-edge verification, exact route denial and joined receipt/credential/reservation/movement/event SQL oracle; new exact-SHA execution and persisted variant SQL artifacts pending.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-09"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-SAL-10",
+      "expected": "Warehouse grants A not B; revoke × each confirm/prepare/fulfill both orders",
+      "requiredProofs": [],
+      "openRequirement": "Старая привязка к picked cancel неверна; квалифицировать strict flag и оба revoke orders для каждой операции.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-10"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-INV-01",
+      "expected": "Same request key stock posting records one movement",
+      "requiredProofs": [
+        {
+          "suite": "InventoryMovementQualificationTest",
+          "test": "concurrentSameKeyPostsExactlyOneMovement"
+        }
+      ],
+      "openRequirement": "Один same-key movement не покрывает transfer/stocktake; расширить реальные команды и ledger baseline.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-INV-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-INV-02",
+      "expected": "Reserved on hand ledger conserves quantities under concurrent checkout and reconciliation",
+      "requiredProofs": [
+        {
+          "suite": "CommercialCoreE2EQualificationTest",
+          "test": "postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger"
+        }
+      ],
+      "openRequirement": "Отличать per-page REPEATABLE_READ и durable cursor от tenant-wide immutable snapshot; foreign/empty/end cases.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-INV-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-01",
+      "expected": "Published product QR remains stable and reflects authoritative offer price",
+      "requiredProofs": [
+        {
+          "suite": "PublishedOfferQrQualificationTest",
+          "test": "qrP01StableReprintAndCurrentPublishedPriceAfterRevision"
+        }
+      ],
+      "openRequirement": "Стабильный reprint недостаточен; два revoke × checkout schedules и exact committed replay.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-02",
+      "expected": "Hidden unpublished and revoked references never expose public card",
+      "requiredProofs": [
+        {
+          "suite": "PublishedOfferQrQualificationTest",
+          "test": "qrP03PausedHiddenAndRevokedReferencesCannotExposeCard"
+        }
+      ],
+      "openRequirement": "Старая привязка проверяет visibility без bytes; negative storage invocation и public derivative отделить от original.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-03",
+      "expected": "Available/partial/unknown region preview including empty → advisory only",
+      "requiredProofs": [],
+      "openRequirement": "Старая привязка к private order read не относится к regional advisory; проверить zero reservation и отсутствие warehouse leakage.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-03"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-04",
+      "expected": "List price checkout requires active verified buyer and exact price/version",
+      "requiredProofs": [
+        {
+          "suite": "PublishedQrCheckoutQualificationTest",
+          "test": "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"
+        }
+      ],
+      "openRequirement": "Основной entrypoint checkoutVerified; email-first checkout по умолчанию закрыт; price race отдельно.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-04"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-05",
+      "expected": "Buyer and seller alternate valid bargaining turns and persist agreement",
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents"
+        }
+      ],
+      "openRequirement": "Добавить точную привязку reject, self-accept, request conflict и конкурентный revision CAS.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-05"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-06",
+      "expected": "Accepted quote creates an immutable priced order with buyer identity",
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource"
+        }
+      ],
+      "openRequirement": "Accepted happy path не доказывает разные ключи/namespace/restart; scope receipt tenant+key, quote uniqueness отдельно.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-06"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-QR-07",
+      "expected": "Expire/withdraw/revoke/suspend×checkout both orders, exact cutoff → winner only",
+      "requiredProofs": [
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04aExpiredProposalEffectiveStateAndMaterialization"
+        },
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bExpiredQuoteFailsWithoutAnyOrderOrReceipt"
+        },
+        {
+          "suite": "QrNegotiatedCheckoutQualificationTest",
+          "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+        }
+      ],
+      "openRequirement": "Pending proposal withdrawal versus accept+checkout, buyer suspension/deletion versus quote checkout, actual deadline crossing while PostgreSQL checkout waits, terminal proposal denial and exact replay implemented. Exact cutoff equality, live QR generation revocation semantics for already accepted quotes, persisted independent variant artifacts and new exact-SHA PostgreSQL execution remain open. No post-AGREED WITHDRAW transition exists under QR-04.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-07"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-PICK-01",
+      "expected": "Order preparation requires full reserved pick before READY without stock debit",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock"
+        }
+      ],
+      "openRequirement": "Полный pick/ready/no early debit есть как кандидат; сохранить отдельный incomplete-pick отрицательный oracle.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-PICK-02",
+      "expected": "Buyer issues credential; scoped staff previews; foreign/expired deny",
+      "requiredProofs": [],
+      "openRequirement": "Старая привязка к preparation не доказывает issue/preview; wrong warehouse/expiry и zero IO/stock отдельно.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-PICK-03",
+      "expected": "Only verified buyer can issue fresh one time pickup proof",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06CredentialRequiresVerifiedBuyerAndReadyState"
+        }
+      ],
+      "openRequirement": "Issue-only не доказывает debit; reissue через issue с новым ключом; старый proof, replay и unique receipt.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-03"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-PICK-04",
+      "expected": "Multiple simultaneous pickup scans produce one stock debit",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce"
+        }
+      ],
+      "openRequirement": "Двухпоточный scan не равен two-JVM; добавить revoke-first и handover-first, account и permission variants.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-04"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-PICK-05",
+      "expected": "Crash after commit and lost response cannot cause second stock debit",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit"
+        }
+      ],
+      "openRequirement": "Реальные Runtime.halt workers существуют; отдельно SQL fault при receipt/credential и run logs с кодами выхода.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-05"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-RET-01",
+      "expected": "Return claims cannot exceed quantity in immutable completed handover",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity"
+        }
+      ],
+      "openRequirement": "Capacity учитывает все незакрытые claims кроме REJECTED/CANCELLED_BY_BUYER; проверить состояния и independent sum.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-01"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-RET-02",
+      "expected": "Only authorized staff reviews and approves return with durable evidence",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R1ReviewApproveAndImmutableDecisionReplay"
+        }
+      ],
+      "openRequirement": "Review не равен physical reception; proof issue/consume, wrong warehouse, replay и no early stock.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-02"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-RET-03",
+      "expected": "Receipt inspection and restock link one returned quantity to one stock movement",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection"
+        }
+      ],
+      "openRequirement": "Связать RESTOCK movement по posting.movement_id; QUARANTINE отдельный ledger, WRITE_OFF без sellable credit.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-03"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-RET-04",
+      "expected": "Concurrent quarantine resolution in both orders → one resolution/conserved qty",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04RestockFirst"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04DisposeFirst"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B01RestockDistinctKeys"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B02DisposeDistinctKeys"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B03RestockIdenticalReplay"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B04DisposeIdenticalReplay"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B05ChangedAction"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B06ChangedEvidence"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B07StaleVersionBeforeResolution"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B08ChangedVersionAfterResolution"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B09ResolutionInsertRollback"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B10TerminalEventInsertRollback"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B11ResolutionInsertSameKeyRetry"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04B12TerminalEventInsertSameKeyRetry"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C01RestockCrashBeforeCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C02RestockCrashAfterCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C03DisposeCrashBeforeCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C04DisposeCrashAfterCommit"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C05TwoJvmIdenticalRestock"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C06TwoJvmRestockVsDispose"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C07SharedSkuRestockRestock"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C08SharedSkuDisposeDispose"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C09SharedSkuRestockDispose"
+        },
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R25CoreRet04C10SharedSkuDisposeRestock"
+        }
+      ],
+      "openRequirement": "E.6C/v3 56/56 PASS and target/full/global evidence on d14234a5282f1ec625606e8b2b414256894fdeee. E.7A adds independent BSR §14.3 original posting, fulfilled capacity, intake and terminal movement/event linkage plus zero invoices at return checkpoints; v4 exact-SHA qualification pending. A/B/AB distinct-grant variant, inactive workspace denial, full checkpoint/variant manifest and independent review remain open. SUPPORTING_PARTIAL intentional.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-04"
+      },
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:CORE-RET-05",
+      "expected": "Repeated physical returns cannot post a second restock movement",
+      "requiredProofs": [
+        {
+          "suite": "QrWarehouseHandoverQualificationTest",
+          "test": "qr07R2TwoIndependentJvmsCannotDoubleRestockOneReturn"
+        }
+      ],
+      "openRequirement": "Two-JVM duplicate не заменяет crash; добавить reception duplicate и исходный COMPLETED hash.",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-05"
+      },
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "r3Candidates": [
+    {
+      "key": "R3:CAT-01",
+      "title": "Tenant SKU, product draft and publication",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CatalogQualificationTest",
+        "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:CAT-02",
+      "title": "Price revision immutable audit",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CatalogQualificationTest",
+        "test": "postgresCatalogPriceAndAuditAreAppendOnly"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:CAT-03",
+      "title": "Archive guards against stock/offer commitments",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/catalog/CatalogItemService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CommercialCoreE2EQualificationTest",
+        "test": "publishedOfferAndOpenStocktakePreventUnsafeArchive"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:CAT-04",
+      "title": "Bulk catalog migration with reconciliation report",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:STO-01",
+      "title": "Tenant storefront draft/publication/pause CAS",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "StorefrontManagementQualificationTest",
+        "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:STO-02",
+      "title": "Published SKU offer price and state lifecycle",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+      "proofCandidate": {
+        "artifact": "sales-084-populated-postgresql",
+        "suite": "SellerOfferQualificationTest",
+        "test": "draftPublicationPauseResumeAndCas"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:STO-03",
+      "title": "Canonical price audit and no-op CAS",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/storefront/SellerOfferService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SellerOfferQualificationTest",
+        "test": "r10PriceHistoryIsImmutableAndNoOpOrStaleCasCannotAppend"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:STO-04",
+      "title": "Cross-service permission and suspension fences",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/storefront/StorefrontOfferService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SellerOfferQualificationTest",
+        "test": "postgresW1SuspensionAndCheckoutSerialize"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:STO-05",
+      "title": "Ready-to-use seller storefront management UI",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-01",
+      "title": "Idempotent checkout and proof boundaries",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "retryIsIdempotentAndChangesAreRejected"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-02",
+      "title": "Immutable accepted SKU and price snapshot",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-03",
+      "title": "Order confirm / inventory reserve / fulfillment",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CommercialCoreE2EQualificationTest",
+        "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-04",
+      "title": "Tenant-scoped seller detail and order history",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/sales/SalesOrderQueryService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SalesOrderQueryQualificationTest",
+        "test": "r10SellerDetailAndStatusHistoryAreTenantBoundAndLimited"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-05",
+      "title": "Buyer identity safe order reads",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/autoorder/AuthenticatedBuyerOrders.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "tcrud04BuyerOrdersCannotBeReadBySupplyingAnotherUsersUuid"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-06",
+      "title": "Full real OIDC buyer/seller browser E2E",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:SAL-07",
+      "title": "Invoice/payment/settlement order integration",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-01",
+      "title": "Idempotent receiving and movement ledger",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryMovementQualificationTest",
+        "test": "adjustmentIsAtomicAndIdempotent"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-02",
+      "title": "Stock reservations and release invariants",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryReservationQualificationTest",
+        "test": "reservationReleaseAndIdempotentReplay"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-03",
+      "title": "Conserving transfers with safe replay",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryTransferStocktakeQualificationTest",
+        "test": "transferWritesExactlyTwoLegsAndReplaysWithoutDuplicateBalances"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-04",
+      "title": "Stocktake with guard against reserved overdraw",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryTransferStocktakeQualificationTest",
+        "test": "stocktakePostsOnlyMeasuredDeltaAndRejectsStaleOrBelowReserved"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-05",
+      "title": "Durable reconciliation concurrent advance fencing",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/inventory/AuthenticatedInventoryReconciliationRuns.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryTransferStocktakeQualificationTest",
+        "test": "postgresInv16ConcurrentAdvanceCannotDoubleCommitCursorOrFindings"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-06",
+      "title": "Posting sequence ordered under position lock",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/inventory/InventoryPostingVersion.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "InventoryMovementQualificationTest",
+        "test": "postgresConcurrentDifferentKeysHaveStrictlyIncreasingPostingVersions"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:INV-07",
+      "title": "Certified tenant-wide as-of reconciliation across pages",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:GEO-01",
+      "title": "Reference KATO snapshots and deleted rows",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/geo/KatoTerritoryDirectory.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KatoTerritoryQualificationTest",
+        "test": "sourceSnapshotPreservesActiveAndDeletedRows"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:GEO-02",
+      "title": "Reject invalid geographic territory references",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/geo/KatoLocationPolicy.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KatoTerritoryQualificationTest",
+        "test": "databaseRejectsUnknownTerritoryCode"
+      },
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "R3:GEO-03",
+      "title": "Verified full Kazakhstan directory update lifecycle",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED"
+    }
+  ],
+  "dualCandidates": [
+    {
+      "key": "DUAL:QR-HANDOVER-15",
+      "title": "Exactly-once secure physical handover",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-HANDOVER-15]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:QR-LIST-PRICE-12",
+      "title": "Public QR checkout with price acknowledgement",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-LIST-PRICE-12]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:QR-NEGOTIATION-13",
+      "title": "Buyer and seller bargaining with accepted quote",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-NEGOTIATION-13]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:QR-PACKAGING-OPT-19",
+      "title": "Optional QR-08 packaging service R0",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-PACKAGING-OPT-19]",
+          "historical": {
+            "phase": "OPTIONAL_P1",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:QR-PREPARATION-14",
+      "title": "Full pick, ready state and buyer credential",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-PREPARATION-14]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:QR-PUBLIC-11",
+      "title": "Stable QR published offer and safe public card",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-PUBLIC-11]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:QR-RETURNS-16",
+      "title": "Return reception, inspection, posting, quarantine",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=QR-RETURNS-16]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:SHR-CATALOG-06",
+      "title": "Product SKU, publication and historical prices",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=SHR-CATALOG-06]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:SHR-CHECKOUT-08",
+      "title": "One seller checkout and immutable order snapshot",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=SHR-CHECKOUT-08]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:SHR-INVENTORY-09",
+      "title": "Reserve, receive, move, stocktake, reconcile",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=SHR-INVENTORY-09]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:SHR-OFFER-07",
+      "title": "Seller storefront and offer",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=SHR-OFFER-07]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    },
+    {
+      "key": "DUAL:SHR-SALES-LIFECYCLE-10",
+      "title": "Seller confirmation, cancellation and fulfillment policy",
+      "sourceRefs": [
+        {
+          "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+          "selector": "capabilities[id=SHR-SALES-LIFECYCLE-10]",
+          "historical": {
+            "phase": "CORE_P0",
+            "sourceStatus": "IMPLEMENTED_METHODS_PRESENT",
+            "integratedVerdict": "HOLD"
+          }
+        }
+      ],
+      "scope": "REVIEW_REQUIRED"
+    }
+  ],
+  "sectionObligations": [
+    {
+      "id": "COM-01",
+      "owner": "CATALOG/STOREFRONT",
+      "statement": "Catalog price revision does not silently update offer; explicit seller publication and price version.",
+      "source": {
+        "path": "docs/spec/RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md",
+        "section": "PASS 07–08"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-02",
+      "owner": "INVENTORY",
+      "statement": "Quantity conservation: available=on_hand-reserved for same tenant/location/SKU; reserve changes reserved only, fulfillment reduces on_hand and reserved by same quantity, release reduces reserved only.",
+      "source": {
+        "path": "docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md",
+        "section": "quantity R1; corroborate QR BR-027–033"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-03",
+      "owner": "SALES",
+      "statement": "STANDARD versus PICKUP_PROOF_REQUIRED immutable; generic fulfill denies proof-required order including replay; no cancellation after pick without approved reverse path.",
+      "source": {
+        "path": "docs/architecture/RM-DEC-FUL-01-EXECUTION-CHANNEL-R1.md",
+        "section": "Decision and proof targets"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-04",
+      "owner": "INVENTORY",
+      "statement": "Returns cannot exceed fulfilled quantity; only actual sellable RESTOCK posting increases sellable balance; quarantine/disposal not sellable.",
+      "source": {
+        "path": "docs/spec/RM-QR-07-08-RETURNS-AND-SERVICES-SERVICE-FIRST-R1.md",
+        "section": "QR-07"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-05",
+      "owner": "INVENTORY",
+      "statement": "Quantity qualification does not imply cost valuation or COGS; reservation never posts COGS.",
+      "source": {
+        "path": "docs/spec/RM-INVENTORY-VALUATION-R1.md",
+        "section": "§3–4"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-06",
+      "owner": "INTELLIGENCE",
+      "statement": "Canonical physical facts use source UUID in same owner transaction; RESTOCK delegates to adjustment, no duplicate append; reserve/release, pick/ready and zero discrepancy not physical movement facts.",
+      "source": {
+        "path": "docs/reviews/RM-P1-COMPLETE-CANONICAL-PRODUCERS.md",
+        "section": "Production"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-07",
+      "owner": "INTELLIGENCE",
+      "statement": "Transfer has two physical legs; tenant-wide net quantity zero only for matching same SKU/UOM transfer; no summing incompatible units.",
+      "source": {
+        "path": "docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md",
+        "section": "§3"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-08",
+      "owner": "INTELLIGENCE",
+      "statement": "Booked amount not revenue/payment; exact order/line/SKU identities; compatible currency/UOM and no fabricated allocation.",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02–03"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "COM-09",
+      "owner": "SALES/INVENTORY",
+      "statement": "Return RESTOCK versus DISPOSE requires both real ordered races and independent physical lineage.",
+      "source": {
+        "path": "docs/reviews/RM-BSR-CORE-RET-04-E7A-NORMATIVE-REVIEW.md",
+        "section": "normative review"
+      },
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "COM-C01",
+      "issue": "QR R1.4 is draft; email-first PLACED not equivalent to verified QR checkout",
+      "resolution": "Freeze QR J1 and DEC-FUL-01 prevail; preserve legacy distinct route, no email proof substitution.",
+      "status": "NORMATIVE_BOUNDARY"
+    },
+    {
+      "id": "COM-C02",
+      "issue": "QR draft BR-033 full active reserve does not alone prove full pick",
+      "resolution": "Freeze QR J1 and CORE-PICK-01 require full reserved pick before READY.",
+      "status": "NORMATIVE_BOUNDARY"
+    },
+    {
+      "id": "COM-C03",
+      "issue": "QR return draft uses WRITE_OFF while quarantine resolution review uses DISPOSE",
+      "resolution": "Map disposition vs resolution separately; do not rename enums or conflate stock movements. Check actual owner DDL.",
+      "status": "OPEN_METHOD_MAPPING"
+    },
+    {
+      "id": "COM-C04",
+      "issue": "Quantity R1 historical PASS not valuation qualification",
+      "resolution": "Keep cost policy metadata separate from executed valuation; no COGS inference.",
+      "status": "NORMATIVE_BOUNDARY"
+    },
+    {
+      "id": "COM-C05",
+      "issue": "BR-035 delegate and BR-044 no-show not automatically in scope",
+      "resolution": "Verified buyer only unless delegate explicitly admitted; no automatic reserve expiry or cancellation.",
+      "status": "OPEN_SCOPE_TRACE"
+    },
+    {
+      "id": "COM-C06",
+      "issue": "Physical movement vs sales lifecycle canonical facts",
+      "resolution": "No double append for return adjustment, no inventory fact from reserve/release or READY. Verify current producers and actual exact-SHA.",
+      "status": "OPEN_METHOD_MAPPING"
+    }
+  ],
+  "variantFamilies": [
+    {
+      "id": "V01",
+      "scenario": "confirm vs last stock",
+      "oracle": "one valid reserve winner, no oversell, losing tx no success effects",
+      "types": [
+        "CONC",
+        "INV",
+        "DENY"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V02",
+      "scenario": "cancel vs pick/fulfill both orders",
+      "oracle": "owner-approved winner only, no silent release after pick or second debit",
+      "types": [
+        "CONC",
+        "INV",
+        "IMM"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V03",
+      "scenario": "checkout price/revoke/retry",
+      "oracle": "immutable accepted server price and one receipt; conflicting replay rejected",
+      "types": [
+        "CONC",
+        "IDEM",
+        "RBAC"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V04",
+      "scenario": "handover duplicate and failure at owner boundaries",
+      "oracle": "one receipt and one movement set; rollback all or replay committed receipt",
+      "types": [
+        "CRASH",
+        "CONC",
+        "INV"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V05",
+      "scenario": "competing partial returns and RESTOCK/DISPOSE",
+      "oracle": "sum accepted quantity bounded by fulfilled; only authorized physical posting increases sellable stock",
+      "types": [
+        "CONC",
+        "INV",
+        "OWN"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V06",
+      "scenario": "canonical fact source reconciliation",
+      "oracle": "source-to-fact identity and count equality, no orphan/duplicate; transfer legs and return provenance",
+      "types": [
+        "IMM",
+        "INV",
+        "CRASH"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V07",
+      "scenario": "tenant/warehouse scope and revoked actor",
+      "oracle": "zero unauthorized data and business effects, both commit orders",
+      "types": [
+        "TEN",
+        "RBAC",
+        "DENY"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "V08",
+      "scenario": "money and quantity independent reconciliation",
+      "oracle": "accepted line amount per versioned owner rounding, totals in one currency, exact quantities and distinct identities",
+      "types": [
+        "PROP",
+        "INV",
+        "BOUND"
+      ],
+      "status": "PROPOSED_NOT_RUN"
+    }
+  ]
+}

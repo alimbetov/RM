@@ -70,3 +70,7 @@ Snapshot 0cae504294a810363dd8396bd164d314b8c51c77: 298 tracked Markdown/JSON doc
 
 ## SFC-R1.0B.2B.2 — CRM/IAM/ORG journey crosswalk
 [CRM journey crosswalk](RM-SFC-CRM-JOURNEY-CROSSWALK-v1.json), reviewed dd65bb44c6fd27d09083555e132fd484be25511a: 99 source simulations, 12 journeys, 45 related R3 requirements, 11 operation groups, 23 explicit journey-to-R3 source references and six reconciliation findings. Candidate variants and semantic links need owner method/SQL review; zero merged IDs or new PASS. Preserve scope and regression, Reporting priority, Radar F2H deferred. Next B.2B.3 commerce/inventory/QR and remaining domain sections. No runtime/CI change.
+
+
+## SFC-R1.0B.2B.3 — commercial semantic crosswalk
+[Commerce crosswalk](RM-SFC-COMMERCE-CROSSWALK-v1.json), reviewed f784f6f59a2b9adbc62b2fc33e8322d6a1f0b3e1: {"qrRules":50,"coreScenarios":37,"r3":26,"dual":12,"sectionObligations":9,"findings":6,"variantFamilies":8}. Preserve draft status, explicit owner scope, physical versus financial effects, one order engine and canonical fact identity. Candidate links not equivalence; no new PASS. Reporting P4.1A.5-Q → P4.2 after GREEN, F2H deferred. Next B.2B.4 FX/Intelligence/EVT/Scheduler. No runtime or CI change.
