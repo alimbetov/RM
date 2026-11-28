@@ -1,6 +1,7 @@
 package kz.rm.files;
 
 import org.springframework.beans.factory.ObjectProvider;
+import kz.rm.security.kms.FileContentCryptoPort.Expected;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -44,6 +45,15 @@ class SwitchableFileStorage implements FileStoragePort {
     @Override public Staged stage(UUID tenant,UUID file,InputStream data,
                                   long size,String mime) throws IOException {
         return (useRust?rust:local).stage(tenant,file,data,size,mime);
+    }
+    @Override public String stageEncrypted(Expected expected,byte[] envelope) throws IOException {
+        return (useRust?rust:local).stageEncrypted(expected,envelope);
+    }
+    @Override public String promoteEncrypted(Expected expected,String stagingKey) throws IOException {
+        return existing(stagingKey).promoteEncrypted(expected,stagingKey);
+    }
+    @Override public InputStream openEncrypted(Expected expected,String key,boolean staged) throws IOException {
+        return existing(key).openEncrypted(expected,key,staged);
     }
     @Override public String promote(UUID tenant,UUID file,Staged staged) throws IOException {
         if(staged==null)throw new IOException("Staged reference required");

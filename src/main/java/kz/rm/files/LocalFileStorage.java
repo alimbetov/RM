@@ -1,6 +1,8 @@
 package kz.rm.files;
 
 import org.springframework.beans.factory.annotation.Value;
+import kz.rm.security.kms.FileContentCryptoPort;
+import kz.rm.security.kms.FileContentCryptoPort.Expected;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -33,7 +35,7 @@ class LocalFileStorage implements FileStoragePort {
         }
     }
     private Path resolve(String key) throws IOException {
-        if(key==null || !key.matches("[0-9a-f-]{36}/[0-9a-f-]{36}/(stage|final)-[0-9a-f-]{36}"))
+        if(key==null || !(key.matches("[0-9a-f-]{36}/[0-9a-f-]{36}/(stage|final)-[0-9a-f-]{36}") || key.matches(ReportStorageKey.LOCAL_PATTERN)))
             throw new IOException("Invalid storage reference");
         Path path=root.resolve(key).normalize();
         if(!path.startsWith(root))throw new IOException("Unsafe storage reference");
@@ -87,6 +89,45 @@ class LocalFileStorage implements FileStoragePort {
         }
         return new Staged(key,bytes,HexFormat.of().formatHex(sha.digest()),mime,0);
     }
+    @Override public String stageEncrypted(Expected expected,byte[] envelope) throws IOException {
+        if(envelope==null||envelope.length!=FileContentCryptoPort.envelopeSize(expected))
+            throw new IOException("REPORT_ENVELOPE_SIZE");
+        bucket(expected.tenantId(),expected.fileId());
+        String key=ReportStorageKey.of(false,true,expected);
+        Path path=resolve(key);
+        // CREATE_NEW must never replace an existing attempt.
+        try(OutputStream out=Files.newOutputStream(path,StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS)) {
+            out.write(envelope);
+        }
+        // On an ambiguous or partial write, recovery owns the private orphan.
+        return key;
+    }
+    @Override public String promoteEncrypted(Expected expected,String stagingKey) throws IOException {
+        ReportStorageKey.require(stagingKey,false,true,expected);
+        bucket(expected.tenantId(),expected.fileId());
+        Path from=resolve(stagingKey);
+        if(!Files.isRegularFile(from,LinkOption.NOFOLLOW_LINKS)
+                || Files.size(from)!=FileContentCryptoPort.envelopeSize(expected))
+            throw new IOException("REPORT_ENVELOPE_SIZE");
+        String key=ReportStorageKey.of(false,false,expected);
+        // Atomic no-replace hard-link within the same directory; no fallback to
+        // replacement or plaintext. Unsupported filesystems fail closed.
+        Files.createLink(resolve(key),from);
+        Files.delete(from);
+        return key;
+    }
+    @Override public InputStream openEncrypted(Expected expected,String key,boolean staged) throws IOException {
+        ReportStorageKey.require(key,false,staged,expected);
+        Path path=resolve(key);
+        if(Files.isSymbolicLink(path.getParent())||Files.isSymbolicLink(path.getParent().getParent()))
+            throw new IOException("Unsafe namespace");
+        if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS)) {
+            if(!Files.exists(path,LinkOption.NOFOLLOW_LINKS))throw new java.io.FileNotFoundException("Encrypted file missing");
+            throw new IOException("Unsafe encrypted file");
+        }
+        return Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS);
+    }
     @Override public InputStream openStagedForScan(String stagingKey) throws IOException {
         if(stagingKey==null || !stagingKey.matches(
                 "[0-9a-f-]{36}/[0-9a-f-]{36}/stage-[0-9a-f-]{36}"))
@@ -97,6 +138,8 @@ class LocalFileStorage implements FileStoragePort {
         return Files.newInputStream(p,LinkOption.NOFOLLOW_LINKS);
     }
     @Override public String promote(UUID tenant,UUID fileId,Staged staged) throws IOException {
+        if(staged.cryptoVersion()!=0)throw new IOException("REPORT_STORAGE_REQUIRES_V1_PROMOTION");
+        ReportStorageKey.rejectLegacyRead(staged.key());
         Path from=resolve(staged.key());
         if(!staged.key().startsWith(tenant+"/"+fileId+"/stage-"))
             throw new IOException("Wrong tenant/file staging key");
@@ -113,6 +156,7 @@ class LocalFileStorage implements FileStoragePort {
         Files.deleteIfExists(resolve(key));
     }
     @Override public boolean matches(String key,long expectedSize,String expectedHash) throws IOException {
+        ReportStorageKey.rejectLegacyRead(key);
         if(expectedSize<0 || expectedHash==null || !expectedHash.matches("[0-9a-f]{64}"))
             return false;
         Path path=resolve(key);
@@ -135,6 +179,7 @@ class LocalFileStorage implements FileStoragePort {
     /** Caller must check tenant/CRM owner policy and stored SHA-256 first. */
     @Override public void streamVerified(UUID tenant,UUID fileId,String key,OutputStream sink)
             throws IOException {
+        ReportStorageKey.rejectLegacyRead(key);
         if(tenant==null || fileId==null || sink==null || key==null
                 || !key.startsWith(tenant+"/"+fileId+"/final-"))
             throw new SecurityException("LOCAL binary read tenant/file scope denied");
@@ -155,7 +200,7 @@ class LocalFileStorage implements FileStoragePort {
                 if(keys.size()>=10000)throw new IOException("Recovery directory too large");
                 String filename=p.getFileName().toString();
                 if(Files.isRegularFile(p,LinkOption.NOFOLLOW_LINKS)
-                        && filename.matches("(stage|final)-[0-9a-f-]{36}"))
+                        && filename.matches("(stage|final)-(v1-)?[0-9a-f-]{36}"))
                     keys.add(tenant+"/"+fileId+"/"+filename);
             }
         }

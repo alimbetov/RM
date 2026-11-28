@@ -1,6 +1,8 @@
 package kz.rm.files;
 
 import org.springframework.beans.factory.annotation.Value;
+import kz.rm.security.kms.FileContentCryptoPort;
+import kz.rm.security.kms.FileContentCryptoPort.Expected;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -23,7 +25,7 @@ import java.util.regex.Pattern;
 @ConditionalOnProperty(name="rm.files.rustfs.endpoint")
 class RustFsFileStorage implements FileStoragePort {
     private static final Pattern KEY=Pattern.compile(
-        "rustfs/[0-9a-f-]{36}/[0-9a-f-]{36}/(stage|final)-[0-9a-f-]{36}");
+        "rustfs/(?:[0-9a-f-]{36}/[0-9a-f-]{36}/(stage|final)-[0-9a-f-]{36}|"+ReportStorageKey.LOCAL_PATTERN+")");
     private final S3Client s3;
     private final String bucket;
 
@@ -113,7 +115,43 @@ class RustFsFileStorage implements FileStoragePort {
             return new Staged(ref,count,HexFormat.of().formatHex(digest.digest()),mime,0);
         } finally {Files.deleteIfExists(temp);}
     }
+    private void putEncrypted(String ref,byte[] envelope) throws IOException {
+        try {
+            // S3 conditional create; qualification must prove RustFS actually
+            // honors If-None-Match. Never retry by overwriting an existing key.
+            s3.putObject(PutObjectRequest.builder().bucket(bucket).key(key(ref))
+                .ifNoneMatch("*").contentType("application/octet-stream").build(),
+                RequestBody.fromBytes(envelope));
+        } catch(RuntimeException e) {
+            throw new IOException("REPORT_ENCRYPTED_PUT_FAILED",e);
+        }
+    }
+    @Override public String stageEncrypted(Expected expected,byte[] envelope) throws IOException {
+        if(envelope==null||envelope.length!=FileContentCryptoPort.envelopeSize(expected))
+            throw new IOException("REPORT_ENVELOPE_SIZE");
+        String ref=ReportStorageKey.of(true,true,expected);
+        putEncrypted(ref,envelope);
+        return ref;
+    }
+    @Override public String promoteEncrypted(Expected expected,String stagingKey) throws IOException {
+        ReportStorageKey.require(stagingKey,true,true,expected);
+        int size=FileContentCryptoPort.envelopeSize(expected);
+        byte[] bytes;
+        try(InputStream in=get(stagingKey)) {
+            bytes=in.readNBytes(size+1);
+        }
+        if(bytes.length!=size)throw new IOException("REPORT_ENVELOPE_SIZE");
+        String dest=ReportStorageKey.of(true,false,expected);
+        putEncrypted(dest,bytes);
+        delete(stagingKey);
+        return dest;
+    }
+    @Override public InputStream openEncrypted(Expected expected,String ref,boolean staged) throws IOException {
+        ReportStorageKey.require(ref,true,staged,expected);
+        return get(ref);
+    }
     @Override public String promote(UUID tenant,UUID file,Staged staged) throws IOException {
+        if(staged!=null)ReportStorageKey.rejectLegacyRead(staged.key());
         if(tenant==null||file==null||staged==null||staged.cryptoVersion()!=0
             || staged.key()==null
             || !staged.key().startsWith("rustfs/"+tenant+"/"+file+"/stage-"))
@@ -142,6 +180,7 @@ class RustFsFileStorage implements FileStoragePort {
         catch(RuntimeException e){throw new IOException("RustFS read unavailable",e);}
     }
     @Override public InputStream openStagedForScan(String ref) throws IOException {
+        ReportStorageKey.rejectLegacyRead(ref);
         if(!isRustKey(ref)||!ref.contains("/stage-"))
             throw new IOException("Scanner access denied");
         return get(ref);
@@ -155,6 +194,7 @@ class RustFsFileStorage implements FileStoragePort {
         }catch(RuntimeException e){throw new IOException("RustFS HEAD failed",e);}
     }
     @Override public boolean matches(String ref,long length,String sha256) throws IOException {
+        ReportStorageKey.rejectLegacyRead(ref);
         if(length<0||sha256==null||!sha256.matches("[0-9a-f]{64}"))return false;
         MessageDigest digest=sha();long count=0;
         try(InputStream in=get(ref)) {
@@ -171,6 +211,7 @@ class RustFsFileStorage implements FileStoragePort {
     }
     @Override public void streamVerified(UUID tenant,UUID file,String ref,OutputStream sink)
             throws IOException {
+        ReportStorageKey.rejectLegacyRead(ref);
         if(tenant==null||file==null||sink==null||ref==null
                 || !ref.startsWith("rustfs/"+tenant+"/"+file+"/final-"))
             throw new SecurityException("RustFS read scope denied");
