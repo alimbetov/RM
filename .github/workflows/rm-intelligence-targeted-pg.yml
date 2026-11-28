@@ -9,6 +9,7 @@ on:
       - 'src/main/java/kz/rm/iam/TenantAuthorization.java'
       - 'src/main/java/kz/rm/iam/VerifiedActor.java'
       - 'src/main/resources/db/changelog/**'
+      - 'src/main/resources/report-templates/**'
       - 'pom.xml'
       - 'src/test/java/kz/rm/intelligence/**'
       - 'src/test/java/kz/rm/iam/L1ProjectionJourneyEvidence.java'
@@ -149,6 +150,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 -m unittest discover -s .github/scripts -p 'test_verify_rm_intelligence_targeted.py'
       - name: Execute targeted canonical and L0-L3 journeys
+        env:
+          RM_TEST_XLSX_EVIDENCE: 'true'
         run: |
           set -euo pipefail
           mvn -B -ntp clean test '-Dtest=BusMvpServiceJourneyQualificationTest#canonicalSalesAndInventoryDigestOraclePg+canonicalSourceAdmissionAndOwnerRollbackPg+canonicalConcurrentReplayAndRollbackPg+canonicalSourceSealingLockOrdersPg+canonicalTenantSourceCollisionPg+p2CanonicalDurableDiscoveryReplayAndBackfillPg+p3L1ProjectionParityAndLateDuplicatePg+b4RegionAndNomenclatureSnapshotsPg,DerivedMetricQualificationTest,DerivedPostgresQualificationTest,BusinessInterpretationQualificationTest,BusinessTrendQualificationTest,BusinessAnomalyQualificationTest,BusinessFactorQualificationTest,BusinessConclusionQualificationTest,AnalyticalJobFoundationQualificationTest,ReportDatasetDigestTest,ReportStorageQualificationTest'
@@ -161,6 +164,21 @@ jobs:
           set -euo pipefail
           docker cp docs/operations/RM-FINAL-SEC-GATE-DB-ROLE-QUALIFICATION.sql "$PG_SERVICE_ID:/tmp/rm-role-gate.sql"
           docker exec "$PG_SERVICE_ID" psql -v ON_ERROR_STOP=1 -U rm -d rm_test -f /tmp/rm-role-gate.sql | tee rm-intelligence-role-gate.log
+      - name: Verify generated XLSX fixture catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target/rm-d06c-fixture-xlsx
+          test "$(find . -maxdepth 1 -name 'RM-R*.xlsx' -type f | wc -l)" -eq 12
+          test "$(wc -l < SHA256SUMS)" -eq 12
+          sha256sum --strict -c SHA256SUMS
+      - name: Publish XLSX fixture catalog
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rm-d06c-xlsx-fixture-${{ github.sha }}
+          path: target/rm-d06c-fixture-xlsx/
+          if-no-files-found: error
       - name: Publish targeted evidence
         if: always()
         uses: actions/upload-artifact@v4

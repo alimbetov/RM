@@ -59,6 +59,7 @@ public final class SalesReportMaterializationEvidence {
                         assertThat(sheet.getRow(i+1).getCell(col).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
                 }
             }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+            ReportTemplateJourneyEvidence.record(code,tenant,bytes);
             assertThatThrownBy(()->reader.renderScopedTemplate(foreign,tenant,code,queries,dates,policy,anomaly)).isInstanceOf(SecurityException.class);
         }
         System.out.println("RM_D06C_SCOPED_TEMPLATE_SOURCE_ORACLE_PASS workbooks=3");
@@ -77,6 +78,7 @@ public final class SalesReportMaterializationEvidence {
             assertThat(sheet.getRow(1).getCell(3).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
             assertThat(sheet.getRow(1).getCell(5).getStringCellValue()).contains("PARTIAL");
         }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+        ReportTemplateJourneyEvidence.record("RM-R03",tenant,bytes);
         bytes=service.positions(actor,tenant,warehouse,java.util.List.of(sku));
         try(var book=readOwnerWorkbook(bytes,tenant)){
             var expected=metric.calculate(actor,tenant,new MetricQuery(MetricRegistry.Code.CURRENT_AVAILABLE,1,
@@ -87,6 +89,7 @@ public final class SalesReportMaterializationEvidence {
             assertTemplateValue(row.getCell(1),expected.cells().getFirst().value());
             assertThat(row.getCell(2).getStringCellValue()).isEqualTo("READY");
         }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+        ReportTemplateJourneyEvidence.record("RM-R06",tenant,bytes);
         for(var code:java.util.List.of("RM-R04","RM-R05")){
             bytes=service.distribution(actor,tenant,code,calendar,PeriodResolver.Code.D,today,java.util.List.of(warehouse),"KZT");
             try(var book=readOwnerWorkbook(bytes,tenant)){
@@ -99,6 +102,7 @@ public final class SalesReportMaterializationEvidence {
                        AND event_at>=? AND event_at<transaction_timestamp()
                      GROUP BY %s ORDER BY 1
                     """.formatted(key,key),(rs,n)->new Object[]{rs.getString(1),rs.getBigDecimal(2)},tenant,warehouse,from);
+                assertThat(expected).isNotEmpty();
                 for(int i=0;i<expected.size();i++){
                     var row=detail.getRow(i+1);var p=expected.get(i);
                     assertThat(row.getCell(0).getStringCellValue()).isEqualTo(p[0]);
@@ -115,11 +119,13 @@ public final class SalesReportMaterializationEvidence {
                 if(code.equals("RM-R04"))assertThat(book.getSheet("Groups").getRow(1).getCell(1).getCellType())
                     .isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
             }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+            ReportTemplateJourneyEvidence.record(code,tenant,bytes);
             assertThatThrownBy(()->service.distribution(foreign,tenant,code,calendar,PeriodResolver.Code.D,today,
                 java.util.List.of(warehouse),"KZT")).isInstanceOf(SecurityException.class);
         }
         for(var code:java.util.List.of("RM-R08","RM-R09","RM-R12")){
-            try(var book=readOwnerWorkbook(service.gated(actor,tenant,code),tenant)){
+            bytes=service.gated(actor,tenant,code);
+            try(var book=readOwnerWorkbook(bytes,tenant)){
                 for(var sheet:book)if(!java.util.Set.of("Dashboard","Metadata").contains(sheet.getSheetName()))
                     for(var row:sheet)if(row.getRowNum()>0)for(var c:row)
                         assertThat(c.getCellType()).isNotEqualTo(org.apache.poi.ss.usermodel.CellType.NUMERIC);
@@ -133,11 +139,13 @@ public final class SalesReportMaterializationEvidence {
                 }
                 assertThat(book.getSheet("Dashboard").getRow(9).getCell(6).getStringCellValue()).isEqualTo("HOLD");
             }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+            ReportTemplateJourneyEvidence.record(code,tenant,bytes);
             assertThatThrownBy(()->service.gated(foreign,tenant,code)).isInstanceOf(SecurityException.class);
         }
         assertThatThrownBy(()->service.orders(foreign,tenant,calendar,month)).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->service.positions(foreign,tenant,warehouse,java.util.List.of(sku))).isInstanceOf(SecurityException.class);
         assertThatThrownBy(()->service.positions(actor,tenant,warehouse,java.util.List.of(sku,sku))).isInstanceOf(IllegalArgumentException.class);
+        ReportTemplateJourneyEvidence.verifyCatalog(tenant);
         System.out.println("RM_D06C_OWNER_TEMPLATE_ORACLE_PASS owner=4 gated=3");
     }
     private static org.apache.poi.xssf.usermodel.XSSFWorkbook readOwnerWorkbook(byte[] bytes,UUID tenant)throws java.io.IOException{
