@@ -1,6 +1,6 @@
 {
   "schema": "RM-CI-R3.6A/v1",
-  "reviewedSha": "19bcf7f29379f5760b9c3677ebd5635838912325",
+  "reviewedSha": "4f67b1d1c94cd91bce972729a91f89298af3a0df",
   "admission": "ADVISORY_ONLY",
   "executionPolicy": "UNCHANGED",
   "reuse": "FORBIDDEN",
@@ -273,14 +273,15 @@
     },
     {
       "path": ".github/workflows/rm-intelligence-targeted-pg.yml",
-      "reviewedBlob": "ca0055e80681e58291228cf1b2056cfc01e67486",
+      "reviewedBlob": "4cff0c37f29e9312e1ad531f7623414ae8a7dc6e",
       "domainHint": "INTELLIGENCE",
       "mandatoryRelease": false,
       "directReview": [
         "TREE_INVENTORY_ONLY",
         "ISOLATED_INTELLIGENCE_DIAGNOSTICS_ONLY",
         "LINEAR_HISTORY_SCOPE_GUARD",
-        "ARS_NINE_REQUIRED_CASES_ADDED_NO_EXECUTION_POLICY_CHANGE"
+        "ARS_NINE_REQUIRED_CASES_ADDED_NO_EXECUTION_POLICY_CHANGE",
+        "D06C_FIXTURE_XLSX_ARTIFACT_AND_CHECKSUM_VALIDATION_NO_GATE_CHANGE"
       ],
       "closure": "UNQUALIFIED",
       "decision": "EXECUTE_REQUIRED"
