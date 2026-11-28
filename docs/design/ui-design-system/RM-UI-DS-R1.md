@@ -137,6 +137,12 @@ Reference [shell.html](ui-kit/shell.html), [shell.css](ui-kit/shell.css), [shell
 
 Status: prototype / partial Chromium qualification; 8/8 viewport scenarios in in-memory fixture, no claim of full production or cross-browser qualification. Keep the existing K.1/K.2 qualifications separate; no regression rerun on this increment.
 
+## 8.5 Unified UI Kit — R1.0K.8 (2026-11-28)
+
+[Canonical UI Kit](ui-kit/index.html) combines Application Shell, Business Studio and basic component catalog without new component types or icon IDs. One header, workspace selector, navigation, breadcrumb, registry adapter, filter and pagination. Dashboard/List/Form/Detail/Catalog are hash-linked views, not production routes. Old shell.html and studio.html redirect; superseded implementations and test scripts are retained in Git history at ff3777026d56cc161bfcde930b2320e7ed11cd04. New [qualification](ui-kit/QUALIFICATION-K8.md) and [test](ui-kit/qualify_unified.py) supersede historical runnable qualification for this layout. Prior evidence remains scoped to its tested source. Shared CSS tokens, basic styles and 56-symbol SVG sprite unchanged.
+
+Separate design review was an AI self-review, not an external designer certification. Consolidated behavior, fixed focus and error/empty separation, improved visual hierarchy. 16/16 Chromium in-memory scenarios PASS with exact blob equality, partial qualification only. HTTP external assets, actual browser/device coverage, accessibility, full API/tenant admission and production integration remain open. Freeze component breadth pending visual acceptance. No backend/CI changes.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, branding palette, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
