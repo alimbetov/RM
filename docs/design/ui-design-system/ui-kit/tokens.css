@@ -1,0 +1,43 @@
+/* RM UI Kit R1.0 — candidate light theme; design-only, no dependencies. */
+:root {
+  color-scheme: light;
+  --rm-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --rm-text-xs: 12px;
+  --rm-text-sm: 14px;
+  --rm-text-md: 16px;
+  --rm-text-lg: 20px;
+  --rm-text-xl: 24px;
+  --rm-space-1: 4px;
+  --rm-space-2: 8px;
+  --rm-space-3: 12px;
+  --rm-space-4: 16px;
+  --rm-space-6: 24px;
+  --rm-space-8: 32px;
+  --rm-radius-sm: 4px;
+  --rm-radius-md: 8px;
+  --rm-radius-lg: 12px;
+  --rm-control-sm: 32px;
+  --rm-control-md: 40px;
+  --rm-control-lg: 48px;
+  --rm-surface: #ffffff;
+  --rm-canvas: #f5f7fa;
+  --rm-text: #172638;
+  --rm-text-muted: #475569;
+  --rm-border: #cbd5e1;
+  --rm-control-border: #64748b;
+  --rm-primary: #245a81;
+  --rm-primary-hover: #194768;
+  --rm-on-primary: #ffffff;
+  --rm-focus: #1565a5;
+  --rm-success: #176443;
+  --rm-success-bg: #e5f5ec;
+  --rm-warning: #854d0e;
+  --rm-warning-bg: #fff3d6;
+  --rm-danger: #a52222;
+  --rm-danger-bg: #fdecec;
+  --rm-info: #245a81;
+  --rm-info-bg: #e7f0f8;
+  --rm-neutral-bg: #edf1f5;
+  --rm-disabled-bg: #e2e8f0;
+  --rm-disabled-text: #475569;
+}
