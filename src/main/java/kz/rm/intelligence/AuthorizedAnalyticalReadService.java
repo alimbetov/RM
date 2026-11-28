@@ -146,6 +146,18 @@ public class AuthorizedAnalyticalReadService {
     }
     private record WindowRead(List<List<Result>> windows,ReportSourceManifest.SnapshotEvidence evidence){}
     private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report,AccountingPolicy accounting){
+        return readWindows(actor,tenant,queries,anchors,report,accounting,report);
+    }
+    /** Existing scoped snapshot path, with the additional report-generation permission.
+     * No new source, transaction strategy or calculation engine. */
+    byte[] renderScopedTemplate(VerifiedActor actor,UUID tenant,String code,List<Query> queries,List<LocalDate> anchors,
+                                BusinessInterpretationEngine.Policy policy,BusinessAnomalyAssessment.Policy anomaly){
+        ReportTemplateRenderer.requireWindow(code,queries,anchors,policy,anomaly);
+        var read=readWindows(actor,tenant,queries,anchors,false,null,true);
+        return ReportTemplateRenderer.renderWindow(code,tenant,actor.userId(),queries,read.windows(),policy,anomaly);
+    }
+    private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,
+                                   boolean report,AccountingPolicy accounting,boolean reportPermission){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         var qs=List.copyOf(queries);
         if(qs.isEmpty()||qs.size()>3||qs.stream().map(Query::metric).distinct().count()!=qs.size())
@@ -164,7 +176,7 @@ public class AuthorizedAnalyticalReadService {
         var admission=new TransactionTemplate(manager);
         admission.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);admission.setTimeout(180);
         return admission.execute(outer->{
-            if(report)l3.admitReport(actor,tenant);
+            if(reportPermission)l3.admitReport(actor,tenant);
             for(var q:qs)l3.admit(actor,tenant,L3DerivedSeriesService.Metric.valueOf(q.metric().name()),
                 new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
             if(accounting!=null)requireAccountingPolicy(tenant,accounting,true);

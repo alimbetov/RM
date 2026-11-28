@@ -100,6 +100,132 @@ final class ReportTemplateRenderer {
             return bytes;
         }catch(IOException e){throw new UncheckedIOException(e);}
     }
+    /** These bindings use the exact existing table capacities and metrics.
+     * Request scope remains the explicit authorized warehouse/SKU/currency. */
+    static void requireWindow(String code,List<Query> qs,List<LocalDate> dates,
+                              BusinessInterpretationEngine.Policy policy,BusinessAnomalyAssessment.Policy anomaly){
+        Objects.requireNonNull(code);Objects.requireNonNull(qs);Objects.requireNonNull(dates);
+        List<Metric> metrics;int n;PeriodResolver.Code period;
+        switch(code){
+            case "RM-R07" -> {metrics=List.of(Metric.STOCK_IN,Metric.STOCK_OUT);n=12;period=PeriodResolver.Code.M;}
+            case "RM-R10" -> {metrics=List.of(Metric.FULFILLED_AMOUNT);n=6;period=PeriodResolver.Code.W;
+                Objects.requireNonNull(policy);Objects.requireNonNull(anomaly);}
+            case "RM-R11" -> {metrics=List.of(Metric.FULFILLED_PRODUCT_UNITS,Metric.STOCK_IN,Metric.STOCK_OUT);n=2;period=PeriodResolver.Code.W;
+                Objects.requireNonNull(policy);}
+            default -> throw new IllegalArgumentException("REPORT_WINDOW_TEMPLATE");
+        }
+        if(!qs.stream().map(Query::metric).toList().equals(metrics)||dates.size()!=n||
+            qs.stream().anyMatch(q->q.period()!=period||q.warehouses().isEmpty()||!q.anchor().equals(dates.getLast())
+                ||(code.equals("RM-R07")||code.equals("RM-R11"))&&q.sku()==null))
+            throw new IllegalArgumentException("REPORT_TEMPLATE_WINDOW");
+        for(int i=0;i<n;i++){
+            var expected=period==PeriodResolver.Code.M?dates.getLast().minusMonths(n-1-i):dates.getLast().minusWeeks(n-1-i);
+            if(!expected.equals(dates.get(i))||(period==PeriodResolver.Code.M?expected.getDayOfMonth()!=1:
+                expected.getDayOfWeek()!=DayOfWeek.MONDAY))throw new IllegalArgumentException("REPORT_TEMPLATE_PERIODS");
+        }
+    }
+
+    static byte[] renderWindow(String code,UUID tenant,UUID actor,List<Query> queries,List<List<Result>> windows,
+                              BusinessInterpretationEngine.Policy policy,BusinessAnomalyAssessment.Policy anomaly){
+        if(windows.size()!=queries.size()||windows.isEmpty()||windows.getFirst().isEmpty())
+            throw new IllegalArgumentException("REPORT_TEMPLATE_WINDOW");
+        var base=windows.getFirst();var first=base.getFirst();var last=base.getLast();var query=queries.getFirst();
+        for(int i=0;i<windows.size();i++){
+            var w=windows.get(i);var q=queries.get(i);
+            if(w.size()!=base.size())throw new IllegalArgumentException("REPORT_TEMPLATE_WINDOW");
+            for(int j=0;j<w.size();j++){
+                var p=w.get(j);
+                if(p.metric()!=q.metric()||p.methodVersion()!=1||!Objects.equals(p.currency(),q.currency())
+                    ||!p.period().equals(base.get(j).period())||!first.observedAt().equals(p.observedAt())
+                    ||first.sourceRevision()!=p.sourceRevision()||p.period().endExclusive().isAfter(p.observedAt())
+                    ||(j>0&&!w.get(j-1).period().endExclusive().equals(p.period().startInclusive())))
+                    throw new IllegalArgumentException("REPORT_TEMPLATE_EVIDENCE");
+            }
+        }
+        try(var book=open(code);var out=new ByteArrayOutputStream()){
+            clear(book);var dash=book.getSheet("Dashboard");
+            String unit=first.currency()==null?first.unit():first.currency();
+            String scope="Warehouses="+query.warehouses()+"; SKU="+Objects.toString(query.sku(),"ALL")+
+                "; group="+Objects.toString(query.group(),"ALL")+"; region="+Objects.toString(query.region(),"ALL");
+            put(dash,2,0,"OBSERVED / QUALITY PER ROW | "+tenant);put(dash,3,0,"Scope: "+scope);
+            put(dash,4,0,"Metric: "+queries.stream().map(q->q.metric().name()).toList());
+            put(dash,5,0,"Unit: "+unit+" | As of: "+first.observedAt());
+            put(dash,6,0,"Historical conclusions require qualified evidence; flows are not availability.");
+            meta(book,"Report code",code);meta(book,"Report name",dash.getRow(1).getCell(0).getStringCellValue());
+            meta(book,"Template version","MOCK-0.1 / D06C");meta(book,"Tenant",tenant.toString());
+            meta(book,"Requested scope",scope);meta(book,"Actual scope",scope);
+            meta(book,"Metric code",queries.stream().map(q->q.metric().name()).toList().toString());
+            meta(book,"Unit / currency",unit);meta(book,"Time zone",first.period().zoneId());
+            meta(book,"Period bounds",first.period().startInclusive()+" / "+last.period().endExclusive());
+            meta(book,"As of",first.observedAt().toString());meta(book,"Generated at",Instant.now().toString());
+            meta(book,"Source revision",Long.toString(first.sourceRevision()));
+            meta(book,"Calendar version",Long.toString(query.calendarVersion()));
+            meta(book,"Mode","INTERNAL_DIAGNOSTIC");meta(book,"Visibility","NOT_PUBLISHED");
+            meta(book,"Data quality",windows.stream().flatMap(List::stream).map(p->p.quality().name()).distinct().toList().toString());
+            meta(book,"Coverage","HISTORICAL_CONTINUITY_UNQUALIFIED");meta(book,"Limits","No production decision admission.");
+            for(var w:windows)for(var p:w)meta(book,p.metric().name()+" "+periodLabel(p.period()),
+                exact(p.value())+" | "+p.quality()+" | "+p.qualityReason()+" | "+p.route()+" | "+
+                Objects.toString(p.generation(),"-")+" | "+Objects.toString(p.proof(),"-"));
+            if(code.equals("RM-R07")){
+                var sheet=book.getSheet("Dynamics");var stockOut=windows.get(1);
+                for(int i=0;i<12;i++){
+                    var in=base.get(i);var exit=stockOut.get(i);
+                    put(sheet,i+1,0,periodLabel(in.period()));put(sheet,i+1,1,in.value());put(sheet,i+1,2,exit.value());
+                    put(sheet,i+1,3,"IN="+in.quality()+"; OUT="+exit.quality());
+                }
+                kpi(dash,0,"STOCK_IN",last.value(),unit);kpi(dash,3,"STOCK_OUT",stockOut.getLast().value(),unit);
+                kpi(dash,6,"Period",periodLabel(last.period()),"");
+            }else if(code.equals("RM-R10")){
+                var sheet=book.getSheet("Dynamics");
+                var result=BusinessAnomalyAssessment.evaluate(points(tenant,actor,query,base),policy,anomaly);
+                for(int i=0;i<6;i++){var p=base.get(i);put(sheet,i+1,0,periodLabel(p.period()));put(sheet,i+1,1,p.value());put(sheet,i+1,5,p.quality().name());}
+                // A single preceding baseline is evidence for the final point only.
+                // No fabricated rolling baseline or threshold series.
+                if(result.quality()==DataQuality.READY){
+                    put(sheet,6,2,result.sma());
+                    if(result.sma()!=null&&result.stddev()!=null){
+                        var width=result.stddev().multiply(anomaly.sigmaMultiplier());
+                        put(sheet,6,3,result.sma().subtract(width));put(sheet,6,4,result.sma().add(width));
+                    }
+                }
+                kpi(dash,0,"FULFILLED_AMOUNT",last.value(),unit);
+                kpi(dash,3,"SMA_BASELINE",result.quality()==DataQuality.READY?result.sma():null,unit);
+                kpi(dash,6,"Deviation",result.quality()==DataQuality.READY?result.deviation():null,unit);
+                meta(book,"Anomaly result",result.pattern()+" / "+result.reason()+" / "+result.quality());
+            }else if(code.equals("RM-R11")){
+                var series=java.util.stream.IntStream.range(0,3)
+                    .mapToObj(i->points(tenant,actor,queries.get(i),windows.get(i))).toList();
+                var result=BusinessFactorAssessment.evaluate(series.get(0),series.get(1),series.get(2),policy);
+                var sheet=book.getSheet("Details");var deltas=Arrays.asList(result.fulfilledDelta(),result.stockInDelta(),result.stockOutDelta());
+                for(int i=0;i<3;i++){
+                    var w=windows.get(i);var p=w.getFirst();var c=w.getLast();
+                    put(sheet,i+1,0,c.metric().name());put(sheet,i+1,1,c.value());put(sheet,i+1,2,p.value());
+                    if(result.quality()==DataQuality.READY){
+                        put(sheet,i+1,3,deltas.get(i));var comparison=DerivedMetricEngine.comparePeriods(p.value(),p.quality(),c.value(),c.quality());
+                        put(sheet,i+1,4,comparison.growth().value());
+                    }
+                    put(sheet,i+1,5,"CURRENT="+c.quality()+"; PRIOR="+p.quality()+"; FACTOR="+result.quality());
+                    kpi(dash,i==0?0:i==1?3:6,c.metric().name(),c.value(),c.unit());
+                }
+                meta(book,"Factor result",result.status()+" / "+result.reason()+" / "+result.quality());
+            }else throw new IllegalArgumentException("REPORT_WINDOW_TEMPLATE");
+            refreshCharts(book);book.write(out);
+            byte[] bytes=out.toByteArray();if(bytes.length>2*1024*1024)throw new IllegalStateException("REPORT_OUTPUT_SIZE");
+            return bytes;
+        }catch(IOException e){throw new UncheckedIOException(e);}
+    }
+    private static List<BusinessInterpretationEngine.Point> points(UUID tenant,UUID actor,Query q,List<Result> rows){
+        return rows.stream().map(p->new BusinessInterpretationEngine.Point(
+            new BusinessInterpretationEngine.Scope(tenant,actor,q.metric(),q.calendarVersion(),q.period(),q.region(),
+                q.group(),q.sku(),q.warehouses(),q.currency(),p.unit(),p.methodVersion()),p)).toList();
+    }
+    private static String periodLabel(PeriodResolver.Period p){
+        return p.startInclusive().atZone(ZoneId.of(p.zoneId())).toLocalDate()+" / "+
+            p.endExclusive().atZone(ZoneId.of(p.zoneId())).toLocalDate();
+    }
+    private static void kpi(Sheet s,int col,String name,Object value,String unit){
+        put(s,8,col,name);put(s,9,col,value);put(s,11,col,unit);
+    }
     static XSSFWorkbook open(String code)throws IOException{
         if(code==null||!code.matches("RM-R(0[1-9]|1[0-2])"))throw new IllegalArgumentException("REPORT_TEMPLATE_CODE");
         try(var in=Objects.requireNonNull(ReportTemplateRenderer.class.getResourceAsStream(ROOT+code+".xlsx"))){

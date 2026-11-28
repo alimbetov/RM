@@ -20,6 +20,54 @@ public final class SalesReportMaterializationEvidence {
         reader=context.getBean(AuthorizedAnalyticalReadService.class);
         materializer=new SalesReportMaterializer(reader,jdbc,manager);
     }
+    public void scopedTemplates(VerifiedActor actor,VerifiedActor foreign,UUID tenant,long calendar,UUID warehouse,UUID sku,LocalDate today){
+        var last=today.withDayOfMonth(1).minusMonths(1);
+        var lastWeek=today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)).minusWeeks(1);
+        var money=java.math.BigDecimal.ONE;
+        var policy=new BusinessInterpretationEngine.Policy(1,money,java.math.BigDecimal.ZERO);
+        var anomaly=new BusinessAnomalyAssessment.Policy(1,new java.math.BigDecimal("3"),new java.math.BigDecimal("0.5"));
+        var monthly=java.util.stream.IntStream.range(0,12).mapToObj(i->last.minusMonths(11-i)).toList();
+        var weeks=java.util.stream.IntStream.range(0,6).mapToObj(i->lastWeek.minusWeeks(5-i)).toList();
+        var pair=java.util.List.of(lastWeek.minusWeeks(1),lastWeek);
+        var q7=java.util.List.of(
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.STOCK_IN,calendar,PeriodResolver.Code.M,last,null,null,sku,java.util.List.of(warehouse),null),
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.STOCK_OUT,calendar,PeriodResolver.Code.M,last,null,null,sku,java.util.List.of(warehouse),null));
+        var q10=java.util.List.of(new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.FULFILLED_AMOUNT,calendar,PeriodResolver.Code.W,lastWeek,null,null,null,java.util.List.of(warehouse),"KZT"));
+        var q11=java.util.List.of(
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.FULFILLED_PRODUCT_UNITS,calendar,PeriodResolver.Code.W,lastWeek,null,null,sku,java.util.List.of(warehouse),null),
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.STOCK_IN,calendar,PeriodResolver.Code.W,lastWeek,null,null,sku,java.util.List.of(warehouse),null),
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.STOCK_OUT,calendar,PeriodResolver.Code.W,lastWeek,null,null,sku,java.util.List.of(warehouse),null));
+        for(var code:java.util.List.of("RM-R07","RM-R10","RM-R11")){
+            var queries=code.equals("RM-R07")?q7:code.equals("RM-R10")?q10:q11;
+            var dates=code.equals("RM-R07")?monthly:code.equals("RM-R10")?weeks:pair;
+            var bytes=reader.renderScopedTemplate(actor,tenant,code,queries,dates,policy,anomaly);
+            var expected=reader.readMetricWindows(actor,tenant,queries,dates);
+            try(var book=new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(bytes))){
+                assertThat(book.getSheet("Metadata").getRow(4).getCell(1).getStringCellValue()).isEqualTo(tenant.toString());
+                assertThat(book.getSheet("Dashboard").getDrawingPatriarch().getCharts()).hasSize(1);
+                var sheet=book.getSheet(code.equals("RM-R11")?"Details":"Dynamics");
+                if(code.equals("RM-R11")){
+                    for(int i=0;i<3;i++){
+                        assertTemplateValue(sheet.getRow(i+1).getCell(1),expected.get(i).getLast().value());
+                        assertTemplateValue(sheet.getRow(i+1).getCell(2),expected.get(i).getFirst().value());
+                        assertThat(sheet.getRow(i+1).getCell(3).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+                    }
+                }else for(int i=0;i<dates.size();i++){
+                    assertTemplateValue(sheet.getRow(i+1).getCell(1),expected.getFirst().get(i).value());
+                    if(code.equals("RM-R07"))assertTemplateValue(sheet.getRow(i+1).getCell(2),expected.get(1).get(i).value());
+                    else for(int col=2;col<=4;col++)
+                        assertThat(sheet.getRow(i+1).getCell(col).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+                }
+            }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+            assertThatThrownBy(()->reader.renderScopedTemplate(foreign,tenant,code,queries,dates,policy,anomaly)).isInstanceOf(SecurityException.class);
+        }
+        System.out.println("RM_D06C_SCOPED_TEMPLATE_SOURCE_ORACLE_PASS workbooks=3");
+    }
+    private static void assertTemplateValue(org.apache.poi.ss.usermodel.Cell cell,java.math.BigDecimal expected){
+        if(expected==null)assertThat(cell.getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+        else if(expected.stripTrailingZeros().precision()>15)assertThat(cell.getStringCellValue()).isEqualTo(ReportDatasetDigest.decimal(expected));
+        else assertThat(cell.getNumericCellValue()).isEqualTo(expected.doubleValue());
+    }
     public void denied(VerifiedActor actor,UUID tenant,long calendar,LocalDate last){
         assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"KZT"))
             .isInstanceOf(SecurityException.class);

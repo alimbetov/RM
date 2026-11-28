@@ -518,6 +518,7 @@ class BusMvpServiceJourneyQualificationTest {
             });
             roles.grant(owner,tenant,role.id(),DomainPermission.REPORT_GENERATE);
             roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
+            r02.scopedTemplates(staff,otherStaff,tenant,b55Calendar,warehouse.id(),published.id(),endDay);
             r02.historicalAndConcurrent(staff,tenant,b55Calendar,otherStaff,otherTenant,otherB55Calendar,lastClosed,orderId);
             r02.accountingPolicyRevision(otherOwner,otherStaff,otherTenant,otherB55Calendar,lastClosed);
             roles.revoke(owner,tenant,role.id(),DomainPermission.REPORT_GENERATE);
