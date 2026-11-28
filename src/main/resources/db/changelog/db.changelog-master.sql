@@ -8474,35 +8474,51 @@ REVOKE ALL ON reporting.int_report_file_intent FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_FILE_INTENT_FORWARD_ONLY'; END; $$;
 
 --changeset rm:0236-int-report-v1-terminal-fence dbms:postgresql splitStatements:false
--- A terminal report cannot acquire a new upload token. The immutable file
--- pointer is retained until a separately admitted REPORT retention lifecycle.
--- This is the post-lock safety condition for out-of-transaction orphan GC.
+-- Only the unmerged 0236 candidate is being hardened here. Previously applied
+-- changesets are untouched. Terminal namespaces cannot acquire new V1 pointers.
 CREATE FUNCTION crm.int_report_file_terminal_guard() RETURNS trigger
- LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
- IF EXISTS(SELECT 1 FROM reporting.int_report_file_intent i WHERE i.tenant_id=OLD.tenant_id AND i.file_id=OLD.id) THEN
+ IF OLD.content_class='CONFIDENTIAL' AND EXISTS(
+    SELECT 1 FROM reporting.int_report_file_intent i WHERE i.tenant_id=OLD.tenant_id AND i.file_id=OLD.id) THEN
    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'REPORT_FILE_RETENTION_NOT_ADMITTED'; END IF;
    IF (NEW.tenant_id,NEW.id,NEW.uploaded_by,NEW.request_key,NEW.content_class,NEW.mime_type,NEW.size_bytes,NEW.sha256)
       IS DISTINCT FROM (OLD.tenant_id,OLD.id,OLD.uploaded_by,OLD.request_key,OLD.content_class,OLD.mime_type,OLD.size_bytes,OLD.sha256)
       OR (OLD.state IN ('AVAILABLE','REJECTED','DELETING','DELETED') AND
-         (NEW.state='STAGED' OR NEW.processing_token IS NOT NULL))
+          (NEW.processing_token IS NOT NULL OR
+           (NEW.state<>OLD.state AND NOT (OLD.state='AVAILABLE' AND NEW.state='REJECTED'))))
    THEN RAISE EXCEPTION 'REPORT_FILE_TERMINAL_OR_IDENTITY'; END IF;
-   IF OLD.state='REJECTED' AND NEW.state<>'REJECTED' THEN RAISE EXCEPTION 'REPORT_FILE_TERMINAL_OR_IDENTITY'; END IF;
  END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER trg_int_report_file_terminal_guard BEFORE UPDATE OR DELETE ON crm.file_object
  FOR EACH ROW EXECUTE FUNCTION crm.int_report_file_terminal_guard();
 CREATE FUNCTION crm.int_report_v1_pointer_guard() RETURNS trigger
- LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE f crm.file_object%ROWTYPE; wanted text;
 BEGIN
- IF OLD.encrypted_format_version=1 AND EXISTS(
-    SELECT 1 FROM reporting.int_report_file_intent i WHERE i.tenant_id=OLD.tenant_id AND i.file_id=OLD.file_id)
+ IF TG_OP='INSERT' THEN
+   IF EXISTS(SELECT 1 FROM reporting.int_report_file_intent i WHERE i.tenant_id=NEW.tenant_id AND i.file_id=NEW.file_id) THEN
+     SELECT * INTO STRICT f FROM crm.file_object WHERE tenant_id=NEW.tenant_id AND id=NEW.file_id FOR UPDATE;
+     wanted:=(CASE WHEN NEW.provider='RUSTFS' THEN 'rustfs/' ELSE '' END)
+        ||NEW.tenant_id::text||'/'||NEW.file_id::text||'/final-v1-'||f.processing_token::text;
+     IF f.state<>'STAGED' OR f.scan_status<>'SCANNING' OR f.processing_token IS NULL
+         OR f.processing_started_at+interval '15 minutes'<=clock_timestamp()
+         OR f.content_class<>'CONFIDENTIAL' OR NEW.encrypted_format_version<>1
+         OR NEW.state<>'ACTIVE' OR NEW.storage_key IS DISTINCT FROM wanted
+     THEN RAISE EXCEPTION 'REPORT_FILE_POINTER_FENCE'; END IF;
+   ELSIF NEW.encrypted_format_version=1 THEN
+     RAISE EXCEPTION 'REPORT_FILE_INTENT_REQUIRED';
+   END IF;
+   RETURN NEW;
+ END IF;
+ IF OLD.encrypted_format_version=1 OR (TG_OP='UPDATE' AND NEW.encrypted_format_version=1)
  THEN RAISE EXCEPTION 'REPORT_FILE_POINTER_IMMUTABLE'; END IF;
  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
  RETURN NEW;
 END $$;
-CREATE TRIGGER trg_int_report_v1_pointer_guard BEFORE UPDATE OR DELETE ON crm.file_storage
+CREATE TRIGGER trg_int_report_v1_pointer_guard BEFORE INSERT OR UPDATE OR DELETE ON crm.file_storage
  FOR EACH ROW EXECUTE FUNCTION crm.int_report_v1_pointer_guard();
 REVOKE ALL ON FUNCTION crm.int_report_file_terminal_guard(),crm.int_report_v1_pointer_guard() FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'REPORT_FILE_TERMINAL_FENCE_FORWARD_ONLY'; END; $$;

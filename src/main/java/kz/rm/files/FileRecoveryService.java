@@ -33,7 +33,7 @@ class FileRecoveryService {
 
     record Result(String outcome,int removed) {}
     private record Snapshot(String state,String scanStatus,UUID token,Instant started,
-                            String storageKey,long size,String sha256,String mime,Integer version,String classification) {}
+                            String storageKey,long size,String sha256,String mime,Integer version,String classification,String requestKey) {}
     private record Claim(String outcome,UUID token,String activeKey,
                          long size,String sha256,String mime,Integer version,String classification) {}
 
@@ -92,7 +92,7 @@ class FileRecoveryService {
                          WHERE s.tenant_id=f.tenant_id AND s.file_id=f.id AND s.state='ACTIVE'),
                        f.size_bytes,f.sha256,f.mime_type,
                        (SELECT s.encrypted_format_version FROM crm.file_storage s
-                         WHERE s.tenant_id=f.tenant_id AND s.file_id=f.id AND s.state='ACTIVE'),f.content_class
+                         WHERE s.tenant_id=f.tenant_id AND s.file_id=f.id AND s.state='ACTIVE'),f.content_class,f.request_key
                   FROM crm.file_object f
                  WHERE f.tenant_id=? AND f.id=? FOR UPDATE
                 """,rs->{
@@ -100,7 +100,7 @@ class FileRecoveryService {
                     Timestamp start=rs.getTimestamp(4);
                     return new Snapshot(rs.getString(1),rs.getString(2),
                             rs.getObject(3,UUID.class),start==null?null:start.toInstant(),
-                            rs.getString(5),rs.getLong(6),rs.getString(7),rs.getString(8),rs.getObject(9,Integer.class),rs.getString(10));
+                            rs.getString(5),rs.getLong(6),rs.getString(7),rs.getString(8),rs.getObject(9,Integer.class),rs.getString(10),rs.getString(11));
                 },tenant,fileId);
             if(snap==null)return new Claim("ABSENT",null,null,0,null,null,null,null);
             if("AVAILABLE".equals(snap.state()))
@@ -108,9 +108,7 @@ class FileRecoveryService {
             // V1 STAGED holds the only potentially recoverable ciphertext.
             // Never sweep it before an authorized replay or terminal rejection.
             if("STAGED".equals(snap.state())&&"CONFIDENTIAL".equals(snap.classification())
-               &&Boolean.TRUE.equals(jdbc.queryForObject("""
-                   SELECT EXISTS(SELECT 1 FROM reporting.int_report_file_intent WHERE tenant_id=? AND file_id=?)
-                   """,Boolean.class,tenant,fileId)))
+               &&snap.requestKey()!=null&&snap.requestKey().matches("report-[0-9a-f-]{36}-XLSX"))
                 return new Claim("REPLAY_REQUIRED",null,null,0,null,null,null,null);
             if("STAGED".equals(snap.state())) {
                 if("SCANNING".equals(snap.scanStatus())
