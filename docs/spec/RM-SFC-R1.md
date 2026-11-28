@@ -66,3 +66,7 @@ Snapshot 0cae504294a810363dd8396bd164d314b8c51c77: 298 tracked Markdown/JSON doc
 
 ## SFC-R1.0B.2B.1 — source obligations, semantic identity and P4 section extraction
 [Atomic requirements register](RM-SFC-ATOMIC-REQUIREMENTS-v1.json), reviewed a464b0694dd471345f873b0cfcb9a31a238b3833: 85 obligation records (56 CORE/TASK source scenarios and 29 selected MIC/Radar/Reporting section obligations), 36 explicit same-source identity matches, 112 B5 source variants with expected behavior and missing evidence preserved. No cross-family equivalence or new unique denominator. Mandatory variant and method qualification remain OPEN. Reporting P4.1A.5-Q → P4.2 after GREEN; F2H deferred. Next: CRM/R3/DUAL/BSR overlay semantic extraction and variant adjudication. No runtime, migration, CI or admission change.
+
+
+## SFC-R1.0B.2B.2 — CRM/IAM/ORG journey crosswalk
+[CRM journey crosswalk](RM-SFC-CRM-JOURNEY-CROSSWALK-v1.json), reviewed dd65bb44c6fd27d09083555e132fd484be25511a: 99 source simulations, 12 journeys, 45 related R3 requirements, 11 operation groups, 23 explicit journey-to-R3 source references and six reconciliation findings. Candidate variants and semantic links need owner method/SQL review; zero merged IDs or new PASS. Preserve scope and regression, Reporting priority, Radar F2H deferred. Next B.2B.3 commerce/inventory/QR and remaining domain sections. No runtime/CI change.

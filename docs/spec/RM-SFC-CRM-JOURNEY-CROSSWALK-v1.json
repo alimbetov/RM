@@ -1,0 +1,5484 @@
+{
+  "schema": "RM-SFC-CRM-JOURNEY-CROSSWALK-v1",
+  "reviewedSha": "dd65bb44c6fd27d09083555e132fd484be25511a",
+  "status": "SOURCE_CASE_EXTRACTION_COMPLETE_SEMANTIC_ADJUDICATION_PARTIAL",
+  "policy": "All original IDs preserved; operation group and R3 candidates are not equivalence, approval or verified implementation. Explicit journey R3 references preserved even if semantics need correction. Variant types proposed from expected behavior, no executed test claims. Scope review separate from mandatory regression. No new runtime admission.",
+  "counts": {
+    "cases": 99,
+    "journeys": 12,
+    "relatedR3": 45,
+    "operationGroups": 11,
+    "explicitJourneyR3Links": 23,
+    "scope": {
+      "CORE_RELATED_VARIANT_SCOPE_REVIEW": 58,
+      "REGRESSION_IF_PRESENT_SCOPE_REVIEW": 22,
+      "DECISION_REQUIRED": 7,
+      "POST_MVP": 10,
+      "CORE_NEGATIVE_INVARIANT_NO_FINANCE_ACTIVATION": 2
+    },
+    "findings": 6,
+    "merged": 0
+  },
+  "operations": [
+    {
+      "id": "SFC-CRM-IDENTITY",
+      "ownerDomain": "IAM",
+      "name": "Verified identity, first tenant, explicit grants and revocation",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-001",
+        "CRM_SIM:CRM-SIM-002",
+        "CRM_SIM:CRM-SIM-003",
+        "CRM_SIM:CRM-SIM-004",
+        "CRM_SIM:CRM-SIM-005",
+        "CRM_SIM:CRM-SIM-006",
+        "CRM_SIM:CRM-SIM-007",
+        "CRM_SIM:CRM-SIM-008",
+        "CRM_SIM:CRM-SIM-009"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-CUSTOMER",
+      "ownerDomain": "CRM",
+      "name": "Customer lifecycle and scoped search",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-010",
+        "CRM_SIM:CRM-SIM-011",
+        "CRM_SIM:CRM-SIM-012",
+        "CRM_SIM:CRM-SIM-013",
+        "CRM_SIM:CRM-SIM-014",
+        "CRM_SIM:CRM-SIM-015",
+        "CRM_SIM:CRM-SIM-016",
+        "CRM_SIM:CRM-SIM-017",
+        "CRM_SIM:CRM-SIM-018"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-CONTACT_PII",
+      "ownerDomain": "CRM/KMS",
+      "name": "Contact lifecycle, encryption and independent PII read",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-019",
+        "CRM_SIM:CRM-SIM-020",
+        "CRM_SIM:CRM-SIM-021",
+        "CRM_SIM:CRM-SIM-022",
+        "CRM_SIM:CRM-SIM-023",
+        "CRM_SIM:CRM-SIM-024",
+        "CRM_SIM:CRM-SIM-025",
+        "CRM_SIM:CRM-SIM-026",
+        "CRM_SIM:CRM-SIM-027"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-CONSENT",
+      "ownerDomain": "CRM",
+      "name": "Purpose-specific consent and revocation",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-028",
+        "CRM_SIM:CRM-SIM-029",
+        "CRM_SIM:CRM-SIM-030",
+        "CRM_SIM:CRM-SIM-031",
+        "CRM_SIM:CRM-SIM-032",
+        "CRM_SIM:CRM-SIM-033",
+        "CRM_SIM:CRM-SIM-034",
+        "CRM_SIM:CRM-SIM-035",
+        "CRM_SIM:CRM-SIM-036"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-INTERACTIONS",
+      "ownerDomain": "CRM",
+      "name": "Interaction history and follow-up",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-037",
+        "CRM_SIM:CRM-SIM-038",
+        "CRM_SIM:CRM-SIM-039",
+        "CRM_SIM:CRM-SIM-040",
+        "CRM_SIM:CRM-SIM-041",
+        "CRM_SIM:CRM-SIM-042",
+        "CRM_SIM:CRM-SIM-043",
+        "CRM_SIM:CRM-SIM-044",
+        "CRM_SIM:CRM-SIM-045"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-CONTRACTS",
+      "ownerDomain": "CRM",
+      "name": "Versioned contract lifecycle",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-046",
+        "CRM_SIM:CRM-SIM-047",
+        "CRM_SIM:CRM-SIM-048",
+        "CRM_SIM:CRM-SIM-049",
+        "CRM_SIM:CRM-SIM-050",
+        "CRM_SIM:CRM-SIM-051",
+        "CRM_SIM:CRM-SIM-052",
+        "CRM_SIM:CRM-SIM-053",
+        "CRM_SIM:CRM-SIM-054"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-SALES_LINK",
+      "ownerDomain": "CRM/SALES",
+      "name": "Verified buyer association and immutable order history",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-055",
+        "CRM_SIM:CRM-SIM-056",
+        "CRM_SIM:CRM-SIM-057",
+        "CRM_SIM:CRM-SIM-058",
+        "CRM_SIM:CRM-SIM-059",
+        "CRM_SIM:CRM-SIM-060",
+        "CRM_SIM:CRM-SIM-061",
+        "CRM_SIM:CRM-SIM-062",
+        "CRM_SIM:CRM-SIM-063"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-FILES",
+      "ownerDomain": "FILES/CRM",
+      "name": "Typed document ownership and safe binary access",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-064",
+        "CRM_SIM:CRM-SIM-065",
+        "CRM_SIM:CRM-SIM-066",
+        "CRM_SIM:CRM-SIM-067",
+        "CRM_SIM:CRM-SIM-068",
+        "CRM_SIM:CRM-SIM-069",
+        "CRM_SIM:CRM-SIM-070",
+        "CRM_SIM:CRM-SIM-071",
+        "CRM_SIM:CRM-SIM-072"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-SECURITY_AUDIT",
+      "ownerDomain": "IAM/AUDIT/CRM",
+      "name": "Authorization and sanitized audit",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-073",
+        "CRM_SIM:CRM-SIM-074",
+        "CRM_SIM:CRM-SIM-075",
+        "CRM_SIM:CRM-SIM-076",
+        "CRM_SIM:CRM-SIM-077",
+        "CRM_SIM:CRM-SIM-078",
+        "CRM_SIM:CRM-SIM-079",
+        "CRM_SIM:CRM-SIM-080",
+        "CRM_SIM:CRM-SIM-081"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-TASKS",
+      "ownerDomain": "TASKS",
+      "name": "Canonical task and CRM link",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-082",
+        "CRM_SIM:CRM-SIM-083",
+        "CRM_SIM:CRM-SIM-084",
+        "CRM_SIM:CRM-SIM-085",
+        "CRM_SIM:CRM-SIM-086",
+        "CRM_SIM:CRM-SIM-087",
+        "CRM_SIM:CRM-SIM-088",
+        "CRM_SIM:CRM-SIM-089",
+        "CRM_SIM:CRM-SIM-090"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    },
+    {
+      "id": "SFC-CRM-FINANCE_GROWTH",
+      "ownerDomain": "FINANCE/MARKETING/SUBSCRIPTION",
+      "name": "Deferred finance and growth; existing negative invariants preserved",
+      "caseKeys": [
+        "CRM_SIM:CRM-SIM-091",
+        "CRM_SIM:CRM-SIM-092",
+        "CRM_SIM:CRM-SIM-093",
+        "CRM_SIM:CRM-SIM-094",
+        "CRM_SIM:CRM-SIM-095",
+        "CRM_SIM:CRM-SIM-096",
+        "CRM_SIM:CRM-SIM-097",
+        "CRM_SIM:CRM-SIM-098",
+        "CRM_SIM:CRM-SIM-099"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "relation": "RELATED_NOT_ALIAS",
+      "status": "SEMANTIC_GROUP_REVIEW_REQUIRED"
+    }
+  ],
+  "cases": [
+    {
+      "key": "CRM_SIM:CRM-SIM-001",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-001]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Valid confirmed principal creates first organization",
+      "expected": "Create one owner/workspace; no implicit CRM grants",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "TENANT",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-002",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-002]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Unverified email attempts first organization",
+      "expected": "Reject with zero workspace/membership writes",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "INV"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-003",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-003]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Same provisioning key replay",
+      "expected": "Return same tenant without second audit event",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "AUD"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-004",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-004]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Two simultaneous first-tenant requests",
+      "expected": "Exactly one owner tenant and no orphans",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "INV"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-005",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-005]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Suspended principal selects former tenant",
+      "expected": "Reject before business writes",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-006",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-006]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Foreign employee guesses tenant UUID",
+      "expected": "Reject tenant access without leaking ownership",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-007",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-007]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "OIDC signing key rotated at external issuer",
+      "expected": "Validate rotated issuer key via real HTTPS test IdP",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "REAL",
+        "RECOVERY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "EXTERNAL_HOLD",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-008",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-008]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Email verification transport is unavailable",
+      "expected": "No verified status until delivered proof; bounded retry",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CRASH",
+        "POIS",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "EXTERNAL_HOLD",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-009",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-009]"
+      },
+      "operation": "SFC-CRM-IDENTITY",
+      "owner": "IAM/ORGANIZATION",
+      "trigger": "Former owner loses organization membership",
+      "expected": "Do not rebootstrap first tenant or inherit grants",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "IDEM"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:IAM-03",
+        "R3:IAM-06",
+        "R3:ORG-05"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U01"
+      ],
+      "serviceCandidates": [
+        "OidcActorResolver",
+        "EmailIdentityService",
+        "SelfServiceTenantOnboardingService",
+        "MyAccessService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-010",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-010]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Employee creates company",
+      "expected": "ACTIVE company appears in tenant-bound search",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "TEN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-011",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-011]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Employee registers a person with PII",
+      "expected": "Encrypt name, safe command response, authorized read",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "TEN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-012",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-012]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Customer name is changed with correct version",
+      "expected": "Update data, revision and immutable history",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "LOCK",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-013",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-013]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Two employees update same customer version",
+      "expected": "Exactly one accepted version, no lost update",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "LOCK"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-014",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-014]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Known customer UUID supplied from tenant B",
+      "expected": "No foreign customer record or oracle leak",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-015",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-015]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Employee archives a customer with active contract",
+      "expected": "Reject and keep history unchanged",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-016",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-016]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Employee restores archived customer",
+      "expected": "Restore lifecycle without fabricating consent",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-017",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-017]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Search contains SQL wildcard characters",
+      "expected": "Literal matching; tenant isolation unchanged",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "BOUND",
+        "TEN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-018",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-018]"
+      },
+      "operation": "SFC-CRM-CUSTOMER",
+      "owner": "CRM",
+      "trigger": "Large tenant searches customers by page",
+      "expected": "Bounded stable pagination and measured p95",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "BOUND",
+        "PERFORMANCE"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-04",
+        "R3:CRM-05",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13CustomerLifecycleEncryptionAuditAndTenantIsolation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-019",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-019]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Employee adds contact to active company",
+      "expected": "Encrypted fields, active parent FK and audit",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "OWN",
+        "AUD"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-020",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-020]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Create contact under archived customer",
+      "expected": "No contact row and no plaintext side effects",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "INV"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-021",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-021]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Read-only CRM reader opens a private contact",
+      "expected": "Require distinct PII_READ permission",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-022",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-022]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Write-only employee creates a private contact",
+      "expected": "Mutation response contains no decrypted PII",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-023",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-023]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Contact encryption envelope is swapped",
+      "expected": "AAD mismatch fails closed",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-024",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-024]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Two writers modify one contact version",
+      "expected": "At most one succeeds, history correct",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "LOCK"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-025",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-025]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Foreign tenant reads a known contact UUID",
+      "expected": "Reject without data or PII",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "PII"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-026",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-026]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Contact is archived while search runs",
+      "expected": "No archived contact in active result",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "BOUND"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR14ContactCrudEncryptionTenantIsolationAndImmutableAudit"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-027",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-027]"
+      },
+      "operation": "SFC-CRM-CONTACT_PII",
+      "owner": "CRM/KMS",
+      "trigger": "Phone/email normalization and duplicate detection",
+      "expected": "Define matching, verification and conflict policy",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DECISION_REQUIRED"
+      ],
+      "r3Candidates": [
+        "R3:CRM-01",
+        "R3:CRM-02",
+        "R3:CRM-05",
+        "R3:KMS-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U02"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedCrmCommands",
+        "AuthenticatedCrmQueries",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-028",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-028]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "New contact has no consent",
+      "expected": "Eligibility false by default",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "BOUND"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-029",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-029]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Consent granted for purpose A",
+      "expected": "Purpose A true, purpose B false",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "PII"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-030",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-030]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Grant repeated with same key",
+      "expected": "One immutable event and same receipt",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-031",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-031]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Same key used for conflicting revoke",
+      "expected": "Reject with no event delta",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-032",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-032]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Revoke accepted after grant",
+      "expected": "Eligibility false and immutable history",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IMM",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-033",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-033]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Foreign tenant queries private consent",
+      "expected": "Permission deny, not a customer lookup leak",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-034",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-034]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Previously consented contact is archived",
+      "expected": "Eligibility false; existing grant never authorizes archived contact",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "NEW_PG_TEST",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-035",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-035]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Parent customer archived after consent",
+      "expected": "All child contact eligibility false while parent archived",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "NEW_PG_TEST",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-036",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-036]"
+      },
+      "operation": "SFC-CRM-CONSENT",
+      "owner": "CRM",
+      "trigger": "Restored contact after historic opt-in",
+      "expected": "Explicit re-consent versus auto-resurrection policy and test",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DECISION_REQUIRED"
+      ],
+      "r3Candidates": [
+        "R3:CRM-03",
+        "R3:MKT-01"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03"
+      ],
+      "serviceCandidates": [
+        "CrmCustomerService",
+        "AuthenticatedCrmQueries"
+      ],
+      "historicalAssessment": "POLICY_GAP",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-037",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-037]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Employee records CALL for active contact",
+      "expected": "OPEN record and immutable event",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-038",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-038]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Employee records MEETING and follow-up",
+      "expected": "Due date saved with correct revision",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "LOCK"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-039",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-039]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "CALL request key replay",
+      "expected": "Return same interaction ID, no duplicate event",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-040",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-040]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Request key reused for a different CALL",
+      "expected": "Reject conflicting fingerprint",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-041",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-041]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Manager assigns active responsible employee",
+      "expected": "Tenant membership and role validated",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-042",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-042]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Manager assigns foreign or suspended employee",
+      "expected": "Deny with zero interaction/event changes",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-043",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-043]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Reader tries to complete an interaction",
+      "expected": "Permission deny; no event appended",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-044",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-044]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Two employees complete same row version",
+      "expected": "One terminal outcome, no double history",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-045",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-045]"
+      },
+      "operation": "SFC-CRM-INTERACTIONS",
+      "owner": "CRM",
+      "trigger": "Employee writes confidential NOTE body",
+      "expected": "Encrypted body + purpose AAD, never plaintext",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:INT-01",
+        "R3:INT-02",
+        "R3:INT-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U05"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-046",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-046]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Create draft contract under active customer",
+      "expected": "Tenant-owned contract and baseline revision",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "TEN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-047",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-047]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Activate valid contract version",
+      "expected": "Status ACTIVE and immutable revision",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "POSITIVE",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-048",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-048]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Activate contract under archived customer",
+      "expected": "Deny without status/history side effects",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-049",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-049]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Extend contract end date",
+      "expected": "New revision retains old snapshot",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IMM",
+        "LOCK"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-050",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-050]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Two employees change same revision",
+      "expected": "Optimistic version fence prevents lost update",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "LOCK"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-051",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-051]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Read contract expiry in a bounded window",
+      "expected": "Correct timezone and inclusive/exclusive date semantics",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "BOUND",
+        "TIME"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-052",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-052]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Customer archival while active contract exists",
+      "expected": "Reject without history event",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-053",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-053]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Cancel contract then archive customer",
+      "expected": "Domain transition policy and no stale references",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "XD",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-054",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-054]"
+      },
+      "operation": "SFC-CRM-CONTRACTS",
+      "owner": "CRM",
+      "trigger": "Counterparty contract belongs to tenant B",
+      "expected": "Tenant-qualified FK and read rejection",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:CRM-04",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U07",
+        "CRM_JOURNEY:CRM-U11"
+      ],
+      "serviceCandidates": [
+        "CrmContractService",
+        "CrmHistoryService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-055",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-055]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Buyer orders published product",
+      "expected": "Immutable quote and seller order saved",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IMM",
+        "XD"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-056",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-056]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Employee requests orders for known CRM customer",
+      "expected": "Cannot join without verified buyer/customer identity",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "BLOCKED_PROVENANCE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-057",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-057]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Two CRM customers share normalized email",
+      "expected": "Never infer identical buyer from email alone",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "BLOCKED_PROVENANCE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-058",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-058]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Customer record has same display name as buyer",
+      "expected": "No name-based order association",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "BLOCKED_PROVENANCE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-059",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-059]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Buyer tenant differs from seller tenant",
+      "expected": "No mistaken cross-tenant customer link",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "BLOCKED_PROVENANCE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-060",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-060]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Checkout replay after seller status change",
+      "expected": "Same receipt without duplicate order",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "XD"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-061",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-061]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Seller loses READ permission mid timeline request",
+      "expected": "No cross-domain partial data exposure",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "CONC"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-062",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-062]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Buyer verified identity linked by explicit proof",
+      "expected": "Implement immutable identity binding with consent and source",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "IMM",
+        "PII"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-063",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-063]"
+      },
+      "operation": "SFC-CRM-SALES_LINK",
+      "owner": "CRM/SALES",
+      "trigger": "Customer timeline includes payment status",
+      "expected": "Do not infer PAID from FULFILLED",
+      "scope": "CORE_NEGATIVE_INVARIANT_NO_FINANCE_ACTIVATION",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:SAL-01",
+        "R3:SAL-02",
+        "R3:SAL-04",
+        "R3:SAL-05",
+        "R3:SAL-06",
+        "R3:SAL-07",
+        "R3:CRM-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedSalesQueries",
+        "AuthenticatedBuyerOrders",
+        "AutoOrderService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-064",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-064]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "Employee attaches clean document to customer",
+      "expected": "Typed customer owner, scan and immutable reference",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "PII"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-065",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-065]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "EICAR upload arrives for same customer",
+      "expected": "Reject quarantine, never expose bytes",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "PII"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-066",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-066]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "ClamAV service times out",
+      "expected": "Fail closed without AVAILABLE object",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "RECOVERY"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-067",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-067]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "Foreign tenant tries to read known file",
+      "expected": "Zero binary bytes read",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-068",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-068]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "Reader lacks CRM_PII_READ for customer document",
+      "expected": "Denied even with general FILES_READ",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-069",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-069]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "FILES_READ revoked during download",
+      "expected": "No bytes after admission revoked",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "CONC"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-070",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-070]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "Owner customer archived after attachment",
+      "expected": "Define historical document visibility and retention",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DECISION_REQUIRED"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-071",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-071]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "Duplicate attachment request retried",
+      "expected": "Idempotent owner relationship and receipt",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-072",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-072]"
+      },
+      "operation": "SFC-CRM-FILES",
+      "owner": "FILES/CRM",
+      "trigger": "File is restored after infrastructure restart",
+      "expected": "Real RustFS/ClamAV and metadata consistency",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CRASH",
+        "REAL"
+      ],
+      "r3Candidates": [
+        "R3:FIL-01",
+        "R3:FIL-02",
+        "R3:FIL-03",
+        "R3:FIL-04",
+        "R3:FIL-05",
+        "R3:FIL-06"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U10"
+      ],
+      "serviceCandidates": [
+        "AuthenticatedFilesAttachments",
+        "AuthenticatedFilesBinaryReads",
+        "RustFsFileStorage"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.crmCustomerAttachmentLifecycleRequiresTypedOwnerAndSeparatePermissions"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-073",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-073]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Owner grants CRM_READ to employee",
+      "expected": "Employee can read, cannot write",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-074",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-074]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Owner revokes CRM_READ",
+      "expected": "Following read rejected, no history modifications",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-075",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-075]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Suspended tenant attempts any CRM mutation",
+      "expected": "Denied with zero business/audit delta",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-076",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-076]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Viewer tries to update private contact",
+      "expected": "Denied before ciphertext changed",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "COMPONENT_TESTED",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-077",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-077]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "RBAC revoke races with CRM interaction completion",
+      "expected": "Both transaction orders must be deterministic",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-078",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-078]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Auditor queries sanitized customer history",
+      "expected": "No PII in bounded timeline",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "BOUND"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-079",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-079]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Audit export crosses tenant boundary",
+      "expected": "Never reveal other tenant objects or counts",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "PII"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-080",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-080]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "Retention job runs during customer archive",
+      "expected": "Legal hold and event immutability preserved",
+      "scope": "REGRESSION_IF_PRESENT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-081",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-081]"
+      },
+      "operation": "SFC-CRM-SECURITY_AUDIT",
+      "owner": "IAM/AUDIT/CRM",
+      "trigger": "CRM role matrix for all 5 membership roles",
+      "expected": "Cover each operation including deny/zero deltas",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:IAM-01",
+        "R3:IAM-02",
+        "R3:AUD-01",
+        "R3:AUD-02",
+        "R3:AUD-03",
+        "R3:AUD-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U12"
+      ],
+      "serviceCandidates": [
+        "TenantAuthorization",
+        "CrmHistoryService",
+        "AuditRetentionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmR1aQualificationTest.urR32CrmWriterRevocationAndForeignTenantLeaveCustomerLedgerUnchanged"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-082",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-082]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "CALL schedules next action without task",
+      "expected": "Timestamp retained; not a TASKS entity",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "POSITIVE"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+      ],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-083",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-083]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Employee creates tenant-owned task",
+      "expected": "TASKS source of truth and RBAC required",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-084",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-084]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Manager assigns task to active employee",
+      "expected": "Tenant-qualified owner and assignee",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "TEN",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-085",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-085]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Inactive employee receives task",
+      "expected": "Reject without dangling assignment",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "RBAC",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-086",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-086]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Employee marks task completed",
+      "expected": "Immutable task transition and history",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IMM",
+        "POSITIVE"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-087",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-087]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Two employees close task concurrently",
+      "expected": "One completion and idempotent retry",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "IDEM"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-088",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-088]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "CRM interaction links to task",
+      "expected": "Typed immutable link, not a shadow task table",
+      "scope": "CORE_RELATED_VARIANT_SCOPE_REVIEW",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-089",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-089]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Worker is suspended with pending tasks",
+      "expected": "Reassignment policy and no leaked reminders",
+      "scope": "DECISION_REQUIRED",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DECISION_REQUIRED",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "POLICY_GAP",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-090",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-090]"
+      },
+      "operation": "SFC-CRM-TASKS",
+      "owner": "TASKS/CRM",
+      "trigger": "Reminder job crashes after publishing",
+      "expected": "Outbox retry and dedup guarantee",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OUT",
+        "CRASH",
+        "IDEM"
+      ],
+      "r3Candidates": [
+        "R3:TSK-01",
+        "R3:TSK-02",
+        "R3:TSK-03",
+        "R3:INT-04"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U04",
+        "CRM_JOURNEY:CRM-U06"
+      ],
+      "serviceCandidates": [
+        "CrmInteractionService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-091",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-091]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Seller issues invoice for order",
+      "expected": "FINANCE-owned immutable invoice snapshot",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-092",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-092]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Buyer makes partial payment",
+      "expected": "Allocation to invoice, overpayment rejected",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "INV",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-093",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-093]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Payment webhook retries",
+      "expected": "Receipt dedup and no duplicate ledger",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "INV"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-094",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-094]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Order fulfilled but not paid",
+      "expected": "Do not emit paid status without payment proof",
+      "scope": "CORE_NEGATIVE_INVARIANT_NO_FINANCE_ACTIVATION",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "DENY",
+        "OWN"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-095",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-095]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Finance event races with order cancellation",
+      "expected": "Explicit compensating policy and rollback",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "COMP"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-096",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-096]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Campaign targets consented contacts only",
+      "expected": "Consent snapshot and send admission required",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "PII",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-097",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-097]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Consent revoked while campaign queued",
+      "expected": "No dispatch after revocation commit",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "CONC",
+        "RBAC"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-098",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-098]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Tenant exceeds subscription quota",
+      "expected": "Fail before write; idempotent usage meter",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "IDEM",
+        "DENY"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_SIM:CRM-SIM-099",
+      "source": {
+        "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+        "selector": "cases[id=CRM-SIM-099]"
+      },
+      "operation": "SFC-CRM-FINANCE_GROWTH",
+      "owner": "FINANCE/MARKETING/SUBSCRIPTION",
+      "trigger": "Subscription renewal fails",
+      "expected": "Suspend entitlement without deleting CRM customer",
+      "scope": "POST_MVP",
+      "scopeBasis": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§0–3; §0A/B exceptions; related variant not automatic scope admission"
+      },
+      "candidateVariantTypes": [
+        "OWN",
+        "IMM"
+      ],
+      "r3Candidates": [
+        "R3:FIN-01",
+        "R3:FIN-02",
+        "R3:FIN-03",
+        "R3:FIN-04",
+        "R3:MKT-01",
+        "R3:MKT-02",
+        "R3:MKT-03",
+        "R3:SUB-01",
+        "R3:SUB-02",
+        "R3:SUB-03"
+      ],
+      "journeyCandidates": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_JOURNEY:CRM-U09"
+      ],
+      "serviceCandidates": [
+        "AutoOrderService",
+        "CrmCustomerService"
+      ],
+      "historicalAssessment": "MISSING_FEATURE",
+      "historicalEvidence": [],
+      "oracleStatus": "METHOD_SQL_AND_FIXTURE_REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    }
+  ],
+  "journeys": [
+    {
+      "key": "CRM_JOURNEY:CRM-U01",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U01]"
+      },
+      "behavior": "Verified user creates tenant and grants staff access",
+      "explicitR3Refs": [
+        {
+          "key": "R3:IAM-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:ORG-05",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-IDENTITY"
+      ],
+      "remainingAcceptance": "Real external OIDC/email and complete principal-to-employee role journey",
+      "historicalEvidence": [
+        "R4FirstTenantOnboardingQualificationTest.verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent",
+        "IamUserOnboardingProcessQualificationTest.completePlatformAdminToOwnerToEmployeeRoleAndReadmission"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U02",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U02]"
+      },
+      "behavior": "Employee registers, searches and reloads customer/contact",
+      "explicitR3Refs": [
+        {
+          "key": "R3:CRM-01",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:CRM-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-CUSTOMER",
+        "SFC-CRM-CONTACT_PII"
+      ],
+      "remainingAcceptance": "Full write/read/PII role matrix, revocation and persistence after process restart",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U03",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U03]"
+      },
+      "behavior": "Consent grant/revoke controls communication eligibility",
+      "explicitR3Refs": [
+        {
+          "key": "R3:CRM-02",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:MKT-01",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-CONSENT",
+        "SFC-CRM-FINANCE_GROWTH"
+      ],
+      "remainingAcceptance": "Marketing dispatch admission, consent-vs-send race, quota and no delivery after revoke",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc04ConsentLifecycleRevocationOverridesGrantWithoutDuplicateEvents"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "MIXED_REGRESSION_AND_DEFERRED_SCOPE",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U04",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U04]"
+      },
+      "behavior": "Employee records, assigns, follows up and completes interaction",
+      "explicitR3Refs": [
+        {
+          "key": "R3:INT-01",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:INT-04",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-INTERACTIONS",
+        "SFC-CRM-TASKS"
+      ],
+      "remainingAcceptance": "Active/inactive reassignee, both concurrency orders, task owner lifecycle",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads",
+        "CrmInteractionQualificationTest.crmSvc03ReadonlyEmployeeCannotCompleteOrReadAfterPermissionRevoke"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U05",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U05]"
+      },
+      "behavior": "Employee writes protected NOTE and communication outcome",
+      "explicitR3Refs": [
+        {
+          "key": "R3:INT-03",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-INTERACTIONS"
+      ],
+      "remainingAcceptance": "Encrypted NOTE/outcome body with AAD and purpose-scoped read permissions",
+      "historicalEvidence": [],
+      "historicalAssessment": "GAP",
+      "scope": "POST_MVP_EXPANSION",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U06",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U06]"
+      },
+      "behavior": "Employee creates and closes linked task from CRM",
+      "explicitR3Refs": [
+        {
+          "key": "R3:TSK-01",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:INT-04",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-TASKS"
+      ],
+      "remainingAcceptance": "Tenant-owned TASKS lifecycle and typed interaction reference",
+      "historicalEvidence": [],
+      "historicalAssessment": "GAP",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U07",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U07]"
+      },
+      "behavior": "Manager activates and reviews versioned contract",
+      "explicitR3Refs": [
+        {
+          "key": "R3:CRM-04",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:CRM-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-CONTRACTS"
+      ],
+      "remainingAcceptance": "Contract deadline, archived parent and all assigned role negative cases",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U08",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U08]"
+      },
+      "behavior": "CRM customer is reliably associated with seller order",
+      "explicitR3Refs": [
+        {
+          "key": "R3:SAL-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:CRM-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-SALES_LINK"
+      ],
+      "remainingAcceptance": "No verified crm.customer→sales_order identity link; never infer from email, name, tenant or line",
+      "historicalEvidence": [
+        "CommercialCoreE2EQualificationTest.skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+      ],
+      "historicalAssessment": "BLOCKED_PROVENANCE",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U09",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U09]"
+      },
+      "behavior": "Customer sees relationship history through payment",
+      "explicitR3Refs": [
+        {
+          "key": "R3:FIN-01",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:SAL-07",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-SALES_LINK",
+        "SFC-CRM-FINANCE_GROWTH"
+      ],
+      "remainingAcceptance": "Finance owner invoice/payment/allocation, no fulfillment-as-payment inference",
+      "historicalEvidence": [],
+      "historicalAssessment": "GAP",
+      "scope": "POST_MVP_EXPANSION",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U10",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U10]"
+      },
+      "behavior": "Customer file stays tenant and permission bound",
+      "explicitR3Refs": [
+        {
+          "key": "R3:FIL-05",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:FIL-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-FILES"
+      ],
+      "remainingAcceptance": "End-to-end CRM attach→read→revoke→restore with actual RustFS/ClamAV",
+      "historicalEvidence": [
+        "FilesR10bQualificationTest.wrongTenantAndRevokedPermissionNeverReadBinaryStream"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "MIXED_REGRESSION_AND_DEFERRED_SCOPE",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U11",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U11]"
+      },
+      "behavior": "Manager safely archives/restores customer and relations",
+      "explicitR3Refs": [
+        {
+          "key": "R3:CRM-03",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:CRM-06",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-CUSTOMER",
+        "SFC-CRM-CONTRACTS"
+      ],
+      "remainingAcceptance": "More multi-resource failure injection, concurrent archive against contract creation, reload",
+      "historicalEvidence": [
+        "CrmInteractionQualificationTest.crmSvc05CustomerArchiveContractGuardAndRestorePreserveTimeline"
+      ],
+      "historicalAssessment": "PARTIAL",
+      "scope": "CORE_RELATED_SCOPE_REVIEW",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "key": "CRM_JOURNEY:CRM-U12",
+      "source": {
+        "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+        "selector": "journeys[id=CRM-U12]"
+      },
+      "behavior": "Auditor reviews sanitized cross-domain history",
+      "explicitR3Refs": [
+        {
+          "key": "R3:AUD-03",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        },
+        {
+          "key": "R3:AUD-04",
+          "resolved": true,
+          "relation": "SOURCE_DECLARED_REFERENCE_NOT_EQUIVALENCE"
+        }
+      ],
+      "candidateOperations": [
+        "SFC-CRM-SECURITY_AUDIT"
+      ],
+      "remainingAcceptance": "Bounded cross-domain read model, redaction, isolation, retention proof",
+      "historicalEvidence": [],
+      "historicalAssessment": "GAP",
+      "scope": "DECISION_REQUIRED",
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    }
+  ],
+  "relatedR3": [
+    {
+      "key": "R3:IAM-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=IAM-01]"
+      },
+      "title": "Tenant roles and explicit permissions",
+      "domain": "IAM_RBAC",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/iam/VerifiedTenantRoleCommands.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "TenantRbacQualificationTest",
+        "test": "functionalRoleIsIsolatedAndActivatedOnlyAfterApproval"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:IAM-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=IAM-02]"
+      },
+      "title": "Immediate permission revocation with command fencing",
+      "domain": "IAM_RBAC",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/iam/TenantAuthorization.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "TenantRbacRevocationQualificationTest",
+        "test": "commandCannotProceedUntilEarlierRevocationCommits"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:IAM-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=IAM-03]"
+      },
+      "title": "Email registration and single-use proof",
+      "domain": "IAM_RBAC",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/iam/EmailIdentityService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "IamInitialEmailRegistrationQualificationTest",
+        "test": "firstRegistrationCreatesUnverifiedEncryptedEmailAndQueuesOneChallenge"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:IAM-06",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=IAM-06]"
+      },
+      "title": "Real issuer/JWKS session onboarding and external email delivery",
+      "domain": "IAM_RBAC",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:ORG-05",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=ORG-05]"
+      },
+      "title": "Complete first-tenant self-service onboarding",
+      "domain": "ORGANIZATION",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:CRM-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=CRM-01]"
+      },
+      "title": "Tenant-safe customer and contact access",
+      "domain": "CRM_CORE",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/AuthenticatedCrmQueries.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "tenantIsoR1CustomersContactsJPAFiltersCountsAndAllPagesRemainScoped"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:CRM-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=CRM-02]"
+      },
+      "title": "Encrypted customer/person PII",
+      "domain": "CRM_CORE",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/CrmCustomerService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "personAndContactSecretsStayEncryptedAndReloadAcrossInstance"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:CRM-04",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=CRM-04]"
+      },
+      "title": "Contract revision and customer archive guards",
+      "domain": "CRM_CORE",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/CrmContractService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "crmR13ContractRenewalImmutableRevisionsAndArchiveGuard"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:CRM-05",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=CRM-05]"
+      },
+      "title": "Bounded customer search and privacy",
+      "domain": "CRM_CORE",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/CrmSearchService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "customerAndContactSearchAreBoundedTenantScopedAndPrivacyMinimized"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:CRM-06",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=CRM-06]"
+      },
+      "title": "Qualified staff-facing complete CRM funnel",
+      "domain": "CRM_CORE",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:KMS-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=KMS-01]"
+      },
+      "title": "Tenant envelope encryption and wrapping",
+      "domain": "KMS",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/security/kms/KeyWrappingService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "KmsPersistedRoundTripTest",
+        "test": "persistedEnvelopeRestoresUsingFreshCryptoInstance"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:CRM-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=CRM-03]"
+      },
+      "title": "Consent opt-in and revocation",
+      "domain": "CRM_CORE",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/CrmCustomerService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmR1aQualificationTest",
+        "test": "consentIsOptInAndRevocationWins"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:MKT-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=MKT-01]"
+      },
+      "title": "Purpose-bound customer consent targeting",
+      "domain": "MARKETING",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:INT-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=INT-01]"
+      },
+      "title": "Interaction lifecycle, assignee and next action",
+      "domain": "CRM_INTERACTION",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmInteractionQualificationTest",
+        "test": "interactionLifecycleIsIdempotentTenantScopedAndHistoryImmutable"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:INT-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=INT-02]"
+      },
+      "title": "Immutable interaction events with tenant-qualified ownership",
+      "domain": "CRM_INTERACTION",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/crm/CrmInteractionService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "CrmInteractionQualificationTest",
+        "test": "postgresInteractionEventsAreImmutableAndContactOwnershipIsTenantQualified"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:INT-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=INT-03]"
+      },
+      "title": "Purpose-scoped encrypted NOTE body and communication outcome",
+      "domain": "CRM_INTERACTION",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:INT-04",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=INT-04]"
+      },
+      "title": "Task creation and completion through TASKS ownership",
+      "domain": "CRM_INTERACTION",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SAL-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SAL-01]"
+      },
+      "title": "Idempotent checkout and proof boundaries",
+      "domain": "SALES_AUTOORDER",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "retryIsIdempotentAndChangesAreRejected"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SAL-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SAL-02]"
+      },
+      "title": "Immutable accepted SKU and price snapshot",
+      "domain": "SALES_AUTOORDER",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "sale08CheckoutCapturesImmutableSkuAndAcceptedCommercialPrice"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SAL-04",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SAL-04]"
+      },
+      "title": "Tenant-scoped seller detail and order history",
+      "domain": "SALES_AUTOORDER",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/sales/SalesOrderQueryService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "SalesOrderQueryQualificationTest",
+        "test": "r10SellerDetailAndStatusHistoryAreTenantBoundAndLimited"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SAL-05",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SAL-05]"
+      },
+      "title": "Buyer identity safe order reads",
+      "domain": "SALES_AUTOORDER",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/autoorder/AuthenticatedBuyerOrders.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AutoOrderR1QualificationTest",
+        "test": "tcrud04BuyerOrdersCannotBeReadBySupplyingAnotherUsersUuid"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SAL-06",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SAL-06]"
+      },
+      "title": "Full real OIDC buyer/seller browser E2E",
+      "domain": "SALES_AUTOORDER",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SAL-07",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SAL-07]"
+      },
+      "title": "Invoice/payment/settlement order integration",
+      "domain": "SALES_AUTOORDER",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIL-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIL-01]"
+      },
+      "title": "Idempotent tenant-file metadata staging",
+      "domain": "FILES",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/files/FileMetadataService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10aQualificationTest",
+        "test": "verifiedMetadataBeginIsIdempotentAndTenantScoped"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIL-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIL-02]"
+      },
+      "title": "Malware and invalid stream fail-closed policy",
+      "domain": "FILES",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/files/FileUploadCompletionService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10bQualificationTest",
+        "test": "scannerInfectedAndTimeoutFailClosedWithoutStoragePromotion"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIL-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIL-03]"
+      },
+      "title": "CRM owner and PII binary read boundary",
+      "domain": "FILES",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/files/AuthenticatedFilesBinaryReads.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10bQualificationTest",
+        "test": "crmDocumentAccessRequiresPiiAndFileReadNotOnlyTenantMembership"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIL-04",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIL-04]"
+      },
+      "title": "Recovery of interrupted storage promotion",
+      "domain": "FILES",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/files/FileRecoveryService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "FilesR10bQualificationTest",
+        "test": "crashAfterPromoteBeforeSqlCommitIsReconciledAndRetrySucceeds"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIL-05",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIL-05]"
+      },
+      "title": "Real RustFS and scanner infrastructure validation",
+      "domain": "FILES",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/files/RustFsFileStorage.java",
+      "proofCandidate": {
+        "artifact": "rustfs-real-infra-e2e-surefire",
+        "suite": "RustFsRealClamAvE2ETest",
+        "test": "realClamdRespondsCleanInfectedAndFailClosedForUnavailableEndpoint"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIL-06",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIL-06]"
+      },
+      "title": "Typed attachment owner ACL for catalog and sales",
+      "domain": "FILES",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:AUD-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=AUD-01]"
+      },
+      "title": "Retention policy and legal hold enforcement",
+      "domain": "AUDIT",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/audit/AuditRetentionService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AuditRetentionQualificationTest",
+        "test": "threeAndFiveYearPoliciesAndLegalHoldsAreEnforced"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:AUD-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=AUD-02]"
+      },
+      "title": "Protected modification of retention governance",
+      "domain": "AUDIT",
+      "historicalDelivery": "IMPLEMENTED",
+      "sourceCandidate": "src/main/java/kz/rm/audit/AuditRetentionService.java",
+      "proofCandidate": {
+        "artifact": "kms-postgres-surefire",
+        "suite": "AuditRetentionQualificationTest",
+        "test": "governanceLockTriggersProtectHoldAndPolicyWrites"
+      },
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:AUD-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=AUD-03]"
+      },
+      "title": "Tenant-safe cross-domain sanitized audit query",
+      "domain": "AUDIT",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:AUD-04",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=AUD-04]"
+      },
+      "title": "Auditor UI and bounded compliant export",
+      "domain": "AUDIT",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:TSK-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=TSK-01]"
+      },
+      "title": "Tenant-owned task commands and transitions",
+      "domain": "TASKS",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:TSK-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=TSK-02]"
+      },
+      "title": "CRM interaction-to-task typed link",
+      "domain": "TASKS",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:TSK-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=TSK-03]"
+      },
+      "title": "Assigned task lists, reminders and deadlines",
+      "domain": "TASKS",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIN-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIN-01]"
+      },
+      "title": "Tenant-owned invoice issue and lifecycle",
+      "domain": "FINANCE",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIN-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIN-02]"
+      },
+      "title": "Payments and allocations with idempotency",
+      "domain": "FINANCE",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIN-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIN-03]"
+      },
+      "title": "Reconciliation and immutable financial events",
+      "domain": "FINANCE",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:FIN-04",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=FIN-04]"
+      },
+      "title": "Order-linked finance view and audit",
+      "domain": "FINANCE",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:MKT-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=MKT-02]"
+      },
+      "title": "Campaign lifecycle and consent-gated dispatch",
+      "domain": "MARKETING",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:MKT-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=MKT-03]"
+      },
+      "title": "Campaign delivery status and suppression proof",
+      "domain": "MARKETING",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SUB-01",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SUB-01]"
+      },
+      "title": "Tenant plan entitlement evaluation",
+      "domain": "SUBSCRIPTION",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SUB-02",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SUB-02]"
+      },
+      "title": "Usage metering and quota enforcement",
+      "domain": "SUBSCRIPTION",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "R3:SUB-03",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "selector": "requirements[id=SUB-03]"
+      },
+      "title": "Subscription billing lifecycle and renewal proof",
+      "domain": "SUBSCRIPTION",
+      "historicalDelivery": "PLANNED",
+      "sourceCandidate": null,
+      "proofCandidate": null,
+      "scope": "REVIEW_REQUIRED",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "CRM-SFC-C01",
+      "sources": [
+        "CRM_JOURNEY:CRM-U06",
+        "R3:TSK-01",
+        "CRM_SIM:CRM-SIM-083",
+        "CRM_SIM:CRM-SIM-088"
+      ],
+      "decision": "Historical GAP/PLANNED does not override approved basic TASK scope or establish current missing implementation. Verify TaskService and typed link at method level.",
+      "status": "OPEN_RUNTIME_REVIEW"
+    },
+    {
+      "id": "CRM-SFC-C02",
+      "sources": [
+        "CRM_JOURNEY:CRM-U08",
+        "CRM_SIM:CRM-SIM-056",
+        "CRM_SIM:CRM-SIM-062"
+      ],
+      "decision": "Historical BLOCKED_PROVENANCE retained; explicit identity linkage required. Do not infer from email/name. Check current buyer-link owner and evidence.",
+      "status": "OPEN_RUNTIME_REVIEW"
+    },
+    {
+      "id": "CRM-SFC-C03",
+      "sources": [
+        "CRM_JOURNEY:CRM-U03",
+        "CRM_SIM:CRM-SIM-028",
+        "CRM_SIM:CRM-SIM-096"
+      ],
+      "decision": "Consent invariants and existing regression distinct from deferred campaign dispatch.",
+      "status": "SCOPE_DISTINCTION"
+    },
+    {
+      "id": "CRM-SFC-C04",
+      "sources": [
+        "CRM_JOURNEY:CRM-U09",
+        "CRM_SIM:CRM-SIM-063",
+        "CRM_SIM:CRM-SIM-094"
+      ],
+      "decision": "No paid inference mandatory negative invariant; invoice/payment implementation deferred.",
+      "status": "SCOPE_DISTINCTION"
+    },
+    {
+      "id": "CRM-SFC-C05",
+      "sources": [
+        "CRM_SIM:CRM-SIM-015",
+        "CRM_SIM:CRM-SIM-052"
+      ],
+      "decision": "Same archive guard candidate; preserve actor, fixtures, expected deltas until proven identical. No merge.",
+      "status": "ALIAS_CANDIDATE"
+    },
+    {
+      "id": "CRM-SFC-C06",
+      "sources": [
+        "CRM_SIM:CRM-SIM-026",
+        "CRM_SIM:CRM-SIM-069"
+      ],
+      "decision": "Concurrent visibility and revocation wording needs owner linearization contract; do not promise retroactive suppression of already-authorized snapshot/bytes.",
+      "status": "DECISION_REQUIRED"
+    }
+  ]
+}
