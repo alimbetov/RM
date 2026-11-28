@@ -439,6 +439,11 @@ class BusMvpServiceJourneyQualificationTest {
             roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
             r02.denied(otherStaff,tenant,b55Calendar,lastClosed);
             r02.emptyTenant(otherStaff,otherTenant,tenant,otherB55Calendar,lastClosed);
+            roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.FILES_UPLOAD);
+            roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.FILES_READ);
+            r02.privateReportFile(otherStaff,staff,otherTenant,otherB55Calendar,lastClosed);
+            roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.FILES_UPLOAD);
+            roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.FILES_READ);
             roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.SALES_ORDER_READ);
             r02.deniedReplay(otherStaff,otherTenant,otherB55Calendar,lastClosed);
             r02.denied(otherStaff,otherTenant,otherB55Calendar,lastClosed);

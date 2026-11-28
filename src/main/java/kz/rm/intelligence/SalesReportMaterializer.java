@@ -54,11 +54,15 @@ final class SalesReportMaterializer {
     kz.rm.files.TrustedReportUpload.Receipt materializeAndUpload(VerifiedActor actor,UUID tenant,long calendar,
         LocalDate lastClosedMonth,String key,kz.rm.files.TrustedReportUpload uploader) throws java.io.IOException {
         Objects.requireNonNull(uploader);
+        return uploader.upload(actor,prepareFile(actor,tenant,calendar,lastClosedMonth,key));
+    }
+
+    TrustedReportFile prepareFile(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String key){
         var prepared=new java.util.concurrent.atomic.AtomicReference<TrustedReportFile>();
         materialize(actor,tenant,calendar,lastClosedMonth,null,key,prepared::set);
         var file=prepared.get();
         if(file==null)throw new IllegalStateException("REPORT_EXISTING_DATASET_ARTIFACT_RECOVERY_REQUIRED");
-        return uploader.upload(actor,file);
+        return file;
     }
 
     private Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency,
