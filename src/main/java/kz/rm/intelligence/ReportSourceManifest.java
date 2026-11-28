@@ -49,7 +49,12 @@ final class ReportSourceManifest {
         return from(tenant,queries,windows,null);
     }
     static ReportSourceManifest from(UUID tenant,List<Query> queries,List<List<Result>> windows,SnapshotEvidence snapshot){
+        return from(tenant,queries,windows,snapshot,null);
+    }
+    static ReportSourceManifest from(UUID tenant,List<Query> queries,List<List<Result>> windows,SnapshotEvidence snapshot,AccountingPolicy accounting){
         Objects.requireNonNull(tenant);
+        if(accounting!=null&&(snapshot==null||queries.stream().anyMatch(q->q.currency()!=null&&!accounting.currency().equals(q.currency()))))
+            throw new IllegalArgumentException("REPORT_ACCOUNTING_SCOPE");
         if(queries.isEmpty()||queries.size()>3||queries.size()!=windows.size())
             throw new IllegalArgumentException("REPORT_MANIFEST_SHAPE");
         var inputQueries=List.copyOf(queries);
@@ -73,7 +78,7 @@ final class ReportSourceManifest {
         Instant observed=Objects.requireNonNull(first.observedAt());
         long revision=first.sourceRevision();
         if(revision<0)throw new IllegalArgumentException("REPORT_MANIFEST_REVISION");
-        var evidence=new FramedHash(snapshot==null?"RM-ARS-SOURCE-1":"RM-ARS-SOURCE-2");
+        var evidence=new FramedHash(accounting!=null?"RM-ARS-SOURCE-3":snapshot==null?"RM-ARS-SOURCE-1":"RM-ARS-SOURCE-2");
         evidence.add(scopeDigest);evidence.add(observed);evidence.add(revision);
         if(snapshot!=null){
             if(Math.addExact(snapshot.sourceCounter(),snapshot.sourceEvents())!=revision)
@@ -82,6 +87,10 @@ final class ReportSourceManifest {
             evidence.add(snapshot.generation());evidence.add(snapshot.proof());evidence.add(snapshot.from());evidence.add(snapshot.until());
             evidence.add(snapshot.dirty());evidence.add(snapshot.receipt());evidence.add(snapshot.materialization());
             evidence.add(snapshot.lifecycle());evidence.add(snapshot.proofStatus());
+        }
+        if(accounting!=null){
+            evidence.add(accounting.country());evidence.add(accounting.currency());evidence.add(accounting.version());
+            evidence.add("ACCOUNTING_NATIVE_ONLY");
         }
         UUID generation=null,proof=null;
         for(int i=0;i<queries.size();i++){

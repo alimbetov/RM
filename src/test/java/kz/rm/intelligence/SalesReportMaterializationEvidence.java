@@ -29,15 +29,15 @@ public final class SalesReportMaterializationEvidence {
     }
     public void emptyTenant(VerifiedActor actor,UUID tenant,UUID foreign,long calendar,LocalDate last){
         String key="empty-"+tenant;
-        var r=materializer.materialize(actor,tenant,calendar,last,"KZT",key);
-        assertThat(materializer.materialize(actor,tenant,calendar,last,"KZT",key)).isEqualTo(r);
+        var r=materializer.materializeAccounting(actor,tenant,calendar,last,key);
+        assertThat(materializer.materializeAccounting(actor,tenant,calendar,last,key)).isEqualTo(r);
         assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"USD",key))
-            .isInstanceOf(org.springframework.dao.DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_CONFLICT");
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("REPORT_ACCOUNTING_CURRENCY_MISMATCH");
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM reporting.int_report_source_evidence
             WHERE tenant_id=? AND dataset_id=? AND staging_date=?
              AND encode(sha256(scope_bytes),'hex')=? AND encode(sha256(source_bytes),'hex')=?
-             AND substring(source_bytes FROM 1 FOR 18)=convert_to('15:RM-ARS-SOURCE-2','UTF8')
+             AND substring(source_bytes FROM 1 FOR 18)=convert_to('15:RM-ARS-SOURCE-3','UTF8')
             """,Long.class,tenant,r.dataset(),r.stagingDate(),r.scopeDigest(),r.sourceDigest())).isEqualTo(1L);
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM reporting.int_report_request_attempt l JOIN reporting.int_report_instance i
@@ -74,15 +74,14 @@ public final class SalesReportMaterializationEvidence {
             VerifiedActor otherActor,UUID other,long otherCalendar,LocalDate last,UUID template){
         new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(status->{
             historicalOrder(tenant,template,last.minusMonths(1),"KZT","100","125");
-            historicalOrder(tenant,template,last.minusMonths(1),"USD","20");
             historicalOrder(tenant,template,last,"KZT","150");
             historicalOrder(tenant,template,last,"KZT","50","100");
         });
         var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
         var start=new java.util.concurrent.CountDownLatch(1);
         try{
-            var a=pool.submit(()->{await(start);return materializer.materialize(actor,tenant,calendar,last,"KZT");});
-            var b=pool.submit(()->{await(start);return materializer.materialize(otherActor,other,otherCalendar,last,"KZT");});
+            var a=pool.submit(()->{await(start);return materializer.materialize(actor,tenant,calendar,last);});
+            var b=pool.submit(()->{await(start);return materializer.materialize(otherActor,other,otherCalendar,last);});
             start.countDown();
             var ra=a.get(150,java.util.concurrent.TimeUnit.SECONDS);
             var rb=b.get(150,java.util.concurrent.TimeUnit.SECONDS);
@@ -94,13 +93,15 @@ public final class SalesReportMaterializationEvidence {
                 SELECT count(*) FROM reporting.int_report_dataset
                 WHERE tenant_id=? AND dataset_id=? AND staging_date=?
                 """,Long.class,other,ra.dataset(),ra.stagingDate())).isZero();
-            assertMonth(ra,last.minusMonths(1),"KZT","225","2");
+            assertMonth(ra,last.minusMonths(1),"KZT","225","1");
             assertMonth(ra,last,"KZT","300","2");
-            var usd=materializer.materialize(actor,tenant,calendar,last,"USD");
-            assertReceipt(usd,tenant,3);
-            assertMonth(usd,last.minusMonths(1),"USD","20","2");
-            assertMonth(usd,last,"USD",null,"2");
-            assertThat(usd.scopeDigest()).isNotEqualTo(ra.scopeDigest());
+            new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(status->
+                historicalOrder(tenant,template,last.minusMonths(1),"USD","20"));
+            assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last))
+                .isInstanceOf(IllegalStateException.class).hasMessage("REPORT_ACCOUNTING_FX_EVIDENCE_REQUIRED");
+            assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"USD"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("REPORT_ACCOUNTING_CURRENCY_MISMATCH");
+            // Raw currency-specific diagnostic parity remains; not a standard USD report.
             assertBatchParity(actor,tenant,calendar,last,"KZT");
             assertBatchParity(actor,tenant,calendar,last,"USD");
             assertBatchParity(otherActor,other,otherCalendar,last,"KZT");

@@ -133,6 +133,14 @@ class ReportDatasetDigestTest {
             new ReportSourceManifest.SnapshotEvidence(5,2,null,null,null,null,null,null,null,null,"NO_MATCHING_ACTIVE_GENERATION")).sha256());
         assertThrows(IllegalArgumentException.class,()->ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),
             new ReportSourceManifest.SnapshotEvidence(5,3,null,null,null,null,null,null,null,null,"NO_MATCHING_ACTIVE_GENERATION")));
+        var accounting=new AuthorizedAnalyticalReadService.AccountingPolicy("KZ","KZT",1);
+        var v3=ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),tuple,accounting);
+        assertEquals(v2.scopeDigest(),v3.scopeDigest());
+        assertNotEquals(v2.sha256(),v3.sha256());
+        assertNotEquals(v3.sha256(),ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),tuple,
+            new AuthorizedAnalyticalReadService.AccountingPolicy("KZ","KZT",2)).sha256());
+        assertThrows(IllegalArgumentException.class,()->ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),tuple,
+            new AuthorizedAnalyticalReadService.AccountingPolicy("US","USD",1)));
         var plan=SalesReportDatasetPlan.from(m,DATASET);
         assertEquals(48,plan.expected().rows());
         assertEquals(plan.expected(),SalesReportDatasetPlan.from(reversed,DATASET).expected());

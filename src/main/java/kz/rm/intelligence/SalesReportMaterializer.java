@@ -34,6 +34,13 @@ final class SalesReportMaterializer {
     record Receipt(UUID tenant,UUID dataset,LocalDate stagingDate,String scopeDigest,String sourceDigest,
                    ReportDatasetDigest.Result expected,ReportDatasetDigest.Result observed){}
 
+    Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth){
+        return materializeAccounting(actor,tenant,calendar,lastClosedMonth,UUID.randomUUID().toString());
+    }
+    Receipt materializeAccounting(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String key){
+        return materialize(actor,tenant,calendar,lastClosedMonth,null,key);
+    }
+    /** Compatibility overload: supplied currency is an assertion, never a selector. */
     Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency){
         return materialize(actor,tenant,calendar,lastClosedMonth,currency,UUID.randomUUID().toString());
     }
@@ -41,30 +48,33 @@ final class SalesReportMaterializer {
     Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency,String key){
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("R02_OWN_TRANSACTION");
-        Objects.requireNonNull(currency);
         Objects.requireNonNull(key);
         if(key.isBlank()||key.length()>128||lastClosedMonth.getDayOfMonth()!=1)
             throw new IllegalArgumentException("R02_REQUEST");
 
+        var policy=Objects.requireNonNull(tx.execute(status->{
+            limits();return reader.admitAccountingPolicy(actor,tenant);
+        }));
+        if(currency!=null&&!policy.currency().equals(currency))throw new IllegalArgumentException("REPORT_ACCOUNTING_CURRENCY_MISMATCH");
         var queries=List.of(
-            new Query(Metric.BOOKED_AMOUNT,calendar,PeriodResolver.Code.M,lastClosedMonth,null,null,null,List.of(),currency),
+            new Query(Metric.BOOKED_AMOUNT,calendar,PeriodResolver.Code.M,lastClosedMonth,null,null,null,List.of(),policy.currency()),
             new Query(Metric.BOOKED_ORDERS,calendar,PeriodResolver.Code.M,lastClosedMonth,null,null,null,List.of(),null));
         String scope=ReportSourceManifest.scopeDigest(tenant,queries);
         // The actor is part of the logical request. A different actor cannot replay a private request.
-        String request=requestDigest(actor.userId(),scope);
+        String request=requestDigest(actor.userId(),scope,policy);
         UUID instance=Objects.requireNonNull(tx.execute(status->{
-            limits();reader.admitReportRecovery(actor,tenant,queries);
+            limits();reader.admitReportRecovery(actor,tenant,queries);reader.requireAccountingPolicy(tenant,policy,true);
             return jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",UUID.class,
                 tenant,UUID.randomUUID(),key,request,scope,"RM-R02","1");
         }));
-        var recovered=recover(actor,tenant,queries,instance);
+        var recovered=recover(actor,tenant,queries,instance,policy);
         if(recovered!=null)return recovered;
-        disposeExpired(actor,tenant,queries,instance);
+        disposeExpired(actor,tenant,queries,instance,policy);
         // An earlier Seal may have committed while disposition was waiting.
-        recovered=recover(actor,tenant,queries,instance);
+        recovered=recover(actor,tenant,queries,instance,policy);
         if(recovered!=null)return recovered;
         // Source admission and RR snapshot finish before any reporting writes.
-        var manifest=reader.readReportMonths(actor,tenant,queries);
+        var manifest=reader.readReportMonths(actor,tenant,queries,policy);
         if(!scope.equals(manifest.scopeDigest()))throw new IllegalStateException("R02_SCOPE_MISMATCH");
         UUID dataset=UUID.randomUUID(),worker=UUID.randomUUID();
         var plan=SalesReportDatasetPlan.from(manifest,dataset);
@@ -96,16 +106,16 @@ final class SalesReportMaterializer {
         });
         var observed=validation.validateAndSeal(header.tenant(),dataset,day,worker,1L);
         if(!observed.equals(plan.expected()))throw new IllegalStateException("R02_OBSERVED_MISMATCH");
-        return Objects.requireNonNull(recover(actor,tenant,queries,instance),"R02_READY_NOT_FOUND");
+        return Objects.requireNonNull(recover(actor,tenant,queries,instance,policy),"R02_READY_NOT_FOUND");
     }
-    private static String requestDigest(UUID actor,String scope){
+    private static String requestDigest(UUID actor,String scope,AccountingPolicy policy){
         try{
             return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                .digest(("RM-R02-REQUEST-1\n"+actor+"\n"+scope).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                .digest(("RM-R02-REQUEST-2\n"+actor+"\n"+scope+"\n"+policy.country()+"\n"+policy.currency()+"\n"+policy.version()).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         }catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
     }
     private record Candidate(UUID dataset,LocalDate day){}
-    private void disposeExpired(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance){
+    private void disposeExpired(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance,AccountingPolicy policy){
         var candidates=Objects.requireNonNull(tx.execute(status->{
             limits();reader.admitReportRecovery(actor,tenant,queries);
             return jdbc.query("""
@@ -124,7 +134,7 @@ final class SalesReportMaterializer {
             actor.userId();
         });
     }
-    private Receipt recover(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance){
+    private Receipt recover(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance,AccountingPolicy policy){
         return tx.execute(status->{
             limits();reader.admitReportRecovery(actor,tenant,queries);
             // Metadata discovery only; take the date fence before selection or data access.

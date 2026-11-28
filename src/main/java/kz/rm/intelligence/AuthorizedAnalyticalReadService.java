@@ -64,20 +64,23 @@ public class AuthorizedAnalyticalReadService {
     }
     /** B5.4: bounded same-grain metric windows in one authorized snapshot. */
     List<List<Result>> readMetricWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors){
-        return readWindows(actor,tenant,queries,anchors,false).windows();
+        return readWindows(actor,tenant,queries,anchors,false,null).windows();
     }
 
     /** Internal report candidate only. Exactly 24 consecutive closed months.
      * Does not grant publication, historical completeness or transport access. */
     ReportSourceManifest readReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries){
+        return readReportMonths(actor,tenant,queries,null);
+    }
+    ReportSourceManifest readReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries,AccountingPolicy accounting){
         var qs=List.copyOf(queries).stream().sorted(Comparator.comparing(x->x.metric().name())).toList();
         if(qs.isEmpty()||qs.size()>3)throw new IllegalArgumentException("REPORT_METRIC_WINDOW");
         var end=qs.getFirst().anchor();
         if(end.getDayOfMonth()!=1||qs.stream().anyMatch(q->q.period()!=PeriodResolver.Code.M))
             throw new IllegalArgumentException("REPORT_MONTH_ANCHOR");
         var dates=java.util.stream.IntStream.range(0,24).mapToObj(i->end.minusMonths(23-i)).toList();
-        var read=readWindows(actor,tenant,qs,dates,true);
-        return ReportSourceManifest.from(tenant,qs,read.windows(),read.evidence());
+        var read=readWindows(actor,tenant,qs,dates,true,accounting);
+        return ReportSourceManifest.from(tenant,qs,read.windows(),read.evidence(),accounting);
     }
     /** Internal recovery admission; caller holds the transaction until result selection. */
     void admitReportRecovery(VerifiedActor actor,UUID tenant,List<Query> queries){
@@ -88,8 +91,41 @@ public class AuthorizedAnalyticalReadService {
             new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
         actor.userId();
     }
+    /** Actual tenant policy, not global defaults or arbitrary client currency. */
+    record AccountingPolicy(String country,String currency,long version){
+        AccountingPolicy{
+            if(country==null||!country.matches("[A-Z]{2}")||currency==null||!currency.matches("[A-Z]{3}")||version<1)
+                throw new IllegalArgumentException("REPORT_ACCOUNTING_POLICY");
+            java.util.Currency.getInstance(currency);
+        }
+    }
+    AccountingPolicy admitAccountingPolicy(VerifiedActor actor,UUID tenant){
+        if(!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("REPORT_RECOVERY_TRANSACTION_REQUIRED");
+        l3.admitReport(actor,tenant);
+        l3.admit(actor,tenant,L3DerivedSeriesService.Metric.BOOKED_ORDERS,
+            new L3DerivedSeriesService.Filter(null,null,null,List.of(),null));
+        return accountingPolicy(tenant,true);
+    }
+    void requireAccountingPolicy(UUID tenant,AccountingPolicy expected,boolean lock){
+        if(!Objects.requireNonNull(expected).equals(accountingPolicy(tenant,lock)))
+            throw new IllegalStateException("REPORT_ACCOUNTING_POLICY_CHANGED");
+    }
+    private AccountingPolicy accountingPolicy(UUID tenant,boolean lock){
+        var policy=jdbc.query("""
+            SELECT p.market_country,p.accounting_currency,p.policy_version
+            FROM public.tenant_currency_policy p
+            WHERE p.tenant_id=? AND p.status='ACTIVE'
+              AND EXISTS(SELECT 1 FROM public.tenant_allowed_currency a
+                WHERE a.tenant_id=p.tenant_id AND a.currency_code=p.accounting_currency
+                  AND a.purpose='ACCOUNTING' AND a.state='ENABLED')
+            """+(lock?" FOR SHARE OF p":""),rs->rs.next()?new AccountingPolicy(rs.getString(1).trim(),
+            rs.getString(2).trim(),rs.getLong(3)):null,tenant);
+        if(policy==null)throw new IllegalStateException("REPORT_ACCOUNTING_POLICY_NOT_ACTIVE");
+        return policy;
+    }
     private record WindowRead(List<List<Result>> windows,ReportSourceManifest.SnapshotEvidence evidence){}
-    private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report){
+    private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report,AccountingPolicy accounting){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         var qs=List.copyOf(queries);
         if(qs.isEmpty()||qs.size()>3||qs.stream().map(Query::metric).distinct().count()!=qs.size())
@@ -111,6 +147,7 @@ public class AuthorizedAnalyticalReadService {
             if(report)l3.admitReport(actor,tenant);
             for(var q:qs)l3.admit(actor,tenant,L3DerivedSeriesService.Metric.valueOf(q.metric().name()),
                 new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
+            if(accounting!=null)requireAccountingPolicy(tenant,accounting,true);
             var snapshot=new TransactionTemplate(manager);
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
@@ -119,7 +156,7 @@ public class AuthorizedAnalyticalReadService {
                 // Reuse only within this read-only RR snapshot; every new request
                 // still runs the full independent proof validation.
                 var checkedProofs=new HashMap<ProofKey,MultidimensionalCoverageService.Status>();
-                if(report)return readReportSnapshot(tenant,qs,dates);
+                if(report)return readReportSnapshot(tenant,qs,dates,accounting);
                 return new WindowRead(qs.stream().map(query->{
                     var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
                     var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
@@ -134,7 +171,7 @@ public class AuthorizedAnalyticalReadService {
 
     /** Closed month report extraction. One calendar/revision/pointer lookup
      * per snapshot and one grouped L0/L3 query per metric and route. */
-    private WindowRead readReportSnapshot(UUID tenant,List<Query> queries,List<LocalDate> dates){
+    private WindowRead readReportSnapshot(UUID tenant,List<Query> queries,List<LocalDate> dates,AccountingPolicy accounting){
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
             c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
             throw new IllegalStateException("ANALYTICAL_POSTGRESQL_REQUIRED");
@@ -152,6 +189,21 @@ public class AuthorizedAnalyticalReadService {
         var periods=dates.stream().map(d->PeriodResolver.resolve(PeriodResolver.Code.M,d,policy)).toList();
         Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
         if(periods.getLast().endExclusive().isAfter(now))throw new IllegalArgumentException("REPORT_MONTH_NOT_CLOSED");
+        if(accounting!=null){
+            requireAccountingPolicy(tenant,accounting,false);
+            if(queries.size()!=2||queries.stream().anyMatch(q->q.region()!=null||q.group()!=null||q.sku()!=null||!q.warehouses().isEmpty())
+                ||queries.stream().noneMatch(q->q.metric()==Metric.BOOKED_AMOUNT&&accounting.currency().equals(q.currency()))
+                ||queries.stream().noneMatch(q->q.metric()==Metric.BOOKED_ORDERS))
+                throw new IllegalArgumentException("REPORT_ACCOUNTING_SCOPE");
+            // No qualified conversion facts yet. Do not silently omit foreign rows.
+            if(Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM crm.int_l2_expected_source
+                  WHERE tenant_id=? AND stream_code='BOOKED' AND event_at>=? AND event_at<?
+                    AND currency IS DISTINCT FROM ?)
+                """,Boolean.class,tenant,Timestamp.from(periods.getFirst().startInclusive()),
+                Timestamp.from(periods.getLast().endExclusive()),accounting.currency())))
+                throw new IllegalStateException("REPORT_ACCOUNTING_FX_EVIDENCE_REQUIRED");
+        }
         var source=Objects.requireNonNull(jdbc.queryForObject("""
             SELECT coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=?),0),
                    (SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?)
