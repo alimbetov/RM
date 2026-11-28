@@ -187,6 +187,23 @@ class TaskCalendarQualificationTest {
         var early=new Filter(null,null,Set.of(EARLY_50),DateBasis.COMPLETED,
             f.dateFrom(),f.dateTo(),f.zone(),false);
         assertSameAsFullPg(t,page(t,early,100,null),100,null);
+        // A valid completion outside the selected interval cannot enter the page.
+        UUID outside=completed(t,due,BASE.plusSeconds(2*86400));
+        assertThat(pageIds(page(t,f,100,null))).containsExactly(done).doesNotContain(outside);
+        assertSameAsFullPg(t,page(t,f,100,null),100,null);
+        // A terminal conflict outside the interval must still invalidate a
+        // candidate whose completion lies inside the interval.
+        UUID conflict=completed(t,due,BASE.plusSeconds(86400));
+        jdbc.update("""
+            INSERT INTO crm.task_event(tenant_id,id,task_id,actor_user_id,action_code,from_state,to_state,
+                previous_version,new_version,occurred_at)
+            VALUES (?,?,?,?,'CANCELLED','IN_PROGRESS','CANCELLED',2,3,?)
+            """,t.id(),UUID.randomUUID(),conflict,t.staff().userId(),
+            java.sql.Timestamp.from(BASE.plusSeconds(2*86400)));
+        clock.at(BASE.plusSeconds(2*86400));
+        var checked=page(t,f,100,null);
+        assertThat(pageIds(checked)).containsExactly(done).doesNotContain(conflict,outside);
+        assertSameAsFullPg(t,checked,100,null);
         assertPageDueHistory(t,early);
     }
 
