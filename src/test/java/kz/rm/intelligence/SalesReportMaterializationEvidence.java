@@ -173,11 +173,12 @@ public final class SalesReportMaterializationEvidence {
         assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"KZT","empty-"+tenant))
             .isInstanceOf(SecurityException.class);
     }
-    public void privateReportFile(VerifiedActor actor,VerifiedActor foreign,UUID tenant,long calendar,LocalDate last){
+    public void privateReportFile(VerifiedActor actor,VerifiedActor foreign,UUID tenant,long calendar,LocalDate last,
+                                  Runnable grantAttach,Runnable revokeAttach){
         String key="p41a-"+UUID.randomUUID();
         var report=materializer.prepareFile(actor,tenant,calendar,last,key);
         try{kz.rm.files.ReportUploadQualificationEvidence.verify(context,jdbc,manager,actor,foreign,report,
-            ()->new SalesReportMaterializer(reader,jdbc,manager).prepareFile(actor,tenant,calendar,last,key));}
+            ()->new SalesReportMaterializer(reader,jdbc,manager).prepareFile(actor,tenant,calendar,last,key),grantAttach,revokeAttach);}
         catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
     }
     public void emptyTenant(VerifiedActor actor,UUID tenant,UUID foreign,long calendar,LocalDate last){
