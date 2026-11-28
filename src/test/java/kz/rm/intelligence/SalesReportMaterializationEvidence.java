@@ -11,11 +11,13 @@ import static org.assertj.core.api.Assertions.*;
 /** Real PostgreSQL owner-side pilot; empty tenant B must never inherit tenant A facts. */
 public final class SalesReportMaterializationEvidence {
     private final SalesReportMaterializer materializer;
+    private final AuthorizedAnalyticalReadService reader;
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
     public SalesReportMaterializationEvidence(ApplicationContext context,JdbcTemplate jdbc,PlatformTransactionManager manager){
         this.jdbc=jdbc;this.manager=manager;
-        materializer=new SalesReportMaterializer(context.getBean(AuthorizedAnalyticalReadService.class),jdbc,manager);
+        reader=context.getBean(AuthorizedAnalyticalReadService.class);
+        materializer=new SalesReportMaterializer(reader,jdbc,manager);
     }
     public void denied(VerifiedActor actor,UUID tenant,long calendar,LocalDate last){
         assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"KZT"))
@@ -41,6 +43,7 @@ public final class SalesReportMaterializationEvidence {
             SELECT count(*) FROM reporting.int_report_request_attempt l JOIN reporting.int_report_instance i
              USING(tenant_id,instance_id) WHERE l.tenant_id=? AND i.idempotency_key=? AND l.selected_at IS NOT NULL
             """,Long.class,tenant,key)).isEqualTo(1L);
+        assertBatchParity(actor,tenant,calendar,last,"KZT");
         assertThat(r.tenant()).isEqualTo(tenant);
         assertThat(r.expected()).isEqualTo(r.observed());
         assertThat(r.observed().rows()).isEqualTo(48);
@@ -98,10 +101,41 @@ public final class SalesReportMaterializationEvidence {
             assertMonth(usd,last.minusMonths(1),"USD","20","2");
             assertMonth(usd,last,"USD",null,"2");
             assertThat(usd.scopeDigest()).isNotEqualTo(ra.scopeDigest());
+            assertBatchParity(actor,tenant,calendar,last,"KZT");
+            assertBatchParity(actor,tenant,calendar,last,"USD");
+            assertBatchParity(otherActor,other,otherCalendar,last,"KZT");
             System.out.println("RM_R02_HISTORICAL_CURRENCY_CONCURRENT_ORACLE_PASS");
         }catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
         catch(java.util.concurrent.ExecutionException|java.util.concurrent.TimeoutException e){throw new AssertionError(e);}
         finally{pool.shutdownNow();}
+    }
+    /** Stable fixture: independent ordinary single-period reads versus report batch.
+     * Ignore only snapshot observation time; compare exact numeric value and all route,
+     * quality, period, currency, revision and proof fields. No live mutation during this test. */
+    private void assertBatchParity(VerifiedActor actor,UUID tenant,long calendar,LocalDate last,String currency){
+        var queries=java.util.List.of(
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT,
+                calendar,PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),currency),
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,
+                calendar,PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),null));
+        var manifest=reader.readReportMonths(actor,tenant,queries);
+        assertThat(manifest.windows()).hasSize(2);
+        for(int i=0;i<queries.size();i++){
+            var q=queries.get(i);
+            var points=manifest.windows().get(i);
+            assertThat(points).hasSize(24);
+            for(int j=0;j<24;j++){
+                var point=points.get(j);
+                var single=reader.read(actor,tenant,new AuthorizedAnalyticalReadService.Query(q.metric(),
+                    calendar,PeriodResolver.Code.M,last.minusMonths(23-j),null,null,null,java.util.List.of(),q.currency()));
+                assertThat(point).usingRecursiveComparison().ignoringFields("observedAt","value").isEqualTo(single);
+                if(single.value()==null)assertThat(point.value()).isNull();
+                else assertThat(point.value()).isEqualByComparingTo(single.value());
+            }
+        }
+        assertThat(manifest.windows().stream().flatMap(java.util.List::stream)
+            .map(AuthorizedAnalyticalReadService.Result::observedAt).distinct().count()).isEqualTo(1L);
+        System.out.printf("RM_R02_BATCH_48_PARITY_PASS currency=%s%n",currency);
     }
     private static void await(java.util.concurrent.CountDownLatch latch){
         try{if(!latch.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("R02_START_TIMEOUT");}
