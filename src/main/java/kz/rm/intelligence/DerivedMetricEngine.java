@@ -35,6 +35,29 @@ final class DerivedMetricEngine {
     }
     record Result(Operator operator, int methodVersion, int window, DataQuality quality,
                   BigDecimal value, String reason) {}
+    /** Two required observations, adjacent or sparse. The caller owns temporal/scope
+     * admission; the numerical kernel never promotes analytical quality. */
+    record Comparison(Result change, Result growth) {}
+    static Comparison comparePeriods(BigDecimal prior, DataQuality priorQuality,
+                                     BigDecimal current, DataQuality currentQuality) {
+        return comparePeriods(prior,priorQuality,current,currentQuality,2);
+    }
+    private static Comparison comparePeriods(BigDecimal prior, DataQuality priorQuality,
+                                             BigDecimal current, DataQuality currentQuality, int size) {
+        Objects.requireNonNull(priorQuality); Objects.requireNonNull(currentQuality);
+        if ((priorQuality==DataQuality.READY && prior==null) ||
+            (currentQuality==DataQuality.READY && current==null))
+            throw new IllegalArgumentException("DERIVED_READY_WITHOUT_VALUE");
+        DataQuality blocked=priorQuality!=DataQuality.READY?priorQuality:currentQuality;
+        if(blocked!=DataQuality.READY)
+            return new Comparison(unavailable(Operator.PERIOD_CHANGE,size,blocked,"UNQUALIFIED_PERIOD"),
+                unavailable(Operator.PERIOD_GROWTH,size,blocked,"UNQUALIFIED_PERIOD"));
+        BigDecimal delta=current.subtract(prior);
+        var change=new Result(Operator.PERIOD_CHANGE,METHOD_VERSION,size,DataQuality.READY,delta,null);
+        var growth=prior.signum()<=0?unavailable(Operator.PERIOD_GROWTH,size,DataQuality.NOT_MEASURABLE,"NONPOSITIVE_BASE"):
+            new Result(Operator.PERIOD_GROWTH,METHOD_VERSION,size,DataQuality.READY,delta.divide(prior,MC),null);
+        return new Comparison(change,growth);
+    }
     static List<PeriodResolver.Period> closedWindow(Scope scope, LocalDate anchor, Instant asOf, int size) {
         Objects.requireNonNull(scope); Objects.requireNonNull(asOf);
         if (size < 2 || size > 120) throw new IllegalArgumentException("DERIVED_WINDOW_SIZE");
@@ -79,7 +102,6 @@ final class DerivedMetricEngine {
         BigDecimal sum = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal mean = sum.divide(n,MC);
         BigDecimal last = values.get(size-1), prior = values.get(size-2);
-        BigDecimal delta = last.subtract(prior);
         BigDecimal value;
         switch(op) {
             case AVG, SMA, FORECAST_NEXT -> value=mean;
@@ -88,10 +110,9 @@ final class DerivedMetricEngine {
                 value=values.get(0);
                 for(int i=1;i<size;i++) value=alpha.multiply(values.get(i),MC).add(BigDecimal.ONE.subtract(alpha).multiply(value,MC),MC);
             }
-            case PERIOD_CHANGE -> value=delta;
-            case PERIOD_GROWTH -> {
-                if (prior.signum()<=0) return unavailable(op,size,DataQuality.NOT_MEASURABLE,"NONPOSITIVE_BASE");
-                value=delta.divide(prior,MC);
+            case PERIOD_CHANGE, PERIOD_GROWTH -> {
+                var comparison=comparePeriods(prior,DataQuality.READY,last,DataQuality.READY,size);
+                return op==Operator.PERIOD_CHANGE?comparison.change():comparison.growth();
             }
             case MIN -> value=Collections.min(values);
             case MAX -> value=Collections.max(values);

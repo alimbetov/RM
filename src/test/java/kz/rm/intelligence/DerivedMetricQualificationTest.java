@@ -40,6 +40,30 @@ class DerivedMetricQualificationTest {
         assertTrue(calculate(DerivedMetricEngine.Operator.CV,p).value().signum()>0);
         assertEquals(DataQuality.NOT_MEASURABLE,calculate(DerivedMetricEngine.Operator.PERIOD_GROWTH,points("100","0","160")).quality());
     }
+    @Test void sparseComparisonUsesOnlyRequiredQualifiedEndpoints(){
+        var ready=DataQuality.READY;
+        var pair=DerivedMetricEngine.comparePeriods(new BigDecimal("100"),ready,new BigDecimal("80"),ready);
+        assertEquals(0,new BigDecimal("-20").compareTo(pair.change().value()));
+        assertEquals(0,new BigDecimal("-0.20").compareTo(pair.growth().value()));
+        var zero=DerivedMetricEngine.comparePeriods(BigDecimal.ZERO,ready,new BigDecimal("80"),ready);
+        assertEquals(0,new BigDecimal("80").compareTo(zero.change().value()));
+        assertEquals(DataQuality.NOT_MEASURABLE,zero.growth().quality());
+        assertNull(zero.growth().value());
+        assertEquals("NONPOSITIVE_BASE",zero.growth().reason());
+        for(var quality:List.of(DataQuality.PARTIAL,DataQuality.MISSING,DataQuality.STALE,DataQuality.NOT_MEASURABLE)){
+            var blocked=DerivedMetricEngine.comparePeriods(BigDecimal.ONE,quality,BigDecimal.TEN,ready);
+            assertEquals(quality,blocked.change().quality());
+            assertEquals(quality,blocked.growth().quality());
+            assertNull(blocked.change().value());assertNull(blocked.growth().value());
+        }
+        var currentMissing=DerivedMetricEngine.comparePeriods(BigDecimal.ONE,ready,null,DataQuality.MISSING);
+        assertEquals(DataQuality.MISSING,currentMissing.change().quality());
+        assertNull(currentMissing.change().value());
+        assertThrows(IllegalArgumentException.class,()->DerivedMetricEngine.comparePeriods(null,ready,BigDecimal.ONE,ready));
+        var negative=DerivedMetricEngine.comparePeriods(new BigDecimal("-10"),ready,BigDecimal.ZERO,ready);
+        assertEquals(DataQuality.NOT_MEASURABLE,negative.growth().quality());
+        assertEquals(0,BigDecimal.TEN.compareTo(negative.change().value()));
+    }
     @Test void missingIsNotZeroAndFutureRejected(){
         var missing=calculate(DerivedMetricEngine.Operator.SMA,points("100",null,"160"));
         assertEquals(DataQuality.MISSING,missing.quality());assertNull(missing.value());

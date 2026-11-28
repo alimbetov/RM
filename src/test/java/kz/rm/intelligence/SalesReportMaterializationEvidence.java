@@ -153,6 +153,7 @@ public final class SalesReportMaterializationEvidence {
         var report=instrumented.readAccountingReportMonths(actor,tenant,queries,accounting);
         assertThat(counter.l0).isEqualTo(2);
         assertThat(countedL3.calls).isEqualTo(2);
+        assertStatisticalView(report,tenant,"225");
         for(var window:report.windows()){
             assertThat(window).hasSize(24);
             assertThat(window.stream().filter(x->x.route()==AuthorizedAnalyticalReadService.Route.L3).toList())
@@ -183,7 +184,43 @@ public final class SalesReportMaterializationEvidence {
         }
         assertBatchParity(actor,tenant,calendar,last,accounting.currency());
         assertThat(late.sha256()).isNotEqualTo(report.sha256());
+        assertStatisticalView(late,tenant,"250");
         System.out.println("RM_R02_LATE_FACT_STALE_ROUTE_ORACLE_PASS amount=250 orders=2");
+    }
+    private void assertStatisticalView(ReportSourceManifest manifest,UUID tenant,String previousAmount){
+        var metric=AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT;
+        var all=ReportStatisticalView.select(manifest,metric,ReportStatisticalView.Range.M24);
+        assertThat(all.tenant()).isEqualTo(tenant);
+        assertThat(all.scopeDigest()).isEqualTo(manifest.scopeDigest());
+        assertThat(all.sourceDigest()).isEqualTo(manifest.sha256());
+        assertThat(all.accountingPolicy().currency()).isEqualTo("KZT");
+        assertThat(all.hintKey()).isEqualTo("metric.BOOKED_AMOUNT.hint");
+        assertThat(all.points()).hasSize(24);
+        assertThat(all.points().get(22).value()).isEqualByComparingTo(previousAmount);
+        assertThat(all.points().get(22).quality()).isEqualTo(DataQuality.PARTIAL);
+        assertThat(all.points().getFirst().value()).isNull();
+        assertThat(all.points().getFirst().quality()).isEqualTo(DataQuality.MISSING);
+        for(var range:ReportStatisticalView.Range.values()){
+            var selected=ReportStatisticalView.select(manifest,metric,range);
+            assertThat(selected.points()).containsExactlyElementsOf(all.points().subList(24-range.months,24));
+            assertThat(selected.comparisons()).isEqualTo(all.comparisons());
+            assertThat(selected.sourceDigest()).isEqualTo(all.sourceDigest());
+        }
+        assertThat(all.comparisons()).hasSize(2);
+        var mom=all.comparisons().getFirst();
+        assertThat(mom.basis()).isEqualTo(ReportStatisticalView.Basis.MOM);
+        assertThat(mom.prior()).isEqualTo(all.points().get(22).period());
+        assertThat(mom.result().change().quality()).isEqualTo(DataQuality.PARTIAL);
+        assertThat(mom.result().change().value()).isNull();
+        assertThat(mom.result().growth().value()).isNull();
+        var yoy=all.comparisons().getLast();
+        assertThat(yoy.basis()).isEqualTo(ReportStatisticalView.Basis.YOY);
+        assertThat(yoy.prior()).isEqualTo(all.points().get(11).period());
+        assertThat(yoy.result().growth().quality()).isEqualTo(DataQuality.MISSING);
+        assertThat(yoy.result().growth().value()).isNull();
+        var count=ReportStatisticalView.select(manifest,AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,ReportStatisticalView.Range.M3);
+        assertThat(count.points()).allSatisfy(p->{assertThat(p.unit()).isEqualTo("COUNT");assertThat(p.currency()).isNull();});
+        System.out.println("RM_ARS_R12A_STATISTICAL_VIEW_QUALITY_ORACLE_PASS");
     }
     /** Real owner change, immutable old request and stale snapshot rejection. */
     public void accountingPolicyRevision(VerifiedActor owner,VerifiedActor staff,UUID tenant,long calendar,LocalDate last){
@@ -264,6 +301,8 @@ public final class SalesReportMaterializationEvidence {
         var instrumented=new AuthorizedAnalyticalReadService(counting,manager,l3,context.getBean(MultidimensionalCoverageService.class));
         long batchStart=System.nanoTime();
         var manifest=instrumented.readDiagnosticMonths(actor,tenant,queries);
+        assertThatThrownBy(()->ReportStatisticalView.select(manifest,queries.getFirst().metric(),ReportStatisticalView.Range.M24))
+            .isInstanceOf(IllegalArgumentException.class).hasMessage("REPORT_ACCOUNTING_MANIFEST_REQUIRED");
         long batchNanos=System.nanoTime()-batchStart;
         int batchL0=counting.l0,batchL3=l3.calls;
         assertThat(batchL0).isBetween(0,2);

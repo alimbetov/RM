@@ -13,14 +13,16 @@ final class ReportSourceManifest {
     private final String scopeDigest, sha256;
     private final Instant observedAt;
     private final long sourceRevision;
+    private final AccountingPolicy accountingPolicy;
     private final byte[] scopeBytes,sourceBytes;
     private final List<Query> queries;
     private final List<List<Result>> windows;
     private ReportSourceManifest(UUID tenant,String scopeDigest,String sha256,Instant observedAt,
-                                 long sourceRevision,List<Query> queries,List<List<Result>> windows,byte[] scopeBytes,byte[] sourceBytes){
+                                 long sourceRevision,List<Query> queries,List<List<Result>> windows,byte[] scopeBytes,byte[] sourceBytes,AccountingPolicy accountingPolicy){
         this.scopeBytes=scopeBytes.clone();this.sourceBytes=sourceBytes.clone();
         this.tenant=tenant;this.scopeDigest=scopeDigest;this.sha256=sha256;
         this.observedAt=observedAt;this.sourceRevision=sourceRevision;
+        this.accountingPolicy=accountingPolicy;
         this.queries=List.copyOf(queries);
         this.windows=windows.stream().map(List::copyOf).toList();
     }
@@ -31,6 +33,7 @@ final class ReportSourceManifest {
     String sha256(){return sha256;}
     Instant observedAt(){return observedAt;}
     long sourceRevision(){return sourceRevision;}
+    AccountingPolicy accountingPolicy(){return accountingPolicy;}
     List<Query> queries(){return queries;}
     List<List<Result>> windows(){return windows;}
     record SnapshotEvidence(long sourceCounter,long sourceEvents,UUID generation,UUID proof,
@@ -131,7 +134,7 @@ final class ReportSourceManifest {
                 evidence.add(x.generation());evidence.add(x.proof());
             }
         }
-        return new ReportSourceManifest(tenant,scopeDigest,evidence.finish(),observed,revision,queries,windows,scope.bytes(),evidence.bytes());
+        return new ReportSourceManifest(tenant,scopeDigest,evidence.finish(),observed,revision,queries,windows,scope.bytes(),evidence.bytes(),accounting);
     }
     static String scopeDigest(UUID tenant,List<Query> queries){
         return scopeHash(tenant,List.copyOf(queries).stream().sorted(Comparator.comparing(q->q.metric().name())).toList()).finish();
