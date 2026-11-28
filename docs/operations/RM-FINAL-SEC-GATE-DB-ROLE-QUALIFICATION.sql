@@ -529,16 +529,16 @@ GRANT USAGE ON SCHEMA crm TO rm_native_capture_gate;
 GRANT SELECT ON crm.int_native_booked_capture TO rm_native_capture_gate;
 GRANT UPDATE(activated_by) ON crm.int_native_booked_capture TO rm_native_capture_gate;
 SET LOCAL ROLE rm_runtime_gate;
-DO $
+DO $native_role$
 BEGIN
  IF has_any_column_privilege(current_user,'crm.int_native_booked_capture','INSERT,UPDATE')
  OR has_table_privilege(current_user,'crm.int_native_booked_capture','DELETE,TRUNCATE,TRIGGER')
  OR has_function_privilege(current_user,'crm.int_native_capture_transition()','EXECUTE')
  THEN RAISE EXCEPTION 'NATIVE_CAPTURE_RUNTIME_EXCESSIVE_PRIVILEGE'; END IF;
-END $;
+END $native_role$;
 RESET ROLE;
 SET LOCAL ROLE rm_native_capture_gate;
-DO $
+DO $native_role$
 BEGIN
  IF NOT has_column_privilege(current_user,'crm.int_native_booked_capture','activated_by','UPDATE')
  OR has_column_privilege(current_user,'crm.int_native_booked_capture','started_at','UPDATE')
@@ -548,6 +548,6 @@ BEGIN
  OR has_any_column_privilege(current_user,'crm.sales_order','INSERT,UPDATE')
  OR has_any_column_privilege(current_user,'crm.int_canonical_fact','INSERT,UPDATE')
  THEN RAISE EXCEPTION 'NATIVE_CAPTURE_ACTIVATION_ROLE_EXCESSIVE_PRIVILEGE'; END IF;
-END $;
+END $native_role$;
 RESET ROLE;
 ROLLBACK;
