@@ -46,7 +46,7 @@ jobs:
       - name: Test strict W2-W5 service journeys in real PostgreSQL
         run: >-
           mvn -B -ntp clean test
-          '-Dtest=MvpServiceWarehouseAdmissionQualificationTest,MvpServiceCurrencyStartupQualificationTest,BusMvpServiceJourneyQualificationTest,QrMvpServiceJourneyQualificationTest'
+          '-Dtest=MvpServiceWarehouseAdmissionQualificationTest,MvpServiceCurrencyStartupQualificationTest,BusMvpServiceJourneyQualificationTest,QrMvpServiceJourneyQualificationTest,ReportContentAdmissionTest,ReportEncryptedStorageQualificationTest,ReportFileEnvelopeV1Test'
       - name: Require W2-W5 strict tests (none skipped)
         run: |
           python3 - <<'PY'
@@ -68,7 +68,16 @@ jobs:
                     'p3L1ProjectionParityAndLateDuplicatePg',
                     'b4RegionAndNomenclatureSnapshotsPg',
                     'qrMvpJ1VerifiedListPriceToHandoverAndRestockPg',
-                    'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg'}
+                    'qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg',
+                    'allTwelveActualTemplatePackagesAndMinimalFixture',
+                    'effectiveWorkbookContentTypeHonorsDefaultAndOverridePrecedence',
+                    'rejectsWrongContainerTraversalMacroExternalXmlAndInflation',
+                    'pdfStructuralPreflightNotJustMagic',
+                    'authenticatedClamAvReceivesExactBytesAndRejectsTruncatedReply',
+                    'v1StageAndFinalAreCiphertextAndLegacyReadsDeny',
+                    'corruptBytesNeverReachReaderAndKmsOutageIsNotCorruption',
+                    'v0StillStagesPromotesAndReadsWithOriginalHash',
+                    'independentGoldenVectorAndRoundTrip'}
           got={c.get('name') for c in cases}
           assert expected <= got, 'MVP_MISSING_REQUIRED_CASES: '+str(expected-got)
           assert not any(c.find(tag) is not None for c in cases

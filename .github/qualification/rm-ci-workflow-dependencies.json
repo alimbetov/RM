@@ -299,7 +299,7 @@
     },
     {
       "path": ".github/workflows/rm-mvp-w23-service-strict-pg.yml",
-      "reviewedBlob": "c24837ff4a8776c9c84fb8c55a2497d21fccc0e6",
+      "reviewedBlob": "6a8c4f661344d044decfb22eff4864bfba7c05c1",
       "domainHint": "CROSS_DOMAIN",
       "mandatoryRelease": true,
       "workflowName": "RM MVP W2-W5 Service Journeys PostgreSQL Qualification",
