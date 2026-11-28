@@ -41,6 +41,8 @@ class BusinessAnomalyQualificationTest {
         assertThat(r.stddev()).isEqualByComparingTo("0");assertThat(r.cv()).isEqualByComparingTo("0");
         assertThat(r.deviation()).isEqualByComparingTo("60");assertThat(r.standardizedDeviation()).isNull();
         assertThat(r.anomalyCandidate()).isTrue();
+        assertThat(band(r,POLICY).lower()).isEqualByComparingTo("100");
+        assertThat(band(r,POLICY).upper()).isEqualByComparingTo("100");
     }
     @Test void bs051DropAndNonconstantBaseline(){
         var r=daily(DataQuality.READY,"90","100","110","50");
@@ -50,6 +52,8 @@ class BusinessAnomalyQualificationTest {
         assertThat(r.stddev()).isCloseTo(new BigDecimal("8.1649658092772603"),within(new BigDecimal("0.000000000000001")));
         assertThat(r.cv()).isCloseTo(new BigDecimal("0.081649658092772603"),within(new BigDecimal("0.000000000000001")));
         assertThat(r.deviation()).isEqualByComparingTo("-50");
+        assertThat(band(r,POLICY).lower()).isCloseTo(new BigDecimal("75.5051025721682191"),within(new BigDecimal("0.00000000000001")));
+        assertThat(band(r,POLICY).upper()).isCloseTo(new BigDecimal("124.4948974278317809"),within(new BigDecimal("0.00000000000001")));
     }
     @Test void bs100NoiseAndBandBoundary(){
         var r=daily(DataQuality.READY,"90","100","110","120");
@@ -71,6 +75,7 @@ class BusinessAnomalyQualificationTest {
         assertThat(zero.anomalyCandidate()).isFalse();
         var missing=daily(DataQuality.MISSING,null,null,null,null);
         assertThat(missing.pattern()).isEqualTo(Pattern.UNAVAILABLE);assertThat(missing.sma()).isNull();
+        assertThat(band(missing,POLICY).lower()).isNull();assertThat(band(missing,POLICY).upper()).isNull();
     }
     @Test void bs097ShortPartialAndUnequalDuration(){
         for(var r:List.of(daily(DataQuality.READY,"100","100","160"),
