@@ -26,7 +26,7 @@ def fixture_html():
     for name in ('tokens.css','components.css','layout.css'):
         html = html.replace(f'<link rel="stylesheet" href="{name}">','<style>'+(ROOT/name).read_text()+'</style>')
     html = html.replace('<body>','<body>'+(ROOT/'icons.svg').read_text().replace('<svg xmlns=', '<svg class="sprite" aria-hidden="true" xmlns=',1))
-    for name in ('catalog.js','unified.js'):
+    for name in ('i18n.js','catalog.js','unified.js'):
         html = html.replace(f'<script src="{name}"></script>','<script>'+(ROOT/name).read_text()+'</script>')
     return html.replace('icons.svg#','#')
 
@@ -41,7 +41,7 @@ def open_page(page):
     page.on('requestfailed', failed)
     page.goto(URL, wait_until='load')
     page.wait_for_function("document.querySelector('.brand-mark .rm-icon').getBBox().width>0")
-    for name in ('index.html', 'tokens.css', 'components.css', 'layout.css', 'catalog.js', 'unified.js', 'icons.svg'):
+    for name in ('index.html', 'tokens.css', 'components.css', 'layout.css', 'i18n.js', 'catalog.js', 'unified.js', 'icons.svg'):
         url = URL.rsplit('/',1)[0]+'/'+name
         assert responses.get(url) in (200,304), (name, responses, failures)
     assert not failures, failures

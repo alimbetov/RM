@@ -27,6 +27,6 @@ with sync_playwright() as p:
                 page.locator('#chart-type').select_option('line');assert page.locator('#chart .line').count()==2
                 assert page.locator('#chart-values td').all_text_contents()==['P1','12','P2','0','P3','Нет данных','P4','18','P5','14']
                 fit();print('PASS locale expansion',width,theme,locale,flush=True)
-            go('form');money=page.locator('#money');money.fill('-1');assert not money.evaluate('e=>e.validity.valid');money.fill('12.345');assert not money.evaluate('e=>e.validity.valid');money.fill('123456789012345.67');assert money.evaluate('e=>e.validity.valid');page.locator('#quantity').fill('1');page.locator('#from').fill('2026-11-01');page.locator('#to').fill('2026-11-28');page.locator('#business-form button[type=submit]').click();assert '123456789012345.67 KZT' in page.locator('#feedback').inner_text();fit();assert not errors,errors
+            go('form');money=page.locator('#money');money.fill('-1');assert not money.evaluate('e=>e.validity.valid');money.fill('12.345');assert not money.evaluate('e=>e.validity.valid');money.fill('123456789012345.67');assert money.evaluate('e=>e.validity.valid');page.locator('#quantity').fill('1');page.locator('#from').fill('2026-11-01');page.locator('#to').fill('2026-11-28');page.locator('#business-form button[type=submit]').click();assert '123\u00a0456\u00a0789\u00a0012\u00a0345,67 KZT' in page.locator('#feedback').inner_text();fit();assert not errors,errors
             print('PASS exact value',width,theme,flush=True);ctx.close()
     browser.close()
