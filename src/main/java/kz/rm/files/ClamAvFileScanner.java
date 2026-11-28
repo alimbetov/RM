@@ -32,8 +32,15 @@ class ClamAvFileScanner implements FileScanPort {
         this.storage=storage;this.host=host;this.port=port;this.maxBytes=maxBytes;
     }
     @Override public Verdict scan(String stagingKey) {
-        try(var in=storage.openStagedForScan(stagingKey);
-            var socket=new Socket()) {
+        try(var in=storage.openStagedForScan(stagingKey)) {return scanStream(in,-1);}
+        catch(IOException | RuntimeException ignored) {return Verdict.ERROR;}
+    }
+    @Override public Verdict scanAuthenticated(InputStream in,long expectedBytes) {
+        if(in==null||expectedBytes<1||expectedBytes>maxBytes)return Verdict.ERROR;
+        return scanStream(in,expectedBytes);
+    }
+    private Verdict scanStream(InputStream in,long expectedBytes) {
+        try(var socket=new Socket()) {
             socket.connect(new InetSocketAddress(host,port),2000);
             socket.setSoTimeout(30_000);
             var out=new DataOutputStream(socket.getOutputStream());
@@ -44,10 +51,11 @@ class ClamAvFileScanner implements FileScanPort {
             while((n=in.read(bytes))!=-1) {
                 if(n==0)continue;
                 seen+=n;
-                if(seen>maxBytes)return Verdict.ERROR;
+                if(seen>maxBytes||(expectedBytes>=0&&seen>expectedBytes))return Verdict.ERROR;
                 out.writeInt(n);
                 out.write(bytes,0,n);
             }
+            if(expectedBytes>=0&&seen!=expectedBytes)return Verdict.ERROR;
             out.writeInt(0);
             out.flush();
             // z-protocol ends replies with NUL; one bounded line from clamd.
@@ -57,6 +65,7 @@ class ClamAvFileScanner implements FileScanPort {
                 if(reply.size()>=1024)return Verdict.ERROR;
                 reply.write(value);
             }
+            if(expectedBytes>=0&&value!=0)return Verdict.ERROR;
             String response=reply.toString(StandardCharsets.US_ASCII);
             if("stream: OK".equals(response))return Verdict.CLEAN;
             if(response.startsWith("stream: ") && response.endsWith(" FOUND"))
