@@ -96,6 +96,7 @@ public final class SalesReportMaterializationEvidence {
                 """,Long.class,other,ra.dataset(),ra.stagingDate())).isZero();
             assertMonth(ra,last.minusMonths(1),"KZT","225","1");
             assertMonth(ra,last,"KZT","300","2");
+            mixedAccountingRoute(actor,tenant,calendar,last);
             new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(status->
                 historicalOrder(tenant,template,last.minusMonths(1),"USD","20"));
             assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last))
@@ -110,6 +111,63 @@ public final class SalesReportMaterializationEvidence {
         }catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
         catch(java.util.concurrent.ExecutionException|java.util.concurrent.TimeoutException e){throw new AssertionError(e);}
         finally{pool.shutdownNow();}
+    }
+    /** Real activated monthly generation inside the 24M report window.
+     * An empty earlier month is a legitimate L3 MISSING observation; the two
+     * populated months outside that generation must still come from L0. */
+    private void mixedAccountingRoute(VerifiedActor actor,UUID tenant,long calendar,LocalDate last){
+        var from=last.minusMonths(2);var until=from.plusMonths(1);
+        var gen=UUID.randomUUID();
+        var l1=context.getBean(L1ProjectionService.class);
+        var l2=context.getBean(L2ProjectionService.class);
+        var l3=context.getBean(L3RollupService.class);
+        var coverage=context.getBean(MultidimensionalCoverageService.class);
+        var generation=l1.open(tenant,gen,calendar,from,until);
+        l1.advance(tenant,gen,500);l2.open(tenant,gen);l2.advance(tenant,gen,500);
+        for(var code:PeriodResolver.Code.values()){
+            LocalDate cursor=from;
+            while(cursor.isBefore(until)){
+                var interval=PeriodResolver.resolve(code,cursor,new PeriodResolver.Policy(generation.zone(),calendar));
+                LocalDate a=interval.startInclusive().atZone(generation.zone()).toLocalDate();
+                LocalDate b=interval.endExclusive().atZone(generation.zone()).toLocalDate();
+                if(!a.isBefore(from)&&!b.isAfter(until))l3.refresh(tenant,gen,code,cursor);
+                cursor=b;
+            }
+        }
+        var proof=coverage.prove(tenant,gen);
+        assertThat(proof.parity()).isTrue();
+        UUID previous=jdbc.query("SELECT generation_id FROM crm.int_active_generation WHERE tenant_id=? AND projection_code='L3'",
+            rs->rs.next()?rs.getObject(1,UUID.class):null,tenant);
+        var active=coverage.activate(tenant,gen,proof.id(),previous);
+        assertThat(coverage.status(tenant,gen,active.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.CURRENT);
+        var accounting=new org.springframework.transaction.support.TransactionTemplate(manager)
+            .execute(status->reader.admitAccountingPolicy(actor,tenant));
+        var queries=java.util.List.of(
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT,calendar,
+                PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),accounting.currency()),
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,calendar,
+                PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),null));
+        var counter=new CountingJdbc(jdbc);
+        var countedL3=new CountingL3(counter,manager,context);
+        var instrumented=new AuthorizedAnalyticalReadService(counter,manager,countedL3,coverage);
+        var report=instrumented.readAccountingReportMonths(actor,tenant,queries,accounting);
+        assertThat(counter.l0).isEqualTo(2);
+        assertThat(countedL3.calls).isEqualTo(2);
+        for(var window:report.windows()){
+            assertThat(window).hasSize(24);
+            assertThat(window.stream().filter(x->x.route()==AuthorizedAnalyticalReadService.Route.L3).toList())
+                .singleElement().satisfies(x->{
+                    assertThat(x.generation()).isEqualTo(gen);
+                    assertThat(x.proof()).isEqualTo(active.activeProof());
+                    assertThat(x.period().startInclusive().atZone(generation.zone()).toLocalDate()).isEqualTo(from);
+                    assertThat(x.value()).isNull();
+                    assertThat(x.quality()).isEqualTo(DataQuality.MISSING);
+                });
+            assertThat(window.getLast().route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
+            assertThat(window.getLast().value()).isNotNull();
+        }
+        assertBatchParity(actor,tenant,calendar,last,accounting.currency());
+        System.out.println("RM_R02_REAL_MIXED_ROUTE_ORACLE_PASS l0=2 l3=2");
     }
     /** Real owner change, immutable old request and stale snapshot rejection. */
     public void accountingPolicyRevision(VerifiedActor owner,VerifiedActor staff,UUID tenant,long calendar,LocalDate last){
