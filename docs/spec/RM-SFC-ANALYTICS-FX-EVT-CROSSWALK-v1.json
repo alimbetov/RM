@@ -1,0 +1,2068 @@
+{
+  "schema": "RM-SFC-ANALYTICS-FX-EVT-CROSSWALK-v1",
+  "reviewedSha": "9fa5bd9b34ac4b2900527b0fc48fbdf7c3c6cd8d",
+  "status": "SELECTED_SECTION_EXTRACTION_COMPLETE_SEMANTIC_REVIEW_PARTIAL",
+  "policy": "Source references preserve design versus implementation versus admission; no new scope, gate or evidence. FX activation HOLD; Reporting priority unchanged; F2H deferred. Not a unique requirement denominator.",
+  "counts": {
+    "fxRequirements": 24,
+    "fxVariants": 80,
+    "fxSourceLinks": 108,
+    "schedulerPackages": 8,
+    "sectionObligations": 26,
+    "findings": 8
+  },
+  "fxRequirements": [
+    {
+      "id": "R2C-REQ-01",
+      "statement": "Единственный canonical price owner",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "1, 3, 8, 10, 11"
+      },
+      "sourceVariantRefs": "29, 37–39, 43, 67",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-02",
+      "statement": "Tenant-qualified scope, no implicit future/type expansion",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "3"
+      },
+      "sourceVariantRefs": "03, 04, 45",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-03",
+      "statement": "Current identity/OWNER/domain permissions",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "4"
+      },
+      "sourceVariantRefs": "01, 02, 08, 28, 30, 47",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-04",
+      "statement": "Immutable consent с точным payload и сроком",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "4"
+      },
+      "sourceVariantRefs": "02, 07, 46, 65",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-05",
+      "statement": "Strict inheritance и отсутствие случайного winner",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "3"
+      },
+      "sourceVariantRefs": "05, 06",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-06",
+      "statement": "PRICING_ANCHOR и KZT-only public price",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "2, 5"
+      },
+      "sourceVariantRefs": "09, 18, 48",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-07",
+      "statement": "Qualified immutable source/calendar/correction",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "7"
+      },
+      "sourceVariantRefs": "17–20, 36, 56, 59, 62, 64",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-08",
+      "statement": "Общая versioned decimal mathematics",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "5"
+      },
+      "sourceVariantRefs": "09–12, 77, 78",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-09",
+      "statement": "Post-rounding delta/band/rolling limits",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "5, 6"
+      },
+      "sourceVariantRefs": "13–16, 52–55, 78",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-10",
+      "statement": "Атомарный общий budget без компенсации знаков",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "6"
+      },
+      "sourceVariantRefs": "49–51, 54, 69",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-11",
+      "statement": "DRY_RUN воспроизводим и не меняет коммерческие данные",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "9"
+      },
+      "sourceVariantRefs": "21–24, 66",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-12",
+      "statement": "Полный bounded manifest, coherent snapshot",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "9"
+      },
+      "sourceVariantRefs": "22, 24, 64",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-13",
+      "statement": "Один successful semantic price event",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "9, 10"
+      },
+      "sourceVariantRefs": "31, 34, 36, 70",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-14",
+      "statement": "Durable stop/lease fencing",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "4, 8, 9"
+      },
+      "sourceVariantRefs": "08, 32, 35, 73",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-15",
+      "statement": "Crash/retry/accounting без ложного успеха",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "8, 9"
+      },
+      "sourceVariantRefs": "33, 34, 63, 71",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-16",
+      "statement": "Checkout/quote/order/inventory immutability",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "8"
+      },
+      "sourceVariantRefs": "25–27, 42",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-17",
+      "statement": "Manual override и честная provenance",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "4, 8, 10"
+      },
+      "sourceVariantRefs": "27, 29, 55, 75",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-18",
+      "statement": "Shock HOLD и явная семантика старой цены",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "7"
+      },
+      "sourceVariantRefs": "57–60, 80",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-19",
+      "statement": "Durable incidents и измеримая реакция",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "7, 12"
+      },
+      "sourceVariantRefs": "61, 62, 71, 80",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-20",
+      "statement": "Независимый admission услуг/пакетов",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "3, 12"
+      },
+      "sourceVariantRefs": "38, 39, 43–45, 68, 69",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-21",
+      "statement": "Безопасная additive migration и retention",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "10"
+      },
+      "sourceVariantRefs": "40, 75, 76",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-22",
+      "statement": "Restore не возвращает потерянное разрешение",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "9"
+      },
+      "sourceVariantRefs": "74",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-23",
+      "statement": "Bounded capacity и доверенное время",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "8, 12"
+      },
+      "sourceVariantRefs": "72, 73, 79, 80",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "R2C-REQ-24",
+      "statement": "Exact-SHA и отдельные pilot/release authorizations",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§14",
+        "normativeSections": "0, 12, 13"
+      },
+      "sourceVariantRefs": "41, 42, 80",
+      "scope": "FX_AUTO_ACTIVATION_HOLD",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "fxVariants": [
+    {
+      "id": "FXA-01",
+      "scenario": "OWNER без бизнес-grant; сотрудник с grant без OWNER; OWNER с обоими",
+      "expected": "Первые два не включают AUTO; третий действует только в своём scope",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-02",
+      "scenario": "Подтверждение конкретного payload; подложный actor UUID",
+      "expected": "Одно immutable evidence; caller identity из доверенной границы, forged input denied",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-03",
+      "scenario": "Explicit selection и includeFuture=false",
+      "expected": "Только exact targets; новая позиция не получает разрешения",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-04",
+      "scenario": "Tenant A/B, чужие IDs и unsupported type",
+      "expected": "Ноль чужих price/receipt/budget writes и утечек существования",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-05",
+      "scenario": "EXCLUDE/override/target/group/tenant precedence",
+      "expected": "Детерминированное effective решение; excluded target не меняется",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-06",
+      "scenario": "Child ослабляет parent cap; пересечение пусто",
+      "expected": "Строгая граница либо BLOCKED_POLICY_CONFLICT",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-07",
+      "scenario": "Две concurrent policy activation",
+      "expected": "Один CAS winner; проигравший не даёт authority worker",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-08",
+      "scenario": "Policy revoke до/после публикации",
+      "expected": "Ни одного нового price commit после revoke commit",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-09",
+      "scenario": "USD/EUR/CNY, разные nominal, purpose",
+      "expected": "Независимые числовые эталоны; candidate/public price строго KZT",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-10",
+      "scenario": "CEILING около границы шага",
+      "expected": "Округлённый результат и receipt совпадают с oracle",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-11",
+      "scenario": "Zero/negative/overflow/precision invalid",
+      "expected": "Deny до price/budget writes; не исправлять вход молча",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-12",
+      "scenario": "Один snapshot/context повторён",
+      "expected": "Тот же candidate и digest; формула не зависит от предыдущей AUTO-цены",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-13",
+      "scenario": "± per-step limit после rounding",
+      "expected": "Включительная точная граница; превышение BLOCKED",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-14",
+      "scenario": "min/max KZT после rounding",
+      "expected": "Ни одной публикации вне диапазона, no clamping",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-15",
+      "scenario": "Серия малых шагов внутри rolling W",
+      "expected": "Ограничение от исторического B, а не от последнего шага",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-16",
+      "scenario": "Cooldown и оба minChange порога",
+      "expected": "Persisted DEFERRED либо NO_CHANGE; нет лишней revision",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-17",
+      "scenario": "NBRK validDate/fetch time/freshness",
+      "expected": "Повторное получение старого курса не продлевает допустимость",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-18",
+      "scenario": "MOCK/kurs24/unqualified source вместо NBRK",
+      "expected": "Live AUTO denied; отсутствует fallback",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-19",
+      "scenario": "Correction заменила source перед price write",
+      "expected": "Старый work SUPERSEDED; новый не подменяет старый manifest",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-20",
+      "scenario": "Отсутствующее/неверное calendar attestation",
+      "expected": "SOURCE_NOT_ADMITTED; праздник не угадывается",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-21",
+      "scenario": "DRY_RUN по реально существующим целям",
+      "expected": "Price/seller decision/consumption/SALES counts и hashes неизменны",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-22",
+      "scenario": "0/1/100/10 000 и limit+1 целей",
+      "expected": "Полный manifest; limit+1 rejected без скрытого усечения",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-23",
+      "scenario": "Несколько причин запрета и разный доступ",
+      "expected": "Детерминированные safe reasons; чужие данные не раскрыты",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-24",
+      "scenario": "Replay simulation/manifest при изменившейся БД",
+      "expected": "Сохранённый результат прежний; refresh создаёт новый snapshot",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-25",
+      "scenario": "Checkout × FX, обе очередности",
+      "expected": "Старый immutable order либо stale-price rejection; ноль частичных orders",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-26",
+      "scenario": "Negotiation/accepted quote × FX",
+      "expected": "Согласованная цена не изменяется; active quote блокирует AUTO",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-27",
+      "scenario": "Manual price edit × FX, обе очередности",
+      "expected": "Устойчивый override; retry не перезаписывает ручную цену",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-28",
+      "scenario": "Signed access token/local JWKS → actor → tenant → policy; revoke",
+      "expected": "Valid issuer/audience/purpose; expired/ID token/foreign tenant denied; свежие права перед write",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-29",
+      "scenario": "Успешная AUTO-публикация",
+      "expected": "Одна canonical revision; отдельные authorizer и system identity; receipt/budget атомарны",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-30",
+      "scenario": "Подложный worker, чужая tenant capability, ordinary user",
+      "expected": "Trusted port denied без побочных коммерческих записей",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-31",
+      "scenario": "Два workers и два runs для одного event",
+      "expected": "Один successful TargetEventKey и одна price revision",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-32",
+      "scenario": "Global/tenant/policy/target stop × publish",
+      "expected": "После подтверждённого stop commit новых публикаций нет",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-33",
+      "scenario": "Fault injection до commit на каждом write boundary",
+      "expected": "Цена/receipt/consumption/work terminal state откатываются вместе",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-34",
+      "scenario": "Commit выполнен, ACK потерян",
+      "expected": "Recovery возвращает тот же receipt; второго расхода/цены нет",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-35",
+      "scenario": "Lease expired и новый generation захватил item",
+      "expected": "Старый worker не пишет цену и не завершает чужой item",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-36",
+      "scenario": "Correction после успешной публикации; повтор delivery",
+      "expected": "Новое отдельно проверенное событие; старый receipt и history неизменны",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-37",
+      "scenario": "Начальный PRODUCT_ONLY и изменившаяся eligibility каталога",
+      "expected": "Услуги/hidden/paused/draft/archived PRODUCT не переоцениваются; QR publicRef стабилен",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-38",
+      "scenario": "Generic SERVICE до qualification",
+      "expected": "BLOCKED_UNSUPPORTED_TARGET; нет фиктивного store_offer",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-39",
+      "scenario": "Qualified PACKAGING adapter",
+      "expected": "Своя version/CAS/tax semantics; прежние service snapshots неизменны",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-40",
+      "scenario": "Clean и populated Liquibase upgrade",
+      "expected": "Checksums/старые суммы/FK сохранены; invalid cross-tenant links rejected",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-41",
+      "scenario": "Exact-SHA evidence gate",
+      "expected": "Все обязательные jobs/XML доступны, нет неожиданных skips или ложного PASS",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-42",
+      "scenario": "Business/QR/SALES/INVENTORY regression",
+      "expected": "Orders/stock/handover/return не получают побочных FX-изменений",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-43",
+      "scenario": "UUID offer и строковый serviceCode; forged owner links",
+      "expected": "Typed identity корректна; tenant FK/ровно один соответствующий owner link защищены",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-44",
+      "scenario": "Бесплатная/смешанная услуга, смена unit/tax basis",
+      "expected": "Unsupported контекст заблокирован; нет divide-by-zero/индексации по догадке",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-45",
+      "scenario": "Установка adapter после «все позиции» consent",
+      "expected": "SERVICE не включается без новой approval; includeFuture не расширяет type",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-46",
+      "scenario": "Payload hash mismatch, validFrom/validUntil, requestKey conflict",
+      "expected": "Ни одной активации другого payload; expiry и conflict воспроизводимы",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-47",
+      "scenario": "OWNER transfer/recovery/role revoke × worker",
+      "expected": "Старое согласие HOLD; новый OWNER не получает чужое consent автоматически",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-48",
+      "scenario": "SALES_INTERNAL без PRICING_ANCHOR и обратный случай",
+      "expected": "Первый AUTO denied; второй AUTO authoring не требует SALES_INTERNAL; legacy flow не переинтерпретирован",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-49",
+      "scenario": "Два targets хотят по 60 при общем остатке 100",
+      "expected": "Только один расход/price commit; второй budget-blocked",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-50",
+      "scenario": "Разбиение 70+40 между runs/groups при cap=100",
+      "expected": "Tenant budget не обходится сменой manifest или группы",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-51",
+      "scenario": "Пара изменений +5 000/−5 000",
+      "expected": "Расход 10 000, а не 0; компенсирующая revision не возвращает budget",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-52",
+      "scenario": "Midnight/timezone/fixed-day boundary внутри W",
+      "expected": "Rolling baseline/cap действуют через границу суток",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-53",
+      "scenario": "Новая цель против старой с отсутствующей историей",
+      "expected": "Разрешён только доказанный shortenedHistory; missing history => HOLD",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-54",
+      "scenario": "Restart/reapproval/window change/pause/resume",
+      "expected": "Неистёкший consumption и ограничения не обнулены",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-55",
+      "scenario": "Рост/падение и manual edit с повторным enrollment",
+      "expected": "Net и absolute variation проверены; ручное изменение не стирает risk history",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-56",
+      "scenario": "Изменение nominal при том же normalizedRate",
+      "expected": "Нет ложного FX-шока; одинаковый допустимый candidate",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-57",
+      "scenario": "FX +30%, price cap +10%, KEEP_LAST",
+      "expected": "BLOCKED + durable incident; старая цена сохранена; новые продажи не объявлены остановленными",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-58",
+      "scenario": "FX-шок скрыт rounding/minChange либо малым Δ",
+      "expected": "Risk gate всё равно накладывает HOLD до price evaluator",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-59",
+      "scenario": "Первый rate reference, integrity HOLD и попытка merchant bypass",
+      "expected": "Только qualified bootstrap/operator release; tenant owner не снимает provider HOLD",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-60",
+      "scenario": "Timer/new tick/restart после shock",
+      "expected": "Нет автоматического resume; нужен review и допустимый source",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-61",
+      "scenario": "Alert lost delivery/ACK/outage/escalation",
+      "expected": "Durable incident не теряется; send не означает merchant ACK; нет duplicate storm",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-62",
+      "scenario": "Upstream outage/старый курс/длительная блокировка quote",
+      "expected": "Freshness/backlog deadlines и alerts срабатывают; произвольного курса нет",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-63",
+      "scenario": "Cooldown work и burst 2–5 revisions",
+      "expected": "Obsolete work superseded; latest заново проверен, нет catch-up публикации всех устаревших цен",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-64",
+      "scenario": "Concurrent membership/source/context changes при manifest capture",
+      "expected": "Согласованный snapshot либо явный отказ; не смешанные страницы",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-65",
+      "scenario": "Policy/anchor/context изменились между preview и commit",
+      "expected": "Старый результат не даёт права записи; требуется актуальный approved context",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-66",
+      "scenario": "DRY_RUN делит ограниченный budget между targets",
+      "expected": "Virtual consumption детерминирован; AUTO revalidation объясняет допустимое отличие",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-67",
+      "scenario": "Caller передал validated=true/поддельный calculation",
+      "expected": "Canonical port перепроверяет authority и limits; ноль чужих writes",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-68",
+      "scenario": "Товар+услуга с единой пакетной ценой",
+      "expected": "Нет частичной независимой переоценки пакета",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-69",
+      "scenario": "PRODUCT и qualified SERVICE конкурируют за tenant budget",
+      "expected": "Единый budget не превышен; две цены остаются у своих owners",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-70",
+      "scenario": "Повторный enrollment/run и собственный rowVersion",
+      "expected": "Нет duplicate successful event и повторного начисления процента",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-71",
+      "scenario": "PARTIAL_SUCCESS, deferred, dead letter, retry exhaustion",
+      "expected": "Непересекающиеся counts в сумме total; незавершённое не помечено COMPLETED",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-72",
+      "scenario": "10k targets, несколько tenants, bursts, competing sellers",
+      "expected": "Измерены p95/p99/queue/DB budget; fairness и bounded transactions подтверждены",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-73",
+      "scenario": "Lease CAS/time boundary, delayed commit и concurrent stop",
+      "expected": "Выполняется точная linearization semantics §8, не эвристика по JVM clock",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-74",
+      "scenario": "PITR потерял поздний revoke/ACK/source state",
+      "expected": "AUTO OFF; reconciliation/current authority approval до resume; old leases invalid",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-75",
+      "scenario": "Миграция старой ручной истории и rollback deployment",
+      "expected": "Human provenance не SYSTEM; нет retroactive AUTO consent, manual flow совместим",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-76",
+      "scenario": "Archive/retention убрал необходимый baseline",
+      "expected": "HOLD без выдуманной цены; idempotency и history references сохранены",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-77",
+      "scenario": "Генерируемые допустимые числа и независимые math invariants",
+      "expected": "Детерминизм, monotonicity фиксированного context, rounding bounds, nominal equivalence; без вызова production calculator как oracle",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-78",
+      "scenario": "Точные границы amount/%/window и минимальные decimal steps",
+      "expected": "Inclusive caps и оба minChange порога; нет early percentage rounding",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-79",
+      "scenario": "JVM drift/DB time anomaly/expiry boundaries",
+      "expected": "DB authoritative; подозрительное время HOLD, stop/lease не обходятся",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    },
+    {
+      "id": "FXA-80",
+      "scenario": "Недостающий threshold/SLO/gate; ручной вызов live process; неподдержанный HOLD_NEW_SALES",
+      "expected": "Activation denied; manual invocation не обходит live gates и не включает unavailable capability",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§13"
+      },
+      "evidence": "PROPOSED_NOT_RUN"
+    }
+  ],
+  "fxSourceLinks": [
+    {
+      "requirement": "R2C-REQ-01",
+      "variant": "FXA-29",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-01",
+      "variant": "FXA-37",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-01",
+      "variant": "FXA-38",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-01",
+      "variant": "FXA-39",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-01",
+      "variant": "FXA-43",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-01",
+      "variant": "FXA-67",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-02",
+      "variant": "FXA-03",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-02",
+      "variant": "FXA-04",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-02",
+      "variant": "FXA-45",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-03",
+      "variant": "FXA-01",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-03",
+      "variant": "FXA-02",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-03",
+      "variant": "FXA-08",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-03",
+      "variant": "FXA-28",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-03",
+      "variant": "FXA-30",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-03",
+      "variant": "FXA-47",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-04",
+      "variant": "FXA-02",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-04",
+      "variant": "FXA-07",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-04",
+      "variant": "FXA-46",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-04",
+      "variant": "FXA-65",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-05",
+      "variant": "FXA-05",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-05",
+      "variant": "FXA-06",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-06",
+      "variant": "FXA-09",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-06",
+      "variant": "FXA-18",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-06",
+      "variant": "FXA-48",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-17",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-18",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-19",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-20",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-36",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-56",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-59",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-62",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-07",
+      "variant": "FXA-64",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-08",
+      "variant": "FXA-09",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-08",
+      "variant": "FXA-10",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-08",
+      "variant": "FXA-11",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-08",
+      "variant": "FXA-12",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-08",
+      "variant": "FXA-77",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-08",
+      "variant": "FXA-78",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-13",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-14",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-15",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-16",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-52",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-53",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-54",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-55",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-09",
+      "variant": "FXA-78",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-10",
+      "variant": "FXA-49",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-10",
+      "variant": "FXA-50",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-10",
+      "variant": "FXA-51",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-10",
+      "variant": "FXA-54",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-10",
+      "variant": "FXA-69",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-11",
+      "variant": "FXA-21",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-11",
+      "variant": "FXA-22",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-11",
+      "variant": "FXA-23",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-11",
+      "variant": "FXA-24",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-11",
+      "variant": "FXA-66",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-12",
+      "variant": "FXA-22",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-12",
+      "variant": "FXA-24",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-12",
+      "variant": "FXA-64",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-13",
+      "variant": "FXA-31",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-13",
+      "variant": "FXA-34",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-13",
+      "variant": "FXA-36",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-13",
+      "variant": "FXA-70",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-14",
+      "variant": "FXA-08",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-14",
+      "variant": "FXA-32",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-14",
+      "variant": "FXA-35",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-14",
+      "variant": "FXA-73",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-15",
+      "variant": "FXA-33",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-15",
+      "variant": "FXA-34",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-15",
+      "variant": "FXA-63",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-15",
+      "variant": "FXA-71",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-16",
+      "variant": "FXA-25",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-16",
+      "variant": "FXA-26",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-16",
+      "variant": "FXA-27",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-16",
+      "variant": "FXA-42",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-17",
+      "variant": "FXA-27",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-17",
+      "variant": "FXA-29",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-17",
+      "variant": "FXA-55",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-17",
+      "variant": "FXA-75",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-18",
+      "variant": "FXA-57",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-18",
+      "variant": "FXA-58",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-18",
+      "variant": "FXA-59",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-18",
+      "variant": "FXA-60",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-18",
+      "variant": "FXA-80",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-19",
+      "variant": "FXA-61",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-19",
+      "variant": "FXA-62",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-19",
+      "variant": "FXA-71",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-19",
+      "variant": "FXA-80",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-38",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-39",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-43",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-44",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-45",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-68",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-20",
+      "variant": "FXA-69",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-21",
+      "variant": "FXA-40",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-21",
+      "variant": "FXA-75",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-21",
+      "variant": "FXA-76",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-22",
+      "variant": "FXA-74",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-23",
+      "variant": "FXA-72",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-23",
+      "variant": "FXA-73",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-23",
+      "variant": "FXA-79",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-23",
+      "variant": "FXA-80",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-24",
+      "variant": "FXA-41",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-24",
+      "variant": "FXA-42",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    },
+    {
+      "requirement": "R2C-REQ-24",
+      "variant": "FXA-80",
+      "relation": "SOURCE_DECLARED_NOT_EXECUTED"
+    }
+  ],
+  "schedulerPackages": [
+    {
+      "id": "P1 Mathematical",
+      "required": "Existing AnalyticalJobFoundationQualificationTest PostgreSQL results; independent owner-event oracle, persisted INTRADAY, same-day L3 and source revision; late visibility, distinct orders, civil-day boundaries",
+      "acceptance": "Exact equality for comparable source and period; no invented zero",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P2 Security",
+      "required": "Real tenants, signed service identity, foreign scope and revoked identity denial, existing least-privilege checks",
+      "acceptance": "Zero unauthorized reads or writes",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P3 Multi-pod",
+      "required": "At least two distinct application pods sharing PostgreSQL; concurrent claims, terminate one worker during work, lease takeover and stale token rejection",
+      "acceptance": "No duplicate acknowledgment or tenant leakage; bounded recovery",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P4 Integrity",
+      "required": "Fault injection before completion, transaction rollback, retry, immutable result",
+      "acceptance": "Zero partial commits or duplicate outcomes",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P5 Performance, SQL & Index Optimization",
+      "required": "Query-plan and index inventory evidence below; paired scheduler OFF/ON runs at each selected load, same pod count, dataset, arrival rate, operation mix and environment",
+      "acceptance": "Per operation p95 degradation <=10%, p99 <=20%; zero deadlocks, pool timeouts and missed in-scope deadlines",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P6 Lifecycle",
+      "required": "Existing NIGHT failure fences, explicit recovery, pilot cap, expiry, idempotency; new slot after cap",
+      "acceptance": "No automatic bypass, mutation or allocation beyond cap",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P7 Admission",
+      "required": "Source Inventory, PostgreSQL source schema, targeted JUnit XML, required security gate and existing Exact-SHA workflow",
+      "acceptance": "All mandatory tests executed and passed; existing Exact-SHA GREEN",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    },
+    {
+      "id": "P8 Closure",
+      "required": "Evidence manifest tying P1–P7 to final SHA and qualified pilot scope",
+      "acceptance": "No missing evidence; explicit approval, not automatic runtime enablement",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Single package P1–P8"
+      },
+      "evidence": "NOT_ASSERTED_ON_REVIEWED_SHA"
+    }
+  ],
+  "sectionObligations": [
+    {
+      "id": "SFC-P4-CUR-01",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-CURRENCY-R1-TENANT-MARKET-CURRENCY-POLICY.md",
+        "section": "§3–4"
+      },
+      "statement": "Separate tenant accounting, inventory valuation, market/public price, purpose allowlist, transaction and snapshot currencies; KZ default KZT, other markets separate approved policy.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-CUR-02",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-CURRENCY-R1-TENANT-MARKET-CURRENCY-POLICY.md",
+        "section": "§1, §4"
+      },
+      "statement": "Allowed currency is not legal or market admission; KZT-only public KZ price, no automatic B2B exception.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-FX-01",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-FX-R1A3-TRUSTED-NBRK-INGESTION.md",
+        "section": "§2, §4–5"
+      },
+      "statement": "Positive rate and nominal, actual effective date, immutable semantic revisions and atomic whole-batch admission; no silent MOCK fallback.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-FX-02",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-FX-R1A3-TRUSTED-NBRK-INGESTION.md",
+        "section": "§3, §6"
+      },
+      "statement": "Fixed trusted HTTPS adapter and bounded parsing; fetch outside DB locks, explicit source provenance and no historical mutation.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-FX-03",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§5.1"
+      },
+      "statement": "One DECIMAL128 formula: multiply anchorAmount by rateKzt before divide nominal; buffer then markup then CEILING step; no pre-rounded normalizedRate.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-FX-04",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§5.2"
+      },
+      "statement": "Post-rounding guardrails, exact boundary comparisons, NO_CHANGE without revision/budget, no clamp or gradual bypass.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-FX-05",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§6"
+      },
+      "statement": "Rolling window (t-W,t], baseline as of t-W, absolute variation includes manual revisions, shared tenant budget serialized and no reset by run or midnight.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-FX-06",
+      "domain": "FX",
+      "source": {
+        "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+        "section": "§6–8"
+      },
+      "statement": "Price owner revision, receipt and budget consumption atomic; no financial exposure inference from sum of unit-price deltas.",
+      "scope": "MIXED_CORE_POLICY_AND_PARKED_AUTO_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-01",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-B4.8-AUTHORIZED-ANALYTICAL-READ.md",
+        "section": "B4.8 final contract"
+      },
+      "statement": "Fresh tenant/warehouse authorization in outer transaction, snapshot resolves source revision, generation and proof coherently.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-02",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-B4.8-AUTHORIZED-ANALYTICAL-READ.md",
+        "section": "B4.8"
+      },
+      "statement": "Closed covered CURRENT L3 else qualified owner-source L0; route reason independent of quality; PARTIAL is not READY; missing not zero.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-03",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md",
+        "section": "MIC-R2 opening"
+      },
+      "statement": "Closed equal calendar windows, default3, 2..120; match tenant/generation/metric/method/grain/currency/UOM/revision and auth; reject incomplete/incompatible input.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-04",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md",
+        "section": "MIC-R2 opening"
+      },
+      "statement": "AVG/SMA same fixed window; growth/CV ratios not percent; nonpositive denominator not measurable; OLS slope per ordinal; population SD.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-05",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md",
+        "section": "B4.5E.7/B"
+      },
+      "statement": "Exact distinct set identity; additive sums separate; SQL/Java numerical tolerance candidate not approved rounding; EMA/forecast separate proof.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-06",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md",
+        "section": "Predictive candidate envelope"
+      },
+      "statement": "Current observation time cannot establish historical availability; no backtest/training/production inference without immutable provenance.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-07",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-B4.7-SAFE-REBUILD.md",
+        "section": "Safe Rebuild"
+      },
+      "statement": "Bounded replay/period refresh; durable progress; fresh independent proof and explicit CAS activation; preserve previous generation.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-INT-08",
+      "domain": "INTELLIGENCE",
+      "source": {
+        "path": "docs/architecture/RM-B5.5R-CONCLUSION-INTEGRITY.md",
+        "section": "REV-B55-01..08"
+      },
+      "statement": "Homogeneous L0 or same L3 generation/proof for conclusions; abstain on mixed routes, unproved causal hypotheses; no industrial latency claim.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-SCH-01",
+      "domain": "SCHEDULER",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "P1/P3/P4/P6"
+      },
+      "statement": "NIGHT and INTRADAY source parity, durable completion, stale lease rejection and recovery; bounded pilot BOOKED_ORDERS only.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-SCH-02",
+      "domain": "SCHEDULER",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "Execution"
+      },
+      "statement": "Pilot 7 slots/day, <=31 days, <=217 stored requests per tenant; no automatic retention or runtime enablement.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-SCH-03",
+      "domain": "SCHEDULER",
+      "source": {
+        "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+        "section": "P5"
+      },
+      "statement": "Matched OFF/ON workload per operation, p95 degradation <=10%, p99 <=20%, no deadlock/pool timeout/missed qualified deadline.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-EVT-01",
+      "domain": "EVT",
+      "source": {
+        "path": "docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md",
+        "section": "§6"
+      },
+      "statement": "Typed allowlisted triggers/conditions, explicit audience and safe versioned template; preview no enqueue; default disabled.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-EVT-02",
+      "domain": "EVT",
+      "source": {
+        "path": "docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md",
+        "section": "§6"
+      },
+      "statement": "Fresh permission per recipient and on open; separate service/marketing consent, in-app plus mock only; external delivery gate separate.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-EVT-03",
+      "domain": "EVT",
+      "source": {
+        "path": "docs/spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md",
+        "section": "§1–2"
+      },
+      "statement": "Owner command and canonical event/required outbox in same PG tx; stable tenant/owner/event identity; no remote I/O under locks.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-EVT-04",
+      "domain": "EVT",
+      "source": {
+        "path": "docs/spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md",
+        "section": "§2"
+      },
+      "statement": "Independent receipt/effect per consumer, at-least-once transport, bounded lease/generation/retry/replay; no global order.",
+      "scope": "ADMITTED_SLICE_APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-REP-01",
+      "domain": "REPORTING",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§1–2"
+      },
+      "statement": "After P4.1A.5-Q GREEN, owner publication and file attachment/event atomic; external storage verify outside tx; catalog fresh auth independently.",
+      "scope": "DECISION_REQUIRED_SCOPE_TRACE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-REP-02",
+      "domain": "REPORTING/RADAR/EVT",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§3–5"
+      },
+      "statement": "Report lifecycle trigger/provider separate admission; one logical ready notification, separate PDF artifact, no inference from generated/available file.",
+      "scope": "DECISION_REQUIRED_SCOPE_TRACE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-P4-REP-03",
+      "domain": "SCHEDULER/REPORTING",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§3–5"
+      },
+      "statement": "Scheduled occurrence and deadline separate from analytics job pilot; no report overdue without qualified occurrence.",
+      "scope": "DECISION_REQUIRED_SCOPE_TRACE",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "P4-C01",
+      "issue": "Currency purpose conflict",
+      "resolution": "Legacy SALES_INTERNAL cannot substitute PRICING_ANCHOR for AUTO; preserve legacy semantics, verify implementation/grants; no activation.",
+      "status": "OPEN_METHOD_MAPPING"
+    },
+    {
+      "id": "P4-C02",
+      "issue": "FX design freeze vs implementation foundation",
+      "resolution": "R2C.0 register authorizes offline foundation, not real publication; later implementation slices require exact owner scope and gates; no general AUTO activation.",
+      "status": "OPEN_SCOPE_TRACE"
+    },
+    {
+      "id": "P4-C03",
+      "issue": "Calculation READY vs qualified business result",
+      "resolution": "Local kernel readiness, L3 proof, source completeness and current authorization are separate; PARTIAL cannot be upgraded by successful calculation.",
+      "status": "NORMATIVE_BOUNDARY"
+    },
+    {
+      "id": "P4-C04",
+      "issue": "Calendar windows vs intraday",
+      "resolution": "Closed-window derived metrics not interchangeable with cumulative same-day observations; no period double counting or historical availability inference.",
+      "status": "OPEN_METHOD_MAPPING"
+    },
+    {
+      "id": "P4-C05",
+      "issue": "Scheduler scope vs report delivery",
+      "resolution": "BOOKED_ORDERS bounded analytical pilot is not authorization for general report or FX scheduler; distinct occurrence and owner contracts.",
+      "status": "NORMATIVE_BOUNDARY"
+    },
+    {
+      "id": "P4-C06",
+      "issue": "Event receipt vs publication",
+      "resolution": "Canonical event, transport ACK, consumer effect, report attachment/published state and notification delivery distinct; no exactly-once end-to-end claim.",
+      "status": "NORMATIVE_BOUNDARY"
+    },
+    {
+      "id": "P4-C07",
+      "issue": "Reporting vs EVT trigger scope",
+      "resolution": "Existing EVT-01 candidates exclude reporting triggers until explicit admission; P4.2 producer independent of consumer availability; no new bus.",
+      "status": "OPEN_SCOPE_TRACE"
+    },
+    {
+      "id": "P4-C08",
+      "issue": "Derived metrics numeric policy",
+      "resolution": "PostgreSQL numeric vs DECIMAL128 tolerance candidate needs independent parity and approved rounding; no historical model or prediction claim.",
+      "status": "OPEN_MATH_REVIEW"
+    }
+  ]
+}

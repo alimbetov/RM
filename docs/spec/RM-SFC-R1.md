@@ -74,3 +74,7 @@ Snapshot 0cae504294a810363dd8396bd164d314b8c51c77: 298 tracked Markdown/JSON doc
 
 ## SFC-R1.0B.2B.3 — commercial semantic crosswalk
 [Commerce crosswalk](RM-SFC-COMMERCE-CROSSWALK-v1.json), reviewed f784f6f59a2b9adbc62b2fc33e8322d6a1f0b3e1: {"qrRules":50,"coreScenarios":37,"r3":26,"dual":12,"sectionObligations":9,"findings":6,"variantFamilies":8}. Preserve draft status, explicit owner scope, physical versus financial effects, one order engine and canonical fact identity. Candidate links not equivalence; no new PASS. Reporting P4.1A.5-Q → P4.2 after GREEN, F2H deferred. Next B.2B.4 FX/Intelligence/EVT/Scheduler. No runtime or CI change.
+
+
+## SFC-R1.0B.2B.4 — FX / Intelligence / EVT / Scheduler semantic and mathematical crosswalk
+[Crosswalk](RM-SFC-ANALYTICS-FX-EVT-CROSSWALK-v1.json), reviewed 9fa5bd9b34ac4b2900527b0fc48fbdf7c3c6cd8d: {"fxRequirements":24,"fxVariants":80,"fxSourceLinks":108,"schedulerPackages":8,"sectionObligations":26,"findings":8}. FX 24 requirements and 80 proposed cases preserve declared trace links; scheduler P1–P8 existing acceptance not modified; selected sections of MIC-R2/B4/B5/EVT/Reporting extracted. No new qualification, runtime, scope or CI change. Reporting P4.1A.5-Q → P4.2 after GREEN; F2H deferred. Next B.2B.5 remaining domains and canonical closure; full semantic document coverage still open.
