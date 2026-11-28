@@ -1,0 +1,104 @@
+{
+  "schema": "RM-FUNCTIONAL-GAP-REGISTER/v1",
+  "reviewedSha": "17324dfd5a5a1fe32dd60f9ec60806cec3e4616c",
+  "status": "INITIAL_RECONCILIATION_BACKLOG",
+  "policy": "Distinguish code, evidence, scope and documentation gaps. Verify before fixing.",
+  "gaps": [
+    {
+      "id": "SFC-G01",
+      "kind": "TASKS status drift",
+      "observation": "R3 TSK-01..04 and CRM-U06 historical PLANNED/GAP while current TaskService/TaskCrmFollowupService/TaskCalendarQueryService exist",
+      "next": "Review each method/variant; do not mass-promote to IMPLEMENTED",
+      "scope": "CORE / APPROVED RADAR",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G02",
+      "kind": "Evidence traceability",
+      "observation": "CORE-P0 and BSR supporting/gap mappings",
+      "next": "Validate real PostgreSQL semantic assertions and exact SHA",
+      "scope": "CORE",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G03",
+      "kind": "External admission",
+      "observation": "Service-source evidence cannot prove real OIDC/email/browser",
+      "next": "Existing G1–G4 separately",
+      "scope": "CORE",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G04",
+      "kind": "Reporting",
+      "observation": "P4.1A.5-Q current CI recovery; guard is not publication/catalog",
+      "next": "P4.1A.5-Q GREEN before P4.2",
+      "scope": "EXISTING LANE",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G05",
+      "kind": "Analytical scenarios",
+      "observation": "B5 source registry contains 112 INVENTORIED_NOT_QUALIFIED rows",
+      "next": "Review historical coverage, exact math, independent oracle, scheduler P1–P8",
+      "scope": "APPROVED SLICE",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G06",
+      "kind": "Radar",
+      "observation": "R0.1 allowed, expansion deferred",
+      "next": "Current R0.1 regression and performance admission; do not open R0.2",
+      "scope": "APPROVED R0.1",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G07",
+      "kind": "FX scope drift",
+      "observation": "FX_AUTO source present; historical CUR-R2C says parked",
+      "next": "Reconcile explicit owner CR and activation gate; retain source/regression",
+      "scope": "DECISION REQUIRED FOR EXPANSION",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G08",
+      "kind": "EVT",
+      "observation": "No evt package in reviewed tree; IAM and analytic outbox are not universal delivery",
+      "next": "Existing IE DAG EVT-01 only; external notification and TASK SLA remain deferred",
+      "scope": "APPROVED EVT-01",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G09",
+      "kind": "Finance Marketing Subscription",
+      "observation": "Minimal sources and planned R3 capabilities",
+      "next": "Full-platform scope after explicit owner decision; no payment inference from fulfillment",
+      "scope": "POST MVP",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G10",
+      "kind": "Inventory settings",
+      "observation": "Historical reserve/picking/valuation mismatch needs current verification",
+      "next": "Preserve mandatory reservation; distinguish policy metadata from valuation",
+      "scope": "REVIEW REQUIRED",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G11",
+      "kind": "CRM provenance",
+      "observation": "CRM-U08 historical blocker, CrmBuyerLinkService source present",
+      "next": "Review typed link; never infer from email/name/tenant",
+      "scope": "REVIEW REQUIRED",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    },
+    {
+      "id": "SFC-G12",
+      "kind": "Registry completeness",
+      "observation": "Other JSON/Markdown scenario sources and method variants still pending",
+      "next": "Semantic extraction, aliases, source and evidence mapping",
+      "scope": "DOC ONLY",
+      "status": "OPEN_REVIEW_NOT_CONFIRMED_DEFECT"
+    }
+  ]
+}

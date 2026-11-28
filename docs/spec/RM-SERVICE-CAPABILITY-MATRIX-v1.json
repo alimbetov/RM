@@ -1,0 +1,452 @@
+{
+  "schema": "RM-SERVICE-CAPABILITY-MATRIX/v1",
+  "reviewedSha": "17324dfd5a5a1fe32dd60f9ec60806cec3e4616c",
+  "scope": "Package/class inventory, candidate anchors in master registry; no semantic method review",
+  "mainJavaFiles": 321,
+  "testJavaFiles": 147,
+  "serviceSuffixCount": 102,
+  "domains": [
+    {
+      "domain": "iam",
+      "javaFiles": 41,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/iam/EmailIdentityService.java",
+        "src/main/java/kz/rm/iam/GlobalAccountDeletionService.java",
+        "src/main/java/kz/rm/iam/GlobalAccountStatusService.java",
+        "src/main/java/kz/rm/iam/GlobalUserProfileService.java",
+        "src/main/java/kz/rm/iam/IamPiiMigrationQualificationService.java",
+        "src/main/java/kz/rm/iam/LegacyIamPiiMigrationService.java",
+        "src/main/java/kz/rm/iam/MyAccessService.java",
+        "src/main/java/kz/rm/iam/PlatformAdminGovernanceService.java",
+        "src/main/java/kz/rm/iam/PlatformTenantBootstrapService.java",
+        "src/main/java/kz/rm/iam/PlatformTenantRecoveryService.java",
+        "src/main/java/kz/rm/iam/SelfServiceTenantOnboardingService.java",
+        "src/main/java/kz/rm/iam/TenantAccessStatusService.java",
+        "src/main/java/kz/rm/iam/TenantMemberEnrollmentService.java",
+        "src/main/java/kz/rm/iam/TenantOwnershipTransferService.java",
+        "src/main/java/kz/rm/iam/TenantRoleService.java",
+        "src/main/java/kz/rm/iam/WarehouseStaffScopeService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/iam/ActivationJourneyEvidence.java",
+        "src/test/java/kz/rm/iam/BusMvpServiceJourneyQualificationTest.java",
+        "src/test/java/kz/rm/iam/CanonicalDeliveryJourneyEvidence.java",
+        "src/test/java/kz/rm/iam/CanonicalFactJourneyEvidence.java",
+        "src/test/java/kz/rm/iam/CanonicalProducerEvidence.java",
+        "src/test/java/kz/rm/iam/CheckoutCanonicalEvidence.java",
+        "src/test/java/kz/rm/iam/ConclusionConcurrencyEvidence.java",
+        "src/test/java/kz/rm/iam/IamAccessStatusQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamAdminOwnerGovernanceQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamEmailChangeOrderHistoryQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamEmailChangeQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamFoundationQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamGlobalUserProfileQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamInitialEmailRegistrationQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamOidcRevocationOutboxQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamPiiPopulatedDatabaseQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamSellerAuthenticatedTenantAdmissionQualificationTest.java",
+        "src/test/java/kz/rm/iam/IamUserOnboardingProcessQualificationTest.java",
+        "src/test/java/kz/rm/iam/IntelligenceMetricQualification.java",
+        "src/test/java/kz/rm/iam/IntelligenceSourceOracle.java",
+        "src/test/java/kz/rm/iam/JourneySignedActorFixture.java",
+        "src/test/java/kz/rm/iam/JourneySqlEvidence.java",
+        "src/test/java/kz/rm/iam/L1ProjectionJourneyEvidence.java",
+        "src/test/java/kz/rm/iam/NativeBookedCaptureJourneyEvidence.java",
+        "src/test/java/kz/rm/iam/NativeBookedClosureJourneyEvidence.java",
+        "src/test/java/kz/rm/iam/OidcActorResolverQualificationTest.java",
+        "src/test/java/kz/rm/iam/OidcJwtCryptoQualificationTest.java",
+        "src/test/java/kz/rm/iam/OidcTestDecoderSupport.java",
+        "src/test/java/kz/rm/iam/R4FirstTenantOnboardingQualificationTest.java",
+        "src/test/java/kz/rm/iam/R4LocalJwksIntegrationQualificationTest.java",
+        "src/test/java/kz/rm/iam/SignedJwtTestAuthority.java",
+        "src/test/java/kz/rm/iam/SignedJwtTestAuthorityTest.java",
+        "src/test/java/kz/rm/iam/TenantRbacQualificationTest.java",
+        "src/test/java/kz/rm/iam/TenantRbacRevocationQualificationTest.java",
+        "src/test/java/kz/rm/iam/UserRoleMatrixR31QualificationTest.java",
+        "src/test/java/kz/rm/iam/VerifiedBuyerEmailFixture.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "organization",
+      "javaFiles": 14,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/organization/OrganizationLocationQueryService.java",
+        "src/main/java/kz/rm/organization/OrganizationLocationService.java",
+        "src/main/java/kz/rm/organization/TenantCurrencyPolicyService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/organization/CommerceCurrencyAdmissionQualificationTest.java",
+        "src/test/java/kz/rm/organization/MvpServiceCurrencyStartupQualificationTest.java",
+        "src/test/java/kz/rm/organization/OrganizationLocationLifecycleQualificationTest.java",
+        "src/test/java/kz/rm/organization/OrganizationLocationQueryQualificationTest.java",
+        "src/test/java/kz/rm/organization/OrganizationLocationR11ConcurrencyQualificationTest.java",
+        "src/test/java/kz/rm/organization/TenantCurrencyPolicyQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "geo",
+      "javaFiles": 7,
+      "serviceSuffixFiles": [],
+      "testFiles": [
+        "src/test/java/kz/rm/geo/KatoTerritoryQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "security",
+      "javaFiles": 19,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/security/kms/FileContentCryptoService.java",
+        "src/main/java/kz/rm/security/kms/KeyWrappingService.java",
+        "src/main/java/kz/rm/security/kms/KmsFencedJobService.java",
+        "src/main/java/kz/rm/security/kms/TenantCryptoService.java",
+        "src/main/java/kz/rm/security/kms/TenantKeyService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/security/kms/KeyWrappingQualificationTest.java",
+        "src/test/java/kz/rm/security/kms/KmsCryptoQualificationTest.java",
+        "src/test/java/kz/rm/security/kms/KmsDeploymentGuardTest.java",
+        "src/test/java/kz/rm/security/kms/KmsFencedJobQualificationTest.java",
+        "src/test/java/kz/rm/security/kms/KmsPersistedRoundTripTest.java",
+        "src/test/java/kz/rm/security/kms/ReportFileEnvelopeV1Test.java",
+        "src/test/java/kz/rm/security/kms/TenantKeyServiceTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "audit",
+      "javaFiles": 4,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/audit/AuditRetentionService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/audit/AuditRetentionPolicyTest.java",
+        "src/test/java/kz/rm/audit/AuditRetentionQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "crm",
+      "javaFiles": 31,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/crm/CrmBuyerLinkService.java",
+        "src/main/java/kz/rm/crm/CrmCategoryService.java",
+        "src/main/java/kz/rm/crm/CrmContractService.java",
+        "src/main/java/kz/rm/crm/CrmCustomerService.java",
+        "src/main/java/kz/rm/crm/CrmHistoryService.java",
+        "src/main/java/kz/rm/crm/CrmInteractionService.java",
+        "src/main/java/kz/rm/crm/CrmSearchService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/crm/CrmBuyerLinkQualificationTest.java",
+        "src/test/java/kz/rm/crm/CrmInteractionQualificationTest.java",
+        "src/test/java/kz/rm/crm/CrmR1aQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "catalog",
+      "javaFiles": 4,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/catalog/CatalogGroupService.java",
+        "src/main/java/kz/rm/catalog/CatalogItemService.java",
+        "src/main/java/kz/rm/catalog/CatalogQueryService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/catalog/CatalogQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "files",
+      "javaFiles": 27,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/files/FileAttachmentService.java",
+        "src/main/java/kz/rm/files/FileMetadataService.java",
+        "src/main/java/kz/rm/files/FileRecoveryService.java",
+        "src/main/java/kz/rm/files/FileUploadCompletionService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/files/CatalogPublicProductMediaQualificationTest.java",
+        "src/test/java/kz/rm/files/ClamAvProtocolQualificationTest.java",
+        "src/test/java/kz/rm/files/FilesR10aQualificationTest.java",
+        "src/test/java/kz/rm/files/FilesR10bQualificationTest.java",
+        "src/test/java/kz/rm/files/ReportContentAdmissionTest.java",
+        "src/test/java/kz/rm/files/ReportEncryptedStorageQualificationTest.java",
+        "src/test/java/kz/rm/files/ReportUploadQualificationEvidence.java",
+        "src/test/java/kz/rm/files/RustFsLiveInfrastructureE2ETest.java",
+        "src/test/java/kz/rm/files/RustFsRealClamAvE2ETest.java",
+        "src/test/java/kz/rm/files/RustFsRestartProbeTest.java",
+        "src/test/java/kz/rm/files/RustFsRestoredDatabaseE2ETest.java",
+        "src/test/java/kz/rm/files/RustFsStorageQualificationTest.java",
+        "src/test/java/kz/rm/files/V1DaemonCryptoFixture.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "tasks",
+      "javaFiles": 11,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/tasks/TaskCalendarQueryService.java",
+        "src/main/java/kz/rm/tasks/TaskCrmFollowupService.java",
+        "src/main/java/kz/rm/tasks/TaskCrmReconciliationService.java",
+        "src/main/java/kz/rm/tasks/TaskOverdueQueryService.java",
+        "src/main/java/kz/rm/tasks/TaskReconciliationSnapshotService.java",
+        "src/main/java/kz/rm/tasks/TaskService.java",
+        "src/main/java/kz/rm/tasks/TaskTimingQueryService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/tasks/RadarCompetitionIntervals.java",
+        "src/test/java/kz/rm/tasks/RadarSqlProbe.java",
+        "src/test/java/kz/rm/tasks/TaskCalendarPgConcurrencyQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskCalendarPgPerformanceQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskCalendarQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskExactTimingQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskOverdueSignalQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskRadarPgConcurrencyQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskRadarPgPerformanceQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskRadarR01CServiceQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskRadarSqlFailureQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskServiceQualificationTest.java",
+        "src/test/java/kz/rm/tasks/TaskTimingCompletionQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "sales",
+      "javaFiles": 23,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/sales/OrderPackagingService.java",
+        "src/main/java/kz/rm/sales/PackagingServiceCatalogService.java",
+        "src/main/java/kz/rm/sales/SalesInventoryCommandService.java",
+        "src/main/java/kz/rm/sales/SalesOrderPreparationService.java",
+        "src/main/java/kz/rm/sales/SalesOrderQrReferenceService.java",
+        "src/main/java/kz/rm/sales/SalesOrderQueryService.java",
+        "src/main/java/kz/rm/sales/SalesPickupHandoverService.java",
+        "src/main/java/kz/rm/sales/SalesPriceProposalService.java",
+        "src/main/java/kz/rm/sales/SalesReturnPhysicalService.java",
+        "src/main/java/kz/rm/sales/SalesReturnQuarantineResolutionService.java",
+        "src/main/java/kz/rm/sales/SalesReturnReceptionProofService.java",
+        "src/main/java/kz/rm/sales/SalesReturnRequestService.java",
+        "src/main/java/kz/rm/sales/SalesReturnReviewService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/sales/MvpServiceWarehouseAdmissionQualificationTest.java",
+        "src/test/java/kz/rm/sales/OrderPackagingQualificationTest.java",
+        "src/test/java/kz/rm/sales/PackagingServiceCatalogQualificationTest.java",
+        "src/test/java/kz/rm/sales/PgCommitOrderEvidence.java",
+        "src/test/java/kz/rm/sales/QrHandoverProcessWorker.java",
+        "src/test/java/kz/rm/sales/QrMvpServiceJourneyQualificationTest.java",
+        "src/test/java/kz/rm/sales/QrNegotiatedCheckoutQualificationTest.java",
+        "src/test/java/kz/rm/sales/QrReturnProcessWorker.java",
+        "src/test/java/kz/rm/sales/QrWarehouseHandoverQualificationTest.java",
+        "src/test/java/kz/rm/sales/SalesInventoryRbacQualificationTest.java",
+        "src/test/java/kz/rm/sales/SalesOrderQueryQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "inventory",
+      "javaFiles": 30,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/inventory/InventoryAuthorizedCommandService.java",
+        "src/main/java/kz/rm/inventory/InventoryHistoryQueryService.java",
+        "src/main/java/kz/rm/inventory/InventoryMovementService.java",
+        "src/main/java/kz/rm/inventory/InventoryReservationService.java",
+        "src/main/java/kz/rm/inventory/InventoryStocktakeService.java",
+        "src/main/java/kz/rm/inventory/InventoryTenantSettingsService.java",
+        "src/main/java/kz/rm/inventory/InventoryTransferService.java",
+        "src/main/java/kz/rm/inventory/StockBalanceQueryService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/inventory/InventoryMovementQualificationTest.java",
+        "src/test/java/kz/rm/inventory/InventoryQ123QualificationTest.java",
+        "src/test/java/kz/rm/inventory/InventoryReservationQualificationTest.java",
+        "src/test/java/kz/rm/inventory/InventoryTenantSettingsQualificationTest.java",
+        "src/test/java/kz/rm/inventory/InventoryTransferStocktakeQualificationTest.java",
+        "src/test/java/kz/rm/inventory/RegionalPublicAvailabilityQualificationTest.java",
+        "src/test/java/kz/rm/inventory/SellerWarehouseScopeR0QualificationTest.java",
+        "src/test/java/kz/rm/inventory/StockBalanceQueryQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "storefront",
+      "javaFiles": 7,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/storefront/PublishedOfferQrService.java",
+        "src/main/java/kz/rm/storefront/SellerOfferService.java",
+        "src/main/java/kz/rm/storefront/StorefrontManagementService.java",
+        "src/main/java/kz/rm/storefront/StorefrontOfferService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/storefront/PublishedOfferQrQualificationTest.java",
+        "src/test/java/kz/rm/storefront/SellerOfferQualificationTest.java",
+        "src/test/java/kz/rm/storefront/StorefrontManagementQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "autoorder",
+      "javaFiles": 5,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/autoorder/AutoOrderService.java",
+        "src/main/java/kz/rm/autoorder/PublishedQrCheckoutService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/autoorder/AutoOrderR1QualificationTest.java",
+        "src/test/java/kz/rm/autoorder/CommercialOidcHttpQualificationTest.java",
+        "src/test/java/kz/rm/autoorder/PublishedQrCheckoutQualificationTest.java",
+        "src/test/java/kz/rm/autoorder/QrLegacyEmailFirstDisabledQualificationTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "fx",
+      "javaFiles": 28,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/fx/FxCalendarEvidenceService.java",
+        "src/main/java/kz/rm/fx/FxRateRefreshService.java",
+        "src/main/java/kz/rm/fx/FxRateSnapshotService.java",
+        "src/main/java/kz/rm/fx/SkuFxSellerApprovalService.java",
+        "src/main/java/kz/rm/fx/TrustedNbrkIngestionService.java",
+        "src/main/java/kz/rm/fx/auto/FxAutoConsentRevocationService.java",
+        "src/main/java/kz/rm/fx/auto/FxAutoDraftApprovalService.java",
+        "src/main/java/kz/rm/fx/auto/FxAutoExecutionPreparationService.java",
+        "src/main/java/kz/rm/fx/auto/FxAutoOwnerConsentService.java",
+        "src/main/java/kz/rm/fx/auto/FxAutoPersistentDryRunService.java",
+        "src/main/java/kz/rm/fx/auto/FxAutoPolicyEnrollmentService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/fx/FxRateRefreshMockQualificationTest.java",
+        "src/test/java/kz/rm/fx/FxRateSnapshotQualificationTest.java",
+        "src/test/java/kz/rm/fx/NbrkRssXmlParserQualificationTest.java",
+        "src/test/java/kz/rm/fx/NbrkTradingCalendarPolicyTest.java",
+        "src/test/java/kz/rm/fx/SkuFxCandidateCalculatorTest.java",
+        "src/test/java/kz/rm/fx/SkuFxSellerApprovalQualificationTest.java",
+        "src/test/java/kz/rm/fx/TrustedKaseCalendarHttpClientTest.java",
+        "src/test/java/kz/rm/fx/TrustedNbrkHttpClientTransportQualificationTest.java",
+        "src/test/java/kz/rm/fx/TrustedNbrkIngestionQualificationTest.java",
+        "src/test/java/kz/rm/fx/auto/FxAutoDryRunTest.java",
+        "src/test/java/kz/rm/fx/auto/FxAutoOwnerAdmissionQualificationTest.java",
+        "src/test/java/kz/rm/fx/auto/FxAutoPolicySchemaPgTest.java",
+        "src/test/java/kz/rm/fx/auto/FxAutoRollingLimitEvaluatorTest.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "intelligence",
+      "javaFiles": 62,
+      "serviceSuffixFiles": [
+        "src/main/java/kz/rm/intelligence/AnalyticalJobService.java",
+        "src/main/java/kz/rm/intelligence/AuthorizedAnalyticalReadService.java",
+        "src/main/java/kz/rm/intelligence/BusinessConclusionService.java",
+        "src/main/java/kz/rm/intelligence/BusinessFactorService.java",
+        "src/main/java/kz/rm/intelligence/BusinessObservationService.java",
+        "src/main/java/kz/rm/intelligence/CalendarPolicyService.java",
+        "src/main/java/kz/rm/intelligence/CanonicalFactDeliveryService.java",
+        "src/main/java/kz/rm/intelligence/GenerationRebuildService.java",
+        "src/main/java/kz/rm/intelligence/L1ProjectionService.java",
+        "src/main/java/kz/rm/intelligence/L2ProjectionService.java",
+        "src/main/java/kz/rm/intelligence/L3DerivedSeriesService.java",
+        "src/main/java/kz/rm/intelligence/L3RollupService.java",
+        "src/main/java/kz/rm/intelligence/MetricQueryService.java",
+        "src/main/java/kz/rm/intelligence/MultidimensionalCoverageService.java",
+        "src/main/java/kz/rm/intelligence/MultidimensionalReadService.java",
+        "src/main/java/kz/rm/intelligence/NativeBookedCaptureService.java",
+        "src/main/java/kz/rm/intelligence/NativeBookedClosureService.java",
+        "src/main/java/kz/rm/intelligence/NativeBookedReportEvidenceService.java"
+      ],
+      "testFiles": [
+        "src/test/java/kz/rm/intelligence/AnalyticalJobFoundationQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/BusinessAnomalyQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/BusinessConclusionQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/BusinessFactorQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/BusinessInterpretationQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/BusinessTrendQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/CalendarPolicyQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/CanonicalFactEncodingTest.java",
+        "src/test/java/kz/rm/intelligence/DerivedMetricQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/DerivedPostgresQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/FeatureStoreJourneyEvidence.java",
+        "src/test/java/kz/rm/intelligence/IntelligenceB1ContractTest.java",
+        "src/test/java/kz/rm/intelligence/IntelligenceSourceSchemaQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/ReportDatasetDigestTest.java",
+        "src/test/java/kz/rm/intelligence/ReportStorageQualificationTest.java",
+        "src/test/java/kz/rm/intelligence/ReportTemplateJourneyEvidence.java",
+        "src/test/java/kz/rm/intelligence/SalesReportMaterializationEvidence.java",
+        "src/test/java/kz/rm/intelligence/SnapshotProofReuseEvidence.java"
+      ],
+      "sourceStatus": "SOURCE_PRESENT",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "finance",
+      "javaFiles": 1,
+      "serviceSuffixFiles": [],
+      "testFiles": [],
+      "sourceStatus": "MINIMAL_SOURCE",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "marketing",
+      "javaFiles": 1,
+      "serviceSuffixFiles": [],
+      "testFiles": [],
+      "sourceStatus": "MINIMAL_SOURCE",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "subscription",
+      "javaFiles": 1,
+      "serviceSuffixFiles": [],
+      "testFiles": [],
+      "sourceStatus": "MINIMAL_SOURCE",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "domain": "evt",
+      "javaFiles": 0,
+      "serviceSuffixFiles": [],
+      "testFiles": [],
+      "sourceStatus": "NO_PACKAGE",
+      "functionalStatus": "METHOD_LEVEL_REVIEW_PENDING",
+      "qualification": "NOT_ASSERTED"
+    }
+  ],
+  "scenarioRegistry": "RM-USER-SCENARIO-MASTER-REGISTRY-v1.json"
+}

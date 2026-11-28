@@ -1,5 +1,7 @@
 # RM-MVP-CLOSURE-FREEZE-R1 — завершение функциональности и выпуск первого MVP
 
+> **Documentation alignment 2026-11-28:** [RM-SFC-R1](../spec/RM-SFC-R1.md). SFC consolidates documentation and full-product roadmap; this Freeze and explicit CR remain authoritative for implementation scope. No new MVP capability is authorized by SFC.
+
 **Дата решения:** 2026-11-23. **Ветка:** `base_dev`. **Исходный HEAD при формировании:** `422ba55eaff6fb36a4fda6465bc91f54e0a8370f`.  
 **Статус:** **ACTIVE MVP SCOPE DECISION / ENGINEERING FREEZE POLICY / NOT IMPLEMENTATION PASS**. **Product:** один MVP RM с двумя сценариями: **RM Business** и **RM QR Commerce**.  
 **Normative:** `docs/architecture/RM-PLATFORM-STANDARD-R2.md` и утверждённые IAM/SALES/INVENTORY/QR state/consistency/security решения не ослабляются.  

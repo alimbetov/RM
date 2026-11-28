@@ -1,11 +1,13 @@
 # RM — modular CRM monolith
 
+> **Documentation alignment 2026-11-28:** [RM-SFC-R1](docs/spec/RM-SFC-R1.md). The baseline sections below are historical, not an exhaustive description of current base_dev. SFC is the current source inventory and scenario reconciliation index.
+
 **Approved architectural standard:** [RM-PLATFORM-STANDARD-R2](docs/architecture/RM-PLATFORM-STANDARD-R2.md) — the sole normative design/security reference.
 **Current implemented code baseline:** [Domain Layer Baseline](docs/architecture/RM-DOMAIN-LAYER-BASELINE.md).
 **Integration:** PR #2 (domain baseline), PR #4 (IAM/RBAC security hardening), and the approved RM-R2 standard are merged into `main`. This does not imply production admission.
 **Deployment:** production and public HTTP/OIDC admission **HOLD**.
 
-## Implemented
+## Historical implemented baseline (see SFC for current inventory)
 - Java 21; Spring Boot 4.1.3; PostgreSQL/H2; Liquibase SQL; JDBC/JPA; selective MapStruct.
 - ORGANIZATION/IAM: tenant organization and membership checks, configurable tenant roles, explicit permission grants, immutable role audit.
 - CRM: customer/PII security and tenant boundaries.
@@ -15,7 +17,7 @@
 ## Current entrypoints
 `AuthenticatedSalesCommands` and `AuthenticatedInventoryCommands` are typed internal adapters. Order-linked stock operations flow through `OrderInventoryPort`; raw reservation methods are package-private; all raw stock movement adjustment overloads are package-private after merged [PR #4](https://github.com/alimbetov/RM/pull/4). `TenantAuthorization.requireForCommand` holds a tenant lock during business mutations.
 
-## Not yet delivered or qualified
+## Historical open items (reconcile with SFC and exact-SHA evidence)
 - Real issuer/BFF/HTTP security chain and actual onboarding;
 - independent production security sign-off for IAM suspension/recovery, even though internal transaction tests are GREEN;
 - least-privilege DB role, filled-DB Liquibase rehearsal, production recovery and performance benchmarks;

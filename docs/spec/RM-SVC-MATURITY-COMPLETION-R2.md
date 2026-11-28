@@ -1,5 +1,7 @@
 # RM-SVC-MATURITY-COMPLETION-R2 — единый пул задач зрелости и согласованности сервисов
 
+> **Documentation alignment 2026-11-28:** [RM-SFC-R1](RM-SFC-R1.md). Original maturity scores and waves are a dated baseline. Use SFC diff-first reconciliation; preserve admitted lanes and existing evidence.
+
 **Тип:** сквозное техническое задание / dependency-aware execution backlog (не дублирующий доменные ТЗ).
 **Дата:** 2026-11-22. **Репозиторий/ветка:** `alimbetov/RM` / `base_dev`.
 **Статус:** REVIEWED / ALIGNED SPEC, PLANNED / NOT IMPLEMENTED BY THIS DOCUMENT. **Release:** SERVICE-ONLY FEATURE FREEZE; HTTP/OIDC transport, production и merge в `main` — HOLD.
