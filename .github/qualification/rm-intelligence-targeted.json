@@ -59,6 +59,10 @@
     },
     {
       "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "sparseComparisonUsesOnlyRequiredQualifiedEndpoints"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
       "name": "missingIsNotZeroAndFutureRejected"
     },
     {
