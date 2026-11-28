@@ -31,7 +31,7 @@ Build one reusable UI language for RM business operations, Intelligence, Radar, 
 | Page templates | List/detail, create/edit, master-detail, dashboard, analytics explorer, report preview, settings |
 | Feature pages | Order-to-fulfillment, inventory, customer, FX Shield, Radar, Intelligence, Reports, IAM/settings; inventory before scope approval |
 
-Tokens: primitive → semantic → component. Example semantic names: surface.default, surface.raised, text.primary, text.muted, border.default, action.primary, status.success, status.warning, status.danger, focus.ring. No final palette or logo approved yet. Density compact/comfortable to be evaluated on real tables.
+Tokens: primitive → semantic → component. Example semantic names: surface.default, surface.raised, text.primary, text.muted, border.default, action.primary, status.success, status.warning, status.danger, focus.ring. Visual direction and reference palette are approved in §8.8; final semantic token pairs and logo assets remain pending qualification. Density compact/comfortable to be evaluated on real tables.
 
 ## 4. Page and component contracts
 
@@ -153,6 +153,10 @@ Regression: 16/16 Chromium in-memory scenarios passed, existing test unchanged. 
 
 Keep motion subordinate to business work. Existing CSS and tokens define 100ms control color transitions, 160ms dialog/menu entry, 200ms drawer entry, and 650ms loading rotation limited to three cycles. Motion is opt-in via prefers-reduced-motion:no-preference; reduced motion has no transitions or animations and retains static busy indication and status text. No motion on KPI values, charts or table rows, no perpetual decoration, no delayed closing or artificial loading, no JS animation runtime. Keep focus, visibility and request states independent of animation. Do not animate layout dimensions or use transition:all. Exit actions and Escape remain immediate. See [motion qualification](ui-kit/QUALIFICATION-MOTION.md). Candidate values pending visual approval. No changes to business logic, HTML, SVG icons, backend or CI.
 
+## 8.8 Approved design direction — RM Precision / Intelligent Business Guardian (2026-11-28)
+
+The project owner approved the direction: intelligence, protection and ease of use without overcomplication. The normative [RM Guardian visual and UX standard](RM-GUARDIAN-DESIGN-R1.md) is the source of truth for R1.0K.9B and future RM frontend design. RM Precision is the visual identity; Intelligent Business Guardian is the UX concept. Complexity inside, simplicity outside. Reuse the existing unified UI Kit, SVG and Motion System; no parallel component library. Business Control Center, progressive disclosure, evidence-based protection/analytics states, navy/light and deep-slate dark themes are the target. This approval fixes the direction, not final logo assets, exact dark tokens, production integration or Design Freeze. Prior prototype qualification records remain historical. No runtime, backend or CI changes in this decision.
+
 ## 9. Open decisions
 
-Frontend library and versions, browser support, mobile scope, initial locales, branding palette, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
+Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
