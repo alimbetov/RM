@@ -76,7 +76,7 @@ This decision supersedes the previous inventory-first sequencing in this section
 
 Initial reference assets:
 - [Design tokens](ui-kit/tokens.css) — one CSS custom-property source for colors, typography, spacing, radii, control sizes and semantic states.
-- [Visual catalog](ui-kit/index.html) — standalone HTML reference, open locally alongside tokens.css. Synthetic data only; no external dependencies or real mutations.
+- [Visual catalog](ui-kit/index.html) — HTML reference with local assets. Starting R1.0K.1 serve the directory over same-origin local HTTP for external SVG use; synthetic data only, no external dependencies or real mutations.
 
 Minimal component standard: use native HTML semantics first; one component name and a small set of variants; default/hover/focus/disabled plus loading and error when applicable. One primary action per action group. Financial values align right, carry explicit currency, and are never recalculated in the visual kit. Status has text, not color alone. A qualified zero is not a missing/unqualified value.
 
@@ -98,15 +98,15 @@ No separate mobile component library. Use the same component contracts, semantic
 | Viewport (CSS px) | Layout reference |
 |---|---|
 | 320–479 | XS: one column; primary actions can fill available width |
-| 480–767 | SM: one column; action rows wrap |
-| 768–1023 | MD: two-column grid when content fits |
-| 1024–1439 | LG: three-column reference grid; compact or comfortable density |
+| 480–767 | SM: one or more columns when the component container permits; action rows wrap |
+| 768–1023 | MD: intrinsic grid, typically two columns when content fits |
+| 1024–1439 | LG: intrinsic grid, typically three columns; compact or comfortable density |
 | 1440+ | XL: flexible desktop layout; reference catalog remains max 1120px |
 
 Breakpoints are candidate layout thresholds, not device detection. Test intermediate widths and embedded narrow containers; future business grid column counts may vary by content. Avoid fixed component widths, forced page-level horizontal scrolling, and clipping. Do not mask overflow with body overflow-x:hidden.
 
 - Buttons and editable controls: 48px minimum height on narrow viewports or coarse-pointer devices, including icon targets and compact variants; 16px input text baseline for touch contexts; wrap labels. Desktop density retains 32/40/48px variants.
-- Forms: one/two/three columns according to space; labels, validation and values remain visible. Logical reading/tab order stays consistent.
+- Forms: intrinsic grid with minimum preferred track 17rem, bounded by available container width; labels, validation and values remain visible. Logical reading/tab order stays consistent.
 - Tables: preserve all columns and exact values; use a labeled, keyboard-focusable local horizontal scroll region on narrow screens. No hidden columns or number truncation by default. Future card views are optional, not a second data model.
 - Cards and messages: flexible grids; wrap long localized labels; retain currency, precision and data quality state.
 - Dialogs: viewport-constrained width and height, internal scrolling and native focus behavior; no off-screen actions. Future drawers and navigation must meet equivalent rules.
@@ -114,6 +114,12 @@ Breakpoints are candidate layout thresholds, not device detection. Test intermed
 - Native CSS only in this increment. No frontend framework, responsive JS runtime or added dependencies.
 
 Reference catalog uses shared responsive layout tokens and CSS media queries. Test at widths 320, 375, 480, 600, 767, 768, 820, 1023, 1024, 1280, 1440 and 1920, plus short landscape, coarse pointer, keyboard and 200% zoom. Acceptance requires no document-level horizontal overflow, all table columns reachable, long ru/kk/en fixtures, readable metric values, reachable dialog actions and visible focus. Record browser/device and measured viewport evidence before claiming qualification. Implementation is a candidate; real-browser/device qualification remains pending.
+
+## 8.2 RM Icon System R1 and responsive qualification (2026-11-28)
+
+RM-UI-DS-R1.0K.1 is a candidate component standard, not Production Admission. See [qualification record](ui-kit/QUALIFICATION.md). Reference: [icons.svg](ui-kit/icons.svg), [components.css](ui-kit/components.css), [catalog.js](ui-kit/catalog.js). Own SVG geometry, 24x24 viewBox, 1.75 stroke, round caps/joins, no fill by default, currentColor; semantic color inherited from the control. Size tokens 16/20/24/32px. Icon graphics never replace the accessible button name or the textual data-quality status. Icon buttons use at least 48x48px on narrow or coarse-pointer contexts. Use one stable rm-{name} identifier; never import third-party icon packages or duplicate an existing glyph. No scripts, external references or embedded assets in the sprite. Add domain icons only on demonstrated need. Do not infer backend roles or status semantics from icon names.
+
+Component CSS is separated from the page, grids are intrinsic to available container width, disabled inputs retain their disabled background, and reference controls exercise local demo actions only. Direct file:// loading is no longer the supported preview path for external SVG symbols; use a local HTTP server. Local Chromium in-memory fixture: 15/15 cases passed; actual external asset loading, other browsers and physical devices remain unqualified. All five runtime asset blob IDs were matched to the tested local source files. Test-only Playwright is not a frontend dependency and CI is unchanged.
 
 ## 9. Open decisions
 
