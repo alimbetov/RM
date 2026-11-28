@@ -1,13 +1,13 @@
 {
   "schema": "RM-SFC-CANONICAL-INDEX-v1",
   "reviewedSha": "3de88d8bd6eb5dbf97b7e225ae72c9a58725da51",
-  "status": "CONSOLIDATED_INDEX_SEMANTIC_CLOSURE_HOLD",
+  "status": "STRUCTURAL_COVERAGE_PASS_SEMANTIC_CLOSURE_HOLD",
   "policy": "Register links use zero-based index into sources; source identity preserved, related links not equivalence or scope admission. Reporting FC included as independent source register, no inferred mapping. No unique atomic denominator or new qualification.",
   "counts": {
     "documents": 307,
     "masterIds": 383,
-    "linkedIds": 373,
-    "unlinkedIds": 10,
+    "linkedIds": 383,
+    "unlinkedIds": 0,
     "priorUnlinkedIds": 20,
     "r3": 75,
     "sourceIdentityMatches": 36,
@@ -15,7 +15,8 @@
     "remainingDomainObligations": 24,
     "remainingSourceIdsReviewed": 10,
     "newFindings": 5,
-    "totalFindingReferences": 31
+    "totalFindingReferences": 31,
+    "registryLinks": 813
   },
   "sources": [
     "docs/spec/RM-USER-SCENARIO-MASTER-REGISTRY-v1.json",
@@ -1663,7 +1664,18 @@
       "key": "BSR:BSR-FILES-02",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          6,
+          "R3:FIL-04",
+          "RELATED_RECOVERY"
+        ],
+        [
+          6,
+          "R3:FIL-05",
+          "RELATED_REAL_INFRA"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -1690,7 +1702,18 @@
       "key": "BSR:BSR-FIN-02",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          6,
+          "R3:FIN-01",
+          "RELATED_DEFERRED"
+        ],
+        [
+          6,
+          "R3:FIN-02",
+          "RELATED_DEFERRED"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -1712,7 +1735,18 @@
       "key": "BSR:BSR-FX-02",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          5,
+          "R2C-REQ-08",
+          "RELATED_MATH_ONLY"
+        ],
+        [
+          5,
+          "R2C-REQ-11",
+          "RELATED_NON_PUBLICATION_BOUNDARY"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -1720,7 +1754,13 @@
       "key": "BSR:BSR-INS-01",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          1,
+          "SFC-REQ-INT-01",
+          "RELATED_ADMITTED_SLICE_ONLY"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -1728,7 +1768,13 @@
       "key": "BSR:BSR-INS-02",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          5,
+          "SFC-P4-INT-07",
+          "RELATED_REBUILD"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -1736,7 +1782,13 @@
       "key": "BSR:BSR-TASK-01",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          2,
+          "SFC-ATOM-BUS-TASK-01",
+          "SOURCE_DECLARED_ALIAS_SUPPORT_NOT_TEST_EQUIVALENCE"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -1744,7 +1796,13 @@
       "key": "BSR:BSR-TASK-02",
       "namespace": "BSR",
       "title": null,
-      "links": [],
+      "links": [
+        [
+          2,
+          "SFC-ATOM-BUS-TASK-02",
+          "EXPLICIT_NON_EQUIVALENT_VARIANT"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -5628,7 +5686,18 @@
       "key": "DUAL:BIZ-ORG-03",
       "namespace": "DUAL",
       "title": "Business locations and lifecycle",
-      "links": [],
+      "links": [
+        [
+          2,
+          "SFC-ATOM-CORE-ORG-01",
+          "SOURCE_DECLARED_SCENARIO"
+        ],
+        [
+          2,
+          "SFC-ATOM-CORE-ORG-02",
+          "SOURCE_DECLARED_SCENARIO"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -5650,7 +5719,18 @@
       "key": "DUAL:BIZ-TASKS-LATER-18",
       "namespace": "DUAL",
       "title": "Future TASKS and employee work management",
-      "links": [],
+      "links": [
+        [
+          1,
+          "SFC-REQ-TASK-01",
+          "CURRENT_BASIC_SCOPE"
+        ],
+        [
+          1,
+          "SFC-REQ-TASK-02",
+          "DEFERRED_AUTOMATION_BOUNDARY"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -5786,7 +5866,18 @@
       "key": "DUAL:SHR-BUYER-LINK-05",
       "namespace": "DUAL",
       "title": "Explicit CRM buyer link and order history",
-      "links": [],
+      "links": [
+        [
+          2,
+          "SFC-ATOM-CORE-CRM-05",
+          "SOURCE_DECLARED_SCENARIO"
+        ],
+        [
+          2,
+          "SFC-ATOM-CORE-CRM-06",
+          "SOURCE_DECLARED_SCENARIO"
+        ]
+      ],
       "scope": "REVIEW_REQUIRED",
       "qualification": "NOT_ASSERTED"
     },
@@ -8421,18 +8512,7 @@
       "evidence": "NOT_ASSERTED"
     }
   ],
-  "unresolved": [
-    "BSR:BSR-FILES-02",
-    "BSR:BSR-FIN-02",
-    "BSR:BSR-FX-02",
-    "BSR:BSR-INS-01",
-    "BSR:BSR-INS-02",
-    "BSR:BSR-TASK-01",
-    "BSR:BSR-TASK-02",
-    "DUAL:BIZ-ORG-03",
-    "DUAL:BIZ-TASKS-LATER-18",
-    "DUAL:SHR-BUYER-LINK-05"
-  ],
+  "unresolved": [],
   "documentSnapshot": [
     {
       "path": "docs/RM-R0-BOOTSTRAP.md",
@@ -9975,7 +10055,8 @@
     "globalMethodMapping": "HOLD",
     "reason": "Unadjudicated scope/alias/section coverage; no evidence of whole-document semantic review.",
     "remainingIdsSourceReview": "10/10; concrete registry links and semantic equivalence not asserted",
-    "next": "B.2B.5-Q: full section coverage, exact source-to-variant and scope decisions; selected P4 work remains independent."
+    "next": "Use existing index to track unreviewed sections and scope/variant decisions; no new registers solely for audit. Begin bounded code mapping only within explicit baseline; do not label global SFC-R1.1 admitted.",
+    "baseBSRMethodMapping": "READY_FOR_SCOPED_REVIEW"
   },
   "remainingDomainObligations": [
     {
@@ -10359,5 +10440,156 @@
         "docs/implementation/RM-KMS-R1.7-FENCING-QUALIFICATION.md"
       ]
     }
-  ]
+  ],
+  "previousUnresolved": [
+    "BSR:BSR-FILES-02",
+    "BSR:BSR-FIN-02",
+    "BSR:BSR-FX-02",
+    "BSR:BSR-INS-01",
+    "BSR:BSR-INS-02",
+    "BSR:BSR-TASK-01",
+    "BSR:BSR-TASK-02",
+    "DUAL:BIZ-ORG-03",
+    "DUAL:BIZ-TASKS-LATER-18",
+    "DUAL:SHR-BUYER-LINK-05"
+  ],
+  "verification": {
+    "reviewedSha": "88caefe1a72013801b4c6984d7b0a6dc84d61c2e",
+    "sourceSelectorVerification": {
+      "sourceFiles": 7,
+      "sourceRefs": 437,
+      "resolvedExactlyOnce": 437,
+      "invalid": 0,
+      "uniqueMasterKeys": 383,
+      "masterToIndexMatches": 383,
+      "sourceAliasMatches": 36,
+      "aliasMismatches": 0
+    },
+    "priorRegistryLinks": {
+      "checked": 797,
+      "invalid": 0
+    },
+    "addedLinks": 16,
+    "allScenarioIdsLinked": true,
+    "documentSnapshotDelta": {
+      "priorSnapshotSha": "3de88d8bd6eb5dbf97b7e225ae72c9a58725da51",
+      "currentReviewedSha": "88caefe1a72013801b4c6984d7b0a6dc84d61c2e",
+      "documents": 308,
+      "changed": [
+        "docs/operations/RM-FILES-RUSTFS-FLAG-ROLLOUT-R1.md",
+        "docs/spec/RM-I18N-R1.md",
+        "docs/spec/RM-SFC-R1.md"
+      ],
+      "added": [
+        "docs/spec/RM-SFC-CANONICAL-INDEX-v1.json"
+      ],
+      "coverage": "PATH_AND_BLOB_ONLY; whole-document semantic coverage NOT_MEASURED"
+    },
+    "denominators": {
+      "baseBSR": {
+        "source": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+        "required": 59,
+        "keys": [
+          "BSR:CORE-IAM-01",
+          "BSR:CORE-IAM-02",
+          "BSR:CORE-IAM-03",
+          "BSR:CORE-IAM-04",
+          "BSR:CORE-IAM-05",
+          "BSR:CORE-IAM-06",
+          "BSR:CORE-ORG-01",
+          "BSR:CORE-ORG-02",
+          "BSR:CORE-CRM-01",
+          "BSR:CORE-CRM-02",
+          "BSR:CORE-CRM-03",
+          "BSR:CORE-CRM-04",
+          "BSR:CORE-CAT-01",
+          "BSR:CORE-CAT-02",
+          "BSR:CORE-CAT-03",
+          "BSR:CORE-STO-01",
+          "BSR:CORE-STO-02",
+          "BSR:CORE-STO-03",
+          "BSR:CORE-SAL-01",
+          "BSR:CORE-SAL-02",
+          "BSR:CORE-SAL-03",
+          "BSR:CORE-SAL-04",
+          "BSR:CORE-SAL-05",
+          "BSR:CORE-SAL-06",
+          "BSR:CORE-SAL-07",
+          "BSR:CORE-SAL-08",
+          "BSR:CORE-SAL-09",
+          "BSR:CORE-SAL-10",
+          "BSR:CORE-INV-01",
+          "BSR:CORE-INV-02",
+          "BSR:CORE-QR-01",
+          "BSR:CORE-QR-02",
+          "BSR:CORE-QR-03",
+          "BSR:CORE-QR-04",
+          "BSR:CORE-QR-05",
+          "BSR:CORE-QR-06",
+          "BSR:CORE-QR-07",
+          "BSR:CORE-PICK-01",
+          "BSR:CORE-PICK-02",
+          "BSR:CORE-PICK-03",
+          "BSR:CORE-PICK-04",
+          "BSR:CORE-PICK-05",
+          "BSR:CORE-RET-01",
+          "BSR:CORE-RET-02",
+          "BSR:CORE-RET-03",
+          "BSR:CORE-RET-04",
+          "BSR:CORE-RET-05",
+          "BSR:CORE-CRM-05",
+          "BSR:CORE-CRM-06",
+          "BSR:BSR-TASK-01",
+          "BSR:BSR-TASK-02",
+          "BSR:BSR-FILES-01",
+          "BSR:BSR-FX-01",
+          "BSR:BSR-FIN-01",
+          "BSR:CORE-XD-01",
+          "BSR:CORE-XD-02",
+          "BSR:CORE-XD-03",
+          "BSR:CORE-XD-04",
+          "BSR:CORE-XD-05"
+        ],
+        "nonrequired": [
+          {
+            "key": "BSR:BSR-FILES-02",
+            "historicalScope": "REGRESSION_IF_PRESENT"
+          },
+          {
+            "key": "BSR:BSR-FX-02",
+            "historicalScope": "REGRESSION_IF_PRESENT"
+          },
+          {
+            "key": "BSR:BSR-FIN-02",
+            "historicalScope": "POST_MVP"
+          },
+          {
+            "key": "BSR:BSR-INS-01",
+            "historicalScope": "POST_MVP"
+          },
+          {
+            "key": "BSR:BSR-INS-02",
+            "historicalScope": "POST_MVP"
+          }
+        ],
+        "interpretation": "Fixed source scenario denominator for base BSR only; BUS-TASK-01/02 addendum preserved as supporting distinct variants, no automatic test equivalence."
+      },
+      "expandedMVP": "NOT_MEASURED",
+      "uniqueAtomicRequirements": "NOT_MEASURED"
+    },
+    "scopeDecisions": {
+      "radar": "CR-MVP-KF-RADAR-01/01A only; F2H deferred",
+      "intelligenceEvt": "CR-MVP-INTELLIGENCE-EVT-01 selected slices and operative DAG; historic BSR-INS gaps not proof of current gap; no blanket admission",
+      "reporting": "P4.1A.5-Q -> P4.2 after GREEN; C02/C06 remain OPEN, Reporting FC screening not approved complete report list",
+      "fx": "KZT public admission core; existing FX assessment regression separate from deferred AUTO",
+      "finance": "deferred; negative finance invariants remain",
+      "task": "basic task in MVP; automation deferred"
+    },
+    "admission": {
+      "structural": "PASS_ON_REVIEWED_SHA",
+      "globalSemantic": "HOLD",
+      "baseBSRMethodMapping": "READY_FOR_SCOPED_REVIEW_NOT_GLOBAL_ADMISSION",
+      "reason": "Explicit BSR baseline can be reviewed without inventing a full denominator; unresolved normative section coverage and mandatory variants must not be silently excluded."
+    }
+  }
 }
