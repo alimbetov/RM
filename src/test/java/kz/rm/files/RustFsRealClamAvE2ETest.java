@@ -67,4 +67,28 @@ class RustFsRealClamAvE2ETest {
             } finally {store.delete(infectedKey);}
         }
     }
+    @Test void actualClamAvScansAuthenticatedV1PlaintextNotCiphertext()throws Exception{
+        try(var api=client()){
+            String bucket=System.getenv("RM_RUSTFS_E2E_BUCKET");
+            var store=new RustFsFileStorage(api,bucket);
+            var scanner=new ClamAvFileScanner(store,"127.0.0.1",3310,26_214_400);
+            var unavailable=new ClamAvFileScanner(store,"127.0.0.1",1,26_214_400);
+            UUID tenant=UUID.randomUUID();
+            var encrypted=new ReportEncryptedStorage(store,V1DaemonCryptoFixture.crypto(tenant));
+            for(boolean infected:new boolean[]{false,true}){
+                byte[] bytes=infected?EICAR.getBytes(StandardCharsets.US_ASCII):pdf("Synthetic ordinary report");
+                var e=V1DaemonCryptoFixture.expected(tenant,UUID.randomUUID(),UUID.randomUUID(),bytes);
+                // AV transport qualification only; EICAR is not admitted as PDF.
+                String stage=encrypted.stage(e,new ByteArrayInputStream(bytes));
+                try{
+                    assertThat(encrypted.read(e,stage,true,in->scanner.scanAuthenticated(in,bytes.length)))
+                        .isEqualTo(infected?FileScanPort.Verdict.INFECTED:FileScanPort.Verdict.CLEAN);
+                    assertThat(encrypted.read(e,stage,true,in->unavailable.scanAuthenticated(in,bytes.length)))
+                        .isEqualTo(FileScanPort.Verdict.ERROR);
+                    assertThat(scanner.scan(stage)).isEqualTo(FileScanPort.Verdict.ERROR);
+                }finally{store.delete(stage);}
+            }
+        }
+    }
+
 }
