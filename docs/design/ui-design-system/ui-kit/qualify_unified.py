@@ -3,13 +3,9 @@ from playwright.sync_api import sync_playwright
 from xml.etree import ElementTree as ET
 import os,re
 ROOT=Path(__file__).resolve().parent
-html=(ROOT/'index.html').read_text()
-for name in ('tokens.css','components.css','layout.css'):
-    html=html.replace(f'<link rel="stylesheet" href="{name}">','<style>'+ (ROOT/name).read_text()+'</style>')
-html=html.replace('<body>','<body>'+ (ROOT/'icons.svg').read_text().replace('<svg xmlns=', '<svg class="sprite" aria-hidden="true" xmlns=',1))
-for name in ('catalog.js','unified.js'):
-    html=html.replace(f'<script src="{name}"></script>','<script>'+ (ROOT/name).read_text()+'</script>')
-html=html.replace('icons.svg#','#')
+from qualify_http import open_page
+html = (ROOT/'index.html').read_text()
+
 ids=re.findall(r'\bid="([^"]+)"',html); assert len(ids)==len(set(ids))
 ns={'s':'http://www.w3.org/2000/svg'}; symbols=ET.parse(ROOT/'icons.svg').getroot().findall('s:symbol',ns); assert len(symbols)==56
 assert len({s.attrib['id'] for s in symbols})==56
@@ -17,7 +13,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH','/usr/bin/chromium'),args=['--no-sandbox'])
     print('Chromium',browser.version,flush=True)
     for w,h,touch,scale in [(w,850,False,100) for w in (320,375,480,600,767,768,820,1023,1024,1280,1440,1920)]+[(667,320,True,100),(1024,768,True,100),(320,640,False,200)]:
-        ctx=browser.new_context(viewport={'width':w,'height':h},has_touch=touch); page=ctx.new_page(); page.set_default_timeout(4500); errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.set_content(html);page.evaluate('(s)=>document.documentElement.style.fontSize=s+"%"',scale)
+        ctx=browser.new_context(viewport={'width':w,'height':h},has_touch=touch); page=ctx.new_page(); page.set_default_timeout(4500); errors=[];page.on('pageerror',lambda e:errors.append(str(e)));open_page(page);page.evaluate('(s)=>document.documentElement.style.fontSize=s+"%"',scale)
         def fit(): assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),(w,scale,'overflow')
         def status(s): page.wait_for_function('(s)=>document.getElementById("table-status").textContent===s',arg=s)
         def go(v):
@@ -44,4 +40,4 @@ with sync_playwright() as p:
         page.evaluate("for(const t of ['A','B']){document.getElementById('tenant').value=t;document.getElementById('tenant').dispatchEvent(new Event('change'));}");go('list');status('Найдено: 4');assert 'A-' not in page.locator('#records').inner_text();assert 'B-' in page.locator('#records').inner_text();assert page.locator('#money').input_value()=='';assert page.locator('#state').input_value()=='';assert not errors,errors
         if w in (375,1440) and scale==100: go('dashboard');page.screenshot(path=str(ROOT/f'unified-{w}.png'),full_page=True)
         ctx.close();print('PASS',w,h,touch,scale,flush=True)
-    page=browser.new_page(viewport={'width':1280,'height':800});page.set_content(html);page.locator('[data-view=list]').focus();page.set_viewport_size({'width':375,'height':800});page.wait_for_function("document.getElementById('side').hidden");assert page.locator('#nav-toggle').evaluate('e=>e===document.activeElement');page.locator('#nav-toggle').click();page.set_viewport_size({'width':1280,'height':800});page.wait_for_function("document.getElementById('nav-toggle').hidden");assert page.locator('#heading').evaluate('e=>e===document.activeElement');print('PASS resize/focus',flush=True);browser.close()
+    page=browser.new_page(viewport={'width':1280,'height':800});open_page(page);page.locator('[data-view=list]').focus();page.set_viewport_size({'width':375,'height':800});page.wait_for_function("document.getElementById('side').hidden");assert page.locator('#nav-toggle').evaluate('e=>e===document.activeElement');page.locator('#nav-toggle').click();page.set_viewport_size({'width':1280,'height':800});page.wait_for_function("document.getElementById('nav-toggle').hidden");assert page.locator('#heading').evaluate('e=>e===document.activeElement');print('PASS resize/focus',flush=True);browser.close()

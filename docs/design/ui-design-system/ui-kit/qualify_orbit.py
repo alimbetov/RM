@@ -2,13 +2,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 import os
 ROOT=Path(__file__).resolve().parent
-html=(ROOT/'index.html').read_text()
-for name in ('tokens.css','components.css','layout.css'):
-    html=html.replace(f'<link rel="stylesheet" href="{name}">','<style>'+ (ROOT/name).read_text()+'</style>')
-html=html.replace('<body>','<body>'+ (ROOT/'icons.svg').read_text().replace('<svg xmlns=', '<svg class="sprite" aria-hidden="true" xmlns=',1))
-for name in ('catalog.js','unified.js'):
-    html=html.replace(f'<script src="{name}"></script>','<script>'+ (ROOT/name).read_text()+'</script>')
-html=html.replace('icons.svg#','#')
+from qualify_http import open_page
+html = (ROOT/'index.html').read_text()
+
 def lum(s):
     s=s.lstrip('#');v=[int(s[i:i+2],16)/255 for i in (0,2,4)]
     return sum(w*(x/12.92 if x<=.04045 else ((x+.055)/1.055)**2.4) for x,w in zip(v,(.2126,.7152,.0722)))
@@ -19,11 +15,11 @@ with sync_playwright() as p:
     print('Chromium',browser.version,flush=True)
     for w,h,touch,scale,forced in [(1440,1000,False,100,'none'),(768,850,True,100,'none'),(375,812,True,100,'none'),(320,640,False,200,'none'),(1440,1000,False,100,'active')]:
         ctx=browser.new_context(viewport={'width':w,'height':h},has_touch=touch,forced_colors=forced,reduced_motion='reduce')
-        page=ctx.new_page();page.set_default_timeout(4000);errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.set_content(html);page.evaluate('(n)=>document.documentElement.style.fontSize=n+"%"',scale)
+        page=ctx.new_page();page.set_default_timeout(4000);errors=[];page.on('pageerror',lambda e:errors.append(str(e)));open_page(page);page.evaluate('(n)=>document.documentElement.style.fontSize=n+"%"',scale)
         orbit=page.locator('.brand-orbit');mark=page.locator('.brand-mark');assert orbit.count()==1 and page.locator('main .brand-orbit').count()==0
         assert orbit.get_attribute('aria-hidden')=='true' and orbit.get_attribute('focusable')=='false'
         if page.locator('#side').is_hidden():page.locator('#nav-toggle').click()
-        for theme in ('light','dark'):
+        for theme in ('light','dark','taupe','sage'):
             page.locator('#theme').select_option(theme)
             for density in ('comfortable','compact'):
                 page.locator('#density').select_option(density)

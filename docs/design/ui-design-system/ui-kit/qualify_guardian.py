@@ -2,13 +2,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 import os
 ROOT=Path(__file__).resolve().parent
-html=(ROOT/'index.html').read_text()
-for name in ('tokens.css','components.css','layout.css'):
-    html=html.replace(f'<link rel="stylesheet" href="{name}">','<style>'+ (ROOT/name).read_text()+'</style>')
-html=html.replace('<body>','<body>'+ (ROOT/'icons.svg').read_text().replace('<svg xmlns=', '<svg class="sprite" aria-hidden="true" xmlns=',1))
-for name in ('catalog.js','unified.js'):
-    html=html.replace(f'<script src="{name}"></script>','<script>'+ (ROOT/name).read_text()+'</script>')
-html=html.replace('icons.svg#','#')
+from qualify_http import open_page
+html = (ROOT/'index.html').read_text()
+
 
 def luminance(color):
     color=color.lstrip('#');color=color*2 if len(color)==1 else color
@@ -26,7 +22,7 @@ with sync_playwright() as p:
     for width,height,touch,scale in [(375,812,True,100),(768,850,True,100),(1440,1000,False,100),(320,640,False,200)]:
         for theme in ('light','dark','taupe','sage'):
             context=browser.new_context(viewport={'width':width,'height':height},has_touch=touch,reduced_motion='reduce')
-            page=context.new_page();page.set_default_timeout(4500);errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.set_content(html);page.evaluate('(n)=>document.documentElement.style.fontSize=n+"%"',scale)
+            page=context.new_page();page.set_default_timeout(4500);errors=[];page.on('pageerror',lambda e:errors.append(str(e)));open_page(page);page.evaluate('(n)=>document.documentElement.style.fontSize=n+"%"',scale)
             def menu():
                 if page.locator('#side').is_hidden():page.locator('#nav-toggle').click()
             def go(view):
@@ -60,6 +56,10 @@ with sync_playwright() as p:
                 if width in (375,1440):page.screenshot(path=str(ROOT/f'guardian-{theme}-{density}-{width}.png'),full_page=True)
                 go('list');page.wait_for_function("document.getElementById('table-status').dataset.state==='ready'")
                 assert page.locator('#records tr').count()==3
+                hit=page.locator('#records .row-select').first;bounds=hit.bounding_box();minimum=48 if width<768 or touch else 24
+                assert bounds['width']>=minimum and bounds['height']>=minimum,(width,theme,density,bounds)
+                hit.click(position={'x':2,'y':2});assert page.locator('#records input').first.is_checked()
+                hit.click(position={'x':2,'y':2});assert not page.locator('#records input').first.is_checked()
                 go('form');h=page.locator('#money').bounding_box()['height'];assert h>= (48 if width<768 or touch else 32 if density=='compact' else 40),(width,theme,density,h)
                 go('catalog');assert page.locator('#icon-grid .rm-icon').count()==56
                 page.locator('#open-dialog').click();assert page.locator('#demo-dialog').is_visible();assert page.locator('#demo-dialog').evaluate("e=>getComputedStyle(e).backgroundColor===getComputedStyle(document.querySelector('.guardian-panel')).backgroundColor")

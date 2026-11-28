@@ -3,13 +3,9 @@ from playwright.sync_api import sync_playwright
 import os
 
 ROOT = Path(__file__).resolve().parent
-html = (ROOT / 'index.html').read_text()
-for name in ('tokens.css', 'components.css', 'layout.css'):
-    html = html.replace(f'<link rel="stylesheet" href="{name}">', '<style>' + (ROOT / name).read_text() + '</style>')
-html = html.replace('<body>', '<body>' + (ROOT / 'icons.svg').read_text().replace('<svg xmlns=', '<svg class="sprite" aria-hidden="true" xmlns=', 1))
-for name in ('catalog.js', 'unified.js'):
-    html = html.replace(f'<script src="{name}"></script>', '<script>' + (ROOT / name).read_text() + '</script>')
-html = html.replace('icons.svg#', '#')
+from qualify_http import open_page
+html = (ROOT/'index.html').read_text()
+
 
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH', '/usr/bin/chromium'), args=['--no-sandbox'])
@@ -19,7 +15,7 @@ with sync_playwright() as p:
         page.set_default_timeout(5000)
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.set_content(html)
+        open_page(page)
         reduced = preference == 'reduce'
         def style(selector, prop, pseudo=None):
             return page.locator(selector).evaluate('(e, a) => getComputedStyle(e, a[1])[a[0]]', [prop, pseudo])

@@ -83,3 +83,7 @@
 .brand-orbit{position:absolute;inset:0;width:100%;height:100%;color:var(--rm-nav-focus);opacity:.38;pointer-events:none}
 #side{background-image:radial-gradient(ellipse 100% 240px at 0 0,var(--rm-nav-hover),transparent)}
 @media print,(forced-colors:active){.brand-orbit{display:none}.brand-mark,#side{background-image:none}}
+
+/* Keep the glyph compact; the entire label activates the native checkbox. */
+.row-select{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;cursor:pointer}
+@media(max-width:767px),(any-pointer:coarse){.row-select{min-width:var(--rm-control-touch);min-height:var(--rm-control-touch)}}

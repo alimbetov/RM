@@ -123,7 +123,7 @@ Component CSS is separated from the page, grids are intrinsic to available conta
 
 ## 8.3 Application Shell and navigation — R1.0K.2 (2026-11-28)
 
-Reference [shell.html](ui-kit/shell.html), [shell.css](ui-kit/shell.css), [shell.js](ui-kit/shell.js), [qualification](ui-kit/QUALIFICATION-K2.md). Single navigation DOM with desktop sidebar at 1024 CSS px, wrapping tablet navigation from 768px, inline mobile disclosure below 768px. No modal drawer, duplicate mobile menu, framework, production route or permission logic. Header, demo workspace selector, breadcrumb, keyboard-operated tabs, native dropdown, filter form and pagination share existing design tokens and primitives. Selection updates the example heading, breadcrumb and active navigation item. All records are synthetic and shared across demo workspaces; workspace change resets filters and tabs, not a security boundary. Production tenant/auth admission is unchanged. Extended sprite has 56 unique symbols, retaining all original 43 IDs. Browser qualification remains partial; see explicit evidence and remaining checks. 
+Reference [shell.html](ui-kit/shell.html), [current layout.css](ui-kit/layout.css), [current unified.js](ui-kit/unified.js) (historical shell implementation retained in Git history), [qualification](ui-kit/QUALIFICATION-K2.md). Single navigation DOM with desktop sidebar at 1024 CSS px, wrapping tablet navigation from 768px, inline mobile disclosure below 768px. No modal drawer, duplicate mobile menu, framework, production route or permission logic. Header, demo workspace selector, breadcrumb, keyboard-operated tabs, native dropdown, filter form and pagination share existing design tokens and primitives. Selection updates the example heading, breadcrumb and active navigation item. All records are synthetic and shared across demo workspaces; workspace change resets filters and tabs, not a security boundary. Production tenant/auth admission is unchanged. Extended sprite has 56 unique symbols, retaining all original 43 IDs. Browser qualification remains partial; see explicit evidence and remaining checks. 
 
 ## 8.4 Business Studio prototypes — R1.0K.3–K.7 (2026-11-28)
 
@@ -182,6 +182,10 @@ R1.0K.10D lightens the shared sidebar and brand surface to #344C68, harmonizes h
 ## 8.14 Sage Slate navigation (2026-11-28)
 
 R1.0K.10E implements the owner-approved common navigation base #536B68 across four themes. Supersedes the previous #344C68 navigation palette; supporting tokens chosen for contrast. Existing workspace backgrounds, semantic statuses, orbital and OYU geometry, component structure and runtime unchanged. Guardian 32/32, Orbital 20/20 and OYU 28/28 Chromium in-memory cases passed, all processes exit 0. See [qualification](ui-kit/QUALIFICATION-SAGESLATE.md). No backend or CI changes. Design Freeze still open.
+
+## 8.15 Comprehensive UI qualification — R1.0K.11A–F (2026-11-28)
+
+K11 fixes the registry row selection hit area (native checkbox, 24px desktop / 48px narrow or coarse pointer), consolidates the qualification fixture, adds explicit real HTTP mode, extends Orbital/OYU to all four themes, checks OYU print suppression, and adds RU/KK/EN text expansion and exact decimal display cases. Approved visual identity, tokens, icon geometry and functional scope are unchanged. Chromium 144.0.7559.96 fixture mode: 178/178 PASS (Unified 16, Motion 2, Guardian 32, Orbit 40, OYU 56, Boundaries 32). Local HTTP mode attempted for five suites, blocked by browser administrator policy; not a pass. Full translations, real zoom, Firefox/WebKit/Safari, physical devices and assistive technology remain unqualified. See [K11 qualification](ui-kit/QUALIFICATION-K11.md) for exact source blob manifest, scope and reproduction. Visual baseline accepted; technical Design Freeze HOLD. No production integration, backend or CI changes.
 
 ## 9. Open decisions
 
