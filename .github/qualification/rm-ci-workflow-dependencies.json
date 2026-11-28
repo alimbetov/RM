@@ -512,7 +512,7 @@
     },
     {
       "path": ".github/workflows/sales-084-populated-upgrade.yml",
-      "reviewedBlob": "2fdaacb4d3c32e34fd6d8e97bc5ab9056b0395b1",
+      "reviewedBlob": "73599986d462494c87257c8f3c10d6a3015d8f4b",
       "domainHint": "SALES",
       "mandatoryRelease": true,
       "workflowName": "SALES 08.4 Populated PostgreSQL Upgrade Qualification",

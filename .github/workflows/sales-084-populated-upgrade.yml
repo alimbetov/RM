@@ -48,6 +48,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight historical Maven dependencies (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Seed populated offers with old accepted catalogue mapping
         run: mvn -B -ntp -Dtest=SellerOfferQualificationTest#draftPublicationPauseResumeAndCas test
       - name: Snapshot offer identity and immutable business fields
@@ -62,6 +82,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+      - name: Preflight candidate Maven dependencies (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Run seller offer tests after Liquibase 0079
         run: mvn -B -ntp -Dtest=SellerOfferQualificationTest test
       - name: Check pre-existing offer data preserved and trigger enforces SKU immutability
