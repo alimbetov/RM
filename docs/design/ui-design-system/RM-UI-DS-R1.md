@@ -125,6 +125,18 @@ Component CSS is separated from the page, grids are intrinsic to available conta
 
 Reference [shell.html](ui-kit/shell.html), [shell.css](ui-kit/shell.css), [shell.js](ui-kit/shell.js), [qualification](ui-kit/QUALIFICATION-K2.md). Single navigation DOM with desktop sidebar at 1024 CSS px, wrapping tablet navigation from 768px, inline mobile disclosure below 768px. No modal drawer, duplicate mobile menu, framework, production route or permission logic. Header, demo workspace selector, breadcrumb, keyboard-operated tabs, native dropdown, filter form and pagination share existing design tokens and primitives. Selection updates the example heading, breadcrumb and active navigation item. All records are synthetic and shared across demo workspaces; workspace change resets filters and tabs, not a security boundary. Production tenant/auth admission is unchanged. Extended sprite has 56 unique symbols, retaining all original 43 IDs. Browser qualification remains partial; see explicit evidence and remaining checks. 
 
+## 8.4 Business Studio prototypes — R1.0K.3–K.7 (2026-11-28)
+
+[Business Studio](ui-kit/studio.html) groups five prototype increments: K.3 advanced forms, K.4 advanced table, K.5 charts, K.6 page templates and K.7 mock frontend integration. Reuses the K.1/K.2 tokens, base CSS and SVG sprite; no added runtime dependencies or backend/CI changes. See [qualification](ui-kit/QUALIFICATION-STUDIO.md).
+
+- Form: native date and number fields, decimal strings for demo KZT (nonnegative, two fractional digits), range validation, period, checkbox multiselect, switch and local file metadata. No persistence, upload or domain-specific currency policy.
+- Table: async mock list, search, identifier sort, current-page selection, pagination, empty/error/retry, confirmation and detail drawer.
+- Chart: synthetic nonnegative series, SVG bar/line, gaps for missing values, distinct zero, accessible data table. Fixed prototype scale only; no actual analytics or metric calculation.
+- Templates: dashboard, list, form and detail views; separate reference from the K.2 shell. Not production routes or a framework component library.
+- Integration: mock list adapter with query/page/sort/workspace inputs and generation guard against stale responses; clear form, selected rows and detail on workspace switch. Demonstration only, not authorization or evidence of backend tenant isolation. Real DTO/API mapping and access control remain pending.
+
+Status: prototype / partial Chromium qualification; 8/8 viewport scenarios in in-memory fixture, no claim of full production or cross-browser qualification. Keep the existing K.1/K.2 qualifications separate; no regression rerun on this increment.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, branding palette, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
