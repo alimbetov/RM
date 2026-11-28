@@ -37,12 +37,15 @@ with sync_playwright() as p:
             assert page.locator('html').get_attribute('data-theme')==theme
             assert token('canvas')=={'light':'#f4f6fa','dark':'#111b2b','taupe':'#eee9e2','sage':'#e8f0e8'}[theme]
             assert page.locator('body').evaluate("e=>getComputedStyle(e).backgroundColor") == {'light':'rgb(244, 246, 250)','dark':'rgb(17, 27, 43)','taupe':'rgb(238, 233, 226)','sage':'rgb(232, 240, 232)'}[theme]
-            assert token('nav-surface')=='#142238'
+            assert token('nav-surface')=='#344c68'
+            assert page.locator('#side').evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(52, 76, 104)'
+            assert contrast('#ffffff',token('nav-active'))>=4.5
+            assert contrast('#afcbff',token('nav-active'))>=3
             assert token('primary')==('#92b6ff' if theme=='dark' else '#2855b8')
             assert token('success')==('#8ce3b9' if theme=='dark' else '#176443')
             assert token('warning')==('#f5ce83' if theme=='dark' else '#854d0e')
             assert token('danger')==('#ffb0b0' if theme=='dark' else '#a52222')
-            for a,b,threshold in [('text','surface',4.5),('text-muted','surface',4.5),('text-muted','canvas',4.5),('on-primary','primary',4.5),('on-primary','primary-hover',4.5),('success','success-bg',4.5),('warning','warning-bg',4.5),('danger','danger-bg',4.5),('info','info-bg',4.5),('text-muted','neutral-bg',4.5),('disabled-text','disabled-bg',4.5),('control-border','surface',3),('focus','canvas',3),('nav-text','nav-surface',4.5),('nav-muted','nav-surface',4.5),('nav-text','nav-hover',4.5),('nav-focus','nav-active',3)]:
+            for a,b,threshold in [('text','surface',4.5),('text-muted','surface',4.5),('text-muted','canvas',4.5),('on-primary','primary',4.5),('on-primary','primary-hover',4.5),('success','success-bg',4.5),('warning','warning-bg',4.5),('danger','danger-bg',4.5),('info','info-bg',4.5),('text-muted','neutral-bg',4.5),('disabled-text','disabled-bg',4.5),('control-border','surface',3),('focus','canvas',3),('nav-text','nav-surface',4.5),('nav-muted','nav-surface',4.5),('nav-text','nav-hover',4.5),('nav-focus','nav-active',3),('nav-muted','nav-hover',4.5),('nav-control-border','nav-hover',3),('nav-text','nav-active',4.5)]:
                 ratio=contrast(token(a),token(b));assert ratio>=threshold,(theme,a,b,ratio)
             for density in ('comfortable','compact'):
                 menu();page.locator('#density').select_option(density);assert page.locator('html').get_attribute('data-density')==density

@@ -16,7 +16,7 @@ RM Precision is the design identity; Intelligent Business Guardian is its UX con
 
 | Semantic direction | Reference color | Purpose |
 |---|---|---|
-| Deep Navy | #142238 | Calm, confident navigation and brand surfaces |
+| Soft Slate Blue | #344C68 | Calm, lighter navigation and brand surfaces |
 | Precision Blue | #2855B8 | Primary actions and intellectual/analytical emphasis |
 | Signal Teal | #008579 | Restrained secondary analytic series and brand signal |
 | Cloud | #F4F6FA | Light workspace canvas |
@@ -38,11 +38,15 @@ Approved direction: barely perceptible presence, never an emphasis. Use independ
 
 ### 2.2 RM Orbital Precision — restrained future-technology accent (R1.0K.10B)
 
-Add a quiet visual impression of advanced technology without science-fiction ornamentation: two thin rounded orbital arcs and a small static node confined to the existing 38px brand mark, 38% decorative opacity, with existing semantic navigation colors; a subtle radial navy gradient in the brand mark and upper sidebar, fading to the established Deep Navy surface. No new colors, glow, neon, stars, animated orbit, glassmorphism, status semantics or decoration in working content. The existing shield remains the primary glyph and RM OYU Soft Jiek is unchanged. Decorative SVG is aria-hidden, non-focusable, non-interactive; orbit and gradients are disabled in forced colors and print. Preserve navigation contrast at both gradient endpoints. Candidate brand treatment only, not a finalized logo. See [qualification](ui-kit/QUALIFICATION-ORBIT.md).
+Add a quiet visual impression of advanced technology without science-fiction ornamentation: two thin rounded orbital arcs and a small static node confined to the existing 38px brand mark, 38% decorative opacity, with existing semantic navigation colors; a subtle radial navy gradient in the brand mark and upper sidebar, fading to the established navigation surface. No new colors, glow, neon, stars, animated orbit, glassmorphism, status semantics or decoration in working content. The existing shield remains the primary glyph and RM OYU Soft Jiek is unchanged. Decorative SVG is aria-hidden, non-focusable, non-interactive; orbit and gradients are disabled in forced colors and print. Preserve navigation contrast at both gradient endpoints. Candidate brand treatment only, not a finalized logo. See [qualification](ui-kit/QUALIFICATION-ORBIT.md).
 
 ### 2.3 RM Precision Taupe and Sage — additional light themes (R1.0K.10C)
 
-Four supported presentation choices: Light (default), Dark, Taupe (warm gray-beige) and Sage (muted light green). Taupe canvas #EEE9E2, surface #FDFBF8, subtle surface #F5F1EB, border/grid #D9D0C5. Sage canvas #E8F0E8, surface #FCFEFB, subtle surface #F0F5EF, border/grid #D2DFD2. Neutral and disabled surfaces follow the corresponding palette. Both new variants inherit light color scheme, primary blue, text, semantic success/warning/danger colors and Deep Navy navigation; a green background never indicates successful checks or protection. Same page-local selector, density rules, component markup, RM OYU and Orbital treatment. No additional runtime code or theme-specific components. Palette choices are implementation candidates pending owner visual acceptance. See [qualification](ui-kit/QUALIFICATION-THEMES.md).
+Four supported presentation choices: Light (default), Dark, Taupe (warm gray-beige) and Sage (muted light green). Taupe canvas #EEE9E2, surface #FDFBF8, subtle surface #F5F1EB, border/grid #D9D0C5. Sage canvas #E8F0E8, surface #FCFEFB, subtle surface #F0F5EF, border/grid #D2DFD2. Neutral and disabled surfaces follow the corresponding palette. Both new variants inherit light color scheme, primary blue, text, semantic success/warning/danger colors and shared slate-blue navigation; a green background never indicates successful checks or protection. Same page-local selector, density rules, component markup, RM OYU and Orbital treatment. No additional runtime code or theme-specific components. Palette choices are implementation candidates pending owner visual acceptance. See [qualification](ui-kit/QUALIFICATION-THEMES.md).
+
+### 2.4 Soft Slate navigation (R1.0K.10D)
+
+Owner requested lighter navigation. Replace #142238 with #344C68 in the shared navigation surface; hover/gradient endpoint #405A76, active #4A6685, text #F0F5FB, muted #D0DCEA, focus #C9DDFF, control border #B6C8DF. Same palette in all four themes. Existing orbital geometry and OYU opacity unchanged; the brand mark follows the navigation tokens. Do not modify the dark workspace background or dark primary-button foreground. Candidate shades pending visual acceptance. See [qualification](ui-kit/QUALIFICATION-SOFTNAV.md).
 
 ## 3. Business Control Center
 

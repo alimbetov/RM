@@ -175,6 +175,10 @@ R1.0K.10B adds brand-only orbital geometry and subtle navy depth in the existing
 
 R1.0K.10C adds two light theme variants via seven semantic surface tokens each and two options in the existing selector. Light remains default; Dark, Taupe and Sage are available without changing component logic or business semantics. Four themes × two densities × four viewport/text contexts: 32/32 Guardian cases PASS, exit 0. See [qualification](ui-kit/QUALIFICATION-THEMES.md). No changes to backend, CI, existing SVGs or JS. Other test suites not rerun in this increment; Design Freeze pending.
 
+## 8.13 Soft Slate navigation (2026-11-28)
+
+R1.0K.10D lightens the shared sidebar and brand surface to #344C68, harmonizes hover, active, text, focus and native select borders. Four workspace themes, semantic statuses, OYU and orbital geometry unchanged. Guardian 32/32 and Orbital 20/20 Chromium in-memory cases PASS, exit 0. See [qualification](ui-kit/QUALIFICATION-SOFTNAV.md). No backend, JS, HTML or CI changes. Design Freeze remains open.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
