@@ -143,6 +143,12 @@ Status: prototype / partial Chromium qualification; 8/8 viewport scenarios in in
 
 Separate design review was an AI self-review, not an external designer certification. Consolidated behavior, fixed focus and error/empty separation, improved visual hierarchy. 16/16 Chromium in-memory scenarios PASS with exact blob equality, partial qualification only. HTTP external assets, actual browser/device coverage, accessibility, full API/tenant admission and production integration remain open. Freeze component breadth pending visual acceptance. No backend/CI changes.
 
+## 8.6 Modern Enterprise Visual Refinement — R1.0K.9A (2026-11-28)
+
+Visual candidate, not Design Freeze. Retain all existing views, mock contracts, 56 SVG symbols and zero runtime dependencies. Update existing tokens to a neutral slate canvas #F4F6FA, cobalt primary #2855B8, primary hover #1E4395, text #17243A, muted #526179, border #DCE3ED and semantic status surfaces. Radii 6/10/16px, subtle elevation, responsive heading and KPI hierarchy, desktop page gutter 32px, desktop sidebar 15rem. Shared existing system font and focus/touch rules retained. Header mark is a candidate, not an approved product logo. Dashboard uses independent KPI cards and chart panel, visible tick grid and rounded bars; missing vs zero remains unchanged. Registry uses text-bearing semantic badges and less prominent row actions. No business metric, API, role or tenant policy added.
+
+Regression: 16/16 Chromium in-memory scenarios passed, existing test unchanged. See [visual qualification](ui-kit/QUALIFICATION-K9A.md). Actual HTTP assets, Safari, Firefox, physical devices, actual browser zoom, full accessibility/localization and owner visual review remain pending. No backend/CI changes.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, branding palette, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
