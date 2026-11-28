@@ -96,7 +96,7 @@ public final class SalesReportMaterializationEvidence {
                 """,Long.class,other,ra.dataset(),ra.stagingDate())).isZero();
             assertMonth(ra,last.minusMonths(1),"KZT","225","1");
             assertMonth(ra,last,"KZT","300","2");
-            mixedAccountingRoute(actor,tenant,calendar,last);
+            mixedAccountingRoute(actor,tenant,calendar,last,template);
             new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(status->
                 historicalOrder(tenant,template,last.minusMonths(1),"USD","20"));
             assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last))
@@ -113,10 +113,10 @@ public final class SalesReportMaterializationEvidence {
         finally{pool.shutdownNow();}
     }
     /** Real activated monthly generation inside the 24M report window.
-     * An empty earlier month is a legitimate L3 MISSING observation; the two
-     * populated months outside that generation must still come from L0. */
-    private void mixedAccountingRoute(VerifiedActor actor,UUID tenant,long calendar,LocalDate last){
-        var from=last.minusMonths(2);var until=from.plusMonths(1);
+     * The previous month has canonical BOOKED facts; the latest month remains L0.
+     * A later source commit must invalidate the proof and restore exact L0 parity. */
+    private void mixedAccountingRoute(VerifiedActor actor,UUID tenant,long calendar,LocalDate last,UUID template){
+        var from=last.minusMonths(1);var until=from.plusMonths(1);
         var gen=UUID.randomUUID();
         var l1=context.getBean(L1ProjectionService.class);
         var l2=context.getBean(L2ProjectionService.class);
@@ -160,14 +160,30 @@ public final class SalesReportMaterializationEvidence {
                     assertThat(x.generation()).isEqualTo(gen);
                     assertThat(x.proof()).isEqualTo(active.activeProof());
                     assertThat(x.period().startInclusive().atZone(generation.zone()).toLocalDate()).isEqualTo(from);
-                    assertThat(x.value()).isNull();
-                    assertThat(x.quality()).isEqualTo(DataQuality.MISSING);
+                    assertThat(x.value()).isEqualByComparingTo(x.metric()==AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT?"225":"1");
+                    assertThat(x.quality()).isEqualTo(DataQuality.PARTIAL);
                 });
             assertThat(window.getLast().route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
             assertThat(window.getLast().value()).isNotNull();
         }
         assertBatchParity(actor,tenant,calendar,last,accounting.currency());
-        System.out.println("RM_R02_REAL_MIXED_ROUTE_ORACLE_PASS l0=2 l3=2");
+        System.out.println("RM_R02_REAL_MIXED_ROUTE_ORACLE_PASS l0=2 l3=2 amount=225 orders=1");
+        new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(status->
+            historicalOrder(tenant,template,from,accounting.currency(),"25"));
+        assertThat(coverage.status(tenant,gen,active.activeProof())).isEqualTo(MultidimensionalCoverageService.Status.STALE);
+        counter.l0=0;countedL3.calls=0;
+        var late=instrumented.readAccountingReportMonths(actor,tenant,queries,accounting);
+        assertThat(counter.l0).isEqualTo(2);assertThat(countedL3.calls).isZero();
+        for(var window:late.windows()){
+            var point=window.get(22);
+            assertThat(point.route()).isEqualTo(AuthorizedAnalyticalReadService.Route.L0);
+            assertThat(point.reason()).isEqualTo("PROOF_STALE");
+            assertThat(point.value()).isEqualByComparingTo(point.metric()==AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT?"250":"2");
+            assertThat(point.quality()).isEqualTo(DataQuality.PARTIAL);
+        }
+        assertBatchParity(actor,tenant,calendar,last,accounting.currency());
+        assertThat(late.sha256()).isNotEqualTo(report.sha256());
+        System.out.println("RM_R02_LATE_FACT_STALE_ROUTE_ORACLE_PASS amount=250 orders=2");
     }
     /** Real owner change, immutable old request and stale snapshot rejection. */
     public void accountingPolicyRevision(VerifiedActor owner,VerifiedActor staff,UUID tenant,long calendar,LocalDate last){
@@ -297,10 +313,15 @@ public final class SalesReportMaterializationEvidence {
                 SELECT tenant_id,?,?,offer_id,title_snapshot,1,?,?,catalog_item_id_snapshot,price_source
                 FROM crm.sales_order_line WHERE tenant_id=? AND order_id=?
                 """,UUID.randomUUID(),id,new java.math.BigDecimal(amount),currency,tenant,template)).isEqualTo(1);
+        UUID event=UUID.randomUUID();
         assertThat(jdbc.update("""
             INSERT INTO crm.sales_order_status_event(tenant_id,id,order_id,event_type,occurred_at)
             VALUES (?,?,?,'PLACED',?)
-            """,tenant,UUID.randomUUID(),id,at)).isEqualTo(1);
+            """,tenant,event,id,at)).isEqualTo(1);
+        // Historical replay: preserve the original source, do not capture current dimensions.
+        assertThat(context.getBean(CanonicalFactAppender.class).append(new CanonicalFactKey(tenant,
+            CanonicalFactKey.Owner.SALES,CanonicalFactKey.Kind.ORDER_PLACED,event)))
+            .isEqualTo(CanonicalFactAppender.Outcome.INSERTED);
     }
     private void assertReceipt(SalesReportMaterializer.Receipt r,UUID tenant,long nonNull){
         assertThat(r.tenant()).isEqualTo(tenant);
