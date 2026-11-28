@@ -1,0 +1,4872 @@
+{
+  "schema": "RM-SFC-ATOMIC-REQUIREMENTS-v1",
+  "reviewedSha": "a464b0694dd471345f873b0cfcb9a31a238b3833",
+  "status": "PARTIAL_SECTION_EXTRACTION",
+  "policy": "Source scenario obligations may still require splitting. Confirmed alias is source identity only, never equivalent tests or qualification. Do not infer scope of B5 or new report triggers. Preserve existing 383 records and all CI inputs.",
+  "counts": {
+    "sourceObligations": 56,
+    "sectionObligations": 29,
+    "total": 85,
+    "confirmedSourceAliases": 36,
+    "b5Variants": 112
+  },
+  "atoms": [
+    {
+      "id": "SFC-ATOM-CORE-IAM-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-IAM-01"
+      },
+      "statement": "Verified account provisions exactly one first organization tenant",
+      "scenarioKeys": [
+        "BSR:CORE-IAM-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "R4FirstTenantOnboardingQualificationTest",
+            "test": "verifiedEmailFirstTenantIsAtomicAndExactRetryIsIdempotent"
+          }
+        ],
+        "openRequirement": "Signed access token → resolver → onboarding; restart/replay и независимый подсчёт org/member/orphan.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Signed access token → resolver → onboarding; restart/replay и независимый подсчёт org/member/orphan.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-IAM-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-IAM-02"
+      },
+      "statement": "Unverified suspended or foreign principal cannot provision or select tenant",
+      "scenarioKeys": [
+        "BSR:CORE-IAM-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "R4FirstTenantOnboardingQualificationTest",
+            "test": "unverifiedEmailSuspensionAndForeignTenantRejectWithoutWrites"
+          }
+        ],
+        "openRequirement": "Отказы onboarding и JWT пока в разных тестах; проверить все owner-дельты.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Отказы onboarding и JWT пока в разных тестах; проверить все owner-дельты.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-IAM-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-IAM-03"
+      },
+      "statement": "Active tenant staff obtains only explicit functional grants",
+      "scenarioKeys": [
+        "BSR:CORE-IAM-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "UserRoleMatrixR31QualificationTest",
+            "test": "urR31ExplicitGrantsAuthorizeEachRoleAndRevocationFencesNextCommand"
+          }
+        ],
+        "openRequirement": "Связать invite/accept/grants и бизнес-команду с signed identity и AB-grants в одном варианте.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Связать invite/accept/grants и бизнес-команду с signed identity и AB-grants в одном варианте.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-IAM-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-IAM-04"
+      },
+      "statement": "Active employee/order → revoke and confirm A→B/B→A → committed authorized winner only",
+      "scenarioKeys": [
+        "BSR:CORE-IAM-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "postgresSalesConfirmationFencesConcurrentPermissionRevocation"
+          }
+        ],
+        "openRequirement": "Both permission-revoke/confirm schedules implemented with signed JWT and observed PG blocking edge. Account/membership suspension variants and persisted independent evidence still pending.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Текущая привязка проверяет STOREFRONT после SQL suspension, а не оба порядка revoke × confirm; дополнить verified SALES маршрут.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-IAM-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-IAM-05"
+      },
+      "statement": "Linked buyer → suspend/delete races link read/checkout → no post-revoke new access, retain permitted immutable evidence",
+      "scenarioKeys": [
+        "BSR:CORE-IAM-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к складу не относится к блокировке покупателя; раздельно checkout/link/read и retention.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к складу не относится к блокировке покупателя; раздельно checkout/link/read и retention.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-IAM-06",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-IAM-06"
+      },
+      "statement": "Warehouse A grant only → attempt B; revoke × pick/handover both orders → scope enforced",
+      "scenarioKeys": [
+        "BSR:CORE-IAM-06"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr05WrongWarehouseAndRevokedAssignmentBlockPreparation"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06bPgHandoverCommitPrecedesConcurrentScopeRevocation"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06bPgScopeRevocationCommitPrecedesHandoverAdmission"
+          }
+        ],
+        "openRequirement": "Both pick/revoke schedules added to existing scope-revocation test; legacy handover schedules remain supporting. Full strict verified QR setup and durable evidence pending.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к общим grants не доказывает warehouse scope; отдельно оба порядка pick × revoke.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-ORG-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-ORG-01"
+      },
+      "statement": "An active warehouse cannot be deactivated after reserved stock commits",
+      "scenarioKeys": [
+        "BSR:CORE-ORG-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+            "test": "postgresConfirmedOrderWinsThenDeactivationIsBlockedByReservation"
+          }
+        ],
+        "openRequirement": "Разделить INACTIVE с остатком и CLOSED без остатка; нормативное расхождение §12.3.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Разделить INACTIVE с остатком и CLOSED без остатка; нормативное расхождение §12.3.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-ORG-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-ORG-02"
+      },
+      "statement": "Deactivation first prevents later stock reservation",
+      "scenarioKeys": [
+        "BSR:CORE-ORG-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "OrganizationLocationR11ConcurrencyQualificationTest",
+            "test": "postgresDeactivationWinsThenNewConfirmationRollsBackToPlaced"
+          }
+        ],
+        "openRequirement": "Дополнить остальные пары transfer/confirm/close из того же класса; сохранить остаток при законной деактивации.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Дополнить остальные пары transfer/confirm/close из того же класса; сохранить остаток при законной деактивации.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CRM-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CRM-01"
+      },
+      "statement": "Customer contact interaction and contract persisted tenant scoped",
+      "scenarioKeys": [
+        "BSR:CORE-CRM-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CrmInteractionQualificationTest",
+            "test": "crmSvc01CustomerContactInteractionAndContractJourneyPersistsAcrossReads"
+          }
+        ],
+        "openRequirement": "Нужны PERSON и COMPANY, same-name без merge, независимые encrypted/foreign-row oracles.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Нужны PERSON и COMPANY, same-name без merge, независимые encrypted/foreign-row oracles.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CRM-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CRM-02"
+      },
+      "statement": "Two updates with same version, search empty/bounded/filter → one correct version, no foreign rows",
+      "scenarioKeys": [
+        "BSR:CORE-CRM-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к readonly interaction не доказывает customer/contact CAS и поиск.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к readonly interaction не доказывает customer/contact CAS и поиск.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CRM-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CRM-03"
+      },
+      "statement": "Archive customer/contract × open order creation both orders → approved policy, order snapshot retained",
+      "scenarioKeys": [
+        "BSR:CORE-CRM-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к consent ошибочна; заказ связан с IAM buyer, не прямо с CRM customer/contract; нужен контракт архивации и hash заказа.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к consent ошибочна; заказ связан с IAM buyer, не прямо с CRM customer/contract; нужен контракт архивации и hash заказа.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CRM-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CRM-04"
+      },
+      "statement": "Record interaction→assign→nextAction→complete; repeated request and inactive assignee → correct history",
+      "scenarioKeys": [
+        "BSR:CORE-CRM-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к архиву не покрывает record/assign/nextAction/complete; проверить каждый шаг и history.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к архиву не покрывает record/assign/nextAction/complete; проверить каждый шаг и history.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CRM-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CRM-05"
+      },
+      "statement": "Explicit verified buyer link is required to expose order history",
+      "scenarioKeys": [
+        "BSR:CORE-CRM-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CrmBuyerLinkQualificationTest",
+            "test": "verifiedBuyerConfirmsOrderAndSellerSeesOnlyTenantOrders"
+          }
+        ],
+        "openRequirement": "Проверить оба независимых CRM_READ/SALES_ORDER_READ и отсутствие infer-by-email; source test body не заменяет run.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Проверить оба независимых CRM_READ/SALES_ORDER_READ и отсутствие infer-by-email; source test body не заменяет run.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CRM-06",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CRM-06"
+      },
+      "statement": "Dispute and revocation hide seller order history without mutating ledger",
+      "scenarioKeys": [
+        "BSR:CORE-CRM-06"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CrmBuyerLinkQualificationTest",
+            "test": "disputeFreezesSalesVisibilityAndSellerCanOnlyCloseFailClosed"
+          }
+        ],
+        "openRequirement": "Последовательный dispute supporting; confirm × revoke не равен orderHistory × revoke; read linearization отдельно.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Последовательный dispute supporting; confirm × revoke не равен orderHistory × revoke; read linearization отдельно.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CAT-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CAT-01"
+      },
+      "statement": "Published product SKU and price are tenant qualified",
+      "scenarioKeys": [
+        "BSR:CORE-CAT-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CatalogQualificationTest",
+            "test": "twoTenantCatalogSkuPricePublicationAndReadOnlyBoundary"
+          }
+        ],
+        "openRequirement": "Дополнить точные price/quantity bounds, invalid currency и negative zero-effect oracles.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Дополнить точные price/quantity bounds, invalid currency и negative zero-effect oracles.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CAT-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CAT-02"
+      },
+      "statement": "Catalog version CAS prevents stale price revision and cross tenant write",
+      "scenarioKeys": [
+        "BSR:CORE-CAT-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CatalogQualificationTest",
+            "test": "draftTranslationsAndVersionCasCannotLeakOtherTenant"
+          }
+        ],
+        "openRequirement": "Catalog CAS сам по себе не доказывает коммерческую цену; проверить обе истории и old-order hash при drift.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Catalog CAS сам по себе не доказывает коммерческую цену; проверить обе истории и old-order hash при drift.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-CAT-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-CAT-03"
+      },
+      "statement": "Active sellable SKU cannot be archived across concurrent offers",
+      "scenarioKeys": [
+        "BSR:CORE-CAT-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "postgresArchiveAndOfferPublicationAreSerializedInBothOrders"
+          }
+        ],
+        "openRequirement": "В том же классе есть receipt-first; stocktake race и обе стороны всех конфликтов требуют отдельной привязки.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "В том же классе есть receipt-first; stocktake race и обе стороны всех конфликтов требуют отдельной привязки.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-STO-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-STO-01"
+      },
+      "statement": "Seller storefront publish pause resume preserve revision and audit",
+      "scenarioKeys": [
+        "BSR:CORE-STO-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "sellerCanCreatePublishPauseAndResumeWithAuditAndStaleCheck"
+          }
+        ],
+        "openRequirement": "Resume выполняется publish с актуальной версией; отдельно revoked role, inactive workspace и tenant.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Resume выполняется publish с актуальной версией; отдельно revoked role, inactive workspace и tenant.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-STO-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-STO-02"
+      },
+      "statement": "Offer authoritative price version and accepted order snapshot are consistent",
+      "scenarioKeys": [
+        "BSR:CORE-STO-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "offerVersionCasAndCheckoutSnapshotStayImmutable"
+          }
+        ],
+        "openRequirement": "У price update CAS/no-op, а не универсальный request-key receipt; привязать hide и invalid product.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "У price update CAS/no-op, а не универсальный request-key receipt; привязать hide и invalid product.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-STO-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-STO-03"
+      },
+      "statement": "Paused storefront cannot accept new checkout",
+      "scenarioKeys": [
+        "BSR:CORE-STO-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "StorefrontManagementQualificationTest",
+            "test": "postgresCommittedStorefrontPauseBlocksNewCheckoutWithoutPartialOrder"
+          }
+        ],
+        "openRequirement": "Оба теста кандидаты; доказать именно publication и оба управляемых порядка pause × checkout.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Оба теста кандидаты; доказать именно publication и оба управляемых порядка pause × checkout.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-01"
+      },
+      "statement": "Single seller checkout uses immutable accepted price and SKU snapshot",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "skuToSellerOfferToCheckoutToFulfillmentToReconciliation"
+          }
+        ],
+        "openRequirement": "Сквозной happy path из старой карты не доказывает конфликт ключа; отдельно lost response и process restart.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Сквозной happy path из старой карты не доказывает конфликт ключа; отдельно lost response и process restart.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-02"
+      },
+      "statement": "Price/pause change×checkout both orders → acknowledged version or reconfirm, no new order on deny",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к duplicate checkout не покрывает stale price/pause; отдельно verified QR и обычный route.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к duplicate checkout не покрывает stale price/pause; отдельно verified QR и обычный route.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-03"
+      },
+      "statement": "Full reserve only after seller confirmation",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+          }
+        ],
+        "openRequirement": "Кандидаты вызывают внутренние методы; нужен verified facade, multi-line snapshot и один склад в strict mode.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Кандидаты вызывают внутренние методы; нужен verified facade, multi-line snapshot и один склад в strict mode.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-04"
+      },
+      "statement": "Insufficient stock rolls back all reservations and status",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "insufficientStockRollsBackStatusAndEveryReservation"
+          }
+        ],
+        "openRequirement": "Shortage/outer rollback не равны hard crash; подтвердить last-line failure и отсутствие всех success-эффектов.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Shortage/outer rollback не равны hard crash; подтвердить last-line failure и отсутствие всех success-эффектов.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-05"
+      },
+      "statement": "Two orders compete for last units and reversed SKU ordering → no oversell/deadlock leak",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "concurrentOrdersCannotOversellAndCrossTenantCannotCommand"
+          },
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "opposingMultiSkuOrdersReserveWithoutDeadlock"
+          }
+        ],
+        "openRequirement": "Deterministic hot-SKU A/B winner schedules with exact insufficient inventory denial, replay and multi-line rollback; PostgreSQL execution and strict warehouse scope variants pending.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая проверка fulfillment не является hot-SKU race; нужны управляемые schedules и отрицательные ledger oracles.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-06",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-06"
+      },
+      "statement": "Cancel×confirm and cancel×fulfill both orders → one valid final state/release/debit",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-06"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "r13PostgresCancelVsFulfillRaceHasExactlyOneTerminalOutcome"
+          }
+        ],
+        "openRequirement": "Four deterministic STANDARD order cancel/confirm and cancel/fulfill commit orders, exact loser denial and terminal replay; strict pickup route and durable SQL artifacts remain open.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к permission deny ошибочна; random race не заменяет оба заданных порядка cancel × confirm/fulfill.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-07",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-07"
+      },
+      "statement": "Cancellation before pick releases once and retries idempotently",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-07"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "confirmAndCancelAreAtomicAndRetriesAreIdempotent"
+          }
+        ],
+        "openRequirement": "Есть последовательный picked-deny; не найден самостоятельный детерминированный pick × cancel в обоих порядках.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Есть последовательный picked-deny; не найден самостоятельный детерминированный pick × cancel в обоих порядках.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-08",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-08"
+      },
+      "statement": "Proof-required QR order cannot use generic fulfillment",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-08"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+          }
+        ],
+        "openRequirement": "SQL fixture proof-mode допустим для локального fence; полный путь должен создавать mode через verified QR checkout.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "SQL fixture proof-mode допустим для локального fence; полный путь должен создавать mode через verified QR checkout.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-09",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-09"
+      },
+      "statement": "Generic fulfill×secure pickup both orders → exactly one legal debit with proof",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-09"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrMvpServiceJourneyQualificationTest",
+            "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
+          },
+          {
+            "suite": "QrMvpServiceJourneyQualificationTest",
+            "test": "qrMvpJ1NegotiatedPriceToHandoverAndQuarantinePg"
+          },
+          {
+            "suite": "SalesInventoryRbacQualificationTest",
+            "test": "decFul01PickupProofRequiredBlocksGenericFulfillBeforePreparing"
+          }
+        ],
+        "openRequirement": "Strict QR list-price generic-first rollback and negotiated-price pickup-first commit schedules implemented with actual PostgreSQL blocking-edge verification, exact route denial and joined receipt/credential/reservation/movement/event SQL oracle; new exact-SHA execution and persisted variant SQL artifacts pending.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к BUS happy path неверна; double-scan не заменяет generic fulfill × secure pickup на одном заказе.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-SAL-10",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-SAL-10"
+      },
+      "statement": "Warehouse grants A not B; revoke × each confirm/prepare/fulfill both orders",
+      "scenarioKeys": [
+        "BSR:CORE-SAL-10"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к picked cancel неверна; квалифицировать strict flag и оба revoke orders для каждой операции.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к picked cancel неверна; квалифицировать strict flag и оба revoke orders для каждой операции.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-INV-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-INV-01"
+      },
+      "statement": "Same request key stock posting records one movement",
+      "scenarioKeys": [
+        "BSR:CORE-INV-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "InventoryMovementQualificationTest",
+            "test": "concurrentSameKeyPostsExactlyOneMovement"
+          }
+        ],
+        "openRequirement": "Один same-key movement не покрывает transfer/stocktake; расширить реальные команды и ledger baseline.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Один same-key movement не покрывает transfer/stocktake; расширить реальные команды и ledger baseline.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-INV-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-INV-02"
+      },
+      "statement": "Reserved on hand ledger conserves quantities under concurrent checkout and reconciliation",
+      "scenarioKeys": [
+        "BSR:CORE-INV-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "CommercialCoreE2EQualificationTest",
+            "test": "postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger"
+          }
+        ],
+        "openRequirement": "Отличать per-page REPEATABLE_READ и durable cursor от tenant-wide immutable snapshot; foreign/empty/end cases.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Отличать per-page REPEATABLE_READ и durable cursor от tenant-wide immutable snapshot; foreign/empty/end cases.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-01"
+      },
+      "statement": "Published product QR remains stable and reflects authoritative offer price",
+      "scenarioKeys": [
+        "BSR:CORE-QR-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "PublishedOfferQrQualificationTest",
+            "test": "qrP01StableReprintAndCurrentPublishedPriceAfterRevision"
+          }
+        ],
+        "openRequirement": "Стабильный reprint недостаточен; два revoke × checkout schedules и exact committed replay.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Стабильный reprint недостаточен; два revoke × checkout schedules и exact committed replay.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-02"
+      },
+      "statement": "Hidden unpublished and revoked references never expose public card",
+      "scenarioKeys": [
+        "BSR:CORE-QR-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "PublishedOfferQrQualificationTest",
+            "test": "qrP03PausedHiddenAndRevokedReferencesCannotExposeCard"
+          }
+        ],
+        "openRequirement": "Старая привязка проверяет visibility без bytes; negative storage invocation и public derivative отделить от original.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка проверяет visibility без bytes; negative storage invocation и public derivative отделить от original.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-03"
+      },
+      "statement": "Available/partial/unknown region preview including empty → advisory only",
+      "scenarioKeys": [
+        "BSR:CORE-QR-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к private order read не относится к regional advisory; проверить zero reservation и отсутствие warehouse leakage.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к private order read не относится к regional advisory; проверить zero reservation и отсутствие warehouse leakage.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-04"
+      },
+      "statement": "List price checkout requires active verified buyer and exact price/version",
+      "scenarioKeys": [
+        "BSR:CORE-QR-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "PublishedQrCheckoutQualificationTest",
+            "test": "qrMvpVerifiedListCheckoutCreatesOneBuyerOwnedOrder"
+          }
+        ],
+        "openRequirement": "Основной entrypoint checkoutVerified; email-first checkout по умолчанию закрыт; price race отдельно.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Основной entrypoint checkoutVerified; email-first checkout по умолчанию закрыт; price race отдельно.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-05"
+      },
+      "statement": "Buyer and seller alternate valid bargaining turns and persist agreement",
+      "scenarioKeys": [
+        "BSR:CORE-QR-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04aCounterThenBuyerAcceptanceCreatesOneQuoteAndImmutableEvents"
+          }
+        ],
+        "openRequirement": "Добавить точную привязку reject, self-accept, request conflict и конкурентный revision CAS.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Добавить точную привязку reject, self-accept, request conflict и конкурентный revision CAS.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-06",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-06"
+      },
+      "statement": "Accepted quote creates an immutable priced order with buyer identity",
+      "scenarioKeys": [
+        "BSR:CORE-QR-06"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04bAcceptedPriceCreatesOnePlacedOrderWithImmutableQuoteSource"
+          }
+        ],
+        "openRequirement": "Accepted happy path не доказывает разные ключи/namespace/restart; scope receipt tenant+key, quote uniqueness отдельно.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Accepted happy path не доказывает разные ключи/namespace/restart; scope receipt tenant+key, quote uniqueness отдельно.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-QR-07",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-QR-07"
+      },
+      "statement": "Expire/withdraw/revoke/suspend×checkout both orders, exact cutoff → winner only",
+      "scenarioKeys": [
+        "BSR:CORE-QR-07"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04aExpiredProposalEffectiveStateAndMaterialization"
+          },
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04bExpiredQuoteFailsWithoutAnyOrderOrReceipt"
+          },
+          {
+            "suite": "QrNegotiatedCheckoutQualificationTest",
+            "test": "qr04bConcurrentDistinctKeysAtMostOneOrderOnRealPostgres"
+          }
+        ],
+        "openRequirement": "Pending proposal withdrawal versus accept+checkout, buyer suspension/deletion versus quote checkout, actual deadline crossing while PostgreSQL checkout waits, terminal proposal denial and exact replay implemented. Exact cutoff equality, live QR generation revocation semantics for already accepted quotes, persisted independent variant artifacts and new exact-SHA PostgreSQL execution remain open. No post-AGREED WITHDRAW transition exists under QR-04.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к double consumption ошибочна; для expire/withdraw/QR revoke/suspend нужны свои состояния и оба порядка.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-PICK-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-01"
+      },
+      "statement": "Order preparation requires full reserved pick before READY without stock debit",
+      "scenarioKeys": [
+        "BSR:CORE-PICK-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr05PreparingAndReadyRequireFullPickWithoutDebitingStock"
+          }
+        ],
+        "openRequirement": "Полный pick/ready/no early debit есть как кандидат; сохранить отдельный incomplete-pick отрицательный oracle.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Полный pick/ready/no early debit есть как кандидат; сохранить отдельный incomplete-pick отрицательный oracle.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-PICK-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-02"
+      },
+      "statement": "Buyer issues credential; scoped staff previews; foreign/expired deny",
+      "scenarioKeys": [
+        "BSR:CORE-PICK-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к preparation не доказывает issue/preview; wrong warehouse/expiry и zero IO/stock отдельно.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к preparation не доказывает issue/preview; wrong warehouse/expiry и zero IO/stock отдельно.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-PICK-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-03"
+      },
+      "statement": "Only verified buyer can issue fresh one time pickup proof",
+      "scenarioKeys": [
+        "BSR:CORE-PICK-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06CredentialRequiresVerifiedBuyerAndReadyState"
+          }
+        ],
+        "openRequirement": "Issue-only не доказывает debit; reissue через issue с новым ключом; старый proof, replay и unique receipt.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Issue-only не доказывает debit; reissue через issue с новым ключом; старый proof, replay и unique receipt.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-PICK-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-04"
+      },
+      "statement": "Multiple simultaneous pickup scans produce one stock debit",
+      "scenarioKeys": [
+        "BSR:CORE-PICK-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06PostgresConcurrentScansWithDifferentKeysFulfillOnlyOnce"
+          }
+        ],
+        "openRequirement": "Двухпоточный scan не равен two-JVM; добавить revoke-first и handover-first, account и permission variants.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Двухпоточный scan не равен two-JVM; добавить revoke-first и handover-first, account и permission variants.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-PICK-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-PICK-05"
+      },
+      "statement": "Crash after commit and lost response cannot cause second stock debit",
+      "scenarioKeys": [
+        "BSR:CORE-PICK-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr06bPgJVMKilledAfterCommitReplayHasNoSecondDebit"
+          }
+        ],
+        "openRequirement": "Реальные Runtime.halt workers существуют; отдельно SQL fault при receipt/credential и run logs с кодами выхода.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Реальные Runtime.halt workers существуют; отдельно SQL fault при receipt/credential и run logs с кодами выхода.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-RET-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-01"
+      },
+      "statement": "Return claims cannot exceed quantity in immutable completed handover",
+      "scenarioKeys": [
+        "BSR:CORE-RET-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R0ConcurrentPartialClaimsCannotExceedFulfilledQuantity"
+          }
+        ],
+        "openRequirement": "Capacity учитывает все незакрытые claims кроме REJECTED/CANCELLED_BY_BUYER; проверить состояния и independent sum.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Capacity учитывает все незакрытые claims кроме REJECTED/CANCELLED_BY_BUYER; проверить состояния и independent sum.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-RET-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-02"
+      },
+      "statement": "Only authorized staff reviews and approves return with durable evidence",
+      "scenarioKeys": [
+        "BSR:CORE-RET-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R1ReviewApproveAndImmutableDecisionReplay"
+          }
+        ],
+        "openRequirement": "Review не равен physical reception; proof issue/consume, wrong warehouse, replay и no early stock.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Review не равен physical reception; proof issue/consume, wrong warehouse, replay и no early stock.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-RET-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-03"
+      },
+      "statement": "Receipt inspection and restock link one returned quantity to one stock movement",
+      "scenarioKeys": [
+        "BSR:CORE-RET-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R2RestockPostsOneLinkedStockMovementOnlyAfterInspection"
+          }
+        ],
+        "openRequirement": "Связать RESTOCK movement по posting.movement_id; QUARANTINE отдельный ledger, WRITE_OFF без sellable credit.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Связать RESTOCK movement по posting.movement_id; QUARANTINE отдельный ledger, WRITE_OFF без sellable credit.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-RET-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-04"
+      },
+      "statement": "Concurrent quarantine resolution in both orders → one resolution/conserved qty",
+      "scenarioKeys": [
+        "BSR:CORE-RET-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04RestockFirst"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04DisposeFirst"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B01RestockDistinctKeys"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B02DisposeDistinctKeys"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B03RestockIdenticalReplay"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B04DisposeIdenticalReplay"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B05ChangedAction"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B06ChangedEvidence"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B07StaleVersionBeforeResolution"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B08ChangedVersionAfterResolution"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B09ResolutionInsertRollback"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B10TerminalEventInsertRollback"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B11ResolutionInsertSameKeyRetry"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04B12TerminalEventInsertSameKeyRetry"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C01RestockCrashBeforeCommit"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C02RestockCrashAfterCommit"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C03DisposeCrashBeforeCommit"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C04DisposeCrashAfterCommit"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C05TwoJvmIdenticalRestock"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C06TwoJvmRestockVsDispose"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C07SharedSkuRestockRestock"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C08SharedSkuDisposeDispose"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C09SharedSkuRestockDispose"
+          },
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R25CoreRet04C10SharedSkuDisposeRestock"
+          }
+        ],
+        "openRequirement": "E.6C/v3 56/56 PASS and target/full/global evidence on d14234a5282f1ec625606e8b2b414256894fdeee. E.7A adds independent BSR §14.3 original posting, fulfilled capacity, intake and terminal movement/event linkage plus zero invoices at return checkpoints; v4 exact-SHA qualification pending. A/B/AB distinct-grant variant, inactive workspace denial, full checkpoint/variant manifest and independent review remain open. SUPPORTING_PARTIAL intentional.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая проверка disposition не доказывает resolution race; проверить два заданных порядка RESTOCK/DISPOSE и immutable original.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-RET-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-RET-05"
+      },
+      "statement": "Repeated physical returns cannot post a second restock movement",
+      "scenarioKeys": [
+        "BSR:CORE-RET-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrWarehouseHandoverQualificationTest",
+            "test": "qr07R2TwoIndependentJvmsCannotDoubleRestockOneReturn"
+          }
+        ],
+        "openRequirement": "Two-JVM duplicate не заменяет crash; добавить reception duplicate и исходный COMPLETED hash.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Two-JVM duplicate не заменяет crash; добавить reception duplicate и исходный COMPLETED hash.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-XD-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-XD-01"
+      },
+      "statement": "Business journey integrates IAM CRM TASK catalog stock and order",
+      "scenarioKeys": [
+        "BSR:CORE-XD-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "BusMvpServiceJourneyQualificationTest",
+            "test": "busMvpJ1OrganizationEmployeeCustomerTaskSkuOrderStockHistoryPg"
+          }
+        ],
+        "openRequirement": "BUS использует new VerifiedActor, обычную TASK и email-first checkout; CRM buyer link, cancellation и signed chain не доказаны одним journey.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "BUS использует new VerifiedActor, обычную TASK и email-first checkout; CRM buyer link, cancellation и signed chain не доказаны одним journey.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-XD-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-XD-02"
+      },
+      "statement": "Verified QR list price reaches immutable pickup and returned stock",
+      "scenarioKeys": [
+        "BSR:CORE-XD-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "QrMvpServiceJourneyQualificationTest",
+            "test": "qrMvpJ1VerifiedListPriceToHandoverAndRestockPg"
+          }
+        ],
+        "openRequirement": "Два маршрута существуют, decoder stub; tenant/email/warehouse setup через SQL/repos; нет WRITE_OFF полного J1.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Два маршрута существуют, decoder stub; tenant/email/warehouse setup через SQL/repos; нет WRITE_OFF полного J1.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-XD-03",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-XD-03"
+      },
+      "statement": "A/B/AB actor tries foreign customer/offer/order/stock/QR/media using UUIDs and list filters",
+      "scenarioKeys": [
+        "BSR:CORE-XD-03"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к negotiated happy path неверна; собрать A/B/AB по всем owner reads/list/count/history/bytes.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к negotiated happy path неверна; собрать A/B/AB по всем owner reads/list/count/history/bytes.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-XD-04",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-XD-04"
+      },
+      "statement": "Populated old schema→Liquibase→restart→read and replay historical orders/link/receipt/stock",
+      "scenarioKeys": [
+        "BSR:CORE-XD-04"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к oversell не относится к upgrade; использовать populated workflows, baseline schema/fixtures, restore и hash исторических rows.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к oversell не относится к upgrade; использовать populated workflows, baseline schema/fixtures, restore и hash исторических rows.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-CORE-XD-05",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "CORE-XD-05"
+      },
+      "statement": "Frozen candidate SHA → mandatory H2/PG/security/infra jobs and per-ID evidence → no unexpected skip",
+      "scenarioKeys": [
+        "BSR:CORE-XD-05"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [],
+        "openRequirement": "Старая привязка к seller suspend × checkout неверна; gate является workflow+verifier+artifact set, не одним JUnit методом.",
+        "bsrScope": "REQUIRED_FOR_MVP",
+        "bsrOpenRequirement": "Старая привязка к seller suspend × checkout неверна; gate является workflow+verifier+artifact set, не одним JUnit методом.",
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-BUS-TASK-01",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "BUS-TASK-01"
+      },
+      "statement": "Task creation assignment execution and immutable history",
+      "scenarioKeys": [
+        "BSR:BUS-TASK-01"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "TaskServiceQualificationTest",
+            "test": "t01ManagerCreatesAssignedTaskAndEmployeeCompletesHistory"
+          }
+        ],
+        "openRequirement": "Full semantic variant and oracle review pending",
+        "bsrScope": null,
+        "bsrOpenRequirement": null,
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-BUS-TASK-02",
+      "kind": "SOURCE_SCENARIO_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+        "selector": "BUS-TASK-02"
+      },
+      "statement": "Task tenant permission and revoked employee do not mutate unauthorized state",
+      "scenarioKeys": [
+        "BSR:BUS-TASK-02"
+      ],
+      "scope": "CORE_MVP_QUALIFICATION_OBLIGATION",
+      "variants": {
+        "sourceRequiredProofs": [
+          {
+            "suite": "TaskServiceQualificationTest",
+            "test": "t12EarlierTaskPermissionRevocationDeniesExecutionWithoutWrites"
+          }
+        ],
+        "openRequirement": "Full semantic variant and oracle review pending",
+        "bsrScope": null,
+        "bsrOpenRequirement": null,
+        "mandatoryVariantReview": "OPEN_NOT_INFERRED_FROM_TEST_NAME"
+      },
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-01A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-01"
+      },
+      "statement": "Each metric has versioned owner, grain, identity, cohort, time, dimensions, units, authorization, quality, aggregation and oracle.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-02A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02 ADDITIVE"
+      },
+      "statement": "Sum only disjoint compatible contributions; booked/fulfilled/movement and product/service are separate.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-02B",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02 EXACT_DISTINCT"
+      },
+      "statement": "Target-grain exact identity union, never sum child distinct counts without proved disjointness.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-02C",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02 SEMI_ADDITIVE"
+      },
+      "statement": "Balance snapshot at one as-of, not sum over time.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-02D",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02 DERIVED_RATIO"
+      },
+      "statement": "Recompute operands at target grain; zero denominator not measurable, unknown missing/partial.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-02E",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02 NON_ADDITIVE"
+      },
+      "statement": "Recompute non-additive statistics from sufficient statistics or facts.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-02F",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-02 NUMERIC"
+      },
+      "statement": "Versioned decimal precision/rounding; missing distinct from zero, no approximate replacement for exact.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-03A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-03"
+      },
+      "statement": "Tenant and warehouse rights before aggregation; no leakage via denominator, total, cache or drilldown.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-03B",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-03"
+      },
+      "statement": "Historical category/geography and warehouse grain; no invented allocation; AS_BOOKED and RESTATED separate.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-03C",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-03"
+      },
+      "statement": "Consistent applicable L0–L3 semantics, exact membership, no additive join fanout or overlapping period sum.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-MIC-03D",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+        "section": "MIC-03"
+      },
+      "statement": "Late events, rollback, replay, rebuild and revision fence preserve math and provenance.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§1"
+      },
+      "statement": "TASK owns single classification authority; SQL exact durations, Java mapping only; H2 parity.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01B",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§2 completion evidence"
+      },
+      "statement": "Validate unique completion and archive/version chain; conflicting or missing evidence cannot fabricate completion.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01C",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§2 original deadline"
+      },
+      "statement": "Validate contiguous event and due-change history; tri-state deadline change and unknown evidence preserved.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01D",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§2 precision"
+      },
+      "statement": "One trusted microsecond cutoff; future completion AFTER_CUTOFF; exact signed numeric durations.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01E",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§3"
+      },
+      "statement": "EARLY_50 iff valid completion with positive plan, nonnegative elapsed and 2*elapsed<=planned; late comparison precedes.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01F",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§3"
+      },
+      "statement": "Active overdue only eligible status/assignee/due; exact equality and 24h boundary, severity 24h/72h.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01G",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§4"
+      },
+      "statement": "Safe title vocabulary; no raw title, PII or raw events.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01H",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§5"
+      },
+      "statement": "Fresh TASK_READ and tenant+creator/current assignee; no implicit owner or manager broad access.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01I",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§5"
+      },
+      "statement": "All filters before LIMIT; half-open IANA zone range, max93 days; undated only DUE.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-RAD-01J",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+        "section": "§5"
+      },
+      "statement": "Stable keyset date/id; limit1..100+1; bind cursor to actor/tenant/filter and fresh admission every page.",
+      "scope": "APPROVED_EXTENSION_CONDITIONAL_ON_APPLICABILITY",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-01A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2"
+      },
+      "statement": "Storage verification outside transaction; admit then consumer lock then lockVerified within READ COMMITTED.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-01B",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2"
+      },
+      "statement": "Attachment, owner publication transition and required canonical event/intent atomically; AVAILABLE not PUBLISHED.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-01C",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2"
+      },
+      "statement": "Reconcile orphan intent/object; never delete referenced object; retry stable identity/fence.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-01D",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2"
+      },
+      "statement": "Catalog reads authoritative metadata with fresh authorization independent of event projection.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-01E",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§3"
+      },
+      "statement": "Minimal typed event payload; no secrets/PII/storage key or URL; reauthorize read/delivery/open.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-01F",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2–3"
+      },
+      "statement": "Independent consumer receipts; no global order/exactly once; stale event cannot restore revoked report.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-02A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2–3"
+      },
+      "statement": "PDF separate admission; logical occurrence vs format artifact; no duplicate ready notification.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-ATOM-REP-03A",
+      "kind": "SECTION_OBLIGATION",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§3–5"
+      },
+      "statement": "Scheduled deadline from qualified occurrence; Radar and EVT trigger admission separate.",
+      "scope": "DECISION_REQUIRED",
+      "scenarioKeys": [],
+      "mandatoryVariantReview": "OPEN",
+      "implementation": "NOT_ASSESSED",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "sourceAliasDecisions": [
+    {
+      "id": "CORE-IAM-01",
+      "canonicalKey": "BSR:CORE-IAM-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-IAM-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-IAM-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-IAM-02",
+      "canonicalKey": "BSR:CORE-IAM-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-IAM-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-IAM-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-IAM-03",
+      "canonicalKey": "BSR:CORE-IAM-03",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-IAM-03"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-IAM-03"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-ORG-01",
+      "canonicalKey": "BSR:CORE-ORG-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-ORG-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-ORG-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-ORG-02",
+      "canonicalKey": "BSR:CORE-ORG-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-ORG-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-ORG-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-CRM-01",
+      "canonicalKey": "BSR:CORE-CRM-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-CRM-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-CRM-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-CRM-05",
+      "canonicalKey": "BSR:CORE-CRM-05",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-CRM-05"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-CRM-05"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-CRM-06",
+      "canonicalKey": "BSR:CORE-CRM-06",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-CRM-06"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-CRM-06"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-CAT-01",
+      "canonicalKey": "BSR:CORE-CAT-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-CAT-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-CAT-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-CAT-02",
+      "canonicalKey": "BSR:CORE-CAT-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-CAT-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-CAT-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-CAT-03",
+      "canonicalKey": "BSR:CORE-CAT-03",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-CAT-03"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-CAT-03"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-STO-01",
+      "canonicalKey": "BSR:CORE-STO-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-STO-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-STO-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-STO-02",
+      "canonicalKey": "BSR:CORE-STO-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-STO-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-STO-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-STO-03",
+      "canonicalKey": "BSR:CORE-STO-03",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-STO-03"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-STO-03"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-SAL-01",
+      "canonicalKey": "BSR:CORE-SAL-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-SAL-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-SAL-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-SAL-03",
+      "canonicalKey": "BSR:CORE-SAL-03",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-SAL-03"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-SAL-03"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-SAL-04",
+      "canonicalKey": "BSR:CORE-SAL-04",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-SAL-04"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-SAL-04"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-SAL-07",
+      "canonicalKey": "BSR:CORE-SAL-07",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-SAL-07"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-SAL-07"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-SAL-08",
+      "canonicalKey": "BSR:CORE-SAL-08",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-SAL-08"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-SAL-08"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-INV-01",
+      "canonicalKey": "BSR:CORE-INV-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-INV-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-INV-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-INV-02",
+      "canonicalKey": "BSR:CORE-INV-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-INV-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-INV-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-QR-01",
+      "canonicalKey": "BSR:CORE-QR-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-QR-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-QR-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-QR-02",
+      "canonicalKey": "BSR:CORE-QR-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-QR-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-QR-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-QR-04",
+      "canonicalKey": "BSR:CORE-QR-04",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-QR-04"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-QR-04"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-QR-05",
+      "canonicalKey": "BSR:CORE-QR-05",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-QR-05"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-QR-05"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-QR-06",
+      "canonicalKey": "BSR:CORE-QR-06",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-QR-06"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-QR-06"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-PICK-01",
+      "canonicalKey": "BSR:CORE-PICK-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-PICK-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-PICK-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-PICK-03",
+      "canonicalKey": "BSR:CORE-PICK-03",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-PICK-03"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-PICK-03"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-PICK-04",
+      "canonicalKey": "BSR:CORE-PICK-04",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-PICK-04"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-PICK-04"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-PICK-05",
+      "canonicalKey": "BSR:CORE-PICK-05",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-PICK-05"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-PICK-05"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-RET-01",
+      "canonicalKey": "BSR:CORE-RET-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-RET-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-RET-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-RET-02",
+      "canonicalKey": "BSR:CORE-RET-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-RET-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-RET-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-RET-03",
+      "canonicalKey": "BSR:CORE-RET-03",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-RET-03"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-RET-03"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-RET-05",
+      "canonicalKey": "BSR:CORE-RET-05",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-RET-05"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-RET-05"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-XD-01",
+      "canonicalKey": "BSR:CORE-XD-01",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-XD-01"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-XD-01"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "id": "CORE-XD-02",
+      "canonicalKey": "BSR:CORE-XD-02",
+      "relation": "SAME_SOURCE_SCENARIO_ID_AND_EXPLICIT_PRIOR_BEHAVIOR",
+      "sources": [
+        {
+          "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+          "selector": "CORE-XD-02"
+        },
+        {
+          "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+          "selector": "CORE-XD-02"
+        }
+      ],
+      "proof": "explicit priorMapping points to same source and identical behavior; test mapping verdict retained independently",
+      "qualification": "NOT_ASSERTED"
+    }
+  ],
+  "analyticalVariants": [
+    {
+      "key": "B5:BS-001",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-001]"
+      },
+      "title": "Stable demand",
+      "expected": "No spurious trend",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-002",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-002]"
+      },
+      "title": "Sustained growth",
+      "expected": "Directional demand increase",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-003",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-003]"
+      },
+      "title": "Sustained decline",
+      "expected": "Directional demand decrease",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-004",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-004]"
+      },
+      "title": "Seasonal peaks",
+      "expected": "Calendar-aware pattern",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-005",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-005]"
+      },
+      "title": "Promotion spike",
+      "expected": "Separate transient uplift",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-006",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-006]"
+      },
+      "title": "Structural break",
+      "expected": "Detect regime change",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-007",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-007]"
+      },
+      "title": "Sparse/intermittent demand",
+      "expected": "Avoid unjustified precision",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-008",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-008]"
+      },
+      "title": "New SKU cold start",
+      "expected": "Explicit uncertainty",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-009",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-009]"
+      },
+      "title": "Product substitution",
+      "expected": "Category vs SKU demand",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-010",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-010]"
+      },
+      "title": "Cannibalization",
+      "expected": "No double-counted demand",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-011",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-011]"
+      },
+      "title": "Regional divergence",
+      "expected": "Region-level aggregation",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-012",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-012]"
+      },
+      "title": "Customer concentration",
+      "expected": "Concentration risk",
+      "lane": "CUSTOMER",
+      "plannedSlice": "C1/C2",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_AMOUNT"
+      ],
+      "missingEvidence": "Authorized current customer-buyer link, cohort and owner visibility; customer filter not supported by current B4.8 port; channel evidence where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-013",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-013]"
+      },
+      "title": "FX depreciation",
+      "expected": "Future replacement cost increases",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-014",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-014]"
+      },
+      "title": "FX appreciation",
+      "expected": "Future replacement cost decreases",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-015",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-015]"
+      },
+      "title": "FX volatility",
+      "expected": "Sensitivity and uncertainty",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-016",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-016]"
+      },
+      "title": "Supplier price increase",
+      "expected": "Margin pressure",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-017",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-017]"
+      },
+      "title": "Supplier price decrease",
+      "expected": "Cost opportunity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-018",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-018]"
+      },
+      "title": "Sales discount",
+      "expected": "Revenue vs margin distinction",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-019",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-019]"
+      },
+      "title": "Freight cost shock",
+      "expected": "Landed cost sensitivity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-020",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-020]"
+      },
+      "title": "Multi-currency sales",
+      "expected": "No implicit cross-currency sum",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-021",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-021]"
+      },
+      "title": "FX observation missing",
+      "expected": "Fail closed / explicit unavailable",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-022",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-022]"
+      },
+      "title": "Inflation regime",
+      "expected": "Nominal vs real distinction where supported",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-023",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-023]"
+      },
+      "title": "Stockout / censored demand",
+      "expected": "Sales not equivalent to demand",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-024",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-024]"
+      },
+      "title": "Excess inventory",
+      "expected": "Overstock signal",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-025",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-025]"
+      },
+      "title": "Lead-time increase",
+      "expected": "Reorder sensitivity",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-026",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-026]"
+      },
+      "title": "Supplier delay",
+      "expected": "Arrival risk",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-027",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-027]"
+      },
+      "title": "Supplier failure",
+      "expected": "Alternate sourcing constraints",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-028",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-028]"
+      },
+      "title": "MOQ / lot constraints",
+      "expected": "Feasible procurement",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-029",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-029]"
+      },
+      "title": "Warehouse transfer",
+      "expected": "No double count of stock",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-030",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-030]"
+      },
+      "title": "Partial fulfillment",
+      "expected": "Exact fulfillment grain",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-031",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-031]"
+      },
+      "title": "Cancellation and reserve release",
+      "expected": "No phantom fulfillment",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-032",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-032]"
+      },
+      "title": "Return / damage",
+      "expected": "Explicit supported movement semantics",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-033",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-033]"
+      },
+      "title": "Category reassignment",
+      "expected": "Immutable historical group",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-034",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-034]"
+      },
+      "title": "Warehouse region change",
+      "expected": "Immutable historical location",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-035",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-035]"
+      },
+      "title": "Empty calendar periods",
+      "expected": "Complete period manifest",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-036",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-036]"
+      },
+      "title": "Duplicate / replay",
+      "expected": "Idempotence",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-037",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-037]"
+      },
+      "title": "Late event",
+      "expected": "Proof invalidation/reconciliation",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-038",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-038]"
+      },
+      "title": "Out-of-order fulfillment",
+      "expected": "Source parity",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-039",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-039]"
+      },
+      "title": "Dimension-only repair",
+      "expected": "No invented historical data",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-040",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-040]"
+      },
+      "title": "Concurrent tenant workloads",
+      "expected": "Isolation",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-041",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-041]"
+      },
+      "title": "Recession / broad demand fall",
+      "expected": "Stress demand and liquidity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-042",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-042]"
+      },
+      "title": "Stagflation",
+      "expected": "Demand down, replacement costs up",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-043",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-043]"
+      },
+      "title": "Currency crisis",
+      "expected": "FX shock + volatility + supply uncertainty",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-044",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-044]"
+      },
+      "title": "Liquidity crunch",
+      "expected": "Constrained procurement",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-045",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-045]"
+      },
+      "title": "Credit tightening",
+      "expected": "Financing constraints",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-046",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-046]"
+      },
+      "title": "Payment delay",
+      "expected": "Cash-flow pressure",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-047",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-047]"
+      },
+      "title": "Supplier bankruptcy",
+      "expected": "Supply interruption",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-048",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-048]"
+      },
+      "title": "Logistics disruption",
+      "expected": "Lead-time / availability shock",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-049",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-049]"
+      },
+      "title": "Regional warehouse outage",
+      "expected": "Capacity and transfer constraints",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-050",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-050]"
+      },
+      "title": "Demand panic buying",
+      "expected": "Spike and rationed supply",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-051",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-051]"
+      },
+      "title": "Sudden demand collapse",
+      "expected": "Excess stock and markdown risk",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-052",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-052]"
+      },
+      "title": "Import restriction",
+      "expected": "Substitution / availability",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-053",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-053]"
+      },
+      "title": "Energy cost shock",
+      "expected": "Operating cost sensitivity",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-054",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-054]"
+      },
+      "title": "Combined FX + demand + lead time",
+      "expected": "Conflicting procurement signals",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-055",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-055]"
+      },
+      "title": "Crisis recovery",
+      "expected": "Controlled normalization",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-056",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-056]"
+      },
+      "title": "False recovery / double dip",
+      "expected": "Avoid premature optimism",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-057",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-057]"
+      },
+      "title": "Data ingestion interruption",
+      "expected": "Stale proof / no false completeness",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-058",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-058]"
+      },
+      "title": "Worker crash mid-transaction",
+      "expected": "Atomic rollback and replay",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-059",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-059]"
+      },
+      "title": "Concurrent refresh and late facts",
+      "expected": "Revision fence consistency",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-060",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-060]"
+      },
+      "title": "Forged proof / digest",
+      "expected": "Fail-closed admission",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-061",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-061]"
+      },
+      "title": "Extreme tenant skew",
+      "expected": "Hot tenant isolation and latency",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-062",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-062]"
+      },
+      "title": "Extreme SKU/category skew",
+      "expected": "Exact DISTINCT and rollup",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-063",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-063]"
+      },
+      "title": "Long historical horizon",
+      "expected": "Calendar and index scalability",
+      "lane": "SOURCE_INTEGRITY",
+      "plannedSlice": "B4_REGRESSION",
+      "candidateMetrics": [],
+      "missingEvidence": "Scenario-specific independent evidence, stress profiles and exact-SHA proof; retain regression obligation, not a new runtime module.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-064",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-064]"
+      },
+      "title": "Correlated multi-region crisis",
+      "expected": "Cross-region comparison without tenant leakage",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-065",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-065]"
+      },
+      "title": "Sales fall: demand decline vs stockout",
+      "expected": "Check availability and lost-demand evidence",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-066",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-066]"
+      },
+      "title": "Sales fall: seasonal trough vs structural decline",
+      "expected": "Compare like periods and trend",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-067",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-067]"
+      },
+      "title": "Sales fall: channel outage vs customer churn",
+      "expected": "Check channel health and cohorts",
+      "lane": "CUSTOMER",
+      "plannedSlice": "C1/C2",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_AMOUNT"
+      ],
+      "missingEvidence": "Authorized current customer-buyer link, cohort and owner visibility; customer filter not supported by current B4.8 port; channel evidence where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-068",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-068]"
+      },
+      "title": "Sales fall: late ingestion vs real decline",
+      "expected": "Check freshness and completeness",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-069",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-069]"
+      },
+      "title": "Sales rise: unit growth vs price inflation",
+      "expected": "Separate price and volume",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-070",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-070]"
+      },
+      "title": "Sales rise: promotion vs organic demand",
+      "expected": "Separate temporary and durable effects",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-071",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-071]"
+      },
+      "title": "Revenue rises: product mix vs volume",
+      "expected": "Price-volume-mix decomposition",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-072",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-072]"
+      },
+      "title": "Revenue rises while gross profit falls",
+      "expected": "Check unit cost, mix, discount",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-073",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-073]"
+      },
+      "title": "Margin falls: FX vs supplier price vs freight",
+      "expected": "Identify supported cost drivers",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-074",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-074]"
+      },
+      "title": "Margin rises but cash position worsens",
+      "expected": "Distinguish accrual, receivables and cash",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-075",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-075]"
+      },
+      "title": "Margin percent rises while gross profit falls",
+      "expected": "Distinguish absolute and relative metrics",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-076",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-076]"
+      },
+      "title": "FX moves with domestic fixed-price supplier",
+      "expected": "No automatic FX pass-through",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-077",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-077]"
+      },
+      "title": "FX moves after inventory purchase",
+      "expected": "Preserve historical valuation",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-078",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-078]"
+      },
+      "title": "FX exposure offset by matched currency receipts",
+      "expected": "Net exposure, if supported",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-079",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-079]"
+      },
+      "title": "Low stock: high demand vs supply interruption",
+      "expected": "Separate depletion and replenishment",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-080",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-080]"
+      },
+      "title": "High stock: demand fall vs early delivery",
+      "expected": "Distinguish temporary surplus",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-081",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-081]"
+      },
+      "title": "High turnover: healthy sales vs stock scarcity",
+      "expected": "Check service level and availability",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-082",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-082]"
+      },
+      "title": "Procurement increase vs cash constraint",
+      "expected": "Feasible bounded action or abstain",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-083",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-083]"
+      },
+      "title": "Lower unit price vs excessive MOQ",
+      "expected": "Total cost and holding risk",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-084",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-084]"
+      },
+      "title": "Supplier delay vs missing receiving event",
+      "expected": "Data quality before escalation",
+      "lane": "PROCUREMENT",
+      "plannedSlice": "HOLD_PROCUREMENT",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Supplier, inbound, lead time, availability, constraints, external shock evidence and qualified history where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-085",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-085]"
+      },
+      "title": "Regional decline vs warehouse outage",
+      "expected": "Compare unaffected regions",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-086",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-086]"
+      },
+      "title": "Regional growth vs transfer displacement",
+      "expected": "Avoid counting transfers as final sales",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-087",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-087]"
+      },
+      "title": "Category growth vs reclassification",
+      "expected": "Historical hierarchy vs current grouping",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-088",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-088]"
+      },
+      "title": "Aggregate growth hides SKU decline",
+      "expected": "Drill down; prevent Simpson reversal",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-089",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-089]"
+      },
+      "title": "Aggregate margin falls despite segment improvement",
+      "expected": "Detect mix effects / Simpson reversal",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-090",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-090]"
+      },
+      "title": "Customer churn vs identity merge",
+      "expected": "Check identity lifecycle",
+      "lane": "CUSTOMER",
+      "plannedSlice": "C1/C2",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_AMOUNT"
+      ],
+      "missingEvidence": "Authorized current customer-buyer link, cohort and owner visibility; customer filter not supported by current B4.8 port; channel evidence where applicable.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-091",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-091]"
+      },
+      "title": "Large order vs broad demand increase",
+      "expected": "Concentration and outlier handling",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-092",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-092]"
+      },
+      "title": "Increased returns vs late return recording",
+      "expected": "Event time vs recorded time",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-093",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-093]"
+      },
+      "title": "Zero sales vs missing sales feed",
+      "expected": "No data is not zero",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-094",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-094]"
+      },
+      "title": "Zero observed demand with out-of-stock SKU",
+      "expected": "Censoring and uncertainty",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-095",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-095]"
+      },
+      "title": "Incomplete period vs full prior period",
+      "expected": "Like-for-like coverage",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-096",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-096]"
+      },
+      "title": "Currency conversion vs native currency totals",
+      "expected": "Require approved FX and valuation date",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-097",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-097]"
+      },
+      "title": "Short history vs apparent trend",
+      "expected": "Insufficient evidence",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-098",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-098]"
+      },
+      "title": "Conflicting sales and inventory indicators",
+      "expected": "Report conflict, not fabricated certainty",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-099",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-099]"
+      },
+      "title": "Identical observations with two latent causes",
+      "expected": "Return plausible set / abstain",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-100",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-100]"
+      },
+      "title": "Noisy observations around alert threshold",
+      "expected": "Stability and hysteresis where specified",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-101",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-101]"
+      },
+      "title": "Crisis shock vs ordinary seasonal variation",
+      "expected": "Distinguish only when supported",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-102",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-102]"
+      },
+      "title": "Recovery from low base vs sustainable recovery",
+      "expected": "Base effects and persistence",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-103",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-103]"
+      },
+      "title": "Demand rebound with constrained supply",
+      "expected": "Separate forecast and feasible fulfillment",
+      "lane": "WAREHOUSE",
+      "plannedSlice": "W1/W2/W3",
+      "candidateMetrics": [
+        "STOCK_IN",
+        "STOCK_OUT",
+        "FULFILLED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Scoped live stock/availability, reservations, movement reasons, transfer/return reconciliation, qualified time history; observed fulfillment is not latent demand.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-104",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-104]"
+      },
+      "title": "Inflation and recession jointly",
+      "expected": "Nominal vs real volume and margins",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-105",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-105]"
+      },
+      "title": "Liquidity shock with profitable orders",
+      "expected": "Do not infer solvency from margin",
+      "lane": "FINANCE_FX",
+      "plannedSlice": "HOLD_FINANCE",
+      "candidateMetrics": [
+        "BOOKED_AMOUNT",
+        "FULFILLED_AMOUNT",
+        "BOOKED_PRODUCT_UNITS"
+      ],
+      "missingEvidence": "Approved cost, FX, cash, receivables, inflation and finance owner sources where applicable; booked amounts are not paid revenue, profit or liquidity.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-106",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-106]"
+      },
+      "title": "Multi-region shock vs local anomaly",
+      "expected": "Scope evidence and avoid tenant leakage",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-107",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-107]"
+      },
+      "title": "Alternative intervention changes outcome",
+      "expected": "Counterfactual only under explicit model",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-108",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-108]"
+      },
+      "title": "Recommendation becomes obsolete after late event",
+      "expected": "Invalidate and re-evaluate",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-109",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-109]"
+      },
+      "title": "Unseen combination of known shocks",
+      "expected": "Generalization or safe abstention",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-110",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-110]"
+      },
+      "title": "Novel regime outside training support",
+      "expected": "Out-of-distribution warning",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-111",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-111]"
+      },
+      "title": "Sensitive recommendation based on incomplete inputs",
+      "expected": "No automatic action; request missing inputs",
+      "lane": "PREDICTIVE_DECISION",
+      "plannedSlice": "HOLD_PREDICTIVE",
+      "candidateMetrics": [],
+      "missingEvidence": "Approved model/decision contract, as-of features, held-out validation, feasibility and explicit authorization; no automated action.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    },
+    {
+      "key": "B5:BS-112",
+      "source": {
+        "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+        "selector": "scenarios[id=BS-112]"
+      },
+      "title": "No material change / false alarm control",
+      "expected": "No unsupported recommendation",
+      "lane": "OBSERVATION",
+      "plannedSlice": "B5.1",
+      "candidateMetrics": [
+        "BOOKED_ORDERS",
+        "BOOKED_PRODUCT_UNITS",
+        "BOOKED_AMOUNT",
+        "FULFILLED_PRODUCT_ORDERS",
+        "FULFILLED_PRODUCT_UNITS",
+        "FULFILLED_AMOUNT"
+      ],
+      "missingEvidence": "Comparable qualified historical windows, relevant discriminating evidence; no inference from PARTIAL alone. Price/mix decomposition needs line-level evidence.",
+      "scope": "REVIEW_REQUIRED_NO_INHERITANCE_FROM_INT_CR",
+      "relation": "DISTINCT_SOURCE_VARIANT_PRESERVED",
+      "qualification": "NOT_ASSERTED"
+    }
+  ],
+  "remaining": "CRM_SIM, CRM_JOURNEY, R3, DUAL and BSR overlays require detailed semantic extraction; complete document inventory not reviewed; no unique atomic denominator."
+}
