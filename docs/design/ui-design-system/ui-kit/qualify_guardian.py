@@ -37,8 +37,8 @@ with sync_playwright() as p:
             assert page.locator('html').get_attribute('data-theme')==theme
             assert token('canvas')=={'light':'#f4f6fa','dark':'#111b2b','taupe':'#eee9e2','sage':'#e8f0e8'}[theme]
             assert page.locator('body').evaluate("e=>getComputedStyle(e).backgroundColor") == {'light':'rgb(244, 246, 250)','dark':'rgb(17, 27, 43)','taupe':'rgb(238, 233, 226)','sage':'rgb(232, 240, 232)'}[theme]
-            assert token('nav-surface')=='#344c68'
-            assert page.locator('#side').evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(52, 76, 104)'
+            assert token('nav-surface')=='#536b68'
+            assert page.locator('#side').evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(83, 107, 104)'
             assert contrast('#ffffff',token('nav-active'))>=4.5
             assert contrast('#afcbff',token('nav-active'))>=3
             assert token('primary')==('#92b6ff' if theme=='dark' else '#2855b8')

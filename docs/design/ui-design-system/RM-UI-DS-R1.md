@@ -179,6 +179,10 @@ R1.0K.10C adds two light theme variants via seven semantic surface tokens each a
 
 R1.0K.10D lightens the shared sidebar and brand surface to #344C68, harmonizes hover, active, text, focus and native select borders. Four workspace themes, semantic statuses, OYU and orbital geometry unchanged. Guardian 32/32 and Orbital 20/20 Chromium in-memory cases PASS, exit 0. See [qualification](ui-kit/QUALIFICATION-SOFTNAV.md). No backend, JS, HTML or CI changes. Design Freeze remains open.
 
+## 8.14 Sage Slate navigation (2026-11-28)
+
+R1.0K.10E implements the owner-approved common navigation base #536B68 across four themes. Supersedes the previous #344C68 navigation palette; supporting tokens chosen for contrast. Existing workspace backgrounds, semantic statuses, orbital and OYU geometry, component structure and runtime unchanged. Guardian 32/32, Orbital 20/20 and OYU 28/28 Chromium in-memory cases passed, all processes exit 0. See [qualification](ui-kit/QUALIFICATION-SAGESLATE.md). No backend or CI changes. Design Freeze still open.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.

@@ -16,7 +16,7 @@ RM Precision is the design identity; Intelligent Business Guardian is its UX con
 
 | Semantic direction | Reference color | Purpose |
 |---|---|---|
-| Soft Slate Blue | #344C68 | Calm, lighter navigation and brand surfaces |
+| Sage Slate | #536B68 | Shared muted gray-green navigation and brand surfaces |
 | Precision Blue | #2855B8 | Primary actions and intellectual/analytical emphasis |
 | Signal Teal | #008579 | Restrained secondary analytic series and brand signal |
 | Cloud | #F4F6FA | Light workspace canvas |
@@ -28,7 +28,7 @@ RM Precision is the design identity; Intelligent Business Guardian is its UX con
 
 The reference palette sets direction, not approval of every foreground/background pair. Qualify contrast for both themes, controls, focus and states; adjust shades through semantic tokens when needed. Teal never replaces semantic status colors. No color-only meaning.
 
-Light mode: navy navigation and a clear light working canvas. Dark mode: layered deep navy/slate surfaces rather than pure black; exact semantic dark tokens pending visual and contrast qualification. Both themes use one component tree, one SVG sprite and one state contract. Compact and comfortable density are presentation options, not separate components; preserve touch targets and accessibility.
+Light mode: Sage Slate navigation and a clear light working canvas. Dark mode: layered deep navy/slate surfaces rather than pure black; exact semantic dark tokens pending visual and contrast qualification. All four themes use one component tree, one SVG sprite and one state contract. Compact and comfortable density are presentation options, not separate components; preserve touch targets and accessibility.
 
 Use existing system font first; clear typographic hierarchy, tabular numerals for financial values, 4px spacing base, existing 6/10/16px radius direction, restrained elevation, no excessive shadows or gradients, no glassmorphism in working surfaces, no decorative 3D. Do not introduce external font downloads or new UI frameworks as a prerequisite. Use the existing 56-symbol outline SVG family; connected nodes, contours and signals are the brand motif, restricted to brand and module identity. No automatic new logo or replacement icon IDs without review.
 
@@ -38,15 +38,19 @@ Approved direction: barely perceptible presence, never an emphasis. Use independ
 
 ### 2.2 RM Orbital Precision — restrained future-technology accent (R1.0K.10B)
 
-Add a quiet visual impression of advanced technology without science-fiction ornamentation: two thin rounded orbital arcs and a small static node confined to the existing 38px brand mark, 38% decorative opacity, with existing semantic navigation colors; a subtle radial navy gradient in the brand mark and upper sidebar, fading to the established navigation surface. No new colors, glow, neon, stars, animated orbit, glassmorphism, status semantics or decoration in working content. The existing shield remains the primary glyph and RM OYU Soft Jiek is unchanged. Decorative SVG is aria-hidden, non-focusable, non-interactive; orbit and gradients are disabled in forced colors and print. Preserve navigation contrast at both gradient endpoints. Candidate brand treatment only, not a finalized logo. See [qualification](ui-kit/QUALIFICATION-ORBIT.md).
+Add a quiet visual impression of advanced technology without science-fiction ornamentation: two thin rounded orbital arcs and a small static node confined to the existing 38px brand mark, 38% decorative opacity, with existing semantic navigation colors; a subtle radial navigation gradient in the brand mark and upper sidebar, fading to the established navigation surface. No new colors, glow, neon, stars, animated orbit, glassmorphism, status semantics or decoration in working content. The existing shield remains the primary glyph and RM OYU Soft Jiek is unchanged. Decorative SVG is aria-hidden, non-focusable, non-interactive; orbit and gradients are disabled in forced colors and print. Preserve navigation contrast at both gradient endpoints. Candidate brand treatment only, not a finalized logo. See [qualification](ui-kit/QUALIFICATION-ORBIT.md).
 
 ### 2.3 RM Precision Taupe and Sage — additional light themes (R1.0K.10C)
 
-Four supported presentation choices: Light (default), Dark, Taupe (warm gray-beige) and Sage (muted light green). Taupe canvas #EEE9E2, surface #FDFBF8, subtle surface #F5F1EB, border/grid #D9D0C5. Sage canvas #E8F0E8, surface #FCFEFB, subtle surface #F0F5EF, border/grid #D2DFD2. Neutral and disabled surfaces follow the corresponding palette. Both new variants inherit light color scheme, primary blue, text, semantic success/warning/danger colors and shared slate-blue navigation; a green background never indicates successful checks or protection. Same page-local selector, density rules, component markup, RM OYU and Orbital treatment. No additional runtime code or theme-specific components. Palette choices are implementation candidates pending owner visual acceptance. See [qualification](ui-kit/QUALIFICATION-THEMES.md).
+Four supported presentation choices: Light (default), Dark, Taupe (warm gray-beige) and Sage (muted light green). Taupe canvas #EEE9E2, surface #FDFBF8, subtle surface #F5F1EB, border/grid #D9D0C5. Sage canvas #E8F0E8, surface #FCFEFB, subtle surface #F0F5EF, border/grid #D2DFD2. Neutral and disabled surfaces follow the corresponding palette. Both new variants inherit light color scheme, primary blue, text, semantic success/warning/danger colors and shared Sage Slate navigation; a green background never indicates successful checks or protection. Same page-local selector, density rules, component markup, RM OYU and Orbital treatment. No additional runtime code or theme-specific components. Palette choices are implementation candidates pending owner visual acceptance. See [qualification](ui-kit/QUALIFICATION-THEMES.md).
 
-### 2.4 Soft Slate navigation (R1.0K.10D)
+### 2.4 Soft Slate navigation (R1.0K.10D — historical, superseded by §2.5)
 
 Owner requested lighter navigation. Replace #142238 with #344C68 in the shared navigation surface; hover/gradient endpoint #405A76, active #4A6685, text #F0F5FB, muted #D0DCEA, focus #C9DDFF, control border #B6C8DF. Same palette in all four themes. Existing orbital geometry and OYU opacity unchanged; the brand mark follows the navigation tokens. Do not modify the dark workspace background or dark primary-button foreground. Candidate shades pending visual acceptance. See [qualification](ui-kit/QUALIFICATION-SOFTNAV.md).
+
+### 2.5 Sage Slate navigation (R1.0K.10E)
+
+Owner approved #536B68 (Sage Slate) as the common navigation surface for Light, Dark, Taupe and Sage on 2026-11-28. Supersedes §2.4. Hover/gradient endpoint #4A625E; active #59716E; text #F5F8F5; muted #E5ECE7; focus #C9DDFF; control border #C2D6CC. Supporting colors selected for contrast; preview-only lighter active candidate #68807C not adopted. Preserve existing primary blue, status semantics, workspace surfaces, orbital geometry and OYU. Navigation color is decorative, never a protection/status signal. See [qualification](ui-kit/QUALIFICATION-SAGESLATE.md). Design Freeze remains pending.
 
 ## 3. Business Control Center
 
