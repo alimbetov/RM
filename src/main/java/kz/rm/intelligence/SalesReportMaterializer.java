@@ -46,6 +46,23 @@ final class SalesReportMaterializer {
     }
 
     Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency,String key){
+        return materialize(actor,tenant,calendar,lastClosedMonth,currency,key,null);
+    }
+
+    /** First materialization only. A recovered READY dataset is not re-rendered
+     * from a new source snapshot; durable artifact recovery is a separate gate. */
+    kz.rm.files.TrustedReportUpload.Receipt materializeAndUpload(VerifiedActor actor,UUID tenant,long calendar,
+        LocalDate lastClosedMonth,String key,kz.rm.files.TrustedReportUpload uploader) throws java.io.IOException {
+        Objects.requireNonNull(uploader);
+        var prepared=new java.util.concurrent.atomic.AtomicReference<TrustedReportFile>();
+        materialize(actor,tenant,calendar,lastClosedMonth,null,key,prepared::set);
+        var file=prepared.get();
+        if(file==null)throw new IllegalStateException("REPORT_EXISTING_DATASET_ARTIFACT_RECOVERY_REQUIRED");
+        return uploader.upload(actor,file);
+    }
+
+    private Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency,
+                                String key,java.util.function.Consumer<TrustedReportFile> prepared){
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("R02_OWN_TRANSACTION");
         Objects.requireNonNull(key);
@@ -106,7 +123,9 @@ final class SalesReportMaterializer {
         });
         var observed=validation.validateAndSeal(header.tenant(),dataset,day,worker,1L);
         if(!observed.equals(plan.expected()))throw new IllegalStateException("R02_OBSERVED_MISMATCH");
-        return Objects.requireNonNull(recover(actor,tenant,queries,instance,policy),"R02_READY_NOT_FOUND");
+        Receipt ready=Objects.requireNonNull(recover(actor,tenant,queries,instance,policy),"R02_READY_NOT_FOUND");
+        if(prepared!=null)prepared.accept(TrustedReportFile.renderR02(actor,instance,ready,manifest,reader,request));
+        return ready;
     }
     private static String requestDigest(UUID actor,String scope,AccountingPolicy policy){
         try{

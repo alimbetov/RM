@@ -27,7 +27,7 @@ class FileMetadataService {
         long max=mime.startsWith("image/")?20L*1024*1024:25L*1024*1024;
         if(declaredSize<1 || declaredSize>max)
             throw new IllegalArgumentException("File size exceeds policy");
-        if(requestKey==null || !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
+        if(requestKey==null || requestKey.startsWith("report-") || !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
             throw new IllegalArgumentException("Invalid upload request key");
         // Replays are only metadata-idempotent in R1.0A; concurrent races are
         // enforced by UNIQUE and are qualified for deterministic replay in R1.0B.

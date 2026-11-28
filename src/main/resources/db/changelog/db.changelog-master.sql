@@ -8446,3 +8446,29 @@ REVOKE ALL ON FUNCTION crm.int_native_capture_init(),crm.int_native_capture_tran
 --rollback DROP FUNCTION crm.int_native_capture_init();
 --rollback DROP TABLE crm.int_native_booked_capture;
 --rollback DROP FUNCTION crm.int_native_capture_transition();
+
+--changeset rm:0235-int-report-private-file-intent dbms:postgresql splitStatements:false
+-- Owner-only immutable linkage before publication; no runtime grants or attachment.
+CREATE TABLE reporting.int_report_file_intent (
+ tenant_id uuid NOT NULL, instance_id uuid NOT NULL, dataset_id uuid NOT NULL,
+ format_code varchar(8) NOT NULL CHECK(format_code IN ('XLSX','PDF')),
+ file_id uuid NOT NULL, requester_id uuid NOT NULL REFERENCES public.iam_user_account(id),
+ scope_digest varchar(64) NOT NULL CHECK(scope_digest ~ '^[0-9a-f]{64}$'),
+ source_digest varchar(64) NOT NULL CHECK(source_digest ~ '^[0-9a-f]{64}$'),
+ dataset_digest varchar(64) NOT NULL CHECK(dataset_digest ~ '^[0-9a-f]{64}$'),
+ renderer_version varchar(64) NOT NULL CHECK(length(trim(renderer_version))>0),
+ content_digest varchar(64) NOT NULL CHECK(content_digest ~ '^[0-9a-f]{64}$'),
+ size_bytes bigint NOT NULL CHECK(size_bytes BETWEEN 1 AND CASE WHEN format_code='XLSX' THEN 2097152 ELSE 26214400 END),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(tenant_id,instance_id,format_code),
+ UNIQUE(tenant_id,file_id),
+ FOREIGN KEY(tenant_id,instance_id,dataset_id)
+    REFERENCES reporting.int_report_request_attempt(tenant_id,instance_id,dataset_id),
+ FOREIGN KEY(tenant_id,file_id) REFERENCES crm.file_object(tenant_id,id)
+);
+CREATE TRIGGER trg_int_report_file_intent_immutable BEFORE UPDATE OR DELETE
+ ON reporting.int_report_file_intent FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_report_file_intent_no_truncate BEFORE TRUNCATE
+ ON reporting.int_report_file_intent FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+REVOKE ALL ON reporting.int_report_file_intent FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_FILE_INTENT_FORWARD_ONLY'; END; $$;

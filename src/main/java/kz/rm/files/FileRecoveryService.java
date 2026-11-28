@@ -157,6 +157,8 @@ class FileRecoveryService {
             // files are cleaned only after stale processing has been fenced.
             for(String key:storage.listKeys(tenant,fileId)) {
                 if(key.equals(claim.activeKey()))continue;
+                // V1 deletion requires a dedicated attempt/commit fence (P4.1A.4).
+                if(ReportStorageKey.encrypted(key))continue;
                 storage.delete(key);
                 removed++;
             }
