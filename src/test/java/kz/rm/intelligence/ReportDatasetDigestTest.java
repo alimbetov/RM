@@ -125,6 +125,14 @@ class ReportDatasetDigestTest {
         var reversed=ReportSourceManifest.from(TENANT,List.of(orders,amount),List.of(ov,av));
         assertEquals(m.scopeDigest(),reversed.scopeDigest());
         assertEquals(m.sha256(),reversed.sha256());
+        var tuple=new ReportSourceManifest.SnapshotEvidence(4,3,null,null,null,null,null,null,null,null,"NO_MATCHING_ACTIVE_GENERATION");
+        var v2=ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),tuple);
+        assertEquals(m.scopeDigest(),v2.scopeDigest());
+        assertNotEquals(m.sha256(),v2.sha256());
+        assertNotEquals(v2.sha256(),ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),
+            new ReportSourceManifest.SnapshotEvidence(5,2,null,null,null,null,null,null,null,null,"NO_MATCHING_ACTIVE_GENERATION")).sha256());
+        assertThrows(IllegalArgumentException.class,()->ReportSourceManifest.from(TENANT,List.of(amount,orders),List.of(av,ov),
+            new ReportSourceManifest.SnapshotEvidence(5,3,null,null,null,null,null,null,null,null,"NO_MATCHING_ACTIVE_GENERATION")));
         var plan=SalesReportDatasetPlan.from(m,DATASET);
         assertEquals(48,plan.expected().rows());
         assertEquals(plan.expected(),SalesReportDatasetPlan.from(reversed,DATASET).expected());

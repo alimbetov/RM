@@ -33,7 +33,22 @@ final class ReportSourceManifest {
     long sourceRevision(){return sourceRevision;}
     List<Query> queries(){return queries;}
     List<List<Result>> windows(){return windows;}
+    record SnapshotEvidence(long sourceCounter,long sourceEvents,UUID generation,UUID proof,
+        java.time.LocalDate from,java.time.LocalDate until,Long dirty,Long receipt,Long materialization,Long lifecycle,String proofStatus){
+        SnapshotEvidence{
+            if(sourceCounter<0||sourceEvents<0||proofStatus==null)throw new IllegalArgumentException("REPORT_REVISION_TUPLE");
+            if(generation==null){
+                if(proof!=null||from!=null||until!=null||dirty!=null||receipt!=null||materialization!=null||lifecycle!=null
+                    ||!proofStatus.equals("NO_MATCHING_ACTIVE_GENERATION"))throw new IllegalArgumentException("REPORT_REVISION_TUPLE");
+            }else if(proof==null||from==null||until==null||!from.isBefore(until)||dirty==null||receipt==null||materialization==null||lifecycle==null
+                ||dirty<0||receipt<0||materialization<0||lifecycle<0)
+                throw new IllegalArgumentException("REPORT_REVISION_TUPLE");
+        }
+    }
     static ReportSourceManifest from(UUID tenant,List<Query> queries,List<List<Result>> windows){
+        return from(tenant,queries,windows,null);
+    }
+    static ReportSourceManifest from(UUID tenant,List<Query> queries,List<List<Result>> windows,SnapshotEvidence snapshot){
         Objects.requireNonNull(tenant);
         if(queries.isEmpty()||queries.size()>3||queries.size()!=windows.size())
             throw new IllegalArgumentException("REPORT_MANIFEST_SHAPE");
@@ -58,8 +73,16 @@ final class ReportSourceManifest {
         Instant observed=Objects.requireNonNull(first.observedAt());
         long revision=first.sourceRevision();
         if(revision<0)throw new IllegalArgumentException("REPORT_MANIFEST_REVISION");
-        var evidence=new FramedHash("RM-ARS-SOURCE-1");
+        var evidence=new FramedHash(snapshot==null?"RM-ARS-SOURCE-1":"RM-ARS-SOURCE-2");
         evidence.add(scopeDigest);evidence.add(observed);evidence.add(revision);
+        if(snapshot!=null){
+            if(Math.addExact(snapshot.sourceCounter(),snapshot.sourceEvents())!=revision)
+                throw new IllegalArgumentException("REPORT_REVISION_TOTAL");
+            evidence.add(snapshot.sourceCounter());evidence.add(snapshot.sourceEvents());
+            evidence.add(snapshot.generation());evidence.add(snapshot.proof());evidence.add(snapshot.from());evidence.add(snapshot.until());
+            evidence.add(snapshot.dirty());evidence.add(snapshot.receipt());evidence.add(snapshot.materialization());
+            evidence.add(snapshot.lifecycle());evidence.add(snapshot.proofStatus());
+        }
         UUID generation=null,proof=null;
         for(int i=0;i<queries.size();i++){
             var q=queries.get(i);var points=windows.get(i);
@@ -84,7 +107,8 @@ final class ReportSourceManifest {
                 if(!qualityReason.equals(x.qualityReason())||x.reason()==null||!x.reason().matches("[A-Z0-9_]{1,128}"))
                     throw new IllegalArgumentException("REPORT_MANIFEST_QUALITY_REASON");
                 if(x.route()==Route.L3){
-                    if(x.generation()==null||x.proof()==null||generation!=null&&
+                    if(snapshot!=null&&(!Objects.equals(snapshot.generation(),x.generation())||!Objects.equals(snapshot.proof(),x.proof())||!"CURRENT".equals(snapshot.proofStatus()))
+                        ||x.generation()==null||x.proof()==null||generation!=null&&
                         (!generation.equals(x.generation())||!proof.equals(x.proof())))
                         throw new IllegalArgumentException("REPORT_MANIFEST_GENERATION");
                     generation=x.generation();proof=x.proof();

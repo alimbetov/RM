@@ -64,7 +64,7 @@ public class AuthorizedAnalyticalReadService {
     }
     /** B5.4: bounded same-grain metric windows in one authorized snapshot. */
     List<List<Result>> readMetricWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors){
-        return readWindows(actor,tenant,queries,anchors,false);
+        return readWindows(actor,tenant,queries,anchors,false).windows();
     }
 
     /** Internal report candidate only. Exactly 24 consecutive closed months.
@@ -76,8 +76,8 @@ public class AuthorizedAnalyticalReadService {
         if(end.getDayOfMonth()!=1||qs.stream().anyMatch(q->q.period()!=PeriodResolver.Code.M))
             throw new IllegalArgumentException("REPORT_MONTH_ANCHOR");
         var dates=java.util.stream.IntStream.range(0,24).mapToObj(i->end.minusMonths(23-i)).toList();
-        var windows=readWindows(actor,tenant,qs,dates,true);
-        return ReportSourceManifest.from(tenant,qs,windows);
+        var read=readWindows(actor,tenant,qs,dates,true);
+        return ReportSourceManifest.from(tenant,qs,read.windows(),read.evidence());
     }
     /** Internal recovery admission; caller holds the transaction until result selection. */
     void admitReportRecovery(VerifiedActor actor,UUID tenant,List<Query> queries){
@@ -88,7 +88,8 @@ public class AuthorizedAnalyticalReadService {
             new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
         actor.userId();
     }
-    private List<List<Result>> readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report){
+    private record WindowRead(List<List<Result>> windows,ReportSourceManifest.SnapshotEvidence evidence){}
+    private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         var qs=List.copyOf(queries);
         if(qs.isEmpty()||qs.size()>3||qs.stream().map(Query::metric).distinct().count()!=qs.size())
@@ -114,17 +115,17 @@ public class AuthorizedAnalyticalReadService {
             snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             snapshot.setReadOnly(true);snapshot.setTimeout(120);
-            List<List<Result>> result=snapshot.execute(inner->{
+            WindowRead result=snapshot.execute(inner->{
                 // Reuse only within this read-only RR snapshot; every new request
                 // still runs the full independent proof validation.
                 var checkedProofs=new HashMap<ProofKey,MultidimensionalCoverageService.Status>();
                 if(report)return readReportSnapshot(tenant,qs,dates);
-                return qs.stream().map(query->{
+                return new WindowRead(qs.stream().map(query->{
                     var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
                     var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
                     return dates.stream().map(anchor->readSnapshot(tenant,new Query(query.metric(),query.calendarVersion(),
                         query.period(),anchor,query.region(),query.group(),query.sku(),query.warehouses(),query.currency()),m,f,checkedProofs)).toList();
-                }).toList();
+                }).toList(),null);
             });
             actor.userId();
             return result;
@@ -133,7 +134,7 @@ public class AuthorizedAnalyticalReadService {
 
     /** Closed month report extraction. One calendar/revision/pointer lookup
      * per snapshot and one grouped L0/L3 query per metric and route. */
-    private List<List<Result>> readReportSnapshot(UUID tenant,List<Query> queries,List<LocalDate> dates){
+    private WindowRead readReportSnapshot(UUID tenant,List<Query> queries,List<LocalDate> dates){
         if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
             c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
             throw new IllegalStateException("ANALYTICAL_POSTGRESQL_REQUIRED");
@@ -151,7 +152,11 @@ public class AuthorizedAnalyticalReadService {
         var periods=dates.stream().map(d->PeriodResolver.resolve(PeriodResolver.Code.M,d,policy)).toList();
         Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
         if(periods.getLast().endExclusive().isAfter(now))throw new IllegalArgumentException("REPORT_MONTH_NOT_CLOSED");
-        long revision=sourceRevision(tenant);
+        var source=Objects.requireNonNull(jdbc.queryForObject("""
+            SELECT coalesce((SELECT revision FROM crm.int_source_revision WHERE tenant_id=?),0),
+                   (SELECT count(*) FROM crm.int_source_revision_event WHERE tenant_id=?)
+            """,(rs,n)->new long[]{rs.getLong(1),rs.getLong(2)},tenant,tenant));
+        long revision=Math.addExact(source[0],source[1]);
         Pointer pointer=jdbc.query("""
             SELECT a.generation_id,a.dim_proof_id,g.from_day,g.until_day,
               d.dirty_revision,d.receipt_revision,d.materialization_revision,l.revision
@@ -190,7 +195,12 @@ public class AuthorizedAnalyticalReadService {
                 reasons.get(period),null,null,revision,now));
             windows.add(periods.stream().map(resolved::get).toList());
         }
-        return List.copyOf(windows);
+        var evidence=pointer==null?new ReportSourceManifest.SnapshotEvidence(source[0],source[1],null,null,null,null,null,null,null,null,"NO_MATCHING_ACTIVE_GENERATION"):
+            new ReportSourceManifest.SnapshotEvidence(source[0],source[1],pointer.generation(),pointer.proof(),
+                pointer.snapshot().from(),pointer.snapshot().until(),pointer.snapshot().revision().dirty(),
+                pointer.snapshot().revision().receipt(),pointer.snapshot().revision().materialization(),
+                pointer.snapshot().revision().lifecycle(),proofStatus==null?"NOT_EVALUATED":proofStatus.name());
+        return new WindowRead(List.copyOf(windows),evidence);
     }
 
     /** An inner join avoids counting the synthetic row of an empty month.

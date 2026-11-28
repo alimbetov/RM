@@ -35,6 +35,7 @@ public final class SalesReportMaterializationEvidence {
             SELECT count(*) FROM reporting.int_report_source_evidence
             WHERE tenant_id=? AND dataset_id=? AND staging_date=?
              AND encode(sha256(scope_bytes),'hex')=? AND encode(sha256(source_bytes),'hex')=?
+             AND substring(source_bytes FROM 1 FOR 18)=convert_to('15:RM-ARS-SOURCE-2','UTF8')
             """,Long.class,tenant,r.dataset(),r.stagingDate(),r.scopeDigest(),r.sourceDigest())).isEqualTo(1L);
         assertThat(jdbc.queryForObject("""
             SELECT count(*) FROM reporting.int_report_request_attempt l JOIN reporting.int_report_instance i
