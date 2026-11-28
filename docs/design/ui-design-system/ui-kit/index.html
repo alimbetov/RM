@@ -8,16 +8,18 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:var(--rm-canvas);color:var(--rm-text);font:var(--rm-text-sm)/1.5 var(--rm-font)}
-main{max-width:1120px;margin:auto;padding:var(--rm-space-6)}
+main{width:100%;max-width:var(--rm-content-max);margin:auto;padding:var(--rm-page-gutter)}
 header{margin-bottom:var(--rm-space-6)}
 h1,h2,h3,p{margin:0 0 var(--rm-space-3)}
 h1{font-size:var(--rm-text-xl)}h2{font-size:var(--rm-text-lg)}h3{font-size:var(--rm-text-md)}
 .muted{color:var(--rm-text-muted)}
-.panel{background:var(--rm-surface);border:1px solid var(--rm-border);border-radius:var(--rm-radius-lg);padding:var(--rm-space-4);margin-bottom:var(--rm-space-4)}
+.panel{background:var(--rm-surface);border:1px solid var(--rm-border);border-radius:var(--rm-radius-lg);padding:var(--rm-panel-padding);margin-bottom:var(--rm-space-4);min-width:0;overflow-wrap:anywhere}
 .row{display:flex;gap:var(--rm-space-2);flex-wrap:wrap;align-items:center}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:var(--rm-space-4)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--rm-grid-gap)}
+.grid>*{min-width:0}
+.row>*{min-width:0;max-width:100%}
 button,input,select,textarea{font:inherit;color:inherit}
-button{min-height:var(--rm-control-md);padding:0 var(--rm-space-4);border:1px solid var(--rm-control-border);border-radius:var(--rm-radius-md);background:var(--rm-surface);cursor:pointer;font-weight:600}
+button{min-height:var(--rm-control-md);max-width:100%;white-space:normal;overflow-wrap:anywhere;padding:var(--rm-space-2) var(--rm-space-4);border:1px solid var(--rm-control-border);border-radius:var(--rm-radius-md);background:var(--rm-surface);cursor:pointer;font-weight:600}
 button:hover:not(:disabled){background:var(--rm-neutral-bg)}
 button.primary{background:var(--rm-primary);border-color:var(--rm-primary);color:var(--rm-on-primary)}
 button.primary:hover:not(:disabled){background:var(--rm-primary-hover)}
@@ -27,9 +29,9 @@ button.small{min-height:var(--rm-control-sm);padding:0 var(--rm-space-3)}
 button.icon{min-width:var(--rm-control-md);padding:0}
 button:disabled,input:disabled{background:var(--rm-disabled-bg);color:var(--rm-disabled-text);cursor:not-allowed}
 :focus-visible{outline:3px solid var(--rm-focus);outline-offset:2px}
-.field{display:grid;gap:var(--rm-space-1);align-content:start}
+.field{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--rm-space-1);align-content:start;min-width:0}
 label{font-weight:600}
-input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-height:var(--rm-control-md);padding:var(--rm-space-2) var(--rm-space-3);border:1px solid var(--rm-control-border);border-radius:var(--rm-radius-md);background:var(--rm-surface)}
+input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-width:0;max-width:100%;min-height:var(--rm-control-md);padding:var(--rm-space-2) var(--rm-space-3);border:1px solid var(--rm-control-border);border-radius:var(--rm-radius-md);background:var(--rm-surface)}
 textarea{resize:vertical;min-height:80px}
 input[aria-invalid=true]{border:2px solid var(--rm-danger)}
 .error{color:var(--rm-danger)}
@@ -45,22 +47,43 @@ fieldset{border:0;padding:0;margin:0;min-width:0}legend{font-weight:600;margin-b
 .alert{padding:var(--rm-space-3);border-radius:var(--rm-radius-md);margin-top:var(--rm-space-2)}
 .swatch{height:44px;border-radius:var(--rm-radius-sm);border:1px solid var(--rm-border);margin-bottom:var(--rm-space-1)}
 .palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:var(--rm-space-3)}
-.table-wrap{overflow-x:auto}
-table{border-collapse:collapse;width:100%;white-space:nowrap}
+.table-wrap{overflow-x:auto;max-width:100%;min-width:0;overscroll-behavior-inline:contain}
+.table-hint{display:block;margin-bottom:var(--rm-space-2)}
+table{border-collapse:collapse;width:100%;min-width:36rem;white-space:nowrap}
 th,td{text-align:left;padding:var(--rm-space-3);border-bottom:1px solid var(--rm-border)}
 th{background:var(--rm-neutral-bg);font-weight:600}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .metric{border:1px solid var(--rm-border);border-radius:var(--rm-radius-md);padding:var(--rm-space-4)}
 .value{font-size:var(--rm-text-xl);font-weight:650;font-variant-numeric:tabular-nums}
 .skeleton{height:14px;background:var(--rm-neutral-bg);border-radius:var(--rm-radius-sm);margin:8px 0}
-dialog{border:1px solid var(--rm-border);border-radius:var(--rm-radius-lg);max-width:min(400px,90vw);padding:var(--rm-space-6);color:var(--rm-text)}
+dialog{border:1px solid var(--rm-border);border-radius:var(--rm-radius-lg);width:min(400px,calc(100% - 24px));max-width:none;max-height:calc(100% - 24px);max-height:calc(100dvh - 24px);overflow:auto;padding:var(--rm-panel-padding);color:var(--rm-text);overflow-wrap:anywhere}
 dialog::backdrop{background:#17263880}
-@media(max-width:600px){main{padding:var(--rm-space-3)}.panel{padding:var(--rm-space-3)}}
+/* Responsive by default: flexible components, no page-level horizontal scroll. */
+.action-row>button:not(.icon){flex:1 1 100%}
+.value,.badge{overflow-wrap:anywhere;max-width:100%}
+@media (min-width:480px){
+  .action-row>button:not(.icon){flex:0 1 auto}
+}
+@media (min-width:768px){
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (min-width:1024px){
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .table-hint{display:none}
+}
+@media (max-width:767px), (any-pointer:coarse){
+  button,button.small,.choice,input:not([type=checkbox]):not([type=radio]),select,textarea{min-height:var(--rm-control-touch)}
+  button.icon{min-width:var(--rm-control-touch)}
+  input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:var(--rm-text-md)}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto;animation:none!important;transition:none!important}
+}
 </style>
 </head>
 <body>
 <main>
-<header><h1>RM UI Kit</h1><p class="muted">R1.0 · Визуальный эталон · Демонстрационные данные · Не подключён к API</p></header>
+<header><h1>RM UI Kit</h1><p class="muted">R1.0 · Responsive UI Kit · Визуальный эталон · Демонстрационные данные · Не подключён к API</p></header>
 <section class="panel" aria-labelledby="foundations">
 <h2 id="foundations">01. Foundations</h2>
 <div class="palette">
@@ -73,7 +96,7 @@ dialog::backdrop{background:#17263880}
 </div><p style="margin-top:16px">Типографика: 12 / 14 / 16 / 20 / 24 px. Отступы: 4 / 8 / 12 / 16 / 24 / 32 px.</p>
 </section>
 <section class="panel" aria-labelledby="buttons"><h2 id="buttons">02. Buttons</h2>
-<div class="row"><button type="button" class="primary">Сохранить</button><button type="button">Отмена</button><button type="button" class="ghost">Подробнее</button><button type="button" class="danger" id="open-dialog">Удалить</button><button type="button" disabled>Недоступно</button><button type="button" class="small">Компактная</button><button type="button" class="icon" aria-label="Обновить (образец)">↻</button></div>
+<div class="row action-row"><button type="button" class="primary">Сохранить</button><button type="button">Отмена</button><button type="button" class="ghost">Подробнее</button><button type="button" class="danger" id="open-dialog">Удалить</button><button type="button" disabled>Недоступно</button><button type="button" class="small">Компактная</button><button type="button" class="icon" aria-label="Обновить (образец)">↻</button></div>
 <p class="muted" style="margin-top:12px">Образцы оформления; удаление открывает только демонстрационный диалог.</p>
 </section>
 <section class="panel" aria-labelledby="inputs"><h2 id="inputs">03. Inputs & Controls</h2>
@@ -90,7 +113,7 @@ dialog::backdrop{background:#17263880}
 <div class="alert success">Операция выполнена.</div><div class="alert warning">Данные за период неполные.</div><div class="alert failure">Не удалось загрузить данные. Повторите попытку.</div>
 <div class="grid" style="margin-top:16px"><div><h3>Загрузка</h3><div class="skeleton"></div><div class="skeleton" style="width:70%"></div></div><div><h3>Пустой результат</h3><p class="muted">Нет записей по выбранным фильтрам.</p></div></div>
 </section>
-<section class="panel" aria-labelledby="table"><h2 id="table">05. Data Table</h2><div class="table-wrap" tabindex="0" role="region" aria-label="Демонстрационная таблица заказов">
+<section class="panel" aria-labelledby="table"><h2 id="table">05. Data Table</h2><p class="muted table-hint" id="table-hint">На узком экране прокрутите таблицу горизонтально — все столбцы сохранены.</p><div class="table-wrap" tabindex="0" role="region" aria-label="Демонстрационная таблица заказов" aria-describedby="table-hint">
 <table><thead><tr><th scope="col">Заказ</th><th scope="col">Клиент</th><th scope="col" class="num">Сумма, KZT</th><th scope="col">Статус</th></tr></thead><tbody><tr><td>RM-001</td><td>Компания A</td><td class="num">125 000,00</td><td><span class="badge success">Завершён</span></td></tr><tr><td>RM-002</td><td>Компания B</td><td class="num">80 000,00</td><td><span class="badge info">Подтверждён</span></td></tr></tbody></table></div></section>
 <section class="panel" aria-labelledby="metrics"><h2 id="metrics">06. Metric Cards</h2><div class="grid">
 <div class="metric"><p class="muted">Заказы · пример</p><div class="value">128</div><span class="badge success">+8,2% к предыдущему периоду</span></div>
@@ -98,6 +121,6 @@ dialog::backdrop{background:#17263880}
 <div class="metric"><p class="muted">Историческая статистика · пример</p><div class="value">—</div><span class="badge warning">Данные не квалифицированы</span></div>
 </div></section>
 </main>
-<dialog id="demo-dialog" aria-labelledby="dialog-title"><h2 id="dialog-title">Подтверждение действия</h2><p>Это демонстрационный диалог. Реальные данные не изменяются.</p><form method="dialog" class="row"><button value="cancel" autofocus>Отмена</button><button value="confirm" class="danger">Подтвердить</button></form></dialog>
+<dialog id="demo-dialog" aria-labelledby="dialog-title"><h2 id="dialog-title">Подтверждение действия</h2><p>Это демонстрационный диалог. Реальные данные не изменяются.</p><form method="dialog" class="row action-row"><button value="cancel" autofocus>Отмена</button><button value="confirm" class="danger">Подтвердить</button></form></dialog>
 <script>document.getElementById('open-dialog').addEventListener('click',()=>document.getElementById('demo-dialog').showModal());</script>
 </body></html>
