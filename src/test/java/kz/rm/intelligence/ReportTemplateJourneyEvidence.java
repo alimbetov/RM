@@ -27,6 +27,14 @@ final class ReportTemplateJourneyEvidence {
     static void record(String code,UUID tenant,byte[] bytes){
         if(!code.matches("RM-R(0[1-9]|1[0-2])"))throw new AssertionError("Invalid report code");
         assertThat(bytes.length).isBetween(1,2*1024*1024);
+        try(var zip=new ZipInputStream(new ByteArrayInputStream(bytes))){
+            for(var entry=zip.getNextEntry();entry!=null;entry=zip.getNextEntry()){
+                if(entry.getName().endsWith(".xml")){
+                    var xml=new String(zip.readNBytes(4*1024*1024+1),StandardCharsets.UTF_8);
+                    assertThat(xml).doesNotContain("TENANT-A","SYNTHETIC MOCKUP","SYNTHETIC_NOT_QUALIFIED","DESIGN MOCK","-DEMO");
+                }
+            }
+        }catch(IOException e){throw new UncheckedIOException(e);}
         try(var original=ReportTemplateRenderer.open(code);var actual=new XSSFWorkbook(new ByteArrayInputStream(bytes))){
             assertThat(actual.getNumberOfSheets()).isEqualTo(original.getNumberOfSheets());
             assertThat(actual.getSheet("Metadata").getRow(4).getCell(1).getStringCellValue()).isEqualTo(tenant.toString());
@@ -34,9 +42,16 @@ final class ReportTemplateJourneyEvidence {
                 var out=actual.getSheetAt(i);var in=original.getSheetAt(i);
                 assertThat(out.getSheetName()).isEqualTo(in.getSheetName());
                 assertThat(out.getTables()).hasSize(in.getTables().size());
-                for(int j=0;j<out.getTables().size();j++)
-                    assertThat(out.getTables().get(j).getArea().formatAsString())
+                for(int j=0;j<out.getTables().size();j++){
+                    var table=out.getTables().get(j);
+                    assertThat(table.getArea().formatAsString())
                         .isEqualTo(in.getTables().get(j).getArea().formatAsString());
+                    var start=table.getStartCellReference();
+                    var header=out.getRow(start.getRow());
+                    var columns=table.getCTTable().getTableColumns().getTableColumnList();
+                    for(int k=0;k<columns.size();k++)
+                        assertThat(columns.get(k).getName()).isEqualTo(header.getCell(start.getCol()+k).getStringCellValue());
+                }
                 var drawing=out.getDrawingPatriarch();var input=in.getDrawingPatriarch();
                 if(input==null){assertThat(drawing).isNull();continue;}
                 assertThat(drawing).isNotNull();

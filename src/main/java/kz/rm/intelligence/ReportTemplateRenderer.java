@@ -378,6 +378,11 @@ final class ReportTemplateRenderer {
         }else throw new IllegalArgumentException("REPORT_TEMPLATE_CELL");
     }
     private static void refreshCharts(XSSFWorkbook b){
+        // Keep the existing table ranges and columns. When a binding changes
+        // a header (currency or removal of a mock label), synchronize OOXML
+        // table metadata with the actual header row before writing the file.
+        for(int i=0;i<b.getNumberOfSheets();i++)
+            for(var table:b.getSheetAt(i).getTables())table.updateHeaders();
         for(int i=0;i<b.getNumberOfSheets();i++){
             var drawing=b.getSheetAt(i).getDrawingPatriarch();if(drawing==null)continue;
             for(var chart:drawing.getCharts()){
