@@ -1,0 +1,2707 @@
+{
+  "schema": "RM-SFC-DOCUMENT-INVENTORY-v1",
+  "reviewedSha": "0cae504294a810363dd8396bd164d314b8c51c77",
+  "scope": "All tracked Markdown/JSON blobs under docs/ at fixed SHA; excludes other branches and external requirements",
+  "status": "PATH_INVENTORY_COMPLETE_SEMANTIC_REVIEW_PARTIAL",
+  "counts": {
+    "documents": 298,
+    "selectedReview": 12,
+    "pending": 286,
+    "bySection": {
+      "root": 2,
+      "adr": 3,
+      "architecture": 18,
+      "design": 5,
+      "ideas": 2,
+      "implementation": 11,
+      "operations": 2,
+      "reviews": 148,
+      "spec": 98,
+      "strategy": 9
+    }
+  },
+  "records": [
+    {
+      "path": "docs/RM-R0-BOOTSTRAP.md",
+      "blob": "5fd65c3280250143db9424f327ae2083bed62ea9",
+      "bytes": 2464,
+      "section": "root",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/RM-R1-KMS.md",
+      "blob": "c5a228f8ca81ac2237501c377c53459f85956cc4",
+      "bytes": 16865,
+      "section": "root",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/adr/ADR-RM-CRM-005-public-pii-partitioning.md",
+      "blob": "1f6f8bc1cfd67b041d03ee648bbc13cc951d48a2",
+      "bytes": 12191,
+      "section": "adr",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/adr/ADR-RM-CRM-006-tenant-region-identity-standard.md",
+      "blob": "0c0f3be082693f4a488fbc5da6163d834a6748d9",
+      "bytes": 4455,
+      "section": "adr",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/adr/ADR-RM-KMS-004-microservice-readiness.md",
+      "blob": "56e1d1dc1547aa86760f654a27b45a2fcb6f6902",
+      "bytes": 7490,
+      "section": "adr",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/IAM-CRM-R22E-DELETION-RETENTION-POLICY.md",
+      "blob": "823b81e415c7a93c70205c6c93cb89e98bc17bb4",
+      "bytes": 5922,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/IAM-CRM-R22F-OIDC-REVOCATION-OUTBOX.md",
+      "blob": "0aa8503fe46f35871cacb38c75d70cf3bd5932ae",
+      "bytes": 5481,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B4.7-SAFE-REBUILD.md",
+      "blob": "2618d1d0d6a644df320bd9ad03b2342fb11c8481",
+      "bytes": 2087,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B4.8-AUTHORIZED-ANALYTICAL-READ.md",
+      "blob": "2ee46ab656b0d1171df78f484289913356089b34",
+      "bytes": 2243,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5-EXECUTION-HANDOFF-R1.md",
+      "blob": "1c457d9ca62a19900eef2ebcc2f2075997ca8498",
+      "bytes": 3333,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5-SCENARIO-ADMISSION-R1.json",
+      "blob": "6685ba950a84d8877a45f32b92572cac2d01e0e5",
+      "bytes": 66335,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5.1-BUSINESS-OBSERVATION.md",
+      "blob": "89fd224ec682733e43e88450173206a5f01d1686",
+      "bytes": 1838,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5.2-OBSERVED-SERIES-DYNAMICS.md",
+      "blob": "ea7b42eba9a2c6b2fda3e11063fe04cf88f50156",
+      "bytes": 1785,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5.3-PATTERN-ANOMALY.md",
+      "blob": "b5c7c889658f7b63465159d555eed3d9d4de2a6c",
+      "bytes": 1836,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5.4-FACTOR-EVIDENCE.md",
+      "blob": "7671021239685ff160ff796c1df67214d84f46f5",
+      "bytes": 1674,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5.5-DETERMINISTIC-CONCLUSION.md",
+      "blob": "11bb8488def036c5b483e32cbec4f88fe809f757",
+      "bytes": 2172,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-B5.5R-CONCLUSION-INTEGRITY.md",
+      "blob": "037c9f4e20a18ad55069db97e4d2982c77e8bdf1",
+      "bytes": 4154,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-DEC-FUL-01-EXECUTION-CHANNEL-R1.md",
+      "blob": "f38bda21189098e8576fd4c71c0ed56983bef218",
+      "bytes": 4955,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-DOMAIN-LAYER-BASELINE.md",
+      "blob": "8be87a791cc24bb7e980a64afa466668c3502801",
+      "bytes": 4862,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-DUAL-PRODUCT-FOUNDATION-R1.md",
+      "blob": "4bab69cf8f7c7b41ebfd870206edbe1a2fdc3dc1",
+      "bytes": 22662,
+      "section": "architecture",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+      "blob": "a202d444b8ee52cf20594a9d00d78b9958f4b843",
+      "bytes": 6184,
+      "section": "architecture",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "OPERATIVE_INVARIANTS",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md",
+      "blob": "481ef77a6e992a30d859b5a92f69d6428c08afa8",
+      "bytes": 10483,
+      "section": "architecture",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "SUPPLEMENT_NOT_REPLACEMENT",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/architecture/RM-PLATFORM-STANDARD-R2.md",
+      "blob": "66f072675954a942f96aa0e094a7ef56b4cc2372",
+      "bytes": 144164,
+      "section": "architecture",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "OPERATIVE_PLATFORM",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/design/RM-CI-R3-IMPACT-QUALIFICATION.md",
+      "blob": "90c5ad3f0ea8c95a2b102de9825a5ae2d0845d25",
+      "bytes": 4542,
+      "section": "design",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/design/RM-CI-R3.6A-WORKFLOW-DEPENDENCY-INVENTORY.md",
+      "blob": "ae82fb3e9ec89569bb72596c6ece3aae521b3166",
+      "bytes": 2023,
+      "section": "design",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/design/RM-DEV-ACCEL-R1.md",
+      "blob": "c7f83055825f89e196ac54e123924f6589c83112",
+      "bytes": 4880,
+      "section": "design",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/design/intelligent-commerce/DEC-B4-GEO-NOM-MULTIDIMENSIONAL.md",
+      "blob": "ceb77eea19f646c6eb3f7309ec4c423c539ddfed",
+      "bytes": 23226,
+      "section": "design",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/design/intelligent-commerce/RM-B4.5D.0-BUSINESS-SCENARIO-BANK.md",
+      "blob": "3ac6912ce5971fd174dcea3d0dc19cd67c5e3060",
+      "bytes": 21466,
+      "section": "design",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/ideas/README.md",
+      "blob": "0c27a26ef11ea2f1feaa9c9cf70d10e01411768f",
+      "bytes": 9098,
+      "section": "ideas",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/ideas/RM-IDEA-BANK-R1.md",
+      "blob": "e6bddacbad9235757b89638cb370dbe782b79ac1",
+      "bytes": 46642,
+      "section": "ideas",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/QUAL-RM-DOMAIN-R1.1.md",
+      "blob": "3609f819113719f1fa64afa6514954ebe54a6553",
+      "bytes": 7778,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/QUAL-RM-DOMAIN-R1.2-IAM-IDENTITY-STANDARD.md",
+      "blob": "055421d17f933d06ab8eb21109cf86e286951758",
+      "bytes": 8483,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-ALL-DOMAINS-STANDARDIZATION-R1.md",
+      "blob": "7cf8514c413dc89750f1516409b8c711bdd566ba",
+      "bytes": 7038,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-AUDIT-NIGHTLY-RETENTION-R1.md",
+      "blob": "ad9924ec2c8909b38ea92ea89b1b400ab4079f0d",
+      "bytes": 10832,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-DOMAIN-SERVICES-R1.md",
+      "blob": "a9b9485b41ba99a6d8e748db369fa99acd9b4e83",
+      "bytes": 1494,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-DOMAIN-SQL-IMPLEMENTATION-R1.md",
+      "blob": "ace3544a758347b999ae5bcb7caf41301f96ccd1",
+      "bytes": 3344,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-KMS-R1.6-SLICE-1.md",
+      "blob": "30b3a8488e2ac5075e6f8269cc737f492bdef1de",
+      "bytes": 5478,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-KMS-R1.6C-R1.6D-QUALIFICATION.md",
+      "blob": "5b4c28c7b73cbd3100ed159626a088353434ac55",
+      "bytes": 4686,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-KMS-R1.7-FENCING-QUALIFICATION.md",
+      "blob": "7464c180b6b858eaecd35047707ba2d913167380",
+      "bytes": 6562,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-LIQUIBASE-PARTITIONING-R1.md",
+      "blob": "5119d1d42e7d64020a1e8eaf313f35188357c134",
+      "bytes": 4481,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/implementation/RM-SALES-INVENTORY-RBAC-R1.2.md",
+      "blob": "bd65b77e9bd323aaf2b1ebdfe64d354d466a2fd8",
+      "bytes": 1946,
+      "section": "implementation",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/operations/RM-FILES-RUSTFS-FLAG-ROLLOUT-R1.md",
+      "blob": "2253571b6bb012653f718b2b6f217cfb9cfe4661",
+      "bytes": 5700,
+      "section": "operations",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/operations/RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION.md",
+      "blob": "c5a9e69c68d12e7d252a089e9dcf976d2ffb8b1e",
+      "bytes": 8024,
+      "section": "operations",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/IAM-CRM-R22F-OIDC-REVOCATION-PG-EVIDENCE-2026-11-22.md",
+      "blob": "17b75061f18936edfa98dd698647c2407ba4a569",
+      "bytes": 5514,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-A3-DEV-B1-PERSISTENCE-R1.md",
+      "blob": "430f273f0d7b37a6891b12c5841509df158b1717",
+      "bytes": 1105,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ARS-R1.2B-P1-MONTHLY-HISTORICAL-COVERAGE.md",
+      "blob": "98ae31d5ae184e898f41253c9b5ce837baacdbc3",
+      "bytes": 2739,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ARS-R1.2B-P2-HISTORICAL-ACCOUNTING-INTEGRATION.md",
+      "blob": "0421f8e50fa326f103dc5778c81a8d800fc3d1b0",
+      "bytes": 2603,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ARS-R1.2B.2-NATIVE-CAPTURE-RECOVERY.md",
+      "blob": "e72d3631bc04839408670c8a062950a1232ef1af",
+      "bytes": 3647,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ARS-R1.2B.3-NATIVE-SNAPSHOT-CLOSURE.md",
+      "blob": "8542b8c87c8ecf667c9a6018583d83b1020e5ed3",
+      "bytes": 3230,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B1-L0-IMPLEMENTATION-R1.md",
+      "blob": "dc354099f11a9eec48b3175d6e6dd1b149de97fe",
+      "bytes": 827,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1-CANONICAL-FACT-R1.md",
+      "blob": "15d9a0cc43acd5ca89f53808aa1c8a6f5cd1564d",
+      "bytes": 853,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-CANONICAL-FACT-R1.md",
+      "blob": "8ec0420372b7333ee8792a02a8e51e2f18d04167",
+      "bytes": 1409,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-CI-RECOVERY.md",
+      "blob": "f7c4123716319434236000fd58ab46a7338cdc1f",
+      "bytes": 1124,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-POPULATED-AND-TENANT-EVIDENCE.md",
+      "blob": "fbd74670a888c63625895943137ac6638628b793",
+      "bytes": 1264,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-PRODUCER-INVENTORY.json",
+      "blob": "96f68b6014fc84ec962d33ca734919f327f4adae",
+      "bytes": 4220,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-QUALIFICATION-INCREMENT.md",
+      "blob": "c465fc019fb9331b39ebf1113c40d34bb990563e",
+      "bytes": 1526,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-SEALING-RACE-MATRIX.md",
+      "blob": "bfef967112e1b18ebdc13bd23609993d959c1c47",
+      "bytes": 1012,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-SOURCE-ADMISSION-INCREMENT.md",
+      "blob": "c15d79bea0b7ccf6d8fe6e976814565fd995c524",
+      "bytes": 1732,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-SOURCE-FENCE-INCREMENT.md",
+      "blob": "859fdfb7cc6a79b47b3aff1e7dceed2a4ee3e3fa",
+      "bytes": 984,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R-SOURCE-SEALING.md",
+      "blob": "21ff0aad840240606d7003a98a2c2ee148b1d5ce",
+      "bytes": 1181,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R1-PRE-CLOSURE-B2-2A-ENTRY.md",
+      "blob": "b5cbd518bf9160df104bfe23ecaaefb8625c8e7d",
+      "bytes": 3353,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R1-REPEAT-TECHNICAL-REVIEW.md",
+      "blob": "85ba77a66e43904ee68785c5847e3211290df74d",
+      "bytes": 1673,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R1-SQ07-SQ09-EVIDENCE.md",
+      "blob": "8ec021c833ca4b48589a6d6baf220473db14d15e",
+      "bytes": 1337,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R2-DIGEST-AND-EVIDENCE.md",
+      "blob": "3a7569733e6bb9a912d3841fbc487821c3f10612",
+      "bytes": 748,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R2-OWNERSHIP-AUDIT.md",
+      "blob": "79330a9378c753e54e119104fad60e2c5185320d",
+      "bytes": 1122,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-1R2-RESIDUAL-RISK-CLOSURE.md",
+      "blob": "9f03eec7c0acc786ed3bb6a2529348db4368fab4",
+      "bytes": 1018,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-2A1-CHECKOUT-PRODUCER.md",
+      "blob": "c76628ee405e1c50f4f384ea844867a5ac1929cb",
+      "bytes": 1867,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-B2-2A2-SALES-LIFECYCLE-PRODUCER.md",
+      "blob": "fd3adc6a9348e957e868f52f4ba7e16f5f359d18",
+      "bytes": 2151,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-BSR-CORE-RET-04-E7A-NORMATIVE-REVIEW.md",
+      "blob": "5beac09d8681f1891cd82b1c8a19bda72c794e32",
+      "bytes": 3959,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CATALOG-FUNCTIONAL-DEPTH-PASS01-2026-11-22.md",
+      "blob": "d85e1a8ca1d94ea0bd65aa1a73baf244ef785907",
+      "bytes": 21721,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-99-BUSINESS-SIMULATION-AUDIT-AND-SERVICE-ROADMAP.md",
+      "blob": "d1a1522293caf06f215d3e00e8daa89d986f7a3c",
+      "bytes": 22332,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-99-R2-SECOND-PASS-2026-11-22.md",
+      "blob": "b85b4a38f84b4dcabe2cb3299f5344f53dfac1ef",
+      "bytes": 30130,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-ORGANIZATION-SERVICE-QUALIFICATION-2026-11-21.md",
+      "blob": "8cdb7d7ff0b77bd4ca7ef98007d93cfe277b817e",
+      "bytes": 5995,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-R21B-POSTGRES-EVIDENCE-2026-11-22.md",
+      "blob": "4b9fb3f9cf31d0a7385778abfeda0179a53c8827",
+      "bytes": 3303,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-R22-BUYER-LINK-EVIDENCE-2026-11-22.md",
+      "blob": "2dbb44311f9fca3f0630a5a63fecd745719d6caf",
+      "bytes": 3637,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-R22B-LINK-LIFECYCLE-EVIDENCE-2026-11-22.md",
+      "blob": "a81f98e17f8a04fef8153b2ac0b6281014ff6323",
+      "bytes": 3650,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-R22C-IDENTITY-DISPUTE-EVIDENCE-2026-11-22.md",
+      "blob": "f56cbb70c3d851bb4babc03cf44a14590f26da17",
+      "bytes": 3858,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-R22D-IAM-DELETION-EVIDENCE-2026-11-22.md",
+      "blob": "8c01ea6046081a85a1a2f24a12e5f3a51c4f8590",
+      "bytes": 4824,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-SEARCH-CONSENT-ADVERSARIAL-REVIEW-2026-11-21.md",
+      "blob": "101760c619ad5eabb64ba20a4be395728034b174",
+      "bytes": 3056,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CRM-SERVICE-FUNCTIONAL-AND-TEST-ADEQUACY-2026-11-22.md",
+      "blob": "0e0eea5b136535fe340ae14310466efb7eeaeb83",
+      "bytes": 34095,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CUR-R2C-D1-AUTHORITY-ADMISSION-CONTRACT.md",
+      "blob": "a05908f488b6302e1e28378dbbdce02cb5dfa2aa",
+      "bytes": 2949,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-CUR-R2C-R20-IMPLEMENTATION-REGISTER-2026-11-24.md",
+      "blob": "658c8aa9d5b7f2111deec80c7261e3a67225fa6d",
+      "bytes": 2952,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-DEEP-TECH-AUDIT-R1-2026-11-23.md",
+      "blob": "8ca9986ee306a96942ac55b4ec8e547552f762df",
+      "bytes": 28428,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-DOMAIN-AUDIT-MAIN-2026-11-21.md",
+      "blob": "ba93e0e6100d38f385368f1ddeb39481dbd10b04",
+      "bytes": 12253,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-DOMAIN-TECHNICAL-AUDIT-2026-11-21.md",
+      "blob": "09687f726ec601dcdfb1649ca0fbc7045dde029f",
+      "bytes": 9550,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FEATURE-FREEZE-SERVICE-HARDENING-R1.md",
+      "blob": "a2e6e1ac25140cece90557b358bccdcf501bcd8b",
+      "bytes": 9157,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FILES-MEDIA-R10B-SERVICE-QUALIFICATION-2026-11-21.md",
+      "blob": "fe01807a7490f8b4faf855045000a0c079f0ff73",
+      "bytes": 4057,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FILES-MEDIA-R10C-RECOVERY-QUALIFICATION-2026-11-21.md",
+      "blob": "b8d79dab694fa9fb3039c0c9d260f64bf80288c5",
+      "bytes": 6697,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FILES-RUSTFS-FLAG-SERVICE-REVIEW-2026-11-21.md",
+      "blob": "34c1e0f1f680dc5ba81650a497d0b1f48e841ade",
+      "bytes": 4144,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FILES-RUSTFS-R13-OPERATIONAL-CLAMAV-QUALIFICATION-2026-11-21.md",
+      "blob": "818d7cd8e1442eff6713a1cfa96b99f8204fe753",
+      "bytes": 5515,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FILES-RUSTFS-REAL-INFRA-E2E-2026-11-21.md",
+      "blob": "a73f478f9def162189dc8b723f5e1ad663441f04",
+      "bytes": 4145,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FINAL-SEC-GATE-EXECUTION-2026-11-21.md",
+      "blob": "c20c2f579685a8a2af4dc37e2483a9f9c370bfce",
+      "bytes": 5264,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FINAL-SEC-GATE-MAIL-OTP-REVIEW-2026-11-21.md",
+      "blob": "f29e0d0a4a8019af521fbdffd4bb5274ba0f701c",
+      "bytes": 5792,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FRZ1-SECURITY-REVIEW-2026-11-21.md",
+      "blob": "b7ab81e1226d392ab459a710d850517046e1ce96",
+      "bytes": 6854,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-FX-CUR-TECH-REVIEW-2026-11-23.md",
+      "blob": "48125e3f7ae9f385e266406afa697c547d667aa7",
+      "bytes": 4710,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-I18N-R1-AUDIT-2026-11-21.md",
+      "blob": "f5d8f66361d4509152a4ed31297c6a4c7e929158",
+      "bytes": 8090,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IAM-SELLER-R0-AUTHENTICATED-TENANT-ADMISSION-2026-11-24.md",
+      "blob": "bfee575958554d043070c2bf74d85061bd057476",
+      "bytes": 9389,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-A1-PRODUCER-ORACLE.md",
+      "blob": "cac6fef53294d69606079aa16eb1dddb795f7f11",
+      "bytes": 1321,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-A2-CONTRACTS.json",
+      "blob": "490581a699774642397b797407b5c4f2efb1227b",
+      "bytes": 6060,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-A2-TECHNICAL-REVIEW.md",
+      "blob": "c320911201b172ebb040b62e18c83e731527e3e6",
+      "bytes": 2152,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-A3-ADMISSION.md",
+      "blob": "ece3d08733ade613b3dca20097e31d3516cd9d23",
+      "bytes": 1587,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-B1-PERSISTENCE-ADMISSION.md",
+      "blob": "c09a83a1cf03bea29ad0405e81272cc1c764dd72",
+      "bytes": 1906,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-IMPLEMENTATION-HANDOFF.md",
+      "blob": "662ca7151bb2bfa1fbdd93a404dd112fe6998525",
+      "bytes": 1834,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-IE-00B-R2-SOURCE-INVENTORY.json",
+      "blob": "c3ec901e8c45d295b1081dfc61eafd6893254e8e",
+      "bytes": 35738,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-INT-SCHED-R1.3-Q2-FINAL.md",
+      "blob": "40f66bbc23658617ae6dc3a5f9b1d4fea24c1d5a",
+      "bytes": 8915,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-INTELLIGENCE-IE-00A-SOURCE-CONTRACT-INVENTORY.md",
+      "blob": "7ef4762f28e26e3ec59fa692f76b6c2ca459e9c5",
+      "bytes": 32487,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-INVENTORY-Q7-Q9-PG-PERFORMANCE-CLOSURE-2026-11-22.md",
+      "blob": "b7b957b9924175a1dca9e07e790cf3f801b3de0f",
+      "bytes": 13611,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-INVENTORY-R1.5B-DURABLE-RECONCILIATION.md",
+      "blob": "ada7074cc480ccee4aa3a16c2195285291325b76",
+      "bytes": 3440,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1-R0.2-JOINT-TECHNICAL-REVIEW-2026-11-24.md",
+      "blob": "e3d938b2a04d4c4b2ee809640180329cc77e146c",
+      "bytes": 5056,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1A-EXACT-TIMING-QUALIFICATION.md",
+      "blob": "3413375a344b98140ad065c5cb9e120faa906544",
+      "bytes": 3087,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1B-ACTIVE-TIMING-IMPLEMENTATION.md",
+      "blob": "af38443ffa2b2d944d6f4466e1f5741a5b38fb1d",
+      "bytes": 2023,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1C1-SERVICE-SECURITY-ORACLE.md",
+      "blob": "c2728d5cee9d553ef0c46924483025a7b596b51d",
+      "bytes": 2114,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1C2A-PG-CONCURRENCY.md",
+      "blob": "27b1ece052f33608046a4fa38448211bb8390876",
+      "bytes": 2189,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1C2B-SQL-FAILURE-RECOVERY.md",
+      "blob": "451b7b0e8af8ceb7eb775ed49c96856114f20c4e",
+      "bytes": 2282,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1C3-PERFORMANCE-QUALIFICATION.md",
+      "blob": "b5541414bd94da14ca05785939da5233bf1b91e8",
+      "bytes": 2977,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1E-COMPLETED-TIMING.md",
+      "blob": "3f51de55694b3713783e80a3db3392b46903b9ab",
+      "bytes": 2794,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F1-CALENDAR-QUERY.md",
+      "blob": "52322b58325a871ae85efef2b83e9138b1b44a77",
+      "bytes": 2858,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2-CALENDAR-PG-QUALIFICATION.md",
+      "blob": "5e362fd7e4e1338889a7f7daa1e43a71d3a83def",
+      "bytes": 2312,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2A-PERFORMANCE-REMEDIATION.md",
+      "blob": "131e068e964df87b3cb1d1f0e0dfcaa305c3e77e",
+      "bytes": 1355,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2B-QUERY-EFFICIENCY.md",
+      "blob": "d405175b15cc01772f546e7c6819e4e2659e22dc",
+      "bytes": 1897,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2C-PERFORMANCE-RECOVERY.md",
+      "blob": "b565602f3d612bf052ec8e25ba2653333634578a",
+      "bytes": 2442,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2D-COMPETITION-PROFILING.md",
+      "blob": "7453580a8c5f98f953c8cbe19357bc8aae2595d0",
+      "bytes": 1671,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2D-QR-CI-RECOVERY.md",
+      "blob": "423ad63a6609db24102f11a8c6a9068ebf48f6b5",
+      "bytes": 2038,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2E-HISTORY-PREDECESSOR.md",
+      "blob": "5081541d01157beaf9525e79725e1fa227c4aac7",
+      "bytes": 1941,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2E-ORDERED-STATUS-SCANS.md",
+      "blob": "d33798ef0a08e4823636c9689e2b8778f4cdce51",
+      "bytes": 1635,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2F-PAGE-HISTORY-MATERIALIZATION.md",
+      "blob": "da30f3c4842df017c3757c689e6e82b2b96f36c5",
+      "bytes": 2505,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KF-RADAR-R0.1F2H-INCREMENTAL-TIMING-PROJECTION.md",
+      "blob": "c16c27dc8542c93d1768f0c20f1ec2776a862c98",
+      "bytes": 13251,
+      "section": "reviews",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "DEFERRED_DESIGN_WITH_HISTORICAL_EVIDENCE",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/reviews/RM-KMS-MULTIPOD-IMPLEMENTATION-AUDIT-2026-11-21.md",
+      "blob": "742542675b6738a1d425d8e5ad0338890f25d564",
+      "bytes": 7015,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KMS-R1.6-IMPLEMENTATION-AUDIT-2026-11-21.md",
+      "blob": "d93169da97f0d5b7e694981a3af7ea19881d287e",
+      "bytes": 8011,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-KMS-SPEC-R1-REVIEW-2026-11-21.md",
+      "blob": "8f032dacab89a8f48501d8ee77531d19a1e89970",
+      "bytes": 14989,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS02-2026-11-22.md",
+      "blob": "8e6fa7afe6259a5846d2bae1bd40d9d37670ea97",
+      "bytes": 26726,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS03-2026-11-22.md",
+      "blob": "c5aeabe50d0c1d7f2f1ca394c752f44e0ad90aac",
+      "bytes": 27495,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS04-2026-11-22.md",
+      "blob": "67e3647e6dad0902087b738826cacc6d45f5d325",
+      "bytes": 29111,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS05-2026-11-22.md",
+      "blob": "a82e27da2a2b6cea76ad4390137a7f7c7c190609",
+      "bytes": 31081,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS06-2026-11-22.md",
+      "blob": "0fdbd9dffee3033867412e5c937476ef84adc62b",
+      "bytes": 27126,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-FUNCTIONAL-DEPTH-PASS07-2026-11-22.md",
+      "blob": "4b268399011ddd788ac6822a75e9487424980bc0",
+      "bytes": 20648,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-IMPLEMENTATION-R1.1-2026-11-22.md",
+      "blob": "3f25b00de82e1a5272621e544663de1530cbedd6",
+      "bytes": 12872,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-ORG-INTERIM-CLOSURE-07-2026-11-22.md",
+      "blob": "dc5d73ef20566bd2266d7b037a8ebd495e41c7db",
+      "bytes": 16416,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-P1-COMPLETE-CANONICAL-PRODUCERS.md",
+      "blob": "f3c78714fcf69ad0d11bd5f0b1d4a51588300c73",
+      "bytes": 2600,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-P2-DURABLE-DISCOVERY-REPLAY-BACKFILL.md",
+      "blob": "b57057a96d5441de7ed3e98b6b7369c839ab0a1e",
+      "bytes": 4989,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-P3-L1-MATERIALIZED-INTELLIGENCE.md",
+      "blob": "7e2c80ae3d076509e1367b4dabc659f4063ccb74",
+      "bytes": 4146,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B0-B1-SOURCE-AND-PG-COVERAGE-2026-11-22.md",
+      "blob": "e434a07140663c273bb5af8a3e8712f990f7f6d1",
+      "bytes": 6045,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B2-B3-EXACT-SHA-EVIDENCE-2026-11-22.md",
+      "blob": "fc46248fb3fc937e08991f2fa485e1b447221ec2",
+      "bytes": 4763,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B2-FAULT-RECOVERY-2026-11-22.md",
+      "blob": "428b98789d3772fe831bc63dd83d3482e67e6d40",
+      "bytes": 4000,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B31-MIXED-WORKLOAD-2026-11-22.md",
+      "blob": "b6cce170dfe73c207168cacc73c01460836eebee",
+      "bytes": 6747,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B32-SUCCESS-THROUGHPUT-AND-SOAK-2026-11-22.md",
+      "blob": "13cf30b370bd6c73ce55a5ad7cc496aa7cb5b0d9",
+      "bytes": 5629,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B33-SUSTAINED-CAPACITY-2026-11-22.md",
+      "blob": "0316d4d392eee097e3a1487bac1504fd2f58f21f",
+      "bytes": 5928,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B34-CAPACITY-LONG-RUN-2026-11-22.md",
+      "blob": "db163ec683964f0d926e44780b28907d810812c6",
+      "bytes": 10345,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-06B-B35-RATE-STEP-QUALIFICATION-2026-11-22.md",
+      "blob": "91a583be16dd819cf0c745d960c45f16d2a69010",
+      "bytes": 8402,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-07-R0-RETURN-FOUNDATION-2026-11-22.md",
+      "blob": "854ca6d6f1137629c58143200a7286459168b2a3",
+      "bytes": 4491,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-07-R1-RETURN-REVIEW-QUALIFICATION-2026-11-22.md",
+      "blob": "6c967ce079f3392368bd2e68168d0793b6b23981",
+      "bytes": 7589,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-07-R2-PHYSICAL-RETURN-QUALIFICATION-2026-11-22.md",
+      "blob": "c1f52ab72f270f5490283232c5d267fd44e7bcd3",
+      "bytes": 8155,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-07-R25-PHYSICAL-HARDENING-2026-11-22.md",
+      "blob": "aaa1aed5fde8f2b02f5d7e670f4e8d7f18cbc945",
+      "bytes": 7891,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-08-R0-IMPLEMENTATION-ADMISSION-2026-11-22.md",
+      "blob": "e71b520d103f7d46b2b401508f5d0753147e199a",
+      "bytes": 5376,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-QR-08-R0B-ORDER-PACKAGING-EVIDENCE-2026-11-22.md",
+      "blob": "5d10fc446c246b964dc0fa5e848aeeb82e7a845b",
+      "bytes": 2801,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-R2-PREDEVELOPMENT-DOMAIN-AUDIT-2026-11-21.md",
+      "blob": "1a56d2dda6e8e41473a4d3fb9dac4742f80c55da",
+      "bytes": 7362,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-RADAR-C3-ACTIVE-DUE-INDEX-R1.md",
+      "blob": "c921fb72ada2ac071b49b699792a0dfe4edd8d40",
+      "bytes": 2335,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-RADAR-C3-ORDERED-IAM-FENCE-R1.md",
+      "blob": "81058ea895429081a7142c428c2dff4e882018d2",
+      "bytes": 2573,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-RADAR-C3-TEMPORARY-MERGE-DEFERRAL-R1.md",
+      "blob": "4acf078bead894660a42bdb1274a6c10fd591170",
+      "bytes": 1940,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-RADAR-READ-ADMISSION-PARTITION-DECISION-R1.md",
+      "blob": "d6530cdc907f26a285ae0cb2e7365830202d388f",
+      "bytes": 4761,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-RADAR-SUSTAINED-COMPETITION-TEST-EVIDENCE.md",
+      "blob": "9ad4607b597657daf4f87bcaa8a8ff811b28ba7c",
+      "bytes": 1510,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-CROSS-DOMAIN-PASS-08-2026-11-22.md",
+      "blob": "082a037ee9b4cf2bf9b01c87122f3aa8b282092c",
+      "bytes": 15530,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-METHOD-TRACE-PASS-02-2026-11-22.md",
+      "blob": "c51737f9a3ce30ca528ac6db538833dc5b8255c0",
+      "bytes": 18388,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-POSTGRESQL-SCHEMA-PASS-03-2026-11-22.md",
+      "blob": "3bad65e922e4af18b99a472ff9c7bfc1367e0abd",
+      "bytes": 21971,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-READ-MODEL-PASS-05-2026-11-22.md",
+      "blob": "5ed8f549d48c894f01690ba376eaeb025524f277",
+      "bytes": 19544,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-SETTINGS-FEATURE-FLAGS-PASS-07-2026-11-22.md",
+      "blob": "56f5797266937a9fd4ccebfc6e08519d5146679b",
+      "bytes": 17566,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-STATE-MACHINE-PASS-04-2026-11-22.md",
+      "blob": "5ecd526427291a0e5cc178f9dd591d8a19582942",
+      "bytes": 16771,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-AUTOORDER-TRANSACTIONS-PASS-06-2026-11-22.md",
+      "blob": "2d482d141e3af52e866ce18eac361f80178f13c3",
+      "bytes": 14917,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-INVENTORY-R1.3-RECOVERY-QUALIFICATION.md",
+      "blob": "617c7ac292394296b289347d9281ad1ccd226b20",
+      "bytes": 2731,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-INVENTORY-TECH-REVIEW-2026-11-21.md",
+      "blob": "a2209a1b3db73afc2766d3ad677fc68ae3c28969",
+      "bytes": 5023,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-PASS-08-4-OFFER-LIFECYCLE-PASS-09-SECURITY-SPEC-2026-11-22.md",
+      "blob": "42dcd2e079d6c552b38d84fb94f5d9f0bd6446ee",
+      "bytes": 12265,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SALES-PASS-09-IAM-RBAC-ACCESS-BOUNDARY-2026-11-22.md",
+      "blob": "90b904275df4d45ffdac83376dc7bfc2e0378244",
+      "bytes": 7143,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SELLER-EDIT-R0-DIAGNOSTIC-2026-11-24.md",
+      "blob": "2fc34c80a24133b0a84cd93c399d8bd8fc0df6b6",
+      "bytes": 19230,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SERVICE-MATURITY-DEEP-REVIEW-2026-11-22.md",
+      "blob": "569e0f927d8276d227e8a20add36cd9483bf6493",
+      "bytes": 16491,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SVC-FUNCTIONAL-DEPTH-AUDIT-2026-11-22.md",
+      "blob": "ee010b6e2abd30bbf4e8e33df41fbf7d05ff024f",
+      "bytes": 84026,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-SVC-R2-TENANT-ISOLATION-SEARCH-AUDIT-2026-11-22.md",
+      "blob": "dbcf41f11142f86e336324ef684b10b9d2c317d0",
+      "bytes": 17192,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R2-01A1-TECHNICAL-REVIEW-2026-11-23.md",
+      "blob": "93e8069440033992737befc8812fc63a46199ec2",
+      "bytes": 3986,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R2-01A2-SECOND-TECHNICAL-REVIEW-2026-11-23.md",
+      "blob": "bf9c13e1bcc211be16d6471629ddb10a1f0d8dad",
+      "bytes": 4568,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R2-R3-CONSISTENCY-TECH-REVIEW-2026-11-23.md",
+      "blob": "22a6e7eba8ce75d776c2175b850fa4cf307b18c8",
+      "bytes": 5896,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R3.2A-TECHNICAL-AUDIT-2026-11-23.md",
+      "blob": "db3604827f32bd1206c50e00cadeaa21dadbb884",
+      "bytes": 4574,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R32A-INDEPENDENT-CLOSURE-GATE-2026-11-23.md",
+      "blob": "82e7be09e58d068d88d08c15a98ca4b81115d198",
+      "bytes": 6199,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R32A-Q1-Q2-IMPLEMENTATION-STATUS-2026-11-23.md",
+      "blob": "defff7db8186599ebc8f0966a27028c7ec4363c6",
+      "bytes": 2920,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R32B-T00-CONTRACT-DEPENDENCY-QUALIFICATION-2026-11-23.md",
+      "blob": "8971df7ffa7d280a23b3de7c6859498e0ae80b17",
+      "bytes": 11383,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R32B-T00-INDEPENDENT-TECH-REVIEW-2026-11-23.md",
+      "blob": "58acee391b72438ce52d9ee6c106512d96c8c9c1",
+      "bytes": 6758,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TASK-R32B-T00-PG-QUALIFICATION-2026-11-23.md",
+      "blob": "2c536b3fdf517c6b41fc54de648e322b1d3c82d2",
+      "bytes": 6715,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TCRUD-00-03-SERVICE-EVIDENCE-2026-11-22.md",
+      "blob": "a8cc23795d775fb74a58640cb4a758b3d1fd9588",
+      "bytes": 27292,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TCRUD-00-METHOD-INVENTORY-2026-11-22.md",
+      "blob": "d3ce5dd7af13783ca5742e7487fa779e30aec8d4",
+      "bytes": 58247,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TCRUD-03-COVERAGE-CLOSURE-TCRUD-04-BOUNDARY-2026-11-22.md",
+      "blob": "749d5acb1153f31bd37b728c143b56b08adbe912",
+      "bytes": 7541,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TCRUD-03-TENANT-ADVERSARIAL-2026-11-22.md",
+      "blob": "ce61d1552053858bc4dce6079c61496bdcf13cb3",
+      "bytes": 7532,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TCRUD-04-IAM-BOUNDARY-HARDENING-2026-11-22.md",
+      "blob": "4f5081d8a1be0050ababc5d6da6b6abd706299ed",
+      "bytes": 4522,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/reviews/RM-TCRUD-04-IAM-REGISTRATION-ADMIN-RECOVERY-2026-11-22.md",
+      "blob": "be65ac559e666b41bb21d0d87a06aaee0e8a0c62",
+      "bytes": 6898,
+      "section": "reviews",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-BSR-R1-SERVICE-SCENARIO-QUALIFICATION.md",
+      "blob": "d3ced26ebc9166e0cb6e5ce9c00f04b9ce41d66e",
+      "bytes": 180035,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-BSR-R1-TRACEABILITY-R1.1.json",
+      "blob": "da548f1f01fca81a9d0af1895bd7ff2d97f5b73c",
+      "bytes": 189142,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CATALOG-FUNCTIONAL-DEPTH-R1-12-PASSES.md",
+      "blob": "f68360ef95875ca89b67ed2fe39c8be8ace577c7",
+      "bytes": 12440,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-COMMERCE-INVENTORY-COMPLETION-R1.md",
+      "blob": "f2887432905009c2fa37215a9d4a2e2989a31174",
+      "bytes": 23266,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md",
+      "blob": "d26e0833388981466516c4b1d959607df9ae3942",
+      "bytes": 25500,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-COMPETE-R1-POST-STABILIZATION-KILLER-FEATURES.md",
+      "blob": "a8100eea824c6d69942f4eef519db359ae815273",
+      "bytes": 30764,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CORE-FUNCTIONAL-CLOSURE-R1.md",
+      "blob": "5bff4938d2ab7d59deec245e470b79e52d51e918",
+      "bytes": 76399,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CRM-PERSIST-R1.2-CATEGORIES-CONTRACTS.md",
+      "blob": "9e0a7eb08f7a76eaa7bad813e701747f683cf335",
+      "bytes": 4058,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CRM-R1.3-CUSTOMER-CONTRACT-CRUD.md",
+      "blob": "6dc6a4d2c3e59af8ee591b61d8e4afd298dbba8a",
+      "bytes": 3973,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CRM-R1.4-CONTACT-CRUD-LIFECYCLE.md",
+      "blob": "044e8fabaf24f254dbf5392cc7ec36e553093559",
+      "bytes": 2964,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CUR-R1C-COMMERCE-ADMISSION.md",
+      "blob": "5c28095a6c49c2314415a0154b9036e56bcc3988",
+      "bytes": 7838,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CUR-R2A-IMMUTABLE-SKU-FX-APPROVAL.md",
+      "blob": "bf2b990d0b6eeb53c87cb7b9069b34e7108ad92f",
+      "bytes": 7006,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CUR-R2B-SELLER-FX-PRICING-GUARDRAILS.md",
+      "blob": "921bc316698721ba8bef7a2851ae6b7e1899d29e",
+      "bytes": 20735,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CUR-R2C-SMART-FX-SHIELD-CONTROLLED-AUTO-PRICING-R1.md",
+      "blob": "f7581181452f7448ac55947f4963b33f88a2eb5e",
+      "bytes": 103735,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-CURRENCY-R1-TENANT-MARKET-CURRENCY-POLICY.md",
+      "blob": "7f1c6c9698bfea54c1482e335b2e3730bc32636f",
+      "bytes": 24612,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-DOMAIN-FIELDS-PRIVACY-DELETE-R1.md",
+      "blob": "6a319b3ddc471ddf3432e0af4e922774c28751f6",
+      "bytes": 20179,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-DOMAIN-IMPLEMENTATION-PLAN-R1.md",
+      "blob": "f929c372f02ff100aeec897e8f4a907b89cd328e",
+      "bytes": 5522,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-DOMAIN-MAP-R1.md",
+      "blob": "69eca5b95b17b1fc2a711fdb50ec49367b8b0605",
+      "bytes": 13046,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md",
+      "blob": "a45aa88c64d78a83c054d40fe506695eaaefb1bb",
+      "bytes": 7352,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "OPERATIVE_ARCHITECTURE_DESIGN",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/spec/RM-FILES-R1.0-SERVICE-CORE-IMPLEMENTATION-DECISIONS.md",
+      "blob": "d646fd48de61229419be5ff35af6b57dcba2489f",
+      "bytes": 10630,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-FILES-R1.md",
+      "blob": "0e4e668cbd1d1614049f10ccf590efe5bbaf4de9",
+      "bytes": 49593,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-FUNCTIONAL-GAP-REGISTER-v1.json",
+      "blob": "379fdec84b23736c6e769aa77dbc0e8021c379a5",
+      "bytes": 4132,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "STRUCTURED_INDEX_NOT_DEFECT_PROOF",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/spec/RM-FX-PRICING-R1-SMART-FX-SELLING-PRICE.md",
+      "blob": "754fd405d8f324b5a9d330cfd4830a23cc9420b2",
+      "bytes": 39671,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-FX-R1A3-TRUSTED-NBRK-INGESTION.md",
+      "blob": "37eed8ce0f3f05ca499f174865a9737f7778e3fb",
+      "bytes": 11476,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-I18N-R1.md",
+      "blob": "5c1c905c408e55bbd7461de15b571bda4a1d143a",
+      "bytes": 21728,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md",
+      "blob": "56ba6e748e81bd7ad383990ce2c7debaeefe9678",
+      "bytes": 37702,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-IDENTITY-ORG-CRM-R0.md",
+      "blob": "6baec10ab7d9b423a45837d98f60379cdfeced78",
+      "bytes": 9624,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-IMPLEMENTATION-BASELINE-R1.md",
+      "blob": "8ff185dcaa4e373cd4958562ac71efcb0a1ec14a",
+      "bytes": 26018,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-INSIGHT-FIN-ADAPT-R1-CRM-ANALYTICS-COMPUTATION.md",
+      "blob": "659cd9e6ffbd27dd7b3c0e2c3d0057f60cf17e7f",
+      "bytes": 38404,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-INSIGHT-R1-OPERATIONAL-ANALYTICS-PERFORMANCE.md",
+      "blob": "78e44a2c285b509fa94f1ce5c1a29898bd1813bf",
+      "bytes": 38383,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.json",
+      "blob": "0695d14fed0d22406edb10b206b26e8ad5bc581b",
+      "bytes": 12302,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md",
+      "blob": "0eb56696fdba17948d071574a237619133518235",
+      "bytes": 19646,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "MIXED_OPERATIVE_R1.2_HISTORICAL_R1.1",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/spec/RM-INTELLIGENT-COMMERCE-MASTER-R1.md",
+      "blob": "d7d3672ca8983de61c8926e6da3ae9e1893187f2",
+      "bytes": 89194,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-INVENTORY-FUNCTIONAL-COMPLETION-R1.md",
+      "blob": "ab8cf9b439d984682cd8b6892ea4be53d72affe4",
+      "bytes": 62825,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-INVENTORY-VALUATION-R1.md",
+      "blob": "419d075e69d94c477718f10e89113af1d5f5be48",
+      "bytes": 10393,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-KF-RADAR-R0.1-OVERDUE-TASK-SIGNAL-R1.md",
+      "blob": "12db14af402fdea14ea7e9a4dcd46167d1f1418b",
+      "bytes": 37987,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-KF-RADAR-R0.2-SMART-DEADLINE-REMINDER-TEXT-R1.md",
+      "blob": "77db53d8c12e3d572880fcfdb1a1283c6ea352e4",
+      "bytes": 17964,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-KF-RADAR-TASK-TIMING-CONTRACT-R1.md",
+      "blob": "36a3218df5209ab0a72f55ba11babd80053d0f19",
+      "bytes": 13965,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-KMS-QUAL-R1.md",
+      "blob": "a3af1aea0eaefa0841a4e78cd86c93e3e84c18fb",
+      "bytes": 21237,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-KMS-SPEC-R1.md",
+      "blob": "6a3fd38a18de08d8af1407d8463818f36b74d013",
+      "bytes": 62159,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-MAIL-OTP-R1.md",
+      "blob": "160379b99a4bef02ce3e337faf8cd49c6a91e622",
+      "bytes": 51511,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-MODULAR-DOMAIN-DB-R1.md",
+      "blob": "4e29cbefc70bcf2738819f72c5710d5a855bfb31",
+      "bytes": 23923,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-MVP-CORE-P0-SERVICE-EVIDENCE-v1.json",
+      "blob": "51c0b6a4a8c64c9e4a388c6485c2ca376abd9c11",
+      "bytes": 52118,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md",
+      "blob": "b8942e2e31c41b645526b73353d2d5fdbe5f665f",
+      "bytes": 25170,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "OPERATIVE_SCOPE_STALE_EXECUTION_CHECKPOINT",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/spec/RM-MVP-ONBOARD-01-XLSX-SELLER-EDITS-TENANT-RBAC-R1.md",
+      "blob": "3af30633738ca4dd60b8f6c2c6c704a78bc6588a",
+      "bytes": 37005,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-MVP-SERVICE-FUNCTIONAL-CLOSURE-SIX-PACKAGES-R1.md",
+      "blob": "98cc9dd68f652054072a5544e3d648777a3dfed1",
+      "bytes": 45253,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-ORG-CRM-R1.md",
+      "blob": "24277a95c0a6ff825dc6987a7b1ba5f5ec933848",
+      "bytes": 19493,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-ORG-FUNCTIONAL-DEPTH-R1-12-PASSES.md",
+      "blob": "5bc62db9957b766cfd02ff1583564878f628906e",
+      "bytes": 74411,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-PARTITIONING-R1.md",
+      "blob": "62bf58a8f14d34854a6a32bfea0f5ed463a738da",
+      "bytes": 23486,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-00-QR-01-CODE-TRACE-AND-GATES.md",
+      "blob": "a89703abaecb7979b530b517bd76b28496ddb385",
+      "bytes": 7991,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-02A-FILES-PUBLIC-PRODUCT-MEDIA.md",
+      "blob": "ff751822d39472b46e5a25c613c3914aedbcad75",
+      "bytes": 4459,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-02B-LIVE-REGIONAL-AVAILABILITY.md",
+      "blob": "29cf5d0f41c098e502de234a45dfdd9a36d66651",
+      "bytes": 3245,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-03A-SERVICE-FIRST-CHECKOUT-ADMISSION.md",
+      "blob": "70f25049d0ccdd7db16f7c1713ba22e86d76ffda",
+      "bytes": 3929,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-03B-ORDER-REFERENCE-VERIFIED-READS.md",
+      "blob": "10ff639dae7575692283269a728ed10ab52e6e46",
+      "bytes": 6236,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-04-NEGOTIATION-AND-ACCEPTED-QUOTE-CHECKOUT.md",
+      "blob": "9ae702bde59cb84fb5f7bba16bb2e250087a8c59",
+      "bytes": 3894,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-05-06-PREPARATION-HANDOVER-QUALIFICATION.md",
+      "blob": "9b9f9f10f4c609d6aac97967c684b19a4dee9a76",
+      "bytes": 7181,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-06B-CONCURRENT-HANDOVER-QUALIFICATION.md",
+      "blob": "4dc6d27018d2696bfa654d5b2b1121235ecad538",
+      "bytes": 8652,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-07-08-RETURNS-AND-SERVICES-SERVICE-FIRST-R1.md",
+      "blob": "1c1d54dcc1e90e56bb2102b6d2d658765f5cea8a",
+      "bytes": 7753,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-08-PACKAGING-SERVICE-FIRST-R0-R1-2026-11-22.md",
+      "blob": "cb154b02740983cd82c113a31bc5f1fd254bbf7c",
+      "bytes": 3975,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-R1-ALIGNMENT-BUSINESS-FLOWS-STATE-MACHINES-DTO-QA.md",
+      "blob": "3000f831df265a3437f50f68c6b60c012fafd740",
+      "bytes": 103210,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-R1.3-IMPLEMENTATION-BLUEPRINT-AND-QUALIFICATION.md",
+      "blob": "d4f8ebb8816b75fa1e17b1972ad8578552a8d888",
+      "bytes": 54058,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-QR-R1.4-CANONICAL-FUNCTIONAL-TECHNICAL-CONTRACT.md",
+      "blob": "c8ed84d8062d76bb37ee66a54a0c65d0bb805845",
+      "bytes": 62612,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-R2.1-COMMERCIAL-CORE-HARDENING-E2E-ADMISSION.md",
+      "blob": "4383cc8a4b89553b89948e83ac56345fbff3e29c",
+      "bytes": 19546,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-R1.md",
+      "blob": "12611b3992e14d6b0a5a5615b5b81d7717b99a7e",
+      "bytes": 5948,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+      "blob": "cfc925c038725ee7356d07a8848d48b4b8cd0d90",
+      "bytes": 27986,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-R3-USER-ROLE-CROSSWALK-v1.json",
+      "blob": "b82ffbb5442d2f5ebc3fc600cb55f4343ea048f7",
+      "bytes": 81843,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-R4-W0.1-REAL-IDENTITY-FIRST-TENANT.md",
+      "blob": "2d13f9f5d2d063bbbd78083dabd8ab33eaff1176",
+      "bytes": 4305,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-RADAR-VISION-R1-INTELLIGENT-BUSINESS-CONTROL-CENTER.md",
+      "blob": "3bc05775051f5bf3e26947030864528b3a9e3b8e",
+      "bytes": 40631,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+      "blob": "5501970452b8775460017f77d631517c0e43029b",
+      "bytes": 6283,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "DESIGN_RUNTIME_HOLD",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/spec/RM-SALES-AUTOORDER-FUNCTIONAL-DEPTH-R1-12-PASSES.md",
+      "blob": "4edfb2557eae570743b7ac0a384a744a5704ad5a",
+      "bytes": 58071,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SEC-R1.0-UNIFIED-DOMAIN-AUTHORIZATION.md",
+      "blob": "6d1c0e1e6947d37feda8a88e239182ede4babd29",
+      "bytes": 11923,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SEC-R1.1-TENANT-RBAC.md",
+      "blob": "e47a04b4ec8a98669501f594ac942317cb31102c",
+      "bytes": 7612,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SERVICE-12-PASS-REVIEW-PROTOCOL-R1.md",
+      "blob": "3fb1953932932406a7d8107e442fb0f164ae6626",
+      "bytes": 6056,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SERVICE-CAPABILITY-MATRIX-v1.json",
+      "blob": "0fd022b095d8f898bda194203074bc3a2324e50c",
+      "bytes": 23043,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SERVICE-FIRST-SALES-INVENTORY-R1.2.md",
+      "blob": "4347a03bd9caaa0b884d208e75ea714c13314089",
+      "bytes": 4099,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SFC-R1.md",
+      "blob": "17cbdb095b706faf13d1d835ca33661fe9952d16",
+      "bytes": 7739,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "OPERATIVE_INDEX",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/spec/RM-STOREFRONT-AUTOORDER-R1.md",
+      "blob": "255e6b468d965f8d9eef51aeae9957270fa9ae49",
+      "bytes": 24130,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SVC-MATURITY-COMPLETION-R2.md",
+      "blob": "27d9027b808f5097244fa4c4bd39e743e46d5787",
+      "bytes": 41053,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SVC-R2-CONSOLIDATED-IMPLEMENTATION-PLAN.md",
+      "blob": "a09e89c73cdcf8e77b62e210b3ade09b9beeab0e",
+      "bytes": 8126,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SVC-R2-SERVICE-COMPLETION-CROSS-DOMAIN-CONSISTENCY.md",
+      "blob": "fbf0f6fd419e53ed2d5374b6e772ba5a59353e7d",
+      "bytes": 37330,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SVC-R2A-FILTERING-PAGINATION-CONTRACT.md",
+      "blob": "90bc8f13e66495cfa5415c9ab1bb61365c850058",
+      "bytes": 35275,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-SVC-R2B-PREIMPLEMENTATION-DOMAIN-DECISIONS.md",
+      "blob": "d7d310800c3b1f091e7871b66caba91f6ae1c11b",
+      "bytes": 21522,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-01B-CRM-INTERACTION-FOLLOWUP-R1.md",
+      "blob": "6e549ab36a0c3adc4dc5771e2839ede9133bbdb5",
+      "bytes": 3830,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-01B-R2-LIFECYCLE-HARDENING.md",
+      "blob": "1b8cb72a3ae76f65f707c557e9071993a9ebb03c",
+      "bytes": 4470,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-01B-R3-CANCELLATION-RECONCILIATION.md",
+      "blob": "4edb8a0138466a0dda2265ac6b27bf647acf0c80",
+      "bytes": 5117,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-01B-R3.1-QUEUE-RECONCILIATION-HARDENING.md",
+      "blob": "481da5c4b1f027bff2a157ac67bc6be1c2a446aa",
+      "bytes": 4158,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-01B-R3.2-OPERATIONAL-RECONCILIATION.md",
+      "blob": "d0c9978b1167b2231cb9e779011bfb3f9210ff8a",
+      "bytes": 11403,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-01B-R3.2B-SLA-POLICY-DURABLE-OUTBOX-FOUNDATION.md",
+      "blob": "27c0a3c5db9ee2e27a94712d95a2c0a982a027c8",
+      "bytes": 37020,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TASK-R2-SERVICE-FOUNDATION.md",
+      "blob": "77dbbd81d3b32b1d5920c730d2b044748541a598",
+      "bytes": 6278,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TENANT-CRUD-COMPLETION-R1.md",
+      "blob": "829e686a6a4a261133074e310ff100ba8eee7b08",
+      "bytes": 32823,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-TENANT-SERVICES-COMPLETION-R1.md",
+      "blob": "138df83dd1154ac32c978d29d85925a3b4381966",
+      "bytes": 56303,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-UR-R3.1-JUNIT-CASES-v1.json",
+      "blob": "1804d1f5e38bb6b3ab057d9992a2eaa567cdf597",
+      "bytes": 4294,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-UR-R3.2-JUNIT-CASES-v1.json",
+      "blob": "1a0d10aee3316d0bf27e37b65a1612971641e002",
+      "bytes": 3695,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-UR-R3.3-JUNIT-CASES-v1.json",
+      "blob": "794d7730a8ddbf93343d3eb76c013539005df8ba",
+      "bytes": 5251,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-UR-R3.4-PROOF-REVIEW.md",
+      "blob": "de77437d566fb289cd697f7f84100ae986cb1389",
+      "bytes": 4596,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-UR-R3.5-MATURITY-REPORT-R1.md",
+      "blob": "d46f6c02f5862ff9e628f0d1446984a9514022d4",
+      "bytes": 4232,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-USER-ROLE-BUSINESS-SCENARIO-DIAGNOSTICS-R1.md",
+      "blob": "3338413e3278ced555cdeb54d7ca264bbc3362ed",
+      "bytes": 65763,
+      "section": "spec",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/spec/RM-USER-SCENARIO-MASTER-REGISTRY-v1.json",
+      "blob": "cdbe409b6d7ae1a46d7133818461cefd07df7c26",
+      "bytes": 413690,
+      "section": "spec",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "STRUCTURED_INDEX_NOT_UNIQUE_REQUIREMENTS",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/strategy/RM-CRM-99-BUSINESS-SIMULATIONS-v1.json",
+      "blob": "aca3f55227971d50ac7afd1a599624a8aaadb545",
+      "bytes": 91389,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-CRM-SERVICE-JOURNEY-REGISTRY-v1.json",
+      "blob": "5faa639f233d7f94a4c53c3646f4220596fc8438",
+      "bytes": 7481,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-DUAL-PRODUCT-CAPABILITIES-R1.json",
+      "blob": "3bf0a4a95fa2ad0208aa96502b89435c2f6271e8",
+      "bytes": 24592,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+      "blob": "b4da4652200e41e258c44ba3c9e4c10e310f6105",
+      "bytes": 26608,
+      "section": "strategy",
+      "review": "SELECTED_CONTRACT_REVIEW",
+      "disposition": "OPERATIVE_SCOPE_WITH_EXCEPTIONS",
+      "classificationBasis": "retrieved content / selected sections"
+    },
+    {
+      "path": "docs/strategy/RM-PRODUCT-STRATEGY-R2-SMB-QR.md",
+      "blob": "dc2a70c0ff01d68960117de003bf6a46e6807774",
+      "bytes": 9959,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-PRODUCT-TARGETS-AND-KILLER-FEATURES-R1.md",
+      "blob": "bcf43ba2df28cc6eb33ac0b34d3bf4a35b060ba2",
+      "bytes": 11704,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-PROJECT-KNOWLEDGE-AND-CRM-SERVICE-ROADMAP-R1.md",
+      "blob": "032450af9adfc655fb084b258f63dd69d9ec18b0",
+      "bytes": 15079,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-STRATEGY-R4-FUNCTIONAL-GAP-PRIORITIZATION.md",
+      "blob": "70ae5c1de8bee8fdac79608412f0275487391824",
+      "bytes": 7020,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    },
+    {
+      "path": "docs/strategy/RM-STRATEGY-R4-GAP-PRIORITY-v1.json",
+      "blob": "11a6ae37d5513b21719b764ffef96c4a6efb3bfd",
+      "bytes": 22814,
+      "section": "strategy",
+      "review": "PENDING_SEMANTIC_REVIEW",
+      "disposition": "UNDETERMINED",
+      "classificationBasis": "path only; no normative inference"
+    }
+  ]
+}

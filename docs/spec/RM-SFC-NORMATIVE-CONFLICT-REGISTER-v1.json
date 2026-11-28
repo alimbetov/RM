@@ -1,0 +1,122 @@
+{
+  "schema": "RM-SFC-NORMATIVE-CONFLICT-v1",
+  "reviewedSha": "0cae504294a810363dd8396bd164d314b8c51c77",
+  "status": "PARTIAL_SEMANTIC_RECONCILIATION",
+  "hierarchy": [
+    "Platform Standard and non-weakenable security invariants",
+    "MVP Freeze plus explicit scoped owner CR",
+    "approved domain contracts including MIC-R1 plus MIC-R2 supplement",
+    "operative execution amendments and machine-readable DAG",
+    "SFC indexes and historical evidence"
+  ],
+  "rules": [
+    "Authority by section and scope, not filename or newest date",
+    "Historical evidence remains immutable; PASS bound to actual SHA",
+    "No scope expansion or automatic scenario alias collapse",
+    "DECISION_REQUIRED on unresolved contradictions"
+  ],
+  "conflicts": [
+    {
+      "id": "SFC-C01",
+      "kind": "STALE_EXECUTION_REFERENCE",
+      "sources": [
+        [
+          "docs/spec/RM-INTELLIGENT-COMMERCE-EXECUTION-DAG-R1.md",
+          "R1.2 operative amendment"
+        ],
+        [
+          "docs/spec/RM-MVP-INTELLIGENCE-EVT-SCOPE-R1.md",
+          "Operational priority checkpoint"
+        ]
+      ],
+      "observation": "R1.2 explicitly supersedes historical pause; EVT still says PR9 open and DAG R1.1 operative.",
+      "resolution": "Add explicit R1.2 cross-reference, preserve historical checkpoint.",
+      "status": "RESOLVED_DOCUMENT_POINTER_ONLY"
+    },
+    {
+      "id": "SFC-C02",
+      "kind": "SCOPE_ADMISSION_BOUNDARY",
+      "sources": [
+        [
+          "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+          "0,0A,0B"
+        ],
+        [
+          "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+          "1,3"
+        ]
+      ],
+      "observation": "Freeze excludes universal reports and broad automation; current publication roadmap and proposed report events must be distinguished from explicit MVP admission.",
+      "resolution": "Preserve P4.1A.5-Q -> P4.2 in approved slice only; map precise reporting CR and EVT/Radar trigger admission before runtime. No inferred scope.",
+      "status": "OPEN_SCOPE_TRACE"
+    },
+    {
+      "id": "SFC-C03",
+      "kind": "DESIGN_VS_ADMISSION",
+      "sources": [
+        [
+          "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+          "0A"
+        ],
+        [
+          "docs/reviews/RM-KF-RADAR-R0.1F2H-INCREMENTAL-TIMING-PROJECTION.md",
+          "F2H.1"
+        ]
+      ],
+      "observation": "Radar CR prohibits new schema; projection proposes new table.",
+      "resolution": "F2H deferred; separate owner CR and measured need required before DDL/runtime.",
+      "status": "RESOLVED_PRIORITY_RUNTIME_HOLD"
+    },
+    {
+      "id": "SFC-C04",
+      "kind": "VERSION_RELATION",
+      "sources": [
+        [
+          "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R1.md",
+          "MIC-01..05"
+        ],
+        [
+          "docs/architecture/RM-MATHEMATICAL-INTEGRITY-CONTRACT-R2.md",
+          "opening"
+        ]
+      ],
+      "observation": "R2 extends R1, not replacement; derived candidates not proof of readiness.",
+      "resolution": "Retain both normative layers; do not deduplicate R1 away.",
+      "status": "RESOLVED_INTERPRETATION"
+    },
+    {
+      "id": "SFC-C05",
+      "kind": "COUNT_ALIAS_UNRESOLVED",
+      "sources": [
+        [
+          "docs/spec/RM-SFC-R1.md",
+          "2,6"
+        ],
+        [
+          "docs/spec/RM-USER-SCENARIO-MASTER-REGISTRY-v1.json",
+          "records/documentReviewQueue"
+        ]
+      ],
+      "observation": "383 records from seven sources are not unique requirements; historical queue 118 does not cover current 298-doc inventory.",
+      "resolution": "Preserve source IDs and historical queue; use new snapshot inventory for remaining semantic work. Alias mapping required.",
+      "status": "OPEN_ALIAS_MAPPING"
+    },
+    {
+      "id": "SFC-C06",
+      "kind": "TRANSPORT_SCOPE_BOUNDARY",
+      "sources": [
+        [
+          "docs/spec/RM-EVENT-TRANSPORT-POSTGRES-OUTBOX-REDIS-READINESS-R1.md",
+          "1,2"
+        ],
+        [
+          "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+          "2,3"
+        ]
+      ],
+      "observation": "Logical envelope/port/receipt design is not proof of implemented reusable runtime; proposed report events not admitted triggers.",
+      "resolution": "Verify actual Java/DDL before reuse; no second bus, IAM outbox reuse or Redis activation.",
+      "status": "OPEN_IMPLEMENTATION_MAPPING"
+    }
+  ]
+}

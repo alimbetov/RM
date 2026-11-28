@@ -54,3 +54,7 @@ R3/R4 75/46/29, CRM 99, CRM-U 12, CORE 54+2, BSR 64, B5 112 — разные и�
 
 ## Reporting lifecycle alignment (2026-11-28)
 See [RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md](RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md). Preserve P4.1A.5-Q → P4.2; P4.1B is a planning alias only. RP-J design IDs require existing scenario mapping, no registry denominator or qualification changes.
+
+
+## SFC-R1.0B.1 — fixed-SHA inventory and initial semantic reconciliation
+Snapshot 0cae504294a810363dd8396bd164d314b8c51c77: 298 tracked Markdown/JSON documents under docs/, 12 selected contract reviews, 286 pending semantic review. [Document inventory](RM-SFC-DOCUMENT-INVENTORY-v1.json) binds each path to blob SHA; [normative conflict register](RM-SFC-NORMATIVE-CONFLICT-REGISTER-v1.json) records six findings. The old 118-document queue is a historical subset; 383 scenario records are not a unique requirements denominator. No claim of exhaustive semantic extraction. Preserve P4.1A.5-Q → P4.2 after actual GREEN; Radar F2H deferred until measured need and explicit CR; no runtime/CI changes. Next: SFC-R1.0B.2 section-level requirement extraction, aliases and scope crosswalk, prioritizing P4 without delaying it.
