@@ -182,7 +182,7 @@
     },
     {
       "path": ".github/workflows/rm-exact-sha-admission.yml",
-      "reviewedBlob": "e1b80fa201f2c7379af488c50ec9e354b8414529",
+      "reviewedBlob": "5c479df9e0a4fea544a0b2f254aa23cfce22e0d9",
       "domainHint": "CI",
       "mandatoryRelease": false,
       "directReview": [

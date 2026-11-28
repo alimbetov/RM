@@ -1,6 +1,7 @@
 import copy
 import unittest
-from verify_rm_development_admission import ROOT, load_contract, check_gate, evaluate
+import urllib.error
+from verify_rm_development_admission import ROOT, load_contract, check_gate, evaluate, retryable
 
 SHA = "a" * 40
 ROW = {"path": ".github/workflows/test.yml", "name": "Test", "artifacts": ["test-{sha}"]}
@@ -34,6 +35,35 @@ class DevelopmentAdmissionTest(unittest.TestCase):
                      [dict(JOB, head_sha="b"*40)], [dict(JOB, run_id=2)]):
             with self.assertRaises(ValueError):
                 check_gate(ROW, RUN, jobs, [ART], SHA)
+
+    def test_incomplete_job_evidence_retries_but_never_admits(self):
+        for jobs in ([], [dict(JOB, status="in_progress", conclusion=None)],
+                     [dict(JOB, conclusion=None)]):
+            with self.subTest(jobs=jobs), self.assertRaisesRegex(ValueError, "JOB_PENDING") as cm:
+                check_gate(ROW, RUN, jobs, [ART], SHA)
+            self.assertTrue(retryable(cm.exception))
+        for jobs in ([dict(JOB, conclusion="failure")],
+                     [dict(JOB, status="queued", conclusion=None, head_sha="b"*40)],
+                     [dict(JOB, status="queued", conclusion=None, run_attempt=2)]):
+            with self.subTest(jobs=jobs), self.assertRaises(ValueError) as cm:
+                check_gate(ROW, RUN, jobs, [ART], SHA)
+            self.assertFalse(retryable(cm.exception))
+
+    def test_http_transient_and_terminal_errors(self):
+        for status in (500, 502, 503, 504, 401, 403, 404, 422):
+            error = urllib.error.HTTPError("https://api.github.com", status, "error", {}, None)
+            self.assertEqual(status in (500, 502, 503, 504), retryable(error))
+        self.assertFalse(retryable(ValueError("RERUN_PROVENANCE_UNAVAILABLE")))
+        self.assertFalse(retryable(ValueError("ARTIFACT_PROVENANCE")))
+
+    def test_job_failure_identifies_workflow_and_run(self):
+        original = self.fixture()
+        def get(path):
+            return {"jobs": []} if "/jobs?" in path else original(path)
+        with self.assertRaisesRegex(ValueError, "JOB_PENDING") as cm:
+            evaluate(get, [ROW], SHA, "alimbetov/RM")
+        self.assertEqual(ROW["name"], cm.exception.workflow_name)
+        self.assertEqual(RUN["id"], cm.exception.workflow_run_id)
 
     def test_artifacts(self):
         for artifacts in ([], [ART, copy.copy(ART)], [dict(ART, expired=True)], [dict(ART, size_in_bytes=0)],

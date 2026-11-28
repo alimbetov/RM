@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import re
 import subprocess
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -65,9 +66,15 @@ def check_gate(row, run, jobs, artifacts, sha):
     # GitHub artifacts are run-scoped, not attempt-scoped. Never infer rerun provenance.
     require(run["run_attempt"] == 1, "RERUN_PROVENANCE_UNAVAILABLE")
     require(run["repository"]["id"] == run["head_repository"]["id"], "FOREIGN_HEAD_REPOSITORY")
-    require(bool(jobs) and all(j["status"] == "completed" and j["conclusion"] == "success"
-                               and j["head_sha"] == sha and j["run_id"] == run["id"]
-                               and j["run_attempt"] == run["run_attempt"] for j in jobs), "JOB_NOT_SUCCESS")
+    # Identity violations remain terminal even when a job is not settled.
+    # An empty list or incomplete status can be a lagging API view; never
+    # admit it. The bounded outer poll must obtain complete fresh evidence.
+    require(all(j["head_sha"] == sha and j["run_id"] == run["id"]
+                and j["run_attempt"] == run["run_attempt"] for j in jobs), "JOB_IDENTITY")
+    require(bool(jobs), "JOB_PENDING")
+    require(all(j["conclusion"] in (None, "success") for j in jobs), "JOB_NOT_SUCCESS")
+    require(all(j["status"] == "completed" and j["conclusion"] is not None
+                for j in jobs), "JOB_PENDING")
     ids = set()
     for template in row["artifacts"]:
         matches = [a for a in artifacts if a["name"] == template.format(sha=sha)]
@@ -109,7 +116,12 @@ def evaluate(get, required, sha, repo):
         run_path = prefix + "/actions/runs/" + str(run["id"])
         jobs = pages(get, run_path + "/attempts/" + str(run["run_attempt"]) + "/jobs", "jobs")
         artifacts = pages(get, run_path + "/artifacts", "artifacts")
-        evidence.append(check_gate(row, run, jobs, artifacts, sha))
+        try:
+            evidence.append(check_gate(row, run, jobs, artifacts, sha))
+        except ValueError as exc:
+            exc.workflow_name = row["name"]
+            exc.workflow_run_id = run["id"]
+            raise
         observed.append((row, run, run_path, workflow))
     # Revisit ALL gates after collection, not only immediately after each gate.
     # This detects observed changes but is not an atomic GitHub snapshot.
@@ -124,6 +136,15 @@ def evaluate(get, required, sha, repo):
         require(sorted(a["id"] for a in artifacts if a["name"] in names and a["expired"] is False) == prior["artifactIds"], "ARTIFACT_CHANGED")
     require(get(branch)["commit"]["sha"] == sha, "STALE_SHA")
     return evidence
+
+def retryable(exc):
+    # Only observation failures, never terminal provenance/qualification
+    # failures. The workflow already has a finite 160-poll deadline.
+    return ((isinstance(exc, ValueError) and str(exc) in
+             {"RUN_MISSING", "RUN_PENDING", "JOB_PENDING"})
+            or (isinstance(exc, urllib.error.HTTPError) and exc.code in
+                {500, 502, 503, 504}))
+
 
 def main():
     result = dict(POLICY, developmentAdmission="FAIL", evidenceScope="EXECUTION_METADATA_ONLY",
@@ -140,7 +161,10 @@ def main():
         result["developmentAdmission"] = "PASS"
     except Exception as exc:
         result["reason"] = type(exc).__name__ + ": " + str(exc)
-        result["retryable"] = isinstance(exc, ValueError) and str(exc) in {"RUN_MISSING", "RUN_PENDING"}
+        result["retryable"] = retryable(exc)
+        if hasattr(exc, "workflow_name"):
+            result["failedWorkflow"] = exc.workflow_name
+            result["failedRunId"] = exc.workflow_run_id
     print(json.dumps(result, indent=2))
     return int(result["developmentAdmission"] != "PASS")
 
