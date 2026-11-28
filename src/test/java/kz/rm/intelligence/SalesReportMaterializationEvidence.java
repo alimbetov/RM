@@ -14,8 +14,9 @@ public final class SalesReportMaterializationEvidence {
     private final AuthorizedAnalyticalReadService reader;
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
+    private final ApplicationContext context;
     public SalesReportMaterializationEvidence(ApplicationContext context,JdbcTemplate jdbc,PlatformTransactionManager manager){
-        this.jdbc=jdbc;this.manager=manager;
+        this.jdbc=jdbc;this.manager=manager;this.context=context;
         reader=context.getBean(AuthorizedAnalyticalReadService.class);
         materializer=new SalesReportMaterializer(reader,jdbc,manager);
     }
@@ -110,6 +111,71 @@ public final class SalesReportMaterializationEvidence {
         catch(java.util.concurrent.ExecutionException|java.util.concurrent.TimeoutException e){throw new AssertionError(e);}
         finally{pool.shutdownNow();}
     }
+    /** Real owner change, immutable old request and stale snapshot rejection. */
+    public void accountingPolicyRevision(VerifiedActor owner,VerifiedActor staff,UUID tenant,long calendar,LocalDate last){
+        var policies=context.getBean(kz.rm.organization.TenantCurrencyPolicyService.class);
+        var old=policies.get(owner,tenant);
+        var oldVersion=jdbc.queryForObject("SELECT policy_version FROM public.tenant_currency_policy WHERE tenant_id=?",Long.class,tenant);
+        var previous=new AuthorizedAnalyticalReadService.AccountingPolicy(old.marketCountry(),old.accountingCurrency(),oldVersion);
+        var before=materializer.materializeAccounting(staff,tenant,calendar,last,"empty-"+tenant);
+        boolean enabled=policies.listAllowed(owner,tenant).stream().anyMatch(a->
+            "USD".equals(a.currency())&&"PURCHASE".equals(a.purpose())&&"ENABLED".equals(a.state()));
+        var updated=policies.setCurrencyEnabled(owner,tenant,"USD","PURCHASE",!enabled,old.rowVersion());
+        assertThat(updated.rowVersion()).isEqualTo(old.rowVersion()+1);
+        assertThat(updated.accountingCurrency()).isEqualTo(old.accountingCurrency());
+        assertThatThrownBy(()->materializer.materializeAccounting(staff,tenant,calendar,last,"empty-"+tenant))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_CONFLICT");
+        var qs=java.util.List.of(
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT,calendar,
+                PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),old.accountingCurrency()),
+            new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,calendar,
+                PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),null));
+        assertThatThrownBy(()->reader.readReportMonths(staff,tenant,qs,previous))
+            .isInstanceOf(IllegalStateException.class).hasMessage("REPORT_ACCOUNTING_POLICY_CHANGED");
+        var after=materializer.materializeAccounting(staff,tenant,calendar,last,"policy-"+tenant);
+        assertReceipt(after,tenant,0);
+        assertThat(after.dataset()).isNotEqualTo(before.dataset());
+        assertThat(after.scopeDigest()).isEqualTo(before.scopeDigest());
+        assertThat(after.sourceDigest()).isNotEqualTo(before.sourceDigest());
+        assertThat(jdbc.queryForObject("""
+            SELECT encode(sha256(source_bytes),'hex') FROM reporting.int_report_source_evidence
+            WHERE tenant_id=? AND dataset_id=? AND staging_date=?
+            """,String.class,tenant,before.dataset(),before.stagingDate())).isEqualTo(before.sourceDigest());
+        // Fixture-only REVIEW_REQUIRED transition; this is not a new business policy API.
+        assertThat(jdbc.update("UPDATE public.tenant_currency_policy SET status='REVIEW_REQUIRED' WHERE tenant_id=?",tenant)).isEqualTo(1);
+        try{
+            assertThatThrownBy(()->materializer.materializeAccounting(staff,tenant,calendar,last,"policy-"+tenant))
+                .isInstanceOf(IllegalStateException.class).hasMessage("REPORT_ACCOUNTING_POLICY_NOT_ACTIVE");
+        }finally{
+            assertThat(jdbc.update("UPDATE public.tenant_currency_policy SET status='ACTIVE' WHERE tenant_id=?",tenant)).isEqualTo(1);
+        }
+        System.out.println("RM_R02_ACCOUNTING_POLICY_REVISION_ORACLE_PASS");
+    }
+
+    private static final class CountingJdbc extends JdbcTemplate {
+        int l0;
+        CountingJdbc(JdbcTemplate jdbc){super(java.util.Objects.requireNonNull(jdbc.getDataSource()));}
+        @Override public <T> T queryForObject(String sql,Class<T> type,Object... args){
+            if(sql.contains("FROM crm.int_l2_expected_source")&&sql.contains("stream_code=?"))l0++;
+            return super.queryForObject(sql,type,args);
+        }
+        @Override public void query(String sql,org.springframework.jdbc.core.RowCallbackHandler handler,Object... args){
+            if(sql.contains("JOIN crm.int_l2_expected_source")&&sql.contains("GROUP BY r.ordinal"))l0++;
+            super.query(sql,handler,args);
+        }
+    }
+    private static final class CountingL3 extends L3DerivedSeriesService{
+        int calls;
+        CountingL3(JdbcTemplate jdbc,PlatformTransactionManager manager,ApplicationContext context){
+            super(jdbc,manager,context.getBean(MultidimensionalCoverageService.class),
+                context.getBean(kz.rm.iam.TenantAuthorization.class),context.getBean(kz.rm.iam.WarehouseStaffScopeService.class));
+        }
+        @Override java.util.List<Observation> readPeriods(UUID tenant,UUID gen,Metric metric,Filter f,PeriodResolver.Code code,
+                java.util.List<PeriodResolver.Period> periods,Snapshot snapshot){
+            calls++;
+            return super.readPeriods(tenant,gen,metric,f,code,periods,snapshot);
+        }
+    }
     /** Stable fixture: independent ordinary single-period reads versus report batch.
      * Ignore only snapshot observation time; compare exact numeric value and all route,
      * quality, period, currency, revision and proof fields. No live mutation during this test. */
@@ -119,7 +185,17 @@ public final class SalesReportMaterializationEvidence {
                 calendar,PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),currency),
             new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,
                 calendar,PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),null));
-        var manifest=reader.readReportMonths(actor,tenant,queries);
+        var counting=new CountingJdbc(jdbc);
+        var l3=new CountingL3(counting,manager,context);
+        var instrumented=new AuthorizedAnalyticalReadService(counting,manager,l3,context.getBean(MultidimensionalCoverageService.class));
+        long batchStart=System.nanoTime();
+        var manifest=instrumented.readReportMonths(actor,tenant,queries);
+        long batchNanos=System.nanoTime()-batchStart;
+        int batchL0=counting.l0,batchL3=l3.calls;
+        assertThat(batchL0).isBetween(0,2);
+        assertThat(batchL3).isBetween(0,2);
+        assertThat(batchL0+batchL3).isBetween(2,4);
+        counting.l0=0;l3.calls=0;long singleNanos=0;
         assertThat(manifest.windows()).hasSize(2);
         for(int i=0;i<queries.size();i++){
             var q=queries.get(i);
@@ -127,8 +203,10 @@ public final class SalesReportMaterializationEvidence {
             assertThat(points).hasSize(24);
             for(int j=0;j<24;j++){
                 var point=points.get(j);
-                var single=reader.read(actor,tenant,new AuthorizedAnalyticalReadService.Query(q.metric(),
+                long singleStart=System.nanoTime();
+                var single=instrumented.read(actor,tenant,new AuthorizedAnalyticalReadService.Query(q.metric(),
                     calendar,PeriodResolver.Code.M,last.minusMonths(23-j),null,null,null,java.util.List.of(),q.currency()));
+                singleNanos+=System.nanoTime()-singleStart;
                 assertThat(point).usingRecursiveComparison().ignoringFields("observedAt","value").isEqualTo(single);
                 if(single.value()==null)assertThat(point.value()).isNull();
                 else assertThat(point.value()).isEqualByComparingTo(single.value());
@@ -136,6 +214,9 @@ public final class SalesReportMaterializationEvidence {
         }
         assertThat(manifest.windows().stream().flatMap(java.util.List::stream)
             .map(AuthorizedAnalyticalReadService.Result::observedAt).distinct().count()).isEqualTo(1L);
+        assertThat(counting.l0+l3.calls).isGreaterThanOrEqualTo(48);
+        System.out.printf("RM_R02_BATCH_QUERY_BUDGET_PASS batch_l0=%d batch_l3=%d single_l0=%d single_l3=%d batch_ns=%d single_ns=%d%n",
+            batchL0,batchL3,counting.l0,l3.calls,batchNanos,singleNanos);
         System.out.printf("RM_R02_BATCH_48_PARITY_PASS currency=%s%n",currency);
     }
     private static void await(java.util.concurrent.CountDownLatch latch){
