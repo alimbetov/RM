@@ -440,9 +440,11 @@ class BusMvpServiceJourneyQualificationTest {
             r02.denied(otherStaff,tenant,b55Calendar,lastClosed);
             r02.emptyTenant(otherStaff,otherTenant,tenant,otherB55Calendar,lastClosed);
             roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.SALES_ORDER_READ);
+            r02.deniedReplay(otherStaff,otherTenant,otherB55Calendar,lastClosed);
             r02.denied(otherStaff,otherTenant,otherB55Calendar,lastClosed);
             roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.SALES_ORDER_READ);
             roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
+            r02.deniedReplay(otherStaff,otherTenant,otherB55Calendar,lastClosed);
             r02.denied(otherStaff,otherTenant,otherB55Calendar,lastClosed);
 
             assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))

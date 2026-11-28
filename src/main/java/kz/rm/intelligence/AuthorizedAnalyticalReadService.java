@@ -79,6 +79,15 @@ public class AuthorizedAnalyticalReadService {
         var windows=readWindows(actor,tenant,qs,dates,true);
         return ReportSourceManifest.from(tenant,qs,windows);
     }
+    /** Internal recovery admission; caller holds the transaction until result selection. */
+    void admitReportRecovery(VerifiedActor actor,UUID tenant,List<Query> queries){
+        if(!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("REPORT_RECOVERY_TRANSACTION_REQUIRED");
+        l3.admitReport(actor,tenant);
+        for(var q:queries)l3.admit(actor,tenant,L3DerivedSeriesService.Metric.valueOf(q.metric().name()),
+            new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency()));
+        actor.userId();
+    }
     private List<List<Result>> readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         var qs=List.copyOf(queries);

@@ -7968,3 +7968,37 @@ END $$;
 REVOKE ALL ON reporting.int_report_request_attempt FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_REQUEST_RECOVERY_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0231-int-report-source-evidence dbms:postgresql splitStatements:false
+-- Preserve exact v1 framed evidence, not a coverage certificate. Owner-only.
+CREATE TABLE reporting.int_report_source_evidence (
+ tenant_id uuid NOT NULL,dataset_id uuid NOT NULL,staging_date date NOT NULL,
+ scope_bytes bytea NOT NULL CHECK(octet_length(scope_bytes) BETWEEN 1 AND 65536),
+ source_bytes bytea NOT NULL CHECK(octet_length(source_bytes) BETWEEN 1 AND 1048576),
+ canonical_bytes bigint NOT NULL CHECK(canonical_bytes BETWEEN 1 AND 33554432),
+ PRIMARY KEY(tenant_id,dataset_id),
+ FOREIGN KEY(tenant_id,dataset_id,staging_date)
+ REFERENCES reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date)
+);
+CREATE FUNCTION reporting.int_report_source_evidence_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM reporting.int_report_dataset_attempt a
+   JOIN reporting.int_report_request_attempt l USING(tenant_id,dataset_id,staging_date)
+   WHERE a.tenant_id=NEW.tenant_id AND a.dataset_id=NEW.dataset_id AND a.staging_date=NEW.staging_date
+     AND a.build_state='BUILDING' AND a.build_until>clock_timestamp()
+     AND a.scope_digest=encode(sha256(NEW.scope_bytes),'hex')
+     AND a.source_manifest_digest=encode(sha256(NEW.source_bytes),'hex'))
+ THEN RAISE EXCEPTION 'INT_REPORT_SOURCE_EVIDENCE_MISMATCH'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_source_evidence_guard BEFORE INSERT ON reporting.int_report_source_evidence
+ FOR EACH ROW EXECUTE FUNCTION reporting.int_report_source_evidence_guard();
+CREATE TRIGGER trg_int_report_source_evidence_immutable BEFORE UPDATE OR DELETE ON reporting.int_report_source_evidence
+ FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_report_source_evidence_no_truncate BEFORE TRUNCATE ON reporting.int_report_source_evidence
+ FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+REVOKE ALL ON reporting.int_report_source_evidence FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_source_evidence_guard() FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_SOURCE_EVIDENCE_FORWARD_ONLY'; END; $$;

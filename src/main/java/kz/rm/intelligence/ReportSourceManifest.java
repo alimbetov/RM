@@ -13,15 +13,19 @@ final class ReportSourceManifest {
     private final String scopeDigest, sha256;
     private final Instant observedAt;
     private final long sourceRevision;
+    private final byte[] scopeBytes,sourceBytes;
     private final List<Query> queries;
     private final List<List<Result>> windows;
     private ReportSourceManifest(UUID tenant,String scopeDigest,String sha256,Instant observedAt,
-                                 long sourceRevision,List<Query> queries,List<List<Result>> windows){
+                                 long sourceRevision,List<Query> queries,List<List<Result>> windows,byte[] scopeBytes,byte[] sourceBytes){
+        this.scopeBytes=scopeBytes.clone();this.sourceBytes=sourceBytes.clone();
         this.tenant=tenant;this.scopeDigest=scopeDigest;this.sha256=sha256;
         this.observedAt=observedAt;this.sourceRevision=sourceRevision;
         this.queries=List.copyOf(queries);
         this.windows=windows.stream().map(List::copyOf).toList();
     }
+    byte[] scopeBytes(){return scopeBytes.clone();}
+    byte[] sourceBytes(){return sourceBytes.clone();}
     UUID tenant(){return tenant;}
     String scopeDigest(){return scopeDigest;}
     String sha256(){return sha256;}
@@ -47,14 +51,7 @@ final class ReportSourceManifest {
                 ||!Objects.equals(q.region(),q0.region())||!Objects.equals(q.group(),q0.group())
                 ||!Objects.equals(q.sku(),q0.sku())||!q.warehouses().equals(q0.warehouses())))
             throw new IllegalArgumentException("REPORT_MANIFEST_SCOPE");
-        var scope=new FramedHash("RM-ARS-SCOPE-1");
-        scope.add(tenant);
-        scope.add(queries.size());
-        for(var q:queries){
-            scope.add(q.metric());scope.add(q.calendarVersion());scope.add(q.period());scope.add(q.anchor());
-            scope.add(q.region());scope.add(q.group());scope.add(q.sku());scope.add(q.currency());
-            scope.add(q.warehouses().size());q.warehouses().forEach(scope::add);
-        }
+        var scope=scopeHash(tenant,queries);
         String scopeDigest=scope.finish();
         if(windows.getFirst().size()!=24)throw new IllegalArgumentException("REPORT_MANIFEST_PERIODS");
         var first=windows.getFirst().getFirst();
@@ -101,20 +98,37 @@ final class ReportSourceManifest {
                 evidence.add(x.generation());evidence.add(x.proof());
             }
         }
-        return new ReportSourceManifest(tenant,scopeDigest,evidence.finish(),observed,revision,queries,windows);
+        return new ReportSourceManifest(tenant,scopeDigest,evidence.finish(),observed,revision,queries,windows,scope.bytes(),evidence.bytes());
+    }
+    static String scopeDigest(UUID tenant,List<Query> queries){
+        return scopeHash(tenant,List.copyOf(queries).stream().sorted(Comparator.comparing(q->q.metric().name())).toList()).finish();
+    }
+    private static FramedHash scopeHash(UUID tenant,List<Query> queries){
+        var scope=new FramedHash("RM-ARS-SCOPE-1");
+        scope.add(tenant);
+        scope.add(queries.size());
+        for(var q:queries){
+            scope.add(q.metric());scope.add(q.calendarVersion());scope.add(q.period());scope.add(q.anchor());
+            scope.add(q.region());scope.add(q.group());scope.add(q.sku());scope.add(q.currency());
+            scope.add(q.warehouses().size());q.warehouses().forEach(scope::add);
+        }
+        return scope;
     }
     private static final class FramedHash{
         private final MessageDigest hash;
+        private final java.io.ByteArrayOutputStream data=new java.io.ByteArrayOutputStream();
         FramedHash(String version){
             try{hash=MessageDigest.getInstance("SHA-256");}
             catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}
             add(version);
         }
         void add(Object value){
-            if(value==null){hash.update((byte)'-');hash.update((byte)':');return;}
+            if(value==null){write(new byte[]{'-',':'});return;}
             byte[] bytes=value.toString().getBytes(StandardCharsets.UTF_8);
-            hash.update((bytes.length+":").getBytes(StandardCharsets.US_ASCII));hash.update(bytes);
+            write((bytes.length+":").getBytes(StandardCharsets.US_ASCII));write(bytes);
         }
+        private void write(byte[] bytes){data.writeBytes(bytes);hash.update(bytes);}
+        byte[] bytes(){return data.toByteArray();}
         String finish(){return HexFormat.of().formatHex(hash.digest());}
     }
 }

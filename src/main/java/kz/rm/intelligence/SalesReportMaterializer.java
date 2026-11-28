@@ -35,14 +35,33 @@ final class SalesReportMaterializer {
                    ReportDatasetDigest.Result expected,ReportDatasetDigest.Result observed){}
 
     Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency){
+        return materialize(actor,tenant,calendar,lastClosedMonth,currency,UUID.randomUUID().toString());
+    }
+
+    Receipt materialize(VerifiedActor actor,UUID tenant,long calendar,LocalDate lastClosedMonth,String currency,String key){
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("R02_OWN_TRANSACTION");
         Objects.requireNonNull(currency);
+        Objects.requireNonNull(key);
+        if(key.isBlank()||key.length()>128||lastClosedMonth.getDayOfMonth()!=1)
+            throw new IllegalArgumentException("R02_REQUEST");
+
         var queries=List.of(
             new Query(Metric.BOOKED_AMOUNT,calendar,PeriodResolver.Code.M,lastClosedMonth,null,null,null,List.of(),currency),
             new Query(Metric.BOOKED_ORDERS,calendar,PeriodResolver.Code.M,lastClosedMonth,null,null,null,List.of(),null));
+        String scope=ReportSourceManifest.scopeDigest(tenant,queries);
+        // The actor is part of the logical request. A different actor cannot replay a private request.
+        String request=requestDigest(actor.userId(),scope);
+        UUID instance=Objects.requireNonNull(tx.execute(status->{
+            limits();reader.admitReportRecovery(actor,tenant,queries);
+            return jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",UUID.class,
+                tenant,UUID.randomUUID(),key,request,scope,"RM-R02","1");
+        }));
+        var recovered=recover(actor,tenant,queries,instance);
+        if(recovered!=null)return recovered;
         // Source admission and RR snapshot finish before any reporting writes.
         var manifest=reader.readReportMonths(actor,tenant,queries);
+        if(!scope.equals(manifest.scopeDigest()))throw new IllegalStateException("R02_SCOPE_MISMATCH");
         UUID dataset=UUID.randomUUID(),worker=UUID.randomUUID();
         var plan=SalesReportDatasetPlan.from(manifest,dataset);
         var header=plan.header();
@@ -54,10 +73,15 @@ final class SalesReportMaterializer {
         }));
         // A different transaction is necessary: no shared/exclusive day-lock upgrade.
         tx.executeWithoutResult(status->{
-            limits();lock(day);
-            requireTrue(jdbc.queryForObject("SELECT reporting.int_report_allocate(?,?,?,?,?,?,?,?)",Boolean.class,
-                header.tenant(),dataset,day,worker,header.scopeSha256(),header.sourceManifestSha256(),
+            limits();reader.admitReportRecovery(actor,tenant,queries);lock(day);
+            requireTrue(jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",Boolean.class,
+                header.tenant(),instance,dataset,day,worker,header.scopeSha256(),header.sourceManifestSha256(),
                 plan.expected().rows(),plan.expected().sha256()),"R02_ALLOCATE");
+            if(jdbc.update("""
+                INSERT INTO reporting.int_report_source_evidence(tenant_id,dataset_id,staging_date,scope_bytes,source_bytes,canonical_bytes)
+                VALUES(?,?,?,?,?,?)
+                """,tenant,dataset,day,manifest.scopeBytes(),manifest.sourceBytes(),plan.expected().canonicalBytes())!=1)
+                throw new IllegalStateException("R02_EVIDENCE_INSERT");
         });
         if(batch.append(header.tenant(),dataset,day,worker,1L,plan.rows())!=plan.rows().size())
             throw new IllegalStateException("R02_BATCH_COUNT");
@@ -68,7 +92,46 @@ final class SalesReportMaterializer {
         });
         var observed=validation.validateAndSeal(header.tenant(),dataset,day,worker,1L);
         if(!observed.equals(plan.expected()))throw new IllegalStateException("R02_OBSERVED_MISMATCH");
-        return new Receipt(header.tenant(),dataset,day,header.scopeSha256(),header.sourceManifestSha256(),plan.expected(),observed);
+        return Objects.requireNonNull(recover(actor,tenant,queries,instance),"R02_READY_NOT_FOUND");
+    }
+    private static String requestDigest(UUID actor,String scope){
+        try{
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(("RM-R02-REQUEST-1\n"+actor+"\n"+scope).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
+    }
+    private record Candidate(UUID dataset,LocalDate day){}
+    private Receipt recover(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance){
+        return tx.execute(status->{
+            limits();reader.admitReportRecovery(actor,tenant,queries);
+            // Metadata discovery only; take the date fence before selection or data access.
+            var candidates=jdbc.query("""
+                SELECT l.dataset_id,l.staging_date FROM reporting.int_report_request_attempt l
+                JOIN reporting.int_report_dataset_attempt a USING(tenant_id,dataset_id,staging_date)
+                WHERE l.tenant_id=? AND l.instance_id=? AND a.build_state='READY'
+                ORDER BY l.selected_at DESC NULLS LAST,l.dataset_id LIMIT 2
+                """,(rs,n)->new Candidate(rs.getObject(1,UUID.class),rs.getObject(2,LocalDate.class)),tenant,instance);
+            if(candidates.isEmpty())return null;
+            if(candidates.size()!=1)throw new IllegalStateException("R02_AMBIGUOUS_READY");
+            var candidate=candidates.getFirst();lock(candidate.day());
+            UUID chosen=jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",UUID.class,
+                tenant,instance,candidate.dataset(),candidate.day());
+            if(!candidate.dataset().equals(chosen))throw new IllegalStateException("R02_SELECTED_MISMATCH");
+            var receipt=jdbc.queryForObject("""
+                SELECT a.scope_digest,a.source_manifest_digest,a.expected_rows,a.expected_digest,
+                       a.observed_rows,a.observed_digest,e.canonical_bytes
+                FROM reporting.int_report_dataset_attempt a JOIN reporting.int_report_source_evidence e
+                  USING(tenant_id,dataset_id,staging_date)
+                WHERE a.tenant_id=? AND a.dataset_id=? AND a.staging_date=? AND a.build_state='READY'
+                  AND a.scope_digest=encode(sha256(e.scope_bytes),'hex')
+                  AND a.source_manifest_digest=encode(sha256(e.source_bytes),'hex')
+                """,(rs,n)->new Receipt(tenant,chosen,candidate.day(),rs.getString(1),rs.getString(2),
+                    new ReportDatasetDigest.Result(rs.getLong(3),rs.getLong(7),rs.getString(4)),
+                    new ReportDatasetDigest.Result(rs.getLong(5),rs.getLong(7),rs.getString(6))),
+                tenant,chosen,candidate.day());
+            actor.userId();
+            return Objects.requireNonNull(receipt);
+        });
     }
     private void limits(){
         jdbc.execute("SET LOCAL lock_timeout = '2s'");

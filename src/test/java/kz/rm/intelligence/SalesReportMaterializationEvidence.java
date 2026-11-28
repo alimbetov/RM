@@ -21,8 +21,25 @@ public final class SalesReportMaterializationEvidence {
         assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"KZT"))
             .isInstanceOf(SecurityException.class);
     }
+    public void deniedReplay(VerifiedActor actor,UUID tenant,long calendar,LocalDate last){
+        assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"KZT","empty-"+tenant))
+            .isInstanceOf(SecurityException.class);
+    }
     public void emptyTenant(VerifiedActor actor,UUID tenant,UUID foreign,long calendar,LocalDate last){
-        var r=materializer.materialize(actor,tenant,calendar,last,"KZT");
+        String key="empty-"+tenant;
+        var r=materializer.materialize(actor,tenant,calendar,last,"KZT",key);
+        assertThat(materializer.materialize(actor,tenant,calendar,last,"KZT",key)).isEqualTo(r);
+        assertThatThrownBy(()->materializer.materialize(actor,tenant,calendar,last,"USD",key))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_CONFLICT");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM reporting.int_report_source_evidence
+            WHERE tenant_id=? AND dataset_id=? AND staging_date=?
+             AND encode(sha256(scope_bytes),'hex')=? AND encode(sha256(source_bytes),'hex')=?
+            """,Long.class,tenant,r.dataset(),r.stagingDate(),r.scopeDigest(),r.sourceDigest())).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM reporting.int_report_request_attempt l JOIN reporting.int_report_instance i
+             USING(tenant_id,instance_id) WHERE l.tenant_id=? AND i.idempotency_key=? AND l.selected_at IS NOT NULL
+            """,Long.class,tenant,key)).isEqualTo(1L);
         assertThat(r.tenant()).isEqualTo(tenant);
         assertThat(r.expected()).isEqualTo(r.observed());
         assertThat(r.observed().rows()).isEqualTo(48);
