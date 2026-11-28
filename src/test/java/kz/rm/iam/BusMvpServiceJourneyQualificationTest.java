@@ -433,6 +433,18 @@ class BusMvpServiceJourneyQualificationTest {
                 kz.rm.intelligence.AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,otherB55Calendar,
                 kz.rm.intelligence.PeriodResolver.Code.D,endDay,null,null,null,List.of(),null);
             ConclusionConcurrencyEvidence.twoTenants(b55,staff,tenant,qA,otherStaff,otherTenant,qB,days);
+            var r02=new kz.rm.intelligence.SalesReportMaterializationEvidence(applicationContext,jdbc,canonicalTransactions);
+            var lastClosed=endDay.withDayOfMonth(1).minusMonths(1);
+            r02.denied(otherStaff,otherTenant,otherB55Calendar,lastClosed);
+            roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
+            r02.denied(otherStaff,tenant,b55Calendar,lastClosed);
+            r02.emptyTenant(otherStaff,otherTenant,tenant,otherB55Calendar,lastClosed);
+            roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.SALES_ORDER_READ);
+            r02.denied(otherStaff,otherTenant,otherB55Calendar,lastClosed);
+            roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.SALES_ORDER_READ);
+            roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
+            r02.denied(otherStaff,otherTenant,otherB55Calendar,lastClosed);
+
             assertThatThrownBy(()->dimensions.stock(otherStaff,otherTenant,List.of(warehouse.id()),from,until,31))
                 .isInstanceOf(SecurityException.class).hasMessage("WAREHOUSE_SCOPE_REQUIRED");
             assertThatThrownBy(()->jdbc.update("UPDATE crm.cat_group_node SET label=label WHERE tenant_id=? AND id=?",tenant,originalRoot))
