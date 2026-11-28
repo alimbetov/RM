@@ -127,3 +127,7 @@ Map existing F2R/INSIGHT/TASK tests to appropriate subcases, avoid duplicating c
 ## 10. User acceptance and open decisions
 
 Proposed measurable outcomes: correctly answer selected customer and stock questions without manual spreadsheet; same result vs independent SQL, correct UNKNOWN when facts insufficient; notification exactly once visible per eligible recipient on tested canonical event, no unauthorized or real external delivery; existing J1 unchanged. Before IE-01/IE-06 respectively agree exact selected metrics/dimensions and business thresholds, approved event type list, recipient roles and schedule/limits. IE-00 to inventory actual source, select methods/test cases and define workload and reference fixtures. Owner confirms any broader campaign/SMTP/SMS/push, financial/ML, code import/licensing, advanced reports, additional providers separately. No new automatic actions. R1.0 scope selected; R1.1 updates sequencing and stabilization, not feature authorization or test execution. No new code or production admission.
+
+
+## Reporting trigger candidate — design only (2026-11-28)
+See [RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md](RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md). REPORT_PUBLISHED and later lifecycle triggers are proposed owner events, not an expansion of currently admitted EVT trigger scope. Existing recipient, in-app/mock, external channel and staged gates remain intact.

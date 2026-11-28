@@ -46,3 +46,7 @@ Redis Streams is candidate transport acceleration (consumer groups, pending entr
 | Future Redis admission | equivalent effect/receipt on same envelope, XADD/ACK crash windows, pending recovery, outage/trim replay, bounded backlog, routing rollback and comparative benchmark; separate CR |
 
 Map these to existing IE-Q08…10/20…30 and MC-03/05; no extra test count claimed. Redis is not an IE-00…G4 dependency. Do not add current Maven dependencies, config, tables or runtime services by this document. Existing outbox design and IE-00B approval remain required. All later code base_dev only; main and production HOLD.
+
+
+## Reporting owner integration — design only (2026-11-28)
+See [RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md](RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md). Reuse envelope, transaction port and independent receipt semantics; no separate report bus, no new runtime dependency or implied qualification. Publication state is authoritative; consumers cannot mutate it.

@@ -222,3 +222,7 @@ R1.0 — 2026-11-25: strategic vision and future signal catalogue, service bound
 R1.1 — 2026-11-25: Owner Analytics First decision; defer Radar development pending qualified INSIGHT facts/metrics by vertical and explicit resumption. Existing R0.1 code and gates preserved, no scope extension or production admission.
 
 R1.2 — 2026-11-25: stabilization checkpoint, C2/C3 HOLD and F2 8/8 evidence on e1bced6cf1538bdb9fb7ec22a354255456964e7a; separate core merge from future Radar admission; preserve 48 BV families and all existing thresholds.
+
+
+## Reporting lifecycle provider — design only (2026-11-28)
+See [RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md](RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md). Reporting owns publication; Radar consumes authorized committed lifecycle signals only after separate provider admission, R0.1D and applicable scope gates. Existing deferral remains; no new runtime or analytical provider approval.

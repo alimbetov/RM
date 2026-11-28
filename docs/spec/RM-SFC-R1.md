@@ -50,3 +50,7 @@ R3/R4 75/46/29, CRM 99, CRM-U 12, CORE 54+2, BSR 64, B5 112 — разные и�
 
 ## 6. Граница обновления и следующий шаг
 Первичный индекс структурированных источников создан. Очередь остальных Markdown/JSON документов (118) не означает их полную семантическую проверку. Другие design branches, method bodies, actual CI artifacts и external integrations не исчерпывающе проверены. Следующий шаг SFC-R1.0 semantic reconciliation; затем SFC-R1.1 method mapping. Ни одного нового PASS, изменений бизнес-кода, CI policy или production admission.
+
+
+## Reporting lifecycle alignment (2026-11-28)
+See [RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md](RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md). Preserve P4.1A.5-Q → P4.2; P4.1B is a planning alias only. RP-J design IDs require existing scenario mapping, no registry denominator or qualification changes.
