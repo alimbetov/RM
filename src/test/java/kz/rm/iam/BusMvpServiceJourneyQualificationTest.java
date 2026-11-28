@@ -514,6 +514,11 @@ class BusMvpServiceJourneyQualificationTest {
             assertThat(dimensions.stock(staff,tenant,List.of(warehouse.id()),from,until,31)).anySatisfy(row->{
                 assertThat(row.region()).isNull();assertThat(row.group().id()).isNull();assertThat(row.in()).isEqualByComparingTo("10");
             });
+            roles.grant(owner,tenant,role.id(),DomainPermission.REPORT_GENERATE);
+            roles.grant(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
+            r02.historicalAndConcurrent(staff,tenant,b55Calendar,otherStaff,otherTenant,otherB55Calendar,lastClosed,orderId);
+            roles.revoke(owner,tenant,role.id(),DomainPermission.REPORT_GENERATE);
+            roles.revoke(otherOwner,otherTenant,otherRole.id(),DomainPermission.REPORT_GENERATE);
             return;
         }
         if(scenario==CanonicalCase.L1){
