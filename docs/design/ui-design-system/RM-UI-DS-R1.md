@@ -191,6 +191,10 @@ K11 fixes the registry row selection hit area (native checkbox, 24px desktop / 4
 
 Added an isolated application-owned RU/KK/EN locale dictionary (181 entries), language selection independent of theme/density/workspace, translated dynamic states and accessible names, exact decimal money display with explicit fallback when locale data is unavailable, and a portable browser admission probe. No new components apart from the existing select control reused for language, no new dependencies, no visual identity changes. Fixed implicit catalog status option values and page-select accessible label. Seven Chromium fixture suites passed 210/210 groups on the final source, and independent Python HTTP client verified eight server assets byte-for-byte. Browser HTTP navigation remains blocked by administrator policy; Firefox/WebKit binaries absent; actual Safari, devices, zoom, assistive technology and linguistic acceptance remain open. See [K11Q qualification](ui-kit/QUALIFICATION-K11Q.md). Visual baseline approved; technical Design Freeze HOLD, Production Admission HOLD. Runtime business logic and APIs remain outside this prototype.
 
+## 8.17 External browser and final freeze admission — K11Q.1 (2026-11-28)
+
+Verified existing source manifest, added representative accessible-name probe (15/15 Chromium fixture groups PASS), inspected dictionary structure, and prepared fail-closed external HTTP runner and manual acceptance matrix. Browser HTTP remains blocked by administrator policy and managed browsers are absent. No actual Safari, screen-reader, device, zoom or linguistic acceptance. Visual baseline approved, technical Freeze HOLD. See [K11Q.1 qualification](ui-kit/QUALIFICATION-K11Q1.md) and [manual acceptance](ui-kit/K11Q1-MANUAL.md). No runtime changes.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
