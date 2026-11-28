@@ -2,11 +2,11 @@
 :root {
   color-scheme: light;
   --rm-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --rm-text-xs: 12px;
-  --rm-text-sm: 14px;
-  --rm-text-md: 16px;
-  --rm-text-lg: 20px;
-  --rm-text-xl: 24px;
+  --rm-text-xs: 0.75rem;
+  --rm-text-sm: 0.875rem;
+  --rm-text-md: 1rem;
+  --rm-text-lg: 1.25rem;
+  --rm-text-xl: 1.5rem;
   --rm-space-1: 4px;
   --rm-space-2: 8px;
   --rm-space-3: 12px;
@@ -19,6 +19,11 @@
   --rm-control-sm: 32px;
   --rm-control-md: 40px;
   --rm-control-lg: 48px;
+  --rm-control-touch: 48px;
+  --rm-content-max: 1120px;
+  --rm-page-gutter: var(--rm-space-3);
+  --rm-panel-padding: var(--rm-space-3);
+  --rm-grid-gap: var(--rm-space-3);
   --rm-surface: #ffffff;
   --rm-canvas: #f5f7fa;
   --rm-text: #172638;
@@ -40,4 +45,17 @@
   --rm-neutral-bg: #edf1f5;
   --rm-disabled-bg: #e2e8f0;
   --rm-disabled-text: #475569;
+}
+
+/* Viewport thresholds intentionally written as literals in media queries.
+   CSS custom properties cannot be used as media query thresholds. */
+@media (min-width: 768px) {
+  :root {
+    --rm-page-gutter: var(--rm-space-4);
+    --rm-panel-padding: var(--rm-space-4);
+    --rm-grid-gap: var(--rm-space-4);
+  }
+}
+@media (min-width: 1024px) {
+  :root { --rm-page-gutter: var(--rm-space-6); }
 }
