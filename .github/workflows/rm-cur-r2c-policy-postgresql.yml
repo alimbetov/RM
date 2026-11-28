@@ -39,6 +39,26 @@ jobs:
           cache: maven
       - name: Exact-SHA checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Preflight Maven dependencies 1 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: PostgreSQL schema and isolated simulation tests
         run: mvn -B -ntp -Dtest=FxAutoPolicySchemaPgTest,FxAutoRollingLimitEvaluatorTest,FxAutoDryRunTest,FxAutoOwnerAdmissionQualificationTest,TenantCurrencyPolicyQualificationTest,SkuFxSellerApprovalQualificationTest test
       - name: Qualify synthetic non-owner PostgreSQL runtime role
@@ -103,6 +123,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight Maven dependencies 2 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Populate pre-0154 canonical FX and sales history
         run: mvn -B -ntp -Dtest=SkuFxSellerApprovalQualificationTest test
       - name: Capture historical rows
@@ -120,6 +160,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+      - name: Preflight Maven dependencies 3 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Upgrade and qualify on exact SHA
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -207,6 +267,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight Maven dependencies 4 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Populate exact pre-0160 currency and legacy FX history
         run: mvn -B -ntp -Dtest=TenantCurrencyPolicyQualificationTest,SkuFxSellerApprovalQualificationTest test
       - name: Capture legacy currency permissions and events
@@ -223,6 +303,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+      - name: Preflight Maven dependencies 5 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Upgrade and run current currency and legacy FX qualification
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -279,6 +379,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight Maven dependencies 6 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Populate pre-0161 signed JWT draft and paused approvals
         run: mvn -B -ntp -Dtest=FxAutoOwnerAdmissionQualificationTest test
       - name: Capture pre-0161 evidence
@@ -295,6 +415,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+      - name: Preflight Maven dependencies 7 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Upgrade and qualify complete lifecycle
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"

@@ -46,6 +46,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight Maven dependencies 1 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Populate immutable stock movements before migration
         run: mvn -B -ntp -Dtest=InventoryMovementQualificationTest#adjustmentIsAtomicAndIdempotent test
       - name: Snapshot pre-existing movement identity and quantity evidence
@@ -62,6 +82,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+      - name: Preflight Maven dependencies 2 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Upgrade populated PostgreSQL and qualify movement contract
         run: mvn -B -ntp -Dtest=InventoryMovementQualificationTest,InventoryTransferStocktakeQualificationTest#postgresW2ConcurrentReceiveTransferAndReconciliationAcrossTwoPositions,CommercialCoreE2EQualificationTest#postgresW2ReserveFulfillAndReconciliationNeverObservePartialLedger test
       - name: Verify legacy rows retained and explicitly unverified

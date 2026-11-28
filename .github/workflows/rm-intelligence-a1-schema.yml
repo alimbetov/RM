@@ -46,6 +46,26 @@ jobs:
           python3 .github/scripts/verify_rm_kato_directory.py --admin-manifest src/main/resources/kato-admin-release.json --require-admin-complete --verify-semantic-migration src/main/resources/db/changelog/db.changelog-master.sql
           python3 .github/scripts/test_verify_rm_canonical_producer_inventory.py
           python3 .github/scripts/verify_rm_canonical_producer_inventory.py
+      - name: Preflight Maven dependencies 1 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Qualify migrated schema and pure B1 specifications
         run: mvn -B -ntp clean test '-Dtest=IntelligenceSourceSchemaQualificationTest,IntelligenceB1ContractTest,CanonicalFactEncodingTest,KatoTerritoryQualificationTest'
       - name: Require executed evidence
@@ -108,6 +128,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight Maven dependencies 2 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Populate old schema through real service journey
         run: |
           test "$(git rev-parse HEAD)" = "143704fda016df99055f10d355cfe6b3f7d5b9aa"
@@ -127,6 +167,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+      - name: Preflight Maven dependencies 3 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Apply Liquibase on populated PostgreSQL
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"

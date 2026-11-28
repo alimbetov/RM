@@ -43,6 +43,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Preflight Maven dependencies 1 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Populate actual pre-0149 CRM and task data
         run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
       - name: Capture pre-upgrade rows and assert snapshot schema absent
@@ -69,6 +89,26 @@ jobs:
           clean: true
       - name: Verify exact source SHA
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Preflight Maven dependencies 2 (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile and resolve dependencies/plugins without running tests or migrating DB.
+          # Retry only transient repository/transport failures, never a mutating test.
+          for attempt in 1 2 3; do
+            log="$(mktemp)"
+            if mvn -B -ntp -U -DskipTests test 2>&1 | tee "$log"; then
+              rm -f "$log"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq '429 Too Many Requests|status code: (429|502|503|504)|Connection (reset|timed out)|Read timed out' "$log"; then
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            sleep "$((attempt * 20))"
+          done
+          exit 1
       - name: Apply 0149-0153 on the populated database and qualify R3.2A
         run: mvn -B -ntp -Dtest=TaskServiceQualificationTest test
       - name: Assert all historical task and CRM keys survive
