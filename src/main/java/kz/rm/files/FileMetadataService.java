@@ -27,7 +27,7 @@ class FileMetadataService {
         long max=mime.startsWith("image/")?20L*1024*1024:25L*1024*1024;
         if(declaredSize<1 || declaredSize>max)
             throw new IllegalArgumentException("File size exceeds policy");
-        if(requestKey==null || requestKey.startsWith("report-") || !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
+        if(requestKey==null || !requestKey.matches("[A-Za-z0-9_-]{8,100}"))
             throw new IllegalArgumentException("Invalid upload request key");
         // Replays are only metadata-idempotent in R1.0A; concurrent races are
         // enforced by UNIQUE and are qualified for deterministic replay in R1.0B.
@@ -39,10 +39,11 @@ class FileMetadataService {
                     rs.getObject(6,UUID.class)),tenant,requestKey);
         if(!found.isEmpty()){
             Existing e=found.getFirst();
-            if(!e.mime().equals(mime) || e.size()!=declaredSize || !actor.equals(e.uploadedBy()))
+            if(requestKey.matches("report-[0-9a-f-]{36}-XLSX") || !e.mime().equals(mime) || e.size()!=declaredSize || !actor.equals(e.uploadedBy()))
                 throw new IllegalArgumentException("Upload request key reused with different identity or payload");
             return new FileUploadIntent(e.id(),e.state(),e.scanStatus(),e.mime(),e.size());
         }
+        if(requestKey.matches("report-[0-9a-f-]{36}-XLSX"))throw new IllegalArgumentException("Reserved report request key");
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO crm.file_object

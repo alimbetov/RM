@@ -319,3 +319,7 @@ FILES qualified только когда есть проверенный поль
 - ClamAV clamd protocol: https://docs.clamav.net/manual/Usage/ClamdProtocol.html — INSTREAM и StreamMaxLength.
 
 Эти источники — ориентиры для реализации и проверки конкретных версий инфраструктуры; не означают, что RustFS, ClamAV и presigned APIs уже развернуты в RM.
+
+## P4 — confidential report file exception (candidate, not runtime admission)
+
+Existing V0 behavior and the general no-application-binary-encryption policy remain unchanged for ordinary files. New server-generated report artifacts in the admitted REPORT path must use actual authenticated binary encryption V1, encrypted staging, current tenant/owner authorization, exact plaintext digest, and CLEAN AV before AVAILABLE. This is a narrow exception, not a global encrypted-local flag or a migration of legacy files. The R02 XLSX candidate is default OFF; no production or generic upload authorization is granted. PDF preflight is not a PDF renderer or full parser. Real RustFS/ClamAV, durable retry/recovery, least-privilege, multi-pod and atomic publication remain independent gates. Existing V0 legacy read rules stay unchanged. See design branch P4-CONFIDENTIAL-REPORT-FILE-PROTECTION.md.

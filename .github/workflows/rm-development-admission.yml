@@ -2,8 +2,7 @@ name: RM Development Admission Qualification
 on:
   push:
     branches: [base_dev]
-    paths:
-      - '.github/**'
+    # Every implementation SHA needs fresh independent development evidence.
   workflow_dispatch:
 permissions:
   actions: read
