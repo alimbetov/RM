@@ -11,7 +11,7 @@ Build one reusable UI language for RM business operations, Intelligence, Radar, 
 
 ## 2. Design principles
 
-- Desktop-first for dense business operations; responsive tablet/mobile adaptation with a reduced navigation surface, not a separate semantic model.
+- One responsive UI kit for desktop, tablet and mobile. Dense desktop operations remain supported; CSS layouts use a narrow-first baseline, expand progressively, and never introduce a separate business or semantic model.
 - Consistent shell: workspace switcher, role-aware navigation, global search (subject to availability and authorization), notification entry, contextual page header, content, optional detail panel.
 - Accessible controls: keyboard navigation, visible focus, labels, semantic HTML, no color-only signals, target WCAG 2.2 AA (verification pending).
 - Internationalization from day one: proposed initial ru/kk/en; locale-independent storage and formatting at presentation boundary. Locale, accounting currency, time zone and display preferences are separate concepts; never assume currency from UI language. KZT is a regional default only where tenant policy specifies it.
@@ -90,6 +90,30 @@ Minimal component standard: use native HTML semantics first; one component name 
 K1/K2 initial reference created; not yet qualified in a browser. Candidate values: light theme, system font, 12/14/16/20/24 px type scale, 4 px spacing base, controls 32/40/48 px. Palette and dimensions are candidates until visual review. No dark theme, advanced charts, bespoke framework or complete page design required for initial kit.
 
 Acceptance: locally open catalog; inspect on desktop and narrow viewport; tab through interactive elements; verify focus, labels, disabled state, dialog close/return focus, readable contrast, status text and synthetic metric states. Record issues before treating the kit as accepted. Add components only on demonstrated reuse need. No full backend qualification is necessary for this static package; production security and API gates remain unchanged.
+
+## 8.1 Responsive UI baseline — mandatory (2026-11-28)
+
+No separate mobile component library. Use the same component contracts, semantic tokens, markup and data. Responsive CSS is part of each component's definition of done. Desktop/tablet/mobile navigation patterns are future shell requirements, not implemented pages.
+
+| Viewport (CSS px) | Layout reference |
+|---|---|
+| 320–479 | XS: one column; primary actions can fill available width |
+| 480–767 | SM: one column; action rows wrap |
+| 768–1023 | MD: two-column grid when content fits |
+| 1024–1439 | LG: three-column reference grid; compact or comfortable density |
+| 1440+ | XL: flexible desktop layout; reference catalog remains max 1120px |
+
+Breakpoints are candidate layout thresholds, not device detection. Test intermediate widths and embedded narrow containers; future business grid column counts may vary by content. Avoid fixed component widths, forced page-level horizontal scrolling, and clipping. Do not mask overflow with body overflow-x:hidden.
+
+- Buttons and editable controls: 48px minimum height on narrow viewports or coarse-pointer devices, including icon targets and compact variants; 16px input text baseline for touch contexts; wrap labels. Desktop density retains 32/40/48px variants.
+- Forms: one/two/three columns according to space; labels, validation and values remain visible. Logical reading/tab order stays consistent.
+- Tables: preserve all columns and exact values; use a labeled, keyboard-focusable local horizontal scroll region on narrow screens. No hidden columns or number truncation by default. Future card views are optional, not a second data model.
+- Cards and messages: flexible grids; wrap long localized labels; retain currency, precision and data quality state.
+- Dialogs: viewport-constrained width and height, internal scrolling and native focus behavior; no off-screen actions. Future drawers and navigation must meet equivalent rules.
+- Accessibility: respect text resizing and reduced motion, visible focus, explicit labels/status text; verify 200% text zoom and reflow at 320 CSS px; local table scrolling is allowed for genuinely two-dimensional data. No zoom restrictions.
+- Native CSS only in this increment. No frontend framework, responsive JS runtime or added dependencies.
+
+Reference catalog uses shared responsive layout tokens and CSS media queries. Test at widths 320, 375, 480, 600, 767, 768, 820, 1023, 1024, 1280, 1440 and 1920, plus short landscape, coarse pointer, keyboard and 200% zoom. Acceptance requires no document-level horizontal overflow, all table columns reachable, long ru/kk/en fixtures, readable metric values, reachable dialog actions and visible focus. Record browser/device and measured viewport evidence before claiming qualification. Implementation is a candidate; real-browser/device qualification remains pending.
 
 ## 9. Open decisions
 
