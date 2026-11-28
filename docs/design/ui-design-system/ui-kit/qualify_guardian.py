@@ -24,7 +24,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH','/usr/bin/chromium'),args=['--no-sandbox'])
     print('Chromium',browser.version,flush=True)
     for width,height,touch,scale in [(375,812,True,100),(768,850,True,100),(1440,1000,False,100),(320,640,False,200)]:
-        for theme in ('light','dark'):
+        for theme in ('light','dark','taupe','sage'):
             context=browser.new_context(viewport={'width':width,'height':height},has_touch=touch,reduced_motion='reduce')
             page=context.new_page();page.set_default_timeout(4500);errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.set_content(html);page.evaluate('(n)=>document.documentElement.style.fontSize=n+"%"',scale)
             def menu():
@@ -35,6 +35,13 @@ with sync_playwright() as p:
             def token(name):return page.evaluate('(name)=>getComputedStyle(document.documentElement).getPropertyValue("--rm-"+name).trim()',name)
             menu();page.locator('#theme').select_option(theme)
             assert page.locator('html').get_attribute('data-theme')==theme
+            assert token('canvas')=={'light':'#f4f6fa','dark':'#111b2b','taupe':'#eee9e2','sage':'#e8f0e8'}[theme]
+            assert page.locator('body').evaluate("e=>getComputedStyle(e).backgroundColor") == {'light':'rgb(244, 246, 250)','dark':'rgb(17, 27, 43)','taupe':'rgb(238, 233, 226)','sage':'rgb(232, 240, 232)'}[theme]
+            assert token('nav-surface')=='#142238'
+            assert token('primary')==('#92b6ff' if theme=='dark' else '#2855b8')
+            assert token('success')==('#8ce3b9' if theme=='dark' else '#176443')
+            assert token('warning')==('#f5ce83' if theme=='dark' else '#854d0e')
+            assert token('danger')==('#ffb0b0' if theme=='dark' else '#a52222')
             for a,b,threshold in [('text','surface',4.5),('text-muted','surface',4.5),('text-muted','canvas',4.5),('on-primary','primary',4.5),('on-primary','primary-hover',4.5),('success','success-bg',4.5),('warning','warning-bg',4.5),('danger','danger-bg',4.5),('info','info-bg',4.5),('text-muted','neutral-bg',4.5),('disabled-text','disabled-bg',4.5),('control-border','surface',3),('focus','canvas',3),('nav-text','nav-surface',4.5),('nav-muted','nav-surface',4.5),('nav-text','nav-hover',4.5),('nav-focus','nav-active',3)]:
                 ratio=contrast(token(a),token(b));assert ratio>=threshold,(theme,a,b,ratio)
             for density in ('comfortable','compact'):

@@ -6,3 +6,7 @@
 :root{--rm-nav-surface:#142238;--rm-nav-text:#dbe5f4;--rm-nav-muted:#a6b8d1;--rm-nav-hover:#20354f;--rm-nav-active:#29456c;--rm-nav-focus:#afcbff;--rm-signal:#008579;--rm-backdrop:#17243a80;--rm-table-pad:var(--rm-space-3)}
 :root[data-theme=dark]{color-scheme:dark;--rm-surface:#1c2a3d;--rm-canvas:#111b2b;--rm-text:#f1f5f9;--rm-text-muted:#b4c5dc;--rm-border:#34465f;--rm-control-border:#8294ad;--rm-primary:#92b6ff;--rm-primary-hover:#b0caff;--rm-on-primary:#142238;--rm-focus:#afcbff;--rm-success:#8ce3b9;--rm-success-bg:#1d3c34;--rm-warning:#f5ce83;--rm-warning-bg:#45381e;--rm-danger:#ffb0b0;--rm-danger-bg:#4a2934;--rm-info:#a9c7ff;--rm-info-bg:#263d61;--rm-neutral-bg:#28384d;--rm-disabled-bg:#2b3b50;--rm-disabled-text:#a6b8d1;--rm-shadow:none;--rm-shadow-dialog:0 18px 60px #0006;--rm-surface-subtle:#233247;--rm-chart-grid:#40516a;--rm-signal:#65d5b6;--rm-backdrop:#080e19b3}
 @media(min-width:768px) and (pointer:fine) and (any-pointer:fine){:root[data-density=compact]{--rm-control-md:32px;--rm-panel-padding:14px;--rm-grid-gap:12px;--rm-table-pad:8px}}
+
+/* Soft light themes: shared brand, actions and semantic status colors. */
+:root[data-theme=taupe]{--rm-canvas:#eee9e2;--rm-surface:#fdfbf8;--rm-surface-subtle:#f5f1eb;--rm-border:#d9d0c5;--rm-neutral-bg:#eae4dc;--rm-disabled-bg:#e4ddd4;--rm-chart-grid:#d9d0c5}
+:root[data-theme=sage]{--rm-canvas:#e8f0e8;--rm-surface:#fcfefb;--rm-surface-subtle:#f0f5ef;--rm-border:#d2dfd2;--rm-neutral-bg:#e4ebe3;--rm-disabled-bg:#dce6dc;--rm-chart-grid:#d2dfd2}

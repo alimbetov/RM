@@ -171,6 +171,10 @@ R1.0K.10A implements a single subtle, independently drawn Soft Jiek-inspired bor
 
 R1.0K.10B adds brand-only orbital geometry and subtle navy depth in the existing sidebar, without changes to business content, SVG icon catalog, RM OYU, tokens, runtime JS, backend or CI. See RM-GUARDIAN-DESIGN-R1.md §2.2. Targeted Chromium qualification: 20/20 orbit cases and 28/28 OYU regression cases, both exit 0; print suppression and gradient endpoint contrast checked. Full preceding 34-scenario suite not rerun. Candidate visual treatment, Design Freeze still open. See [qualification](ui-kit/QUALIFICATION-ORBIT.md).
 
+## 8.12 RM Precision Taupe and Sage (2026-11-28)
+
+R1.0K.10C adds two light theme variants via seven semantic surface tokens each and two options in the existing selector. Light remains default; Dark, Taupe and Sage are available without changing component logic or business semantics. Four themes × two densities × four viewport/text contexts: 32/32 Guardian cases PASS, exit 0. See [qualification](ui-kit/QUALIFICATION-THEMES.md). No changes to backend, CI, existing SVGs or JS. Other test suites not rerun in this increment; Design Freeze pending.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
