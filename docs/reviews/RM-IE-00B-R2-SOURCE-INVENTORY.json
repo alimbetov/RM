@@ -49,7 +49,7 @@
     {
       "path": "src/main/resources/db/changelog/db.changelog-master.sql",
       "designBlob": "121f3c8929975a673058b95bd90666743be70bd6",
-      "baselineBlob": "8dc25979c6d03e8b0bf412d387878ff59d047d66",
+      "baselineBlob": "b313831228d1f482d8b8cf80219fa95bb0b6f655",
       "status": "DRIFT",
       "priorBaselineBlob": "b868e0ad786b2b4fe440072736bf7eca209c3b54",
       "previousBaselineBlob": "8c6b34eba61360fa5c0addb87cc30d9fb523c69d"

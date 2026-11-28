@@ -8474,8 +8474,8 @@ REVOKE ALL ON reporting.int_report_file_intent FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_FILE_INTENT_FORWARD_ONLY'; END; $$;
 
 --changeset rm:0236-int-report-v1-terminal-fence dbms:postgresql splitStatements:false
--- Only the unmerged 0236 candidate is being hardened here. Previously applied
--- changesets are untouched. Terminal namespaces cannot acquire new V1 pointers.
+-- Migration history through 0235 is unchanged.
+-- Terminal namespaces cannot acquire new V1 pointers.
 CREATE FUNCTION crm.int_report_file_terminal_guard() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
