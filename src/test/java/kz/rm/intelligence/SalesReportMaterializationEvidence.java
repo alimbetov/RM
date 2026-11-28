@@ -130,7 +130,7 @@ public final class SalesReportMaterializationEvidence {
                 PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),old.accountingCurrency()),
             new AuthorizedAnalyticalReadService.Query(AuthorizedAnalyticalReadService.Metric.BOOKED_ORDERS,calendar,
                 PeriodResolver.Code.M,last,null,null,null,java.util.List.of(),null));
-        assertThatThrownBy(()->reader.readReportMonths(staff,tenant,qs,previous))
+        assertThatThrownBy(()->reader.readAccountingReportMonths(staff,tenant,qs,previous))
             .isInstanceOf(IllegalStateException.class).hasMessage("REPORT_ACCOUNTING_POLICY_CHANGED");
         var after=materializer.materializeAccounting(staff,tenant,calendar,last,"policy-"+tenant);
         assertReceipt(after,tenant,0);
@@ -189,7 +189,7 @@ public final class SalesReportMaterializationEvidence {
         var l3=new CountingL3(counting,manager,context);
         var instrumented=new AuthorizedAnalyticalReadService(counting,manager,l3,context.getBean(MultidimensionalCoverageService.class));
         long batchStart=System.nanoTime();
-        var manifest=instrumented.readReportMonths(actor,tenant,queries);
+        var manifest=instrumented.readDiagnosticMonths(actor,tenant,queries);
         long batchNanos=System.nanoTime()-batchStart;
         int batchL0=counting.l0,batchL3=l3.calls;
         assertThat(batchL0).isBetween(0,2);

@@ -74,7 +74,7 @@ final class SalesReportMaterializer {
         recovered=recover(actor,tenant,queries,instance,policy);
         if(recovered!=null)return recovered;
         // Source admission and RR snapshot finish before any reporting writes.
-        var manifest=reader.readReportMonths(actor,tenant,queries,policy);
+        var manifest=reader.readAccountingReportMonths(actor,tenant,queries,policy);
         if(!scope.equals(manifest.scopeDigest()))throw new IllegalStateException("R02_SCOPE_MISMATCH");
         UUID dataset=UUID.randomUUID(),worker=UUID.randomUUID();
         var plan=SalesReportDatasetPlan.from(manifest,dataset);
@@ -141,7 +141,7 @@ final class SalesReportMaterializer {
             var candidates=jdbc.query("""
                 SELECT l.dataset_id,l.staging_date FROM reporting.int_report_request_attempt l
                 JOIN reporting.int_report_dataset_attempt a USING(tenant_id,dataset_id,staging_date)
-                WHERE l.tenant_id=? AND l.instance_id=? AND a.build_state='READY'
+                WHERE l.tenant_id=? AND l.instance_id=? AND a.build_state='READY' AND l.abandoned_at IS NULL
                 ORDER BY l.selected_at DESC NULLS LAST,l.dataset_id LIMIT 2
                 """,(rs,n)->new Candidate(rs.getObject(1,UUID.class),rs.getObject(2,LocalDate.class)),tenant,instance);
             if(candidates.isEmpty())return null;

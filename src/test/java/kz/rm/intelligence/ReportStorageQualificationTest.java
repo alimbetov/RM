@@ -139,7 +139,7 @@ class ReportStorageQualificationTest {
         allocate(t,a,d,w,expected(t,a,BigDecimal.ONE));
         for(UUID tenant:List.of(t,other)) jdbc.update("""
             INSERT INTO reporting.int_report_instance(tenant_id,instance_id,idempotency_key,request_digest,scope_digest,report_code,template_version)
-            VALUES(?,?,?,?,?,'RM-R02','1')
+            VALUES(?,?,?,?,?,'RM-STORAGE-TEST','1')
             """,tenant,i,"key-"+i,SCOPE,SCOPE);
         assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_register_consumer(?,?,?,?,?)",
             Boolean.class,other,i,c,a,d)).isInstanceOf(DataAccessException.class);
@@ -284,15 +284,15 @@ class ReportStorageQualificationTest {
         UUID t=tenant(),other=tenant(),i=UUID.randomUUID(),a=UUID.randomUUID(),w=UUID.randomUUID();
         LocalDate d=day();ensure(d);String key="R02-"+i,req="3".repeat(64),exp=expected(t,a,BigDecimal.ONE);
         assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
-            UUID.class,t,i,key,req,SCOPE,"RM-R02","1")).isEqualTo(i);
+            UUID.class,t,i,key,req,SCOPE,"RM-STORAGE-TEST","1")).isEqualTo(i);
         assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
-            UUID.class,t,UUID.randomUUID(),key,req,SCOPE,"RM-R02","1")).isEqualTo(i);
+            UUID.class,t,UUID.randomUUID(),key,req,SCOPE,"RM-STORAGE-TEST","1")).isEqualTo(i);
         assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
-            UUID.class,t,UUID.randomUUID(),key,SOURCE,SCOPE,"RM-R02","1")).isInstanceOf(DataAccessException.class)
+            UUID.class,t,UUID.randomUUID(),key,SOURCE,SCOPE,"RM-STORAGE-TEST","1")).isInstanceOf(DataAccessException.class)
             .hasMessageContaining("INT_REPORT_REQUEST_CONFLICT");
         UUID foreign=UUID.randomUUID();
         assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
-            UUID.class,other,foreign,key,req,SCOPE,"RM-R02","1")).isEqualTo(foreign);
+            UUID.class,other,foreign,key,req,SCOPE,"RM-STORAGE-TEST","1")).isEqualTo(foreign);
         assertThat(jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
             Boolean.class,t,i,a,d,w,SCOPE,SOURCE,1L,exp)).isTrue();
         assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
@@ -302,6 +302,11 @@ class ReportStorageQualificationTest {
             UUID.class,t,i,a,d)).isInstanceOf(DataAccessException.class).hasMessageContaining("INT_REPORT_DATASET_NOT_READY");
         assertThat(append(t,a,d,w,1,BigDecimal.ONE)).isTrue();freeze(t,a,d,w);
         new ReportDatasetValidationStore(jdbc,transactions).validateAndSeal(t,a,d,w,1L);
+        // Before selection a bound dataset cannot be consumed; after selection
+        // it cannot be cancelled. A separate READY fixture tests explicit cancellation.
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_register_consumer(?,?,?,?,?)",
+            Boolean.class,t,i,UUID.randomUUID(),a,d)).isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("INT_REPORT_CONSUMER_SELECTION_REQUIRED");
         // Simulated lost response after seal: lookup uses the persistent binding.
         UUID found=jdbc.queryForObject("""
             SELECT l.dataset_id FROM reporting.int_report_request_attempt l
@@ -325,7 +330,7 @@ class ReportStorageQualificationTest {
         UUID t=tenant(),i=UUID.randomUUID(),a=UUID.randomUUID(),w=UUID.randomUUID(),fresh=UUID.randomUUID();
         LocalDate d=day();ensure(d);String exp=expected(t,a,BigDecimal.ONE);
         assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
-            UUID.class,t,i,"race-"+i,SOURCE,SCOPE,"RM-R02","1")).isEqualTo(i);
+            UUID.class,t,i,"race-"+i,SOURCE,SCOPE,"RM-STORAGE-TEST","1")).isEqualTo(i);
         // Short lease on a new isolated fixture; existing attempt identity stays immutable.
         raceTx().executeWithoutResult(status->{
             raceLimits(d);
@@ -373,7 +378,7 @@ class ReportStorageQualificationTest {
         UUID t=tenant(),other=tenant(),i=UUID.randomUUID(),w=UUID.randomUUID();
         LocalDate d=day();ensure(d);
         assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
-            UUID.class,t,i,"disposition-"+i,SOURCE,SCOPE,"RM-R02","1")).isEqualTo(i);
+            UUID.class,t,i,"disposition-"+i,SOURCE,SCOPE,"RM-STORAGE-TEST","1")).isEqualTo(i);
         // Three short-lived owner fixtures simulate already exhausted attempts.
         // They are created, never modified, and use the same guards as normal attempts.
         var attempts=List.of(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID());
@@ -399,6 +404,8 @@ class ReportStorageQualificationTest {
             if(System.nanoTime()>deadline)throw new AssertionError("R02_DISPOSITION_EXPIRY_TIMEOUT");
             Thread.sleep(20);
         }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.int_report_disposition_candidates(?,?,?)",Long.class,t,d,256)).isEqualTo(3L);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.int_report_disposition_candidates(?,?,?)",Long.class,other,d,256)).isZero();
         UUID fresh=UUID.randomUUID();
         assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
             Boolean.class,t,i,fresh,d,w,SCOPE,SOURCE,1L,expected(t,fresh,BigDecimal.ONE)))
@@ -422,5 +429,44 @@ class ReportStorageQualificationTest {
             """,Long.class,t,i)).isEqualTo(3L);
         assertThat(jdbc.queryForObject("SELECT 'RETENTION_NOT_ADMITTED'=ANY(reporting.int_report_retention_blockers(?))",
             Boolean.class,d)).isTrue();
+
+        UUID ready=UUID.randomUUID(),ri=UUID.randomUUID();
+        String readyDigest=expected(t,ready,BigDecimal.ONE);
+        jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",UUID.class,
+            t,ri,"cancel-"+ri,SOURCE,SCOPE,"RM-STORAGE-TEST","1");
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,ri,ready,d,w,SCOPE,SOURCE,1L,readyDigest)).isTrue();
+        assertThat(append(t,ready,d,w,1,BigDecimal.ONE)).isTrue();freeze(t,ready,d,w);
+        new ReportDatasetValidationStore(jdbc,transactions).validateAndSeal(t,ready,d,w,1L);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.int_report_disposition_candidates(?,?,?) WHERE reason='UNSELECTED_READY_CANCELLED'",
+            Long.class,t,d,256)).isEqualTo(1L);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_cancel_unselected_ready(?,?,?,?)",
+            Boolean.class,other,ri,ready,d)).isInstanceOf(DataAccessException.class);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_cancel_unselected_ready(?,?,?,?)",
+            Boolean.class,t,ri,ready,d)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_cancel_unselected_ready(?,?,?,?)",
+            Boolean.class,t,ri,ready,d)).isFalse();
+        assertThat(state(t,ready)).isEqualTo("READY");
+        assertThat(rows(t,ready,d)).isEqualTo(1L);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",
+            UUID.class,t,ri,ready,d)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_register_consumer(?,?,?,?,?)",
+            Boolean.class,t,ri,UUID.randomUUID(),ready,d)).isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("INT_REPORT_CONSUMER_SELECTION_REQUIRED");
+
+        UUID missing=UUID.randomUUID(),mi=UUID.randomUUID();
+        String missingDigest=expected(t,missing,BigDecimal.ONE);
+        jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",UUID.class,
+            t,mi,"evidence-"+mi,SOURCE,SCOPE,"RM-R02","1");
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,mi,missing,d,w,SCOPE,SOURCE,1L,missingDigest)).isTrue();
+        assertThat(append(t,missing,d,w,1,BigDecimal.ONE)).isTrue();freeze(t,missing,d,w);
+        assertThatThrownBy(()->new ReportDatasetValidationStore(jdbc,transactions).validateAndSeal(t,missing,d,w,1L))
+            .isInstanceOf(IllegalStateException.class).hasMessage("REPORT_SOURCE_EVIDENCE_REQUIRED");
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_seal(?,?,?,?,?,?,?)",
+            Boolean.class,t,missing,d,w,1L,1L,missingDigest)).isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("INT_REPORT_ACCOUNTING_EVIDENCE_REQUIRED");
+        assertThat(state(t,missing)).isEqualTo("VALIDATING");
+        System.out.println("RM_R02_TERMINAL_AND_MANDATORY_EVIDENCE_ORACLE_PASS");
     }
 }

@@ -69,10 +69,13 @@ public class AuthorizedAnalyticalReadService {
 
     /** Internal report candidate only. Exactly 24 consecutive closed months.
      * Does not grant publication, historical completeness or transport access. */
-    ReportSourceManifest readReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries){
-        return readReportMonths(actor,tenant,queries,null);
+    ReportSourceManifest readDiagnosticMonths(VerifiedActor actor,UUID tenant,List<Query> queries){
+        return readClosedMonths(actor,tenant,queries,null);
     }
-    ReportSourceManifest readReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries,AccountingPolicy accounting){
+    ReportSourceManifest readAccountingReportMonths(VerifiedActor actor,UUID tenant,List<Query> queries,AccountingPolicy accounting){
+        return readClosedMonths(actor,tenant,queries,Objects.requireNonNull(accounting,"REPORT_ACCOUNTING_POLICY_REQUIRED"));
+    }
+    private ReportSourceManifest readClosedMonths(VerifiedActor actor,UUID tenant,List<Query> queries,AccountingPolicy accounting){
         var qs=List.copyOf(queries).stream().sorted(Comparator.comparing(x->x.metric().name())).toList();
         if(qs.isEmpty()||qs.size()>3)throw new IllegalArgumentException("REPORT_METRIC_WINDOW");
         var end=qs.getFirst().anchor();

@@ -8157,3 +8157,142 @@ REVOKE ALL ON FUNCTION reporting.int_report_request_selection_guard() FROM PUBLI
 REVOKE ALL ON FUNCTION reporting.int_report_allocate_request(uuid,uuid,uuid,date,uuid,text,text,bigint,text) FROM PUBLIC;
 -- Retention remains NOT_ADMITTED: an abandoned binding is not a partition drop permit.
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_ATTEMPT_DISPOSITION_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0234-int-report-terminal-evidence-hardening dbms:postgresql splitStatements:false
+-- Owner-side only. Explicit cancellation of an unselected READY result
+-- is NOT lease expiry, deletion admission, or revocation of published files.
+ALTER TABLE reporting.int_report_request_attempt DROP CONSTRAINT ck_int_report_request_disposition;
+ALTER TABLE reporting.int_report_request_attempt ADD CONSTRAINT ck_int_report_request_disposition CHECK(
+ (abandoned_at IS NULL AND abandon_reason IS NULL) OR
+ (abandoned_at IS NOT NULL AND abandon_reason IS NOT NULL
+ AND abandon_reason IN ('LEASE_EXPIRED','UNSELECTED_READY_CANCELLED') AND selected_at IS NULL));
+
+CREATE OR REPLACE FUNCTION reporting.int_report_request_selection_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE;
+BEGIN
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt a
+ WHERE a.tenant_id=NEW.tenant_id AND a.dataset_id=NEW.dataset_id AND a.staging_date=NEW.staging_date;
+ IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM reporting.int_report_instance i
+ WHERE i.tenant_id=NEW.tenant_id AND i.instance_id=NEW.instance_id AND i.scope_digest=b.scope_digest)
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF TG_OP='INSERT' THEN
+   IF NEW.selected_at IS NOT NULL OR NEW.abandoned_at IS NOT NULL OR NEW.abandon_reason IS NOT NULL
+   THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_INITIAL'; END IF;
+ ELSE
+   IF OLD.selected_at IS NOT NULL OR OLD.abandoned_at IS NOT NULL
+   THEN RAISE EXCEPTION 'INT_REPORT_DISPOSITION_IMMUTABLE'; END IF;
+   IF NEW.selected_at IS NOT NULL AND NEW.abandoned_at IS NULL AND NEW.abandon_reason IS NULL THEN
+     IF b.build_state<>'READY' THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_TRANSITION'; END IF;
+   ELSIF NEW.selected_at IS NULL AND NEW.abandoned_at IS NOT NULL THEN
+     IF NEW.abandoned_at>clock_timestamp() OR EXISTS(SELECT 1 FROM reporting.int_report_consumer c
+         WHERE c.tenant_id=NEW.tenant_id AND c.dataset_id=NEW.dataset_id AND c.staging_date=NEW.staging_date)
+     THEN RAISE EXCEPTION 'INT_REPORT_ABANDONMENT_DENIED'; END IF;
+     IF NEW.abandon_reason='LEASE_EXPIRED' THEN
+       IF b.build_state='READY' OR b.build_until>clock_timestamp() OR NEW.abandoned_at<b.build_until
+       THEN RAISE EXCEPTION 'INT_REPORT_ABANDONMENT_DENIED'; END IF;
+     ELSIF NEW.abandon_reason='UNSELECTED_READY_CANCELLED' THEN
+       IF b.build_state<>'READY' OR NEW.abandoned_at<b.ready_at
+       THEN RAISE EXCEPTION 'INT_REPORT_ABANDONMENT_DENIED'; END IF;
+     ELSE RAISE EXCEPTION 'INT_REPORT_SELECTION_TRANSITION';
+     END IF;
+   ELSE RAISE EXCEPTION 'INT_REPORT_SELECTION_TRANSITION';
+   END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+
+-- Bounded owner maintenance discovery; intentionally independent of actor
+-- request digest and current business policy. No implicit cancellation.
+CREATE FUNCTION reporting.int_report_disposition_candidates(t uuid,d date,n integer)
+ RETURNS TABLE(instance_id uuid,dataset_id uuid,reason text)
+ LANGUAGE plpgsql STABLE SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF t IS NULL OR d IS NULL OR n IS NULL OR n NOT BETWEEN 1 AND 256
+ THEN RAISE EXCEPTION 'INT_REPORT_DISPOSITION_INPUT'; END IF;
+ RETURN QUERY SELECT l.instance_id,l.dataset_id,
+   CASE WHEN a.build_state='READY' THEN 'UNSELECTED_READY_CANCELLED' ELSE 'LEASE_EXPIRED' END
+ FROM reporting.int_report_request_attempt l JOIN reporting.int_report_dataset_attempt a USING(tenant_id,dataset_id,staging_date)
+ WHERE l.tenant_id=t AND l.staging_date=d AND l.selected_at IS NULL AND l.abandoned_at IS NULL
+   AND (a.build_state='READY' OR a.build_until<=statement_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM reporting.int_report_consumer c
+       WHERE c.tenant_id=l.tenant_id AND c.dataset_id=l.dataset_id AND c.staging_date=l.staging_date)
+ ORDER BY l.instance_id,l.dataset_id LIMIT n;
+END $$;
+
+CREATE FUNCTION reporting.int_report_cancel_unselected_ready(t uuid,i uuid,a uuid,d date)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; l reporting.int_report_request_attempt%ROWTYPE;
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed'
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ISOLATION'; END IF;
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt
+ WHERE tenant_id=t AND dataset_id=a AND staging_date=d FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ SELECT * INTO l FROM reporting.int_report_request_attempt
+ WHERE tenant_id=t AND instance_id=i AND dataset_id=a AND staging_date=d;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF l.selected_at IS NOT NULL OR l.abandoned_at IS NOT NULL OR b.build_state<>'READY' THEN RETURN false; END IF;
+ IF EXISTS(SELECT 1 FROM reporting.int_report_consumer c WHERE c.tenant_id=t AND c.dataset_id=a AND c.staging_date=d)
+ THEN RAISE EXCEPTION 'INT_REPORT_ABANDONMENT_DENIED'; END IF;
+ UPDATE reporting.int_report_request_attempt SET abandoned_at=clock_timestamp(),abandon_reason='UNSELECTED_READY_CANCELLED'
+ WHERE tenant_id=t AND instance_id=i AND dataset_id=a AND staging_date=d AND selected_at IS NULL AND abandoned_at IS NULL;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_DISPOSITION_LOST'; END IF;
+ RETURN true;
+END $$;
+
+-- Bound attempts must be selected for their own instance before any consumer
+-- is registered. Serialize with cancellation using the same attempt lock.
+CREATE FUNCTION reporting.int_report_consumer_binding_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE l reporting.int_report_request_attempt%ROWTYPE;
+BEGIN
+ PERFORM 1 FROM reporting.int_report_dataset_attempt
+ WHERE tenant_id=NEW.tenant_id AND dataset_id=NEW.dataset_id AND staging_date=NEW.staging_date FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_CONSUMER_SCOPE'; END IF;
+ SELECT * INTO l FROM reporting.int_report_request_attempt
+ WHERE tenant_id=NEW.tenant_id AND dataset_id=NEW.dataset_id AND staging_date=NEW.staging_date;
+ IF FOUND THEN
+   IF l.instance_id<>NEW.instance_id OR l.selected_at IS NULL OR l.abandoned_at IS NOT NULL
+   THEN RAISE EXCEPTION 'INT_REPORT_CONSUMER_SELECTION_REQUIRED'; END IF;
+ ELSIF EXISTS(SELECT 1 FROM reporting.int_report_instance i
+   WHERE i.tenant_id=NEW.tenant_id AND i.instance_id=NEW.instance_id AND i.report_code='RM-R02')
+ THEN RAISE EXCEPTION 'INT_REPORT_CONSUMER_SELECTION_REQUIRED'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_consumer_binding BEFORE INSERT ON reporting.int_report_consumer
+ FOR EACH ROW EXECUTE FUNCTION reporting.int_report_consumer_binding_guard();
+
+-- Mandatory evidence for the real accounting pilot (not low-level storage
+-- fixtures). Even a direct owner READY UPDATE must have matching evidence.
+CREATE FUNCTION reporting.int_report_accounting_evidence_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF NEW.build_state='READY' AND EXISTS(
+   SELECT 1 FROM reporting.int_report_request_attempt l
+   JOIN reporting.int_report_instance i USING(tenant_id,instance_id)
+   WHERE l.tenant_id=NEW.tenant_id AND l.dataset_id=NEW.dataset_id AND l.staging_date=NEW.staging_date
+     AND i.report_code='RM-R02')
+ AND NOT EXISTS(SELECT 1 FROM reporting.int_report_source_evidence e
+   WHERE e.tenant_id=NEW.tenant_id AND e.dataset_id=NEW.dataset_id AND e.staging_date=NEW.staging_date
+     AND NEW.scope_digest=encode(sha256(e.scope_bytes),'hex')
+     AND NEW.source_manifest_digest=encode(sha256(e.source_bytes),'hex')
+     AND substring(e.source_bytes FROM 1 FOR 18)=convert_to('15:RM-ARS-SOURCE-3','UTF8'))
+ THEN RAISE EXCEPTION 'INT_REPORT_ACCOUNTING_EVIDENCE_REQUIRED'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_accounting_evidence BEFORE UPDATE OF build_state ON reporting.int_report_dataset_attempt
+ FOR EACH ROW EXECUTE FUNCTION reporting.int_report_accounting_evidence_guard();
+
+REVOKE ALL ON FUNCTION reporting.int_report_disposition_candidates(uuid,date,integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_cancel_unselected_ready(uuid,uuid,uuid,date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_consumer_binding_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_accounting_evidence_guard() FROM PUBLIC;
+-- No scheduler, runtime grant, automatic READY cancellation or partition deletion.
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_TERMINAL_EVIDENCE_FORWARD_ONLY'; END; $$;

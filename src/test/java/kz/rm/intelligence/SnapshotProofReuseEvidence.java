@@ -47,7 +47,7 @@ public final class SnapshotProofReuseEvidence {
     public void verifyReportDenied(VerifiedActor actor,UUID tenant,AuthorizedAnalyticalReadService.Query q){
         var month=new AuthorizedAnalyticalReadService.Query(q.metric(),q.calendarVersion(),PeriodResolver.Code.M,
             q.anchor().withDayOfMonth(1).minusMonths(1),q.region(),q.group(),q.sku(),q.warehouses(),q.currency());
-        assertThatThrownBy(()->reader.readReportMonths(actor,tenant,List.of(month))).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->reader.readDiagnosticMonths(actor,tenant,List.of(month))).isInstanceOf(SecurityException.class);
         var dates=java.util.stream.IntStream.range(0,24).mapToObj(i->month.anchor().minusMonths(i)).toList();
         assertThatThrownBy(()->reader.readMetricWindows(actor,tenant,List.of(month),dates))
             .isInstanceOf(IllegalArgumentException.class).hasMessage("ANALYTICAL_WINDOW_SIZE");
