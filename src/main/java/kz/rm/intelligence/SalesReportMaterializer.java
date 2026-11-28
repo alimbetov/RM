@@ -49,8 +49,7 @@ final class SalesReportMaterializer {
         return materialize(actor,tenant,calendar,lastClosedMonth,currency,key,null);
     }
 
-    /** First materialization only. A recovered READY dataset is not re-rendered
-     * from a new source snapshot; durable artifact recovery is a separate gate. */
+    /** First materialization or replay of the exact immutable sealed evidence. */
     kz.rm.files.TrustedReportUpload.Receipt materializeAndUpload(VerifiedActor actor,UUID tenant,long calendar,
         LocalDate lastClosedMonth,String key,kz.rm.files.TrustedReportUpload uploader) throws java.io.IOException {
         Objects.requireNonNull(uploader);
@@ -89,11 +88,17 @@ final class SalesReportMaterializer {
                 tenant,UUID.randomUUID(),key,request,scope,"RM-R02","1");
         }));
         var recovered=recover(actor,tenant,queries,instance,policy);
-        if(recovered!=null)return recovered;
+        if(recovered!=null){
+            if(prepared!=null)prepared.accept(restoreFile(actor,tenant,instance,queries,policy,request,recovered));
+            return recovered;
+        }
         disposeExpired(actor,tenant,queries,instance,policy);
         // An earlier Seal may have committed while disposition was waiting.
         recovered=recover(actor,tenant,queries,instance,policy);
-        if(recovered!=null)return recovered;
+        if(recovered!=null){
+            if(prepared!=null)prepared.accept(restoreFile(actor,tenant,instance,queries,policy,request,recovered));
+            return recovered;
+        }
         // Source admission and RR snapshot finish before any reporting writes.
         var manifest=reader.readAccountingReportMonths(actor,tenant,queries,policy);
         if(!scope.equals(manifest.scopeDigest()))throw new IllegalStateException("R02_SCOPE_MISMATCH");
@@ -131,6 +136,29 @@ final class SalesReportMaterializer {
         if(prepared!=null)prepared.accept(TrustedReportFile.renderR02(actor,instance,ready,manifest,reader,request));
         return ready;
     }
+    private TrustedReportFile restoreFile(VerifiedActor actor,UUID tenant,UUID instance,List<Query> queries,
+        AccountingPolicy policy,String request,Receipt receipt){
+        var evidence=Objects.requireNonNull(tx.execute(status->{
+            limits();reader.admitReportRecovery(actor,tenant,queries);reader.requireAccountingPolicy(tenant,policy,true);
+            lock(receipt.stagingDate());
+            return jdbc.query("""
+                SELECT e.scope_bytes,e.source_bytes
+                  FROM reporting.int_report_source_evidence e
+                  JOIN reporting.int_report_dataset_attempt a USING(tenant_id,dataset_id,staging_date)
+                  JOIN reporting.int_report_request_attempt l USING(tenant_id,dataset_id,staging_date)
+                  JOIN reporting.int_report_instance i USING(tenant_id,instance_id)
+                 WHERE e.tenant_id=? AND e.dataset_id=? AND e.staging_date=?
+                   AND l.instance_id=? AND l.selected_at IS NOT NULL AND l.abandoned_at IS NULL
+                   AND a.build_state='READY' AND i.request_digest=?
+                   AND a.scope_digest=? AND a.source_manifest_digest=? AND a.observed_digest=?
+                """,rs->rs.next()?new byte[][]{rs.getBytes(1),rs.getBytes(2)}:null,
+                tenant,receipt.dataset(),receipt.stagingDate(),instance,request,
+                receipt.scopeDigest(),receipt.sourceDigest(),receipt.observed().sha256());
+        }));
+        var manifest=ReportSourceReplay.restore(tenant,queries,policy,evidence[0],evidence[1],receipt);
+        return TrustedReportFile.renderR02(actor,instance,receipt,manifest,reader,request);
+    }
+
     private static String requestDigest(UUID actor,String scope,AccountingPolicy policy){
         try{
             return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")

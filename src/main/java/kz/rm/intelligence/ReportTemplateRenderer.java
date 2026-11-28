@@ -86,7 +86,7 @@ final class ReportTemplateRenderer {
             meta(book,"Template version","MOCK-0.1 / D06C");meta(book,"Tenant",manifest.tenant().toString());
             meta(book,"Data quality","PARTIAL / MISSING");meta(book,"Actual scope","Tenant-wide booked only");
             meta(book,"Metric code","BOOKED_AMOUNT / BOOKED_ORDERS");meta(book,"Unit / currency",unit);
-            meta(book,"As of",manifest.observedAt().toString());meta(book,"Generated at",Instant.now().toString());
+            meta(book,"As of",manifest.observedAt().toString());meta(book,"Generated at",manifest.observedAt().toString());
             meta(book,"Mode","INTERNAL_DIAGNOSTIC");meta(book,"Visibility","NOT_PUBLISHED");
             meta(book,"Period bounds",values.getFirst().period().startInclusive()+" / "+values.getLast().period().endExclusive());
             meta(book,"Baseline bounds",values.getFirst().period().startInclusive()+" / "+values.get(11).period().endExclusive());
@@ -95,7 +95,7 @@ final class ReportTemplateRenderer {
             meta(book,"Calendar version",Long.toString(values.getLast().period().calendarVersion()));
             meta(book,"Coverage","HISTORICAL_CONTINUITY_UNQUALIFIED");meta(book,"Limits","No fulfilled or unsupported metrics; no historical READY.");
             refreshCharts(book);
-            book.write(out);byte[] bytes=out.toByteArray();
+            book.write(out);byte[] bytes=StableReportPackage.canonical(out.toByteArray(),manifest.observedAt());
             if(bytes.length>2*1024*1024)throw new IllegalStateException("REPORT_OUTPUT_SIZE");
             return bytes;
         }catch(IOException e){throw new UncheckedIOException(e);}
