@@ -27,6 +27,28 @@ final class IndependentCanonicalDigestVerifier {
         for(var f:facts)if(!matches(tenant,f))bad++;
         return bad;
     }
+    /** Bounded native booking verification in the caller's existing read-only snapshot.
+     * Legacy digests are diagnostic only; never silently promote V1. */
+    record BookedSlice(int checked,int mismatches,int legacy,boolean budgetExceeded,String populationDigest){}
+    BookedSlice bookedSlice(UUID tenant,Instant from,Instant until,int limit){
+        if(limit<1||limit>CanonicalFactDeliveryService.MAX_BATCH||!from.isBefore(until))
+            throw new IllegalArgumentException("NATIVE_DIGEST_BUDGET");
+        var facts=jdbc.query("""
+            SELECT owner_module,source_kind,source_id,subject_id,occurred_at,recorded_at,source_version,schema_version,digest
+            FROM crm.int_canonical_fact WHERE tenant_id=? AND owner_module='SALES'
+              AND source_kind='ORDER_PLACED' AND occurred_at>=? AND occurred_at<?
+            ORDER BY source_id LIMIT ?
+            """,(rs,n)->new Fact(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getObject(4,UUID.class),
+                rs.getTimestamp(5).toInstant(),rs.getTimestamp(6)==null?null:rs.getTimestamp(6).toInstant(),
+                rs.getObject(7,Long.class),rs.getInt(8),rs.getString(9)),
+            tenant,java.sql.Timestamp.from(from),java.sql.Timestamp.from(until),limit+1);
+        if(facts.size()>limit)return new BookedSlice(0,0,0,true,null);
+        int bad=0,legacy=0;
+        for(var f:facts){if(f.schema()!=2)legacy++;if(!matches(tenant,f))bad++;}
+        String digest=hash(frame("RM-NATIVE-BOOKED-POPULATION-1",tenant,from,until,
+            frame(facts.stream().map(f->frame(f.id(),f.subject(),f.occurred(),f.schema(),f.digest())).toArray())));
+        return new BookedSlice(facts.size(),bad,legacy,false,digest);
+    }
     private boolean matches(UUID tenant,Fact f){
         String payload,extended;
         Long sourceVersion=null;

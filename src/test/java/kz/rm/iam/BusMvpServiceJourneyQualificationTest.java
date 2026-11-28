@@ -558,6 +558,11 @@ class BusMvpServiceJourneyQualificationTest {
                 owner,staff,otherOwner,tenant,otherTenant,orderId,
                 ()->checkout.checkout(store.slug(),"native-"+UUID.randomUUID()+"@example.kz",
                     "native-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+            NativeBookedClosureJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,
+                applicationContext.getBean(kz.rm.intelligence.NativeBookedClosureService.class),
+                staff,otherOwner,tenant,otherTenant,orderId,
+                ()->checkout.checkout(store.slug(),"closure-"+UUID.randomUUID()+"@example.kz",
+                    "closure-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
             return;
         }
         calendar.append(owner,tenant,"Etc/UTC",0);
