@@ -110,7 +110,8 @@ class RustFsRestartProbeTest {
             var encrypted=new ReportEncryptedStorage(rust,V1DaemonCryptoFixture.crypto(expected.tenantId()));
             String v1=props.getProperty("v1Key");
             assertThat(encrypted.matches(expected,v1,false)).isTrue();
-            assertThat(encrypted.read(expected,v1,false,InputStream::readAllBytes)).isEqualTo(v1Payload());
+            byte[] restored=encrypted.read(expected,v1,false,InputStream::readAllBytes);
+            assertThat(restored).isEqualTo(v1Payload());
             try(var in=rust.openEncrypted(expected,v1,false)){
                 assertThat(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(in.readAllBytes())))
                     .isEqualTo(props.getProperty("v1CipherHash"));

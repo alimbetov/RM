@@ -55,7 +55,7 @@ public final class TrustedReportFile {
     public String datasetDigest(){return receipt.observed().sha256();}
     public String reportCode(){return "RM-R02";}
     public String templateVersion(){return "1";}
-    public String rendererVersion(){return "RM-R02-XLSX-P4.1A-v1";}
+    public String rendererVersion(){return "RM-R02-XLSX-P4.1A-v2";}
     public Format format(){return Format.XLSX;}
     public int size(){return bytes.length;}
     public String sha256(){return sha;}

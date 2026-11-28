@@ -94,17 +94,26 @@ public final class ReportUploadQualificationEvidence {
             try{
                 assertTrue(entered.await(15,java.util.concurrent.TimeUnit.SECONDS));
                 assertThrows(IllegalStateException.class,()->restarted.upload(actor,restored));
+                // Owner test fixture advances only the lease age. The second
+                // instance takes a NEW token and independently scans and commits.
+                assertEquals(1,jdbc.update("""
+                    UPDATE crm.file_object SET processing_started_at=clock_timestamp()-interval '16 minutes'
+                    WHERE tenant_id=? AND id=? AND state='STAGED' AND scan_status='SCANNING'
+                    """,report.tenant(),pending));
+                receipt=restarted.upload(actor,restored);
             }catch(InterruptedException ex){Thread.currentThread().interrupt();throw new IOException(ex);}
             finally{release.countDown();}
-            try{receipt=first.get(30,java.util.concurrent.TimeUnit.SECONDS);}
-            catch(InterruptedException ex){Thread.currentThread().interrupt();throw new IOException(ex);}
-            catch(java.util.concurrent.ExecutionException|java.util.concurrent.TimeoutException ex){throw new IOException(ex);}
+            // The original worker may finish ciphertext IO but must fail its
+            // stale database CAS; it cannot alter or delete the winning pointer.
+            var stale=assertThrows(java.util.concurrent.ExecutionException.class,
+                ()->first.get(30,java.util.concurrent.TimeUnit.SECONDS));
+            assertInstanceOf(IllegalStateException.class,stale.getCause());
         }
         assertEquals(pending,receipt.fileId());
-        assertEquals(3,scanned.get());
+        assertEquals(4,scanned.get());
         // Lost response simulation: second service reads exact durable receipt.
         assertEquals(receipt,restarted.upload(actor,restart.get()));
-        assertEquals(3,scanned.get());
+        assertEquals(4,scanned.get());
         UUID id=receipt.fileId();
         String key=jdbc.queryForObject("""
             SELECT s.storage_key FROM crm.file_storage s JOIN crm.file_object f

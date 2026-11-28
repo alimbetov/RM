@@ -81,10 +81,10 @@ class RustFsRealClamAvE2ETest {
                 // AV transport qualification only; EICAR is not admitted as PDF.
                 String stage=encrypted.stage(e,new ByteArrayInputStream(bytes));
                 try{
-                    assertThat(encrypted.read(e,stage,true,in->scanner.scanAuthenticated(in,bytes.length)))
-                        .isEqualTo(infected?FileScanPort.Verdict.INFECTED:FileScanPort.Verdict.CLEAN);
-                    assertThat(encrypted.read(e,stage,true,in->unavailable.scanAuthenticated(in,bytes.length)))
-                        .isEqualTo(FileScanPort.Verdict.ERROR);
+                    FileScanPort.Verdict verdict=encrypted.read(e,stage,true,in->scanner.scanAuthenticated(in,bytes.length));
+                    assertThat(verdict).isEqualTo(infected?FileScanPort.Verdict.INFECTED:FileScanPort.Verdict.CLEAN);
+                    FileScanPort.Verdict outage=encrypted.read(e,stage,true,in->unavailable.scanAuthenticated(in,bytes.length));
+                    assertThat(outage).isEqualTo(FileScanPort.Verdict.ERROR);
                     assertThat(scanner.scan(stage)).isEqualTo(FileScanPort.Verdict.ERROR);
                 }finally{store.delete(stage);}
             }
