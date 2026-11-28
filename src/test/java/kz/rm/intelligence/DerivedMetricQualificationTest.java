@@ -23,6 +23,49 @@ class DerivedMetricQualificationTest {
     private DerivedMetricEngine.Result calculate(DerivedMetricEngine.Operator op,List<DerivedMetricEngine.Point> points){
         return DerivedMetricEngine.calculate(scope,op,anchor,asOf,3,points);
     }
+    @Test void monthlySnapshotCalendarAndQualifiedZeroContract(){
+        UUID tenant=UUID.randomUUID();
+        var month=YearMonth.of(2024,3);
+        var binding=new NativeBookedClosureService.CalendarBinding(tenant,7,"Europe/Berlin",
+            Instant.parse("2024-01-01T00:00:00Z"),month);
+        var period=binding.period();
+        assertEquals(Instant.parse("2024-02-29T23:00:00Z"),period.startInclusive());
+        assertEquals(Instant.parse("2024-03-31T22:00:00Z"),period.endExclusive());
+        assertEquals(743,Duration.between(period.startInclusive(),period.endExclusive()).toHours());
+        var leap=new NativeBookedClosureService.CalendarBinding(tenant,7,"Etc/UTC",binding.effectiveFrom(),YearMonth.of(2024,2));
+        assertEquals(29,Duration.between(leap.period().startInclusive(),leap.period().endExclusive()).toDays());
+        var boundary=new NativeBookedCaptureService.Boundary(tenant,period.startInclusive(),1);
+        Instant observed=period.endExclusive().plusSeconds(1);
+        var rev=new NativeBookedClosureService.Revision(0,0,0);
+        var empty=new NativeBookedClosureService.Population(0,0,0,0,0,0,0);
+        var evidence=new NativeBookedClosureService.Evidence(1,tenant,period.startInclusive(),period.endExclusive(),observed,
+            boundary,rev,NativeBookedClosureService.State.SNAPSHOT_ZERO,empty,"a".repeat(64),0L);
+        var zero=NativeBookedClosureService.bindMonth(binding,evidence);
+        assertTrue(zero.snapshotQualified());assertTrue(zero.qualifiedSnapshotZero());assertEquals(0L,zero.snapshotValue().longValue());
+        assertEquals("BOOKED_ORDERS",zero.metric());assertEquals(1,zero.methodVersion());
+        assertFalse(zero.admitted());assertEquals(DataQuality.MISSING,zero.historicalQuality());assertNull(zero.historicalValue());
+        var positiveEvidence=new NativeBookedClosureService.Evidence(1,tenant,evidence.from(),evidence.until(),observed.plusSeconds(1),
+            boundary,new NativeBookedClosureService.Revision(0,4,1),NativeBookedClosureService.State.SNAPSHOT_VALUE,
+            new NativeBookedClosureService.Population(1,1,1,1,0,0,0),"b".repeat(64),1L);
+        var positive=NativeBookedClosureService.bindMonth(binding,positiveEvidence);
+        assertEquals(1L,positive.historicalValue().longValue());assertEquals(DataQuality.PARTIAL,positive.historicalQuality());
+        assertFalse(positive.qualifiedSnapshotZero());assertFalse(positive.admitted());assertFalse(zero.sameEvidence(positive));
+        var bad=new NativeBookedClosureService.Evidence(1,tenant,evidence.from(),evidence.until(),observed,boundary,rev,
+            NativeBookedClosureService.State.SOURCE_MISMATCH,empty,null,null);
+        var missing=NativeBookedClosureService.bindMonth(binding,bad);
+        assertNull(missing.snapshotValue());assertFalse(missing.qualifiedSnapshotZero());assertEquals(DataQuality.MISSING,missing.historicalQuality());
+        assertThrows(IllegalArgumentException.class,()->NativeBookedClosureService.bindMonth(leap,evidence));
+        var foreign=new NativeBookedClosureService.CalendarBinding(UUID.randomUUID(),7,binding.zoneId(),binding.effectiveFrom(),month);
+        assertThrows(IllegalArgumentException.class,()->NativeBookedClosureService.bindMonth(foreign,evidence));
+        var falseZero=new NativeBookedClosureService.Evidence(1,tenant,evidence.from(),evidence.until(),observed,boundary,
+            new NativeBookedClosureService.Revision(0,4,1),NativeBookedClosureService.State.SNAPSHOT_ZERO,
+            new NativeBookedClosureService.Population(1,1,1,1,0,0,0),"c".repeat(64),0L);
+        assertThrows(IllegalArgumentException.class,()->NativeBookedClosureService.bindMonth(binding,falseZero));
+        var beforeBoundary=new NativeBookedClosureService.Evidence(1,tenant,evidence.from(),evidence.until(),observed,
+            new NativeBookedCaptureService.Boundary(tenant,evidence.from().plusSeconds(1),1),rev,
+            NativeBookedClosureService.State.SNAPSHOT_ZERO,empty,"a".repeat(64),0L);
+        assertThrows(IllegalArgumentException.class,()->NativeBookedClosureService.bindMonth(binding,beforeBoundary));
+    }
     @Test void deterministicMathematics(){
         var p=points("100","130","160");
         var expected=Map.of(

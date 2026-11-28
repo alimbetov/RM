@@ -558,9 +558,10 @@ class BusMvpServiceJourneyQualificationTest {
                 owner,staff,otherOwner,tenant,otherTenant,orderId,
                 ()->checkout.checkout(store.slug(),"native-"+UUID.randomUUID()+"@example.kz",
                     "native-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+            long nativeCalendar=calendar.append(owner,tenant,"Asia/Almaty",0).version();
             NativeBookedClosureJourneyEvidence.qualify(jdbc,canonicalTransactions,canonicalFacts,
                 applicationContext.getBean(kz.rm.intelligence.NativeBookedClosureService.class),
-                staff,otherOwner,tenant,otherTenant,orderId,
+                staff,otherOwner,tenant,otherTenant,orderId,nativeCalendar,
                 ()->checkout.checkout(store.slug(),"closure-"+UUID.randomUUID()+"@example.kz",
                     "closure-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
             return;

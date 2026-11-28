@@ -17,11 +17,31 @@ final class NativeBookedClosureJourneyEvidence {
     private NativeBookedClosureJourneyEvidence(){}
     static void qualify(JdbcTemplate jdbc,PlatformTransactionManager manager,CanonicalFactAppender appender,
             NativeBookedClosureService closure,VerifiedActor reader,VerifiedActor foreign,UUID tenant,UUID other,
-            UUID template,Supplier<UUID> checkout){
+            UUID template,long calendarVersion,Supplier<UUID> checkout){
         Instant from=jdbc.queryForObject("SELECT started_at FROM crm.int_native_booked_capture WHERE tenant_id=?",Timestamp.class,tenant).toInstant();
         Instant first=jdbc.queryForObject("SELECT min(created_at) FROM crm.sales_order WHERE tenant_id=? AND created_at>=?",
             Timestamp.class,tenant,Timestamp.from(from)).toInstant();
         assertThat(first).isAfter(from);
+        var zone=ZoneId.of("Asia/Almaty");
+        YearMonth month=YearMonth.from(from.atZone(zone));
+        var previous=closure.inspectMonth(reader,tenant,calendarVersion,month.minusMonths(1));
+        assertThat(previous.calendar().tenant()).isEqualTo(tenant);
+        assertThat(previous.calendar().zoneId()).isEqualTo(zone.getId());
+        assertThat(previous.calendar().version()).isEqualTo(calendarVersion);
+        assertThat(previous.source().from()).isEqualTo(month.minusMonths(1).atDay(1).atStartOfDay(zone).toInstant());
+        assertThat(previous.source().until()).isEqualTo(month.atDay(1).atStartOfDay(zone).toInstant());
+        assertThat(previous.source().state()).isEqualTo(NativeBookedClosureService.State.BEFORE_BOUNDARY);
+        assertThat(previous.historicalQuality()).isEqualTo(DataQuality.MISSING);
+        assertThat(previous.snapshotValue()).isNull();assertThat(previous.historicalValue()).isNull();
+        assertThat(previous.qualifiedSnapshotZero()).isFalse();assertThat(previous.admitted()).isFalse();
+        var future=closure.inspectMonth(reader,tenant,calendarVersion,month.plusMonths(1));
+        assertThat(future.source().state()).isEqualTo(NativeBookedClosureService.State.OPEN_RANGE);
+        assertThat(future.historicalQuality()).isEqualTo(DataQuality.MISSING);
+        assertThat(future.snapshotValue()).isNull();assertThat(future.historicalValue()).isNull();
+        assertThatThrownBy(()->closure.inspectMonth(reader,tenant,Long.MAX_VALUE,month)).hasMessage("CALENDAR_VERSION_NOT_FOUND");
+        assertThatThrownBy(()->closure.inspectMonth(foreign,tenant,calendarVersion,month)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->closure.inspectMonth(reader,other,calendarVersion,month)).isInstanceOf(SecurityException.class);
+        System.out.println("RM_ARS_P1_MONTH_CALENDAR_TENANT_ORACLE_PASS");
         var zero=closure.inspect(reader,tenant,from,first);
         assertThat(zero.state()).isEqualTo(NativeBookedClosureService.State.SNAPSHOT_ZERO);
         assertThat(zero.shadowValue()).isZero();assertThat(zero.admitted()).isFalse();

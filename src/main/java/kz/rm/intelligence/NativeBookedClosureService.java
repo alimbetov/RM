@@ -58,14 +58,93 @@ public class NativeBookedClosureService {
                 &&Objects.equals(populationDigest,current.populationDigest)&&Objects.equals(shadowValue,current.shadowValue);
         }
     }
+    /** Explicit calendar interpretation, never an implicit JVM/default zone. */
+    public record CalendarBinding(UUID tenant,long version,String zoneId,Instant effectiveFrom,YearMonth month){
+        public CalendarBinding{
+            Objects.requireNonNull(tenant);Objects.requireNonNull(effectiveFrom);Objects.requireNonNull(month);
+            new PeriodResolver.Policy(ZoneId.of(zoneId),version);
+        }
+        public PeriodResolver.Period period(){
+            return PeriodResolver.resolve(PeriodResolver.Code.M,month.atDay(1),
+                new PeriodResolver.Policy(ZoneId.of(zoneId),version));
+        }
+    }
+    /** A verified monthly population at one revision is not a durable historical
+     * authority. In particular a snapshot zero is never published as historical zero. */
+    public static final class MonthlyEvidence {
+        private final CalendarBinding calendar;
+        private final Evidence source;
+        private MonthlyEvidence(CalendarBinding calendar,Evidence source){
+            this.calendar=Objects.requireNonNull(calendar);this.source=Objects.requireNonNull(source);
+            var period=calendar.period();
+            if(!calendar.tenant().equals(source.tenant())||!period.startInclusive().equals(source.from())
+                ||!period.endExclusive().equals(source.until())||calendar.effectiveFrom().isAfter(source.observedAt())
+                ||source.policyVersion()!=VERSION||source.revision()==null||source.state()==null)
+                throw new IllegalArgumentException("NATIVE_MONTH_EVIDENCE_SCOPE");
+            if(snapshotQualified()){
+                var p=source.population();var boundary=source.boundary();
+                if(boundary==null||!calendar.tenant().equals(boundary.tenant())||boundary.policyVersion()!=1
+                    ||boundary.startedAt()==null||source.from().isBefore(boundary.startedAt())
+                    ||source.until().isAfter(source.observedAt())||p==null||p.overBudget()||!p.exact()
+                    ||source.revision().scopedCheckoutReceipts()!=p.receipts()
+                    ||source.shadowValue()==null||source.shadowValue()!=p.headers()
+                    ||(source.state()==State.SNAPSHOT_ZERO)!=(p.headers()==0)
+                    ||source.populationDigest()==null||!source.populationDigest().matches("[a-f0-9]{64}"))
+                    throw new IllegalArgumentException("NATIVE_MONTH_SNAPSHOT_INTEGRITY");
+            }else if(source.shadowValue()!=null)throw new IllegalArgumentException("NATIVE_MONTH_UNQUALIFIED_VALUE");
+        }
+        public CalendarBinding calendar(){return calendar;}
+        public Evidence source(){return source;}
+        public String metric(){return "BOOKED_ORDERS";}
+        public int methodVersion(){return 1;}
+        public boolean snapshotQualified(){return source.state()==State.SNAPSHOT_VALUE||source.state()==State.SNAPSHOT_ZERO;}
+        public Long snapshotValue(){return snapshotQualified()?source.shadowValue():null;}
+        public boolean qualifiedSnapshotZero(){return source.state()==State.SNAPSHOT_ZERO&&snapshotQualified();}
+        public boolean admitted(){return false;}
+        public DataQuality historicalQuality(){
+            return source.state()==State.SNAPSHOT_VALUE?DataQuality.PARTIAL:DataQuality.MISSING;
+        }
+        public Long historicalValue(){return historicalQuality()==DataQuality.PARTIAL?snapshotValue():null;}
+        public String historicalReason(){
+            return snapshotQualified()?"HISTORICAL_CONTINUITY_UNQUALIFIED":source.state().name();
+        }
+        public boolean sameEvidence(MonthlyEvidence current){
+            return current!=null&&calendar.equals(current.calendar)&&source.sameEvidence(current.source);
+        }
+    }
+    static MonthlyEvidence bindMonth(CalendarBinding calendar,Evidence source){
+        return new MonthlyEvidence(calendar,source);
+    }
     NativeBookedClosureService(JdbcTemplate jdbc,PlatformTransactionManager manager,TenantAuthorization authorization){
         this.jdbc=jdbc;this.manager=manager;this.authorization=authorization;
     }
     public Evidence inspect(VerifiedActor actor,UUID tenant,Instant from,Instant until){
-        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);Objects.requireNonNull(from);Objects.requireNonNull(until);
+        validateRange(from,until);
+        return inspectSnapshot(actor,tenant,(t,asOf)->scan(t,from,until,asOf));
+    }
+    /** Resolve the tenant's actual persisted calendar and scan in the SAME RR snapshot. */
+    public MonthlyEvidence inspectMonth(VerifiedActor actor,UUID tenant,long calendarVersion,YearMonth month){
+        if(calendarVersion<1||month==null)throw new IllegalArgumentException("NATIVE_MONTH_REQUEST");
+        return inspectSnapshot(actor,tenant,(t,asOf)->{
+            var calendar=jdbc.query("""
+                SELECT zone_id,effective_from FROM crm.int_calendar_policy WHERE tenant_id=? AND version=?
+                """,rs->rs.next()?new CalendarBinding(t,calendarVersion,rs.getString(1),
+                    rs.getTimestamp(2).toInstant(),month):null,t,calendarVersion);
+            if(calendar==null)throw new IllegalArgumentException("CALENDAR_VERSION_NOT_FOUND");
+            if(calendar.effectiveFrom().isAfter(asOf))throw new IllegalStateException("NATIVE_CALENDAR_NOT_EFFECTIVE");
+            var p=calendar.period();
+            validateRange(p.startInclusive(),p.endExclusive());
+            return bindMonth(calendar,scan(t,p.startInclusive(),p.endExclusive(),asOf));
+        });
+    }
+    private static void validateRange(Instant from,Instant until){
+        Objects.requireNonNull(from);Objects.requireNonNull(until);
         if(!from.isBefore(until)||Duration.between(from,until).compareTo(Duration.ofDays(32))>0||
             from.getNano()%1000!=0||until.getNano()%1000!=0)
             throw new IllegalArgumentException("NATIVE_CLOSURE_RANGE");
+    }
+    private <T> T inspectSnapshot(VerifiedActor actor,UUID tenant,java.util.function.BiFunction<UUID,Instant,T> read){
+        Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("NATIVE_CLOSURE_OWN_TRANSACTION");
         if(!admission.tryAcquire())throw new IllegalStateException("NATIVE_CLOSURE_BUSY");
@@ -83,7 +162,7 @@ public class NativeBookedClosureService {
                     "SELECT transaction_timestamp() FROM (SELECT pg_current_snapshot()) s",Timestamp.class)).toInstant();
                 // Snapshot-local authorization as well as fresh pre/post fences.
                 authorization.require(actor.userId(),tenant,DomainPermission.SALES_ORDER_READ);
-                return scan(tenant,from,until,asOf);
+                return read.apply(tenant,asOf);
             }));
             admit(actor,tenant);
             return result;
