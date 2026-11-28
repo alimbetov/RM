@@ -87,7 +87,7 @@ final class SalesReportMaterializer {
         }));
         // A different transaction is necessary: no shared/exclusive day-lock upgrade.
         tx.executeWithoutResult(status->{
-            limits();reader.admitReportRecovery(actor,tenant,queries);lock(day);
+            limits();reader.admitReportRecovery(actor,tenant,queries);reader.requireAccountingPolicy(tenant,policy,true);lock(day);
             requireTrue(jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",Boolean.class,
                 header.tenant(),instance,dataset,day,worker,header.scopeSha256(),header.sourceManifestSha256(),
                 plan.expected().rows(),plan.expected().sha256()),"R02_ALLOCATE");
@@ -117,7 +117,7 @@ final class SalesReportMaterializer {
     private record Candidate(UUID dataset,LocalDate day){}
     private void disposeExpired(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance,AccountingPolicy policy){
         var candidates=Objects.requireNonNull(tx.execute(status->{
-            limits();reader.admitReportRecovery(actor,tenant,queries);
+            limits();reader.admitReportRecovery(actor,tenant,queries);reader.requireAccountingPolicy(tenant,policy,true);
             return jdbc.query("""
                 SELECT l.dataset_id,l.staging_date FROM reporting.int_report_request_attempt l
                 JOIN reporting.int_report_dataset_attempt a USING(tenant_id,dataset_id,staging_date)
@@ -128,7 +128,7 @@ final class SalesReportMaterializer {
         }));
         if(candidates.size()>3)throw new IllegalStateException("R02_ATTEMPT_BUDGET");
         for(var candidate:candidates)tx.executeWithoutResult(status->{
-            limits();reader.admitReportRecovery(actor,tenant,queries);lock(candidate.day());
+            limits();reader.admitReportRecovery(actor,tenant,queries);reader.requireAccountingPolicy(tenant,policy,true);lock(candidate.day());
             jdbc.queryForObject("SELECT reporting.int_report_abandon_request_attempt(?,?,?,?)",Boolean.class,
                 tenant,instance,candidate.dataset(),candidate.day());
             actor.userId();
@@ -136,7 +136,7 @@ final class SalesReportMaterializer {
     }
     private Receipt recover(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance,AccountingPolicy policy){
         return tx.execute(status->{
-            limits();reader.admitReportRecovery(actor,tenant,queries);
+            limits();reader.admitReportRecovery(actor,tenant,queries);reader.requireAccountingPolicy(tenant,policy,true);
             // Metadata discovery only; take the date fence before selection or data access.
             var candidates=jdbc.query("""
                 SELECT l.dataset_id,l.staging_date FROM reporting.int_report_request_attempt l
