@@ -553,6 +553,11 @@ class BusMvpServiceJourneyQualificationTest {
             String faultEmail="bus-fact-failure-"+UUID.randomUUID()+"@example.kz";
             CanonicalFactJourneyEvidence.checkoutAppendFailureOnPostgres(jdbc,canonicalTransactions,tenant,faultKey,
                 ()->checkout.checkout(store.slug(),faultEmail,faultKey,List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
+            NativeBookedCaptureJourneyEvidence.qualify(jdbc,canonicalTransactions,
+                applicationContext.getBean(kz.rm.intelligence.NativeBookedCaptureService.class),
+                owner,staff,otherOwner,tenant,otherTenant,orderId,
+                ()->checkout.checkout(store.slug(),"native-"+UUID.randomUUID()+"@example.kz",
+                    "native-"+UUID.randomUUID(),List.of(new AutoOrderService.Line(offer.id(),1))).order().orderId());
             return;
         }
         calendar.append(owner,tenant,"Etc/UTC",0);

@@ -23,6 +23,8 @@ BEGIN
     SELECT o.* INTO STRICT source_order FROM crm.sales_order o
     WHERE EXISTS (SELECT 1 FROM crm.sales_order_line l
                   WHERE l.tenant_id=o.tenant_id AND l.order_id=o.id)
+      AND EXISTS (SELECT 1 FROM crm.int_native_booked_capture c
+                  WHERE c.tenant_id=o.tenant_id AND c.started_at IS NULL)
     ORDER BY o.tenant_id,o.id LIMIT 1;
     INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,
         total_amount,currency,created_at,fulfillment_mode)
@@ -519,5 +521,33 @@ BEGIN
  EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
 END $$;
+RESET ROLE;
+
+-- Native capture: synthetic role separation, not production identity provisioning.
+CREATE ROLE rm_native_capture_gate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA crm TO rm_native_capture_gate;
+GRANT SELECT ON crm.int_native_booked_capture TO rm_native_capture_gate;
+GRANT UPDATE(activated_by) ON crm.int_native_booked_capture TO rm_native_capture_gate;
+SET LOCAL ROLE rm_runtime_gate;
+DO $
+BEGIN
+ IF has_any_column_privilege(current_user,'crm.int_native_booked_capture','INSERT,UPDATE')
+ OR has_table_privilege(current_user,'crm.int_native_booked_capture','DELETE,TRUNCATE,TRIGGER')
+ OR has_function_privilege(current_user,'crm.int_native_capture_transition()','EXECUTE')
+ THEN RAISE EXCEPTION 'NATIVE_CAPTURE_RUNTIME_EXCESSIVE_PRIVILEGE'; END IF;
+END $;
+RESET ROLE;
+SET LOCAL ROLE rm_native_capture_gate;
+DO $
+BEGIN
+ IF NOT has_column_privilege(current_user,'crm.int_native_booked_capture','activated_by','UPDATE')
+ OR has_column_privilege(current_user,'crm.int_native_booked_capture','started_at','UPDATE')
+ OR has_column_privilege(current_user,'crm.int_native_booked_capture','tenant_id','UPDATE')
+ OR has_column_privilege(current_user,'crm.int_native_booked_capture','policy_version','UPDATE')
+ OR has_table_privilege(current_user,'crm.int_native_booked_capture','INSERT,DELETE,TRUNCATE,TRIGGER')
+ OR has_any_column_privilege(current_user,'crm.sales_order','INSERT,UPDATE')
+ OR has_any_column_privilege(current_user,'crm.int_canonical_fact','INSERT,UPDATE')
+ THEN RAISE EXCEPTION 'NATIVE_CAPTURE_ACTIVATION_ROLE_EXCESSIVE_PRIVILEGE'; END IF;
+END $;
 RESET ROLE;
 ROLLBACK;

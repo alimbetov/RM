@@ -34,6 +34,12 @@ public class AutoOrderService {
     private final CommerceCurrencyAdmission currencyAdmission;
     private final CanonicalFactAppender canonicalFacts;
     private String verifiedBuyerIdentityLockSql;
+    private boolean postgresOrderClock;
+    private Timestamp orderTimestamp(){
+        // The existing seller workspace lock precedes the shared database clock.
+        return postgresOrderClock?Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()",Timestamp.class)):
+            Timestamp.from(Instant.now());
+    }
 
     public AutoOrderService(JdbcTemplate jdbc, EmailIdentityService emailIdentities,
                             SalesOrderQrReferenceService orderQrReferences,
@@ -246,7 +252,7 @@ public class AutoOrderService {
                 :buyerProof.emailIdentityId();
         UUID buyerId=buyerProof==null?null:buyerProof.userId();
         UUID orderId=UUID.randomUUID();
-        Timestamp now=Timestamp.from(Instant.now());
+        Timestamp now=orderTimestamp();
         jdbc.update("""
             INSERT INTO crm.sales_order(tenant_id,id,pending_email_identity_id,buyer_user_id,status,total_amount,currency,created_at,fulfillment_mode)
             VALUES (?,?,?,?,'PLACED',?,?,?,?)
@@ -305,8 +311,8 @@ public class AutoOrderService {
     void configureQuoteLocks() {
         String db=jdbc.execute((ConnectionCallback<String>) c->
                 c.getMetaData().getDatabaseProductName());
-        String suffix=(db!=null&&db.toLowerCase(java.util.Locale.ROOT).contains("postgresql"))
-                ?"FOR SHARE":"FOR UPDATE";
+        postgresOrderClock=db!=null&&db.toLowerCase(java.util.Locale.ROOT).contains("postgresql");
+        String suffix=postgresOrderClock?"FOR SHARE":"FOR UPDATE";
         verifiedBuyerIdentityLockSql="SELECT status,external_subject "
                 +"FROM public.iam_user_account WHERE id=? "+suffix;
     }
@@ -453,7 +459,7 @@ public class AutoOrderService {
             throw new IllegalStateException("QUOTE_PROPOSAL_INCONSISTENT");
 
         UUID orderId=UUID.randomUUID();
-        Timestamp now=Timestamp.from(Instant.now());
+        Timestamp now=orderTimestamp();
         BigDecimal total=quote.price().multiply(BigDecimal.valueOf(quote.quantity()));
         buyer.userId();
         jdbc.update("""
