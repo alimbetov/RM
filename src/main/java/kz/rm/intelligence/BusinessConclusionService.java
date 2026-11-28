@@ -58,10 +58,10 @@ public class BusinessConclusionService {
                 throw new IllegalArgumentException("B55_EVIDENCE_REF");
         }
     }
-    private record Guard(Code code,DataQuality quality){}
+    record Guard(Code code,DataQuality quality){}
     private static Guard conflict(){return new Guard(Code.INCOMPATIBLE_EVIDENCE,DataQuality.STALE);}
     /** Never qualify a mixed route by revision equality alone. No physical-unit inference from ORDER_UNITS. */
-    private static Guard guard(List<Evidence> evidence,List<LocalDate> dates){
+    static Guard guard(List<Evidence> evidence,List<LocalDate> dates){
         AuthorizedAnalyticalReadService.Result base=null;
         var firstQuery=evidence.getFirst().query();
         for(var series:evidence){

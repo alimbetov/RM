@@ -125,11 +125,14 @@ final class ReportTemplateRenderer {
         }
     }
 
-    static byte[] renderWindow(String code,UUID tenant,UUID actor,List<Query> queries,List<List<Result>> windows,
+    static byte[] renderWindow(String code,UUID tenant,UUID actor,List<Query> queries,List<LocalDate> dates,List<List<Result>> windows,
                               BusinessInterpretationEngine.Policy policy,BusinessAnomalyAssessment.Policy anomaly){
         if(windows.size()!=queries.size()||windows.isEmpty()||windows.getFirst().isEmpty())
             throw new IllegalArgumentException("REPORT_TEMPLATE_WINDOW");
         var base=windows.getFirst();var first=base.getFirst();var last=base.getLast();var query=queries.getFirst();
+        var evidence=java.util.stream.IntStream.range(0,queries.size())
+            .mapToObj(i->new BusinessConclusionService.Evidence(queries.get(i),windows.get(i))).toList();
+        var guard=BusinessConclusionService.guard(evidence,dates);
         for(int i=0;i<windows.size();i++){
             var w=windows.get(i);var q=queries.get(i);
             if(w.size()!=base.size())throw new IllegalArgumentException("REPORT_TEMPLATE_WINDOW");
@@ -177,37 +180,41 @@ final class ReportTemplateRenderer {
                 kpi(dash,6,"Period",periodLabel(last.period()),"");
             }else if(code.equals("RM-R10")){
                 var sheet=book.getSheet("Dynamics");
-                var result=BusinessAnomalyAssessment.evaluate(points(tenant,actor,query,base),policy,anomaly);
+                var result=guard==null?BusinessAnomalyAssessment.evaluate(points(tenant,actor,query,base),policy,anomaly):null;
                 for(int i=0;i<6;i++){var p=base.get(i);put(sheet,i+1,0,periodLabel(p.period()));put(sheet,i+1,1,p.value());put(sheet,i+1,5,p.quality().name());}
                 // A single preceding baseline is evidence for the final point only.
                 // No fabricated rolling baseline or threshold series.
-                if(result.quality()==DataQuality.READY){
+                boolean admitted=result!=null&&result.quality()==DataQuality.READY;
+                if(admitted){
                     put(sheet,6,2,result.sma());
-                    if(result.sma()!=null&&result.stddev()!=null){
-                        var width=result.stddev().multiply(anomaly.sigmaMultiplier());
-                        put(sheet,6,3,result.sma().subtract(width));put(sheet,6,4,result.sma().add(width));
-                    }
+                    var band=BusinessAnomalyAssessment.band(result,anomaly);
+                    put(sheet,6,3,band.lower());put(sheet,6,4,band.upper());
                 }
                 kpi(dash,0,"FULFILLED_AMOUNT",last.value(),unit);
-                kpi(dash,3,"SMA_BASELINE",result.quality()==DataQuality.READY?result.sma():null,unit);
-                kpi(dash,6,"Deviation",result.quality()==DataQuality.READY?result.deviation():null,unit);
-                meta(book,"Anomaly result",result.pattern()+" / "+result.reason()+" / "+result.quality());
+                kpi(dash,3,"SMA_BASELINE",admitted?result.sma():null,unit);
+                kpi(dash,6,"Deviation",admitted?result.deviation():null,unit);
+                meta(book,"Anomaly result",guard!=null?"ABSTAINED / "+guard.code()+" / "+guard.quality():
+                    result.pattern()+" / "+result.reason()+" / "+result.quality());
             }else if(code.equals("RM-R11")){
                 var series=java.util.stream.IntStream.range(0,3)
                     .mapToObj(i->points(tenant,actor,queries.get(i),windows.get(i))).toList();
-                var result=BusinessFactorAssessment.evaluate(series.get(0),series.get(1),series.get(2),policy);
-                var sheet=book.getSheet("Details");var deltas=Arrays.asList(result.fulfilledDelta(),result.stockInDelta(),result.stockOutDelta());
+                var result=guard==null?BusinessFactorAssessment.evaluate(series.get(0),series.get(1),series.get(2),policy):null;
+                var sheet=book.getSheet("Details");
+                boolean admitted=result!=null&&result.quality()==DataQuality.READY;
+                var deltas=admitted?Arrays.asList(result.fulfilledDelta(),result.stockInDelta(),result.stockOutDelta()):Collections.<BigDecimal>nCopies(3,null);
+                var quality=guard!=null?guard.quality():result.quality();
                 for(int i=0;i<3;i++){
                     var w=windows.get(i);var p=w.getFirst();var c=w.getLast();
                     put(sheet,i+1,0,c.metric().name());put(sheet,i+1,1,c.value());put(sheet,i+1,2,p.value());
-                    if(result.quality()==DataQuality.READY){
+                    if(admitted){
                         put(sheet,i+1,3,deltas.get(i));var comparison=DerivedMetricEngine.comparePeriods(p.value(),p.quality(),c.value(),c.quality());
                         put(sheet,i+1,4,comparison.growth().value());
                     }
-                    put(sheet,i+1,5,"CURRENT="+c.quality()+"; PRIOR="+p.quality()+"; FACTOR="+result.quality());
+                    put(sheet,i+1,5,"CURRENT="+c.quality()+"; PRIOR="+p.quality()+"; FACTOR="+quality);
                     kpi(dash,i==0?0:i==1?3:6,c.metric().name(),c.value(),c.unit());
                 }
-                meta(book,"Factor result",result.status()+" / "+result.reason()+" / "+result.quality());
+                meta(book,"Factor result",guard!=null?"ABSTAINED / "+guard.code()+" / "+guard.quality():
+                    result.status()+" / "+result.reason()+" / "+result.quality());
             }else throw new IllegalArgumentException("REPORT_WINDOW_TEMPLATE");
             refreshCharts(book);book.write(out);
             byte[] bytes=out.toByteArray();if(bytes.length>2*1024*1024)throw new IllegalStateException("REPORT_OUTPUT_SIZE");

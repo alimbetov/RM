@@ -24,6 +24,15 @@ final class BusinessAnomalyAssessment {
                   BigDecimal actual,BigDecimal sma,BigDecimal ema,BigDecimal stddev,BigDecimal cv,
                   BigDecimal baselineSlope,BigDecimal deviation,BigDecimal standardizedDeviation,
                   boolean anomalyCandidate,String decisionEligibility){}
+    record Band(BigDecimal lower,BigDecimal upper){}
+    /** Same sigma multiplier as the admitted anomaly test; never a confidence interval. */
+    static Band band(Result result,Policy policy){
+        Objects.requireNonNull(result);Objects.requireNonNull(policy);
+        if(result.policyVersion()!=policy.version()||result.quality()!=DataQuality.READY
+            ||result.sma()==null||result.stddev()==null)return new Band(null,null);
+        var width=result.stddev().multiply(policy.sigmaMultiplier());
+        return new Band(result.sma().subtract(width),result.sma().add(width));
+    }
     static Result evaluate(List<BusinessInterpretationEngine.Point> input,
                            BusinessInterpretationEngine.Policy materiality,Policy policy){
         Objects.requireNonNull(materiality);Objects.requireNonNull(policy);

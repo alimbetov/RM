@@ -152,9 +152,10 @@ public class AuthorizedAnalyticalReadService {
      * No new source, transaction strategy or calculation engine. */
     byte[] renderScopedTemplate(VerifiedActor actor,UUID tenant,String code,List<Query> queries,List<LocalDate> anchors,
                                 BusinessInterpretationEngine.Policy policy,BusinessAnomalyAssessment.Policy anomaly){
-        ReportTemplateRenderer.requireWindow(code,queries,anchors,policy,anomaly);
-        var read=readWindows(actor,tenant,queries,anchors,false,null,true);
-        return ReportTemplateRenderer.renderWindow(code,tenant,actor.userId(),queries,read.windows(),policy,anomaly);
+        var qs=List.copyOf(queries);var dates=List.copyOf(anchors);
+        ReportTemplateRenderer.requireWindow(code,qs,dates,policy,anomaly);
+        var read=readWindows(actor,tenant,qs,dates,false,null,true);
+        return ReportTemplateRenderer.renderWindow(code,tenant,actor.userId(),qs,dates,read.windows(),policy,anomaly);
     }
     private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,
                                    boolean report,AccountingPolicy accounting,boolean reportPermission){
