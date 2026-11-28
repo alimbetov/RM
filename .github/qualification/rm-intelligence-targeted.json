@@ -412,6 +412,14 @@
     {
       "classname": "kz.rm.intelligence.ReportDatasetDigestTest",
       "name": "r02ManifestAndDatasetMathematicalContract"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "appendFreezeCommitAndRollbackRacePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "expiredBuildCannotResumeAfterWaitingPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"
