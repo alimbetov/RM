@@ -138,8 +138,7 @@ class FileRecoveryService {
                     var expected=ReportEncryptedStorage.persisted(tenant,fileId,claim.activeKey(),
                         claim.mime(),claim.size(),claim.sha256());
                     valid=encrypted.matches(expected,claim.activeKey(),false);
-                } else if(Integer.valueOf(0).equals(claim.version())&&!ReportStorageKey.encrypted(claim.activeKey())
-                           && !"CONFIDENTIAL".equals(claim.classification()))
+                } else if(Integer.valueOf(0).equals(claim.version())&&!ReportStorageKey.encrypted(claim.activeKey()))
                     valid=storage.matches(claim.activeKey(),claim.size(),claim.sha256());
                 else throw new IOException("REPORT_STORAGE_VERSION_UNSUPPORTED");
                 if(!valid) {
