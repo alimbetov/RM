@@ -20,6 +20,12 @@
         <aws.sdk.version>2.25.27</aws.sdk.version>
     </properties>
     <dependencies>
+        <!-- D06C: fill the existing approved Excel template. -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>6.0.0</version>
+        </dependency>
         <!-- S3-compatible RustFS adapter: Java only, no second microservice. -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>

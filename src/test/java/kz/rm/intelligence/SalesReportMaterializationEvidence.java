@@ -154,6 +154,7 @@ public final class SalesReportMaterializationEvidence {
         assertThat(counter.l0).isEqualTo(2);
         assertThat(countedL3.calls).isEqualTo(2);
         assertStatisticalView(report,tenant,"225");
+        ReportTemplateJourneyEvidence.qualify(report,"225");
         var diagnostic=context.getBean(NativeBookedReportEvidenceService.class).inspect(actor,tenant,calendar,
             java.time.YearMonth.from(last),java.time.YearMonth.from(from));
         assertThat(diagnostic.state()).isEqualTo(NativeBookedReportEvidenceService.State.SOURCE_NOT_QUALIFIED);
