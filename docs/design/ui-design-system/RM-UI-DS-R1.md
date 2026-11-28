@@ -149,6 +149,10 @@ Visual candidate, not Design Freeze. Retain all existing views, mock contracts, 
 
 Regression: 16/16 Chromium in-memory scenarios passed, existing test unchanged. See [visual qualification](ui-kit/QUALIFICATION-K9A.md). Actual HTTP assets, Safari, Firefox, physical devices, actual browser zoom, full accessibility/localization and owner visual review remain pending. No backend/CI changes.
 
+## 8.7 Functional motion — R1.0K.9A-M (2026-11-28)
+
+Keep motion subordinate to business work. Existing CSS and tokens define 100ms control color transitions, 160ms dialog/menu entry, 200ms drawer entry, and 650ms loading rotation limited to three cycles. Motion is opt-in via prefers-reduced-motion:no-preference; reduced motion has no transitions or animations and retains static busy indication and status text. No motion on KPI values, charts or table rows, no perpetual decoration, no delayed closing or artificial loading, no JS animation runtime. Keep focus, visibility and request states independent of animation. Do not animate layout dimensions or use transition:all. Exit actions and Escape remain immediate. See [motion qualification](ui-kit/QUALIFICATION-MOTION.md). Candidate values pending visual approval. No changes to business logic, HTML, SVG icons, backend or CI.
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, branding palette, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.

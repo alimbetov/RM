@@ -34,3 +34,14 @@
 
 /* Modern dashboard presentation; existing components and data contracts. */
 #dashboard{background:none;border:0;box-shadow:none;padding:0}#dashboard .grid{margin-bottom:var(--rm-space-4)}.metric-label{display:flex;align-items:center;gap:var(--rm-space-2);color:var(--rm-text-muted);font-weight:550}.metric-label .rm-icon{color:var(--rm-primary)}.metric-meta{font-size:var(--rm-text-xs);color:var(--rm-text-muted);margin:var(--rm-space-2) 0 0}.chart-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--rm-space-3)}.chart-head>div{min-width:0}.chart-head h2{margin-bottom:var(--rm-space-1)}.chart-head .chart-tools{margin:0}#dashboard figure{margin:var(--rm-space-3) 0}figcaption{color:var(--rm-text-muted);font-size:var(--rm-text-xs)}details>summary{cursor:pointer;color:var(--rm-primary);font-weight:600;padding-block:var(--rm-space-2)}.table-wrap{border:1px solid var(--rm-border);border-radius:var(--rm-radius-md)}#registry-region td:last-child button{color:var(--rm-primary);border-color:transparent;background:transparent}#registry-region td:last-child button:hover{background:var(--rm-info-bg)}#business-form .grid{gap:var(--rm-space-6)}.crumbs{color:var(--rm-text-muted);font-size:var(--rm-text-xs)}.crumbs [aria-current]{color:var(--rm-text);font-weight:600} @media(max-width:767px){#side{padding:var(--rm-space-3)}.brand-copy small{display:none}#business-form .grid{gap:var(--rm-space-4)}}
+
+/* Contextual motion: only an entry cue, never delayed closing or hidden data. */
+.table-status[data-state=loading]::before{content:"";display:inline-block;inline-size:12px;block-size:12px;margin-inline-end:8px;border:2px solid currentColor;border-inline-end-color:transparent;border-radius:50%;vertical-align:-1px}
+@media(prefers-reduced-motion:no-preference){
+  .nav-item,.tabs button{transition:background-color var(--rm-motion-fast) var(--rm-motion-ease),color var(--rm-motion-fast) var(--rm-motion-ease)}
+  #drawer[open]{animation:rm-drawer-in var(--rm-motion-panel) var(--rm-motion-ease)}
+  .table-status[data-state=loading]::before{animation:rm-loading-turn var(--rm-motion-loading) linear 3}
+}
+@media(max-width:767px) and (prefers-reduced-motion:no-preference){#side:not([hidden]) nav{animation:rm-nav-in var(--rm-motion-standard) var(--rm-motion-ease)}}
+@keyframes rm-drawer-in{from{transform:translateX(8px)}to{transform:none}}
+@keyframes rm-nav-in{from{transform:translateY(-4px)}to{transform:none}}
