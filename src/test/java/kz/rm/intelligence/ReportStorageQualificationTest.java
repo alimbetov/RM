@@ -280,4 +280,45 @@ class ReportStorageQualificationTest {
             assertThat(jdbc.queryForObject("SELECT 'BUILD_INCOMPLETE'=ANY(reporting.int_report_retention_blockers(?))",Boolean.class,d)).isTrue();
         }finally{release.countDown();pool.shutdownNow();}
     }
+    @Test void durableRequestBindingAndLostResponseRecoveryPg(){
+        UUID t=tenant(),other=tenant(),i=UUID.randomUUID(),a=UUID.randomUUID(),w=UUID.randomUUID();
+        LocalDate d=day();ensure(d);String key="R02-"+i,req="3".repeat(64),exp=expected(t,a,BigDecimal.ONE);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
+            UUID.class,t,i,key,req,SCOPE,"RM-R02","1")).isEqualTo(i);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
+            UUID.class,t,UUID.randomUUID(),key,req,SCOPE,"RM-R02","1")).isEqualTo(i);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
+            UUID.class,t,UUID.randomUUID(),key,SOURCE,SCOPE,"RM-R02","1")).isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("INT_REPORT_REQUEST_CONFLICT");
+        UUID foreign=UUID.randomUUID();
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
+            UUID.class,other,foreign,key,req,SCOPE,"RM-R02","1")).isEqualTo(foreign);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,i,a,d,w,SCOPE,SOURCE,1L,exp)).isTrue();
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,i,UUID.randomUUID(),d,w,SCOPE,SOURCE,1L,exp)).isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT");
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",
+            UUID.class,t,i,a,d)).isInstanceOf(DataAccessException.class).hasMessageContaining("INT_REPORT_DATASET_NOT_READY");
+        assertThat(append(t,a,d,w,1,BigDecimal.ONE)).isTrue();freeze(t,a,d,w);
+        new ReportDatasetValidationStore(jdbc,transactions).validateAndSeal(t,a,d,w,1L);
+        // Simulated lost response after seal: lookup uses the persistent binding.
+        UUID found=jdbc.queryForObject("""
+            SELECT l.dataset_id FROM reporting.int_report_request_attempt l
+            JOIN reporting.int_report_dataset_attempt b USING(tenant_id,dataset_id,staging_date)
+            WHERE l.tenant_id=? AND l.instance_id=? AND b.build_state='READY'
+            """,UUID.class,t,i);
+        assertThat(found).isEqualTo(a);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",UUID.class,t,i,found,d)).isEqualTo(a);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",UUID.class,t,i,found,d)).isEqualTo(a);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",
+            UUID.class,t,foreign,a,d)).isInstanceOf(DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_SCOPE");
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",
+            UUID.class,other,foreign,a,d)).isInstanceOf(DataAccessException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.int_report_request_attempt WHERE tenant_id=? AND instance_id=? AND selected_at IS NOT NULL",
+            Long.class,t,i)).isEqualTo(1L);
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,i,UUID.randomUUID(),d,w,SCOPE,SOURCE,1L,exp)).isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT");
+    }
 }

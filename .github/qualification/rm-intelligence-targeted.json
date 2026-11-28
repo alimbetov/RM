@@ -420,6 +420,10 @@
     {
       "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
       "name": "expiredBuildCannotResumeAfterWaitingPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "durableRequestBindingAndLostResponseRecoveryPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

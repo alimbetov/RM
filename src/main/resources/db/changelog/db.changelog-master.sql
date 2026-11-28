@@ -7864,3 +7864,107 @@ REVOKE ALL ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
 -- Owner DML remains outside admitted API; cumulative budget enforced by
 -- serialized ingress, not a claim of enforcement against the database owner.
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_BATCH_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0230-int-report-request-recovery dbms:postgresql splitStatements:false
+-- Dormant owner-side request identity and attempt binding. No runtime grants,
+-- publication permit, cleanup or reactivation of an expired build token.
+CREATE TABLE reporting.int_report_request_attempt (
+ tenant_id uuid NOT NULL, instance_id uuid NOT NULL, dataset_id uuid NOT NULL,
+ staging_date date NOT NULL, selected_at timestamptz,
+ PRIMARY KEY(tenant_id,instance_id,dataset_id),
+ UNIQUE(tenant_id,dataset_id),
+ FOREIGN KEY(tenant_id,instance_id) REFERENCES reporting.int_report_instance(tenant_id,instance_id),
+ FOREIGN KEY(tenant_id,dataset_id,staging_date)
+ REFERENCES reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date)
+);
+CREATE UNIQUE INDEX uq_int_report_request_selected
+ ON reporting.int_report_request_attempt(tenant_id,instance_id) WHERE selected_at IS NOT NULL;
+CREATE TRIGGER trg_int_report_request_attempt_identity
+ BEFORE UPDATE OF tenant_id,instance_id,dataset_id,staging_date OR DELETE
+ ON reporting.int_report_request_attempt FOR EACH ROW EXECUTE FUNCTION crm.int_reject_fact_mutation();
+CREATE TRIGGER trg_int_report_request_attempt_no_truncate BEFORE TRUNCATE
+ ON reporting.int_report_request_attempt FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
+
+CREATE FUNCTION reporting.int_report_request_selection_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.selected_at IS NOT NULL THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_INITIAL'; END IF;
+ ELSE
+   IF OLD.selected_at IS NOT NULL OR NEW.selected_at IS NULL OR NOT EXISTS(
+     SELECT 1 FROM reporting.int_report_dataset_attempt a
+     WHERE a.tenant_id=NEW.tenant_id AND a.dataset_id=NEW.dataset_id AND a.staging_date=NEW.staging_date
+       AND a.build_state='READY')
+   THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_TRANSITION'; END IF;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM reporting.int_report_instance i
+   JOIN reporting.int_report_dataset_attempt a ON a.tenant_id=i.tenant_id AND a.scope_digest=i.scope_digest
+   WHERE i.tenant_id=NEW.tenant_id AND i.instance_id=NEW.instance_id
+     AND a.dataset_id=NEW.dataset_id AND a.staging_date=NEW.staging_date)
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_request_selection BEFORE INSERT OR UPDATE ON reporting.int_report_request_attempt
+ FOR EACH ROW EXECUTE FUNCTION reporting.int_report_request_selection_guard();
+
+-- READ COMMITTED: conflict resolution and lookup are distinct statements.
+CREATE FUNCTION reporting.int_report_register_request(t uuid,i uuid,k text,req text,s text,code text,ver text)
+ RETURNS uuid LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE x reporting.int_report_instance%ROWTYPE;
+BEGIN
+ INSERT INTO reporting.int_report_instance(tenant_id,instance_id,idempotency_key,request_digest,scope_digest,report_code,template_version)
+ VALUES(t,i,k,req,s,code,ver) ON CONFLICT(tenant_id,idempotency_key) DO NOTHING;
+ SELECT * INTO x FROM reporting.int_report_instance WHERE tenant_id=t AND idempotency_key=k;
+ IF NOT FOUND OR (x.request_digest,x.scope_digest,x.report_code,x.template_version)
+ IS DISTINCT FROM (req,s,code,ver) THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_CONFLICT'; END IF;
+ RETURN x.instance_id;
+END $$;
+
+-- Shared date fence first; lock only the logical request, never a previous
+-- attempt under this lock. New attempt and durable binding commit together.
+CREATE FUNCTION reporting.int_report_allocate_request(t uuid,i uuid,a uuid,d date,w uuid,s text,src text,n bigint,dig text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i AND scope_digest=s FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF EXISTS(SELECT 1 FROM reporting.int_report_request_attempt l
+   JOIN reporting.int_report_dataset_attempt b USING(tenant_id,dataset_id,staging_date)
+   WHERE l.tenant_id=t AND l.instance_id=i
+   AND (l.selected_at IS NOT NULL OR b.build_state='READY' OR b.build_until>clock_timestamp()))
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT'; END IF;
+ PERFORM reporting.int_report_allocate(t,a,d,w,s,src,n,dig);
+ INSERT INTO reporting.int_report_request_attempt(tenant_id,instance_id,dataset_id,staging_date) VALUES(t,i,a,d);
+ RETURN true;
+END $$;
+
+-- Select exactly one READY attempt. No publication or access admission.
+-- Day -> attempt -> instance; never acquire another day fence here.
+CREATE FUNCTION reporting.int_report_select_request(t uuid,i uuid,a uuid,d date)
+ RETURNS uuid LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE chosen uuid;
+BEGIN
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ PERFORM 1 FROM reporting.int_report_dataset_attempt
+ WHERE tenant_id=t AND dataset_id=a AND staging_date=d AND build_state='READY' FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_DATASET_NOT_READY'; END IF;
+ PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i FOR NO KEY UPDATE;
+ IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM reporting.int_report_request_attempt
+ WHERE tenant_id=t AND instance_id=i AND dataset_id=a AND staging_date=d)
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ SELECT dataset_id INTO chosen FROM reporting.int_report_request_attempt
+ WHERE tenant_id=t AND instance_id=i AND selected_at IS NOT NULL;
+ IF FOUND THEN RETURN chosen; END IF;
+ UPDATE reporting.int_report_request_attempt SET selected_at=clock_timestamp()
+ WHERE tenant_id=t AND instance_id=i AND dataset_id=a AND staging_date=d AND selected_at IS NULL;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_LOST'; END IF;
+ RETURN a;
+END $$;
+REVOKE ALL ON reporting.int_report_request_attempt FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_REQUEST_RECOVERY_FORWARD_ONLY'; END; $$;
