@@ -71,3 +71,8 @@
 .observation{border-inline-start:3px solid var(--rm-signal);background:var(--rm-surface-subtle);padding:var(--rm-space-3);border-radius:var(--rm-radius-sm);margin:var(--rm-space-3) 0}
 .observation p{margin:var(--rm-space-1) 0 0}
 #chart-details p{margin-top:var(--rm-space-2)}
+
+/* RM OYU: quiet, non-interactive cultural signature in the desktop sidebar only. */
+.rm-oyu{display:none;inline-size:156px;max-inline-size:100%;block-size:auto;margin:var(--rm-space-2) auto 0;color:var(--rm-nav-muted);opacity:.14;pointer-events:none}
+@media screen and (min-width:1024px) and (min-height:720px){.rm-oyu{display:block}}
+@media(forced-colors:active){.rm-oyu{display:none}}

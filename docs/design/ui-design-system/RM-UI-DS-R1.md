@@ -163,6 +163,10 @@ Implemented approved direction on the existing static UI Kit: Deep Navy navigati
 
 Qualification: 16/16 existing unified scenarios + 16/16 Guardian scenarios + 2/2 motion scenarios, all completed exit 0. Sampled contrast checks in both themes: 17 pairs; actual external HTTP resources, Safari/Firefox, devices, full accessibility and RU/KK/EN localization remain open. See [qualification](ui-kit/QUALIFICATION-GUARDIAN.md). Design Freeze is pending owner visual acceptance and remaining required checks. No changes to base_dev, main, backend or CI.
 
+## 8.10 RM OYU — restrained cultural presence (2026-11-28)
+
+R1.0K.10A implements a single subtle, independently drawn Soft Jiek-inspired border strip in the desktop sidebar, following the owner's preference for a barely noticeable ornament without sharp corners. Reference requirements in RM-GUARDIAN-DESIGN-R1.md §2.1. No ornament in the working area, no new icon IDs, dependencies, business logic or CI changes. 28/28 targeted Chromium in-memory cases passed. Full previous regression was not rerun for this decorative-only increment; Design Freeze and prior cross-browser/physical-device limitations remain open. See [qualification](ui-kit/QUALIFICATION-OYU.md).
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
