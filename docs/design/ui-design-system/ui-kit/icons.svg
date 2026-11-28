@@ -42,4 +42,17 @@
 <symbol id="rm-missing" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 12h8"/></symbol>
 <symbol id="rm-trend-up" viewBox="0 0 24 24"><path d="M3 18l7-7 4 4 7-9M15 6h6v6"/></symbol>
 <symbol id="rm-trend-down" viewBox="0 0 24 24"><path d="M3 6l7 7 4-4 7 9M15 18h6v-6"/></symbol>
+<symbol id="rm-chevron-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+<symbol id="rm-chevron-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+<symbol id="rm-chevron-up" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7"/></symbol>
+<symbol id="rm-first-page" viewBox="0 0 24 24"><path d="M11 5l-7 7 7 7M20 5l-7 7 7 7"/></symbol>
+<symbol id="rm-last-page" viewBox="0 0 24 24"><path d="M4 5l7 7-7 7M13 5l7 7-7 7"/></symbol>
+<symbol id="rm-more" viewBox="0 0 24 24"><path d="M6 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM13 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM20 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></symbol>
+<symbol id="rm-panel-left" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM9 4v16M5 8h2m-2 4h2"/></symbol>
+<symbol id="rm-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.1M3 12h.1M3 18h.1"/></symbol>
+<symbol id="rm-grid" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></symbol>
+<symbol id="rm-sort" viewBox="0 0 24 24"><path d="M7 4v16m-3-3 3 3 3-3M17 20V4m-3 3 3-3 3 3"/></symbol>
+<symbol id="rm-reset" viewBox="0 0 24 24"><path d="M4 9a8 8 0 1 1 1 9M4 4v5h5"/></symbol>
+<symbol id="rm-help" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM9 9a3 3 0 1 1 4 3q-1 .6-1 2m0 3v.1"/></symbol>
+<symbol id="rm-logout" viewBox="0 0 24 24"><path d="M10 4H4v16h6M9 12h12m-4-4 4 4-4 4"/></symbol>
 </svg>

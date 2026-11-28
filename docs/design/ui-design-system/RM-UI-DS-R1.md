@@ -121,6 +121,10 @@ RM-UI-DS-R1.0K.1 is a candidate component standard, not Production Admission. Se
 
 Component CSS is separated from the page, grids are intrinsic to available container width, disabled inputs retain their disabled background, and reference controls exercise local demo actions only. Direct file:// loading is no longer the supported preview path for external SVG symbols; use a local HTTP server. Local Chromium in-memory fixture: 15/15 cases passed; actual external asset loading, other browsers and physical devices remain unqualified. All five runtime asset blob IDs were matched to the tested local source files. Test-only Playwright is not a frontend dependency and CI is unchanged.
 
+## 8.3 Application Shell and navigation — R1.0K.2 (2026-11-28)
+
+Reference [shell.html](ui-kit/shell.html), [shell.css](ui-kit/shell.css), [shell.js](ui-kit/shell.js), [qualification](ui-kit/QUALIFICATION-K2.md). Single navigation DOM with desktop sidebar at 1024 CSS px, wrapping tablet navigation from 768px, inline mobile disclosure below 768px. No modal drawer, duplicate mobile menu, framework, production route or permission logic. Header, demo workspace selector, breadcrumb, keyboard-operated tabs, native dropdown, filter form and pagination share existing design tokens and primitives. Selection updates the example heading, breadcrumb and active navigation item. All records are synthetic and shared across demo workspaces; workspace change resets filters and tabs, not a security boundary. Production tenant/auth admission is unchanged. Extended sprite has 56 unique symbols, retaining all original 43 IDs. Browser qualification remains partial; see explicit evidence and remaining checks. 
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, branding palette, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
