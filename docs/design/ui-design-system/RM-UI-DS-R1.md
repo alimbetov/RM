@@ -68,11 +68,28 @@ R1.0–R1.6 may advance without waiting for full analytical closure. Real integr
 - Performance budgets to be established from representative devices and data; test large table, repeated navigation and dashboard request fan-out. Do not set arbitrary release thresholds without measurement.
 - Future implementation gates: type checks, lint, component tests, accessibility and browser E2E. No existing backend CI gates modified.
 
-## 8. First technical priority
+## 8. First technical priority — UI Kit First (2026-11-28)
 
-RM-UI-DS-R1.0A — Existing UI/API Inventory & Information Architecture.
+RM-UI-DS-R1.0K — Minimal Standard UI Kit & Visual Baseline.
 
-Inspect base_dev for frontend assets, API controllers, security policies, DTOs, error contracts, existing locale/metric contracts and report/Radar capabilities. Reconcile with design/intelligent-commerce-r2. Produce screen catalog and role-to-route/API matrix with actual source references, explicit gaps and a minimal MVP slice (order/warehouse/analytics/Radar). No backend changes, no component library installation, no visual theme freeze before review.
+This decision supersedes the previous inventory-first sequencing in this section. The wider roadmap remains a backlog, not a prerequisite for creating the kit. The project owner requests a minimal base and standardization before broader frontend architecture. Full API inventory, navigation maps, business page catalog and production integration are deferred. The isolated static prototype is in scope; no framework installation, build pipeline or production API access.
+
+Initial reference assets:
+- [Design tokens](ui-kit/tokens.css) — one CSS custom-property source for colors, typography, spacing, radii, control sizes and semantic states.
+- [Visual catalog](ui-kit/index.html) — standalone HTML reference, open locally alongside tokens.css. Synthetic data only; no external dependencies or real mutations.
+
+Minimal component standard: use native HTML semantics first; one component name and a small set of variants; default/hover/focus/disabled plus loading and error when applicable. One primary action per action group. Financial values align right, carry explicit currency, and are never recalculated in the visual kit. Status has text, not color alone. A qualified zero is not a missing/unqualified value.
+
+| Increment | Scope | Evidence |
+|---|---|---|
+| K1 | Tokens, button variants, fields, choice controls | Visual reference and keyboard/contrast review |
+| K2 | Table, card, badge, alerts, empty/loading, dialog | Representative static examples and state review |
+| K3 | Tabs, pagination, date picker, switch, tooltip, shell basics | Add only when a representative workflow requires them |
+| K4 | Extract shared framework components after stack approval | Reuse token names and behavior; no parallel competing kit |
+
+K1/K2 initial reference created; not yet qualified in a browser. Candidate values: light theme, system font, 12/14/16/20/24 px type scale, 4 px spacing base, controls 32/40/48 px. Palette and dimensions are candidates until visual review. No dark theme, advanced charts, bespoke framework or complete page design required for initial kit.
+
+Acceptance: locally open catalog; inspect on desktop and narrow viewport; tab through interactive elements; verify focus, labels, disabled state, dialog close/return focus, readable contrast, status text and synthetic metric states. Record issues before treating the kit as accepted. Add components only on demonstrated reuse need. No full backend qualification is necessary for this static package; production security and API gates remain unchanged.
 
 ## 9. Open decisions
 
