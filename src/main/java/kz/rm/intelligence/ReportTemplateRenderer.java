@@ -226,6 +226,105 @@ final class ReportTemplateRenderer {
     private static void kpi(Sheet s,int col,String name,Object value,String unit){
         put(s,8,col,name);put(s,9,col,value);put(s,11,col,unit);
     }
+    static byte[] renderOrders(ReportTemplateOwnerBindings.Snapshot snapshot,PeriodResolver.Period current,
+                               PeriodResolver.Period prior,List<ReportTemplateOwnerBindings.StatusRow> rows){
+        return ownerWorkbook("RM-R03",snapshot,"Tenant-wide order status events","COUNT","PARTIAL / MISSING",book->{
+            var d=book.getSheet("Dashboard");var detail=book.getSheet("Details");
+            for(int i=0;i<rows.size();i++){
+                var p=rows.get(i);int row=i+1;
+                put(detail,row,0,p.metric());put(detail,row,1,p.current());put(detail,row,2,p.prior());
+                var c=DerivedMetricEngine.comparePeriods(p.prior(),p.priorQuality(),p.current(),p.currentQuality());
+                put(detail,row,3,c.change().value());put(detail,row,4,c.growth().value());
+                put(detail,row,5,"CURRENT="+p.currentQuality()+"; PRIOR="+p.priorQuality());
+                meta(book,p.metric()+" exact",exact(p.current())+" / "+exact(p.prior()));
+                if(i!=1)kpi(d,i==0?0:i==2?3:6,p.metric(),p.current(),"COUNT");
+            }
+            ownerPeriods(book,current,prior);meta(book,"Limits","Status event counts, not a cohort funnel; no qualified historical comparisons.");
+        });
+    }
+    static byte[] renderPositions(ReportTemplateOwnerBindings.Snapshot snapshot,UUID warehouse,List<ReportTemplateOwnerBindings.Position> rows){
+        return ownerWorkbook("RM-R06",snapshot,"Warehouse="+warehouse,"SKU_QUANTITY (per SKU)","LIVE POSITION",book->{
+            var d=book.getSheet("Dashboard");var detail=book.getSheet("Details");
+            for(int i=0;i<rows.size();i++){
+                var p=rows.get(i);int row=i+1;String sku=p.sku().toString();
+                put(detail,row,0,sku);put(detail,row,1,p.value());put(detail,row,2,p.quality().name());
+                meta(book,"CURRENT_AVAILABLE "+sku,exact(p.value())+" | "+p.quality());
+                if(i<3)kpi(d,i==0?0:i==1?3:6,sku,p.value(),"SKU_QUANTITY");
+            }
+            meta(book,"Warehouse",warehouse.toString());meta(book,"Coverage","LIVE_OWNER_POSITION_ONLY");
+            meta(book,"Limits","Per-SKU quantities; no aggregation across different SKU units; no historical balances.");
+        });
+    }
+    static byte[] renderDistribution(String code,ReportTemplateOwnerBindings.Snapshot snapshot,PeriodResolver.Period current,
+                            PeriodResolver.Period prior,List<UUID> warehouses,String currency,List<ReportTemplateOwnerBindings.DistributionRow> rows){
+        boolean products=code.equals("RM-R04");
+        return ownerWorkbook(code,snapshot,"Assigned warehouses="+warehouses,
+            products?currency:"Million "+currency,"PARTIAL / MISSING — observed source only",book->{
+            var d=book.getSheet("Dashboard");var detail=book.getSheet("Details");
+            if(products){
+                // Historical completeness is not established. Keep the rank bands,
+                // totals, counts and shares blank; show observed SKU amounts only.
+                put(detail,0,3,"FULFILLED_AMOUNT "+currency);
+                for(int i=0;i<rows.size();i++){
+                    var p=rows.get(i);put(detail,i+1,0,p.key());put(detail,i+1,3,p.current());
+                    put(detail,i+1,4,"PARTIAL: OBSERVED_NOT_RANKED");
+                }
+                put(book.getSheet("Groups"),1,6,"MISSING: QUALIFIED_POPULATION_REQUIRED");
+                kpi(d,0,"FULFILLED_AMOUNT",null,currency);kpi(d,3,"Eligible SKU",null,"COUNT");kpi(d,6,"Rank bands",null,"COUNT");
+                meta(book,"Limits","Observed SKU detail only. Full distribution, rank, total and share require complete authorized population.");
+            }else{
+                for(int i=0;i<rows.size();i++){
+                    var p=rows.get(i);put(detail,i+1,0,p.key());put(detail,i+1,1,million(p.current()));
+                    put(detail,i+1,2,million(p.prior()));put(detail,i+1,5,"PARTIAL / MISSING");
+                    meta(book,"Region "+p.key(),exact(p.current())+" / "+exact(p.prior())+" "+currency);
+                }
+                kpi(d,0,"FULFILLED_AMOUNT",null,"Million "+currency);kpi(d,3,"PREVIOUS",null,"Million "+currency);kpi(d,6,"YOY_RATIO",null,"ratio");
+                meta(book,"Limits","Observed fulfillment geography only; UNKNOWN retained; no growth or full distribution claim.");
+            }
+            ownerPeriods(book,current,prior);
+            meta(book,"Warehouse",warehouses.toString());meta(book,"Metric code","FULFILLED_AMOUNT");
+            meta(book,"Actual cutoff",current.endExclusive().isAfter(snapshot.asOf())?snapshot.asOf().toString():current.endExclusive().toString());
+        });
+    }
+    static byte[] renderGated(String code,ReportTemplateOwnerBindings.Snapshot snapshot,String reason){
+        return ownerWorkbook(code,snapshot,"No owner source admitted","NOT_AVAILABLE","MISSING / HOLD",book->{
+            var d=book.getSheet("Dashboard");kpi(d,0,"DATA STATUS","MISSING","");kpi(d,3,"SOURCE","NOT_ADMITTED","");kpi(d,6,"ADMISSION","HOLD","");
+            for(Sheet s:book){
+                if(Set.of("Dashboard","Metadata").contains(s.getSheetName()))continue;
+                for(Cell c:s.getRow(0))if(c.getCellType()==CellType.STRING){
+                    String label=c.getStringCellValue();
+                    if(label.startsWith("Mock "))c.setCellValue(label.substring(5));
+                    if(label.equals("Quality"))put(s,1,c.getColumnIndex(),"MISSING: "+reason);
+                }
+            }
+            meta(book,"Coverage","NOT_ADMITTED");meta(book,"Source revision","NOT_AVAILABLE");
+            meta(book,"Limits",reason+"; no actual or synthetic metric values.");
+        });
+    }
+    private static void ownerPeriods(XSSFWorkbook book,PeriodResolver.Period current,PeriodResolver.Period prior){
+        meta(book,"Period bounds",current.startInclusive()+" / "+current.endExclusive());
+        if(prior!=null)meta(book,"Baseline bounds",prior.startInclusive()+" / "+prior.endExclusive());
+        meta(book,"Time zone",current.zoneId());meta(book,"Calendar version",Long.toString(current.calendarVersion()));
+    }
+    private static byte[] ownerWorkbook(String code,ReportTemplateOwnerBindings.Snapshot snapshot,String scope,
+                                  String unit,String quality,java.util.function.Consumer<XSSFWorkbook> binding){
+        try(var book=open(code);var out=new ByteArrayOutputStream()){
+            clear(book);var d=book.getSheet("Dashboard");
+            put(d,2,0,quality+" | "+snapshot.tenant());put(d,3,0,"Scope: "+scope);
+            put(d,5,0,"Unit: "+unit+" | As of: "+snapshot.asOf());
+            put(d,6,0,"Internal diagnostic; no production decision admission.");
+            meta(book,"Report code",code);meta(book,"Report name",d.getRow(1).getCell(0).getStringCellValue());
+            meta(book,"Template version","MOCK-0.1 / D06C");meta(book,"Tenant",snapshot.tenant().toString());
+            meta(book,"Data quality",quality);meta(book,"Requested scope",scope);meta(book,"Actual scope",scope);
+            meta(book,"Unit / currency",unit);meta(book,"As of",snapshot.asOf().toString());
+            meta(book,"Generated at",Instant.now().toString());meta(book,"Mode","INTERNAL_DIAGNOSTIC");
+            meta(book,"Visibility","NOT_PUBLISHED");meta(book,"Source revision",Long.toString(snapshot.revision()));
+            meta(book,"Coverage","HISTORICAL_CONTINUITY_UNQUALIFIED");
+            binding.accept(book);refreshCharts(book);book.write(out);
+            byte[] bytes=out.toByteArray();if(bytes.length>2*1024*1024)throw new IllegalStateException("REPORT_OUTPUT_SIZE");
+            return bytes;
+        }catch(IOException e){throw new UncheckedIOException(e);}
+    }
     static XSSFWorkbook open(String code)throws IOException{
         if(code==null||!code.matches("RM-R(0[1-9]|1[0-2])"))throw new IllegalArgumentException("REPORT_TEMPLATE_CODE");
         try(var in=Objects.requireNonNull(ReportTemplateRenderer.class.getResourceAsStream(ROOT+code+".xlsx"))){

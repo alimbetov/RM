@@ -63,6 +63,95 @@ public final class SalesReportMaterializationEvidence {
         }
         System.out.println("RM_D06C_SCOPED_TEMPLATE_SOURCE_ORACLE_PASS workbooks=3");
     }
+    public void ownerTemplates(VerifiedActor actor,VerifiedActor foreign,UUID tenant,long calendar,UUID warehouse,UUID sku,LocalDate today){
+        var service=context.getBean(ReportTemplateOwnerBindings.class);
+        var metric=context.getBean(MetricQueryService.class);
+        var month=java.time.YearMonth.from(today).minusMonths(1);
+        var bytes=service.orders(actor,tenant,calendar,month);
+        try(var book=readOwnerWorkbook(bytes,tenant)){
+            var sheet=book.getSheet("Details");
+            var expected=metric.calculate(actor,tenant,new MetricQuery(MetricRegistry.Code.PLACED_ORDERS,1,
+                new MetricSelection.OrderPeriod(new MetricSelection.PeriodChoice(PeriodResolver.Code.M,month.atDay(1),calendar))));
+            assertThat(expected.cells()).hasSize(1);
+            assertTemplateValue(sheet.getRow(1).getCell(1),expected.cells().getFirst().value());
+            assertThat(sheet.getRow(1).getCell(3).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+            assertThat(sheet.getRow(1).getCell(5).getStringCellValue()).contains("PARTIAL");
+        }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+        bytes=service.positions(actor,tenant,warehouse,java.util.List.of(sku));
+        try(var book=readOwnerWorkbook(bytes,tenant)){
+            var expected=metric.calculate(actor,tenant,new MetricQuery(MetricRegistry.Code.CURRENT_AVAILABLE,1,
+                new MetricSelection.LivePosition(warehouse,sku)));
+            assertThat(expected.cells()).hasSize(1);
+            var row=book.getSheet("Details").getRow(1);
+            assertThat(row.getCell(0).getStringCellValue()).isEqualTo(sku.toString());
+            assertTemplateValue(row.getCell(1),expected.cells().getFirst().value());
+            assertThat(row.getCell(2).getStringCellValue()).isEqualTo("READY");
+        }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+        for(var code:java.util.List.of("RM-R04","RM-R05")){
+            bytes=service.distribution(actor,tenant,code,calendar,PeriodResolver.Code.D,today,java.util.List.of(warehouse),"KZT");
+            try(var book=readOwnerWorkbook(bytes,tenant)){
+                var detail=book.getSheet("Details");
+                var from=java.sql.Timestamp.from(today.atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
+                String key=code.equals("RM-R04")?"sku_id::text":"coalesce(region_code,'UNKNOWN')";
+                var expected=jdbc.query("""
+                    SELECT %s,sum(amount) FROM crm.int_l2_expected_source
+                     WHERE tenant_id=? AND stream_code='FULFILLED' AND currency='KZT' AND warehouse_id=?
+                       AND event_at>=? AND event_at<transaction_timestamp()
+                     GROUP BY %s ORDER BY 1
+                    """.formatted(key,key),(rs,n)->new Object[]{rs.getString(1),rs.getBigDecimal(2)},tenant,warehouse,from);
+                for(int i=0;i<expected.size();i++){
+                    var row=detail.getRow(i+1);var p=expected.get(i);
+                    assertThat(row.getCell(0).getStringCellValue()).isEqualTo(p[0]);
+                    var amount=(java.math.BigDecimal)p[1];
+                    if(code.equals("RM-R04")){
+                        assertTemplateValue(row.getCell(3),amount);
+                        assertThat(row.getCell(1).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+                        assertThat(row.getCell(2).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+                    }else{
+                        assertTemplateValue(row.getCell(1),amount.movePointLeft(6));
+                        assertThat(row.getCell(3).getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+                    }
+                }
+                if(code.equals("RM-R04"))assertThat(book.getSheet("Groups").getRow(1).getCell(1).getCellType())
+                    .isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
+            }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+            assertThatThrownBy(()->service.distribution(foreign,tenant,code,calendar,PeriodResolver.Code.D,today,
+                java.util.List.of(warehouse),"KZT")).isInstanceOf(SecurityException.class);
+        }
+        for(var code:java.util.List.of("RM-R08","RM-R09","RM-R12")){
+            try(var book=readOwnerWorkbook(service.gated(actor,tenant,code),tenant)){
+                for(var sheet:book)if(!java.util.Set.of("Dashboard","Metadata").contains(sheet.getSheetName()))
+                    for(var row:sheet)if(row.getRowNum()>0)for(var c:row)
+                        assertThat(c.getCellType()).isNotEqualTo(org.apache.poi.ss.usermodel.CellType.NUMERIC);
+                var charts=book.getSheet("Dashboard").getDrawingPatriarch().getCharts();
+                for(var chart:charts){
+                    var plot=chart.getCTChartSpace().getChart().getPlotArea();
+                    for(var line:plot.getLineChartList())for(var series:line.getSerList())
+                        assertThat(series.getVal().getNumRef().getNumCache().sizeOfPtArray()).isZero();
+                    for(var bar:plot.getBarChartList())for(var series:bar.getSerList())
+                        assertThat(series.getVal().getNumRef().getNumCache().sizeOfPtArray()).isZero();
+                }
+                assertThat(book.getSheet("Dashboard").getRow(9).getCell(6).getStringCellValue()).isEqualTo("HOLD");
+            }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
+            assertThatThrownBy(()->service.gated(foreign,tenant,code)).isInstanceOf(SecurityException.class);
+        }
+        assertThatThrownBy(()->service.orders(foreign,tenant,calendar,month)).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->service.positions(foreign,tenant,warehouse,java.util.List.of(sku))).isInstanceOf(SecurityException.class);
+        assertThatThrownBy(()->service.positions(actor,tenant,warehouse,java.util.List.of(sku,sku))).isInstanceOf(IllegalArgumentException.class);
+        System.out.println("RM_D06C_OWNER_TEMPLATE_ORACLE_PASS owner=4 gated=3");
+    }
+    private static org.apache.poi.xssf.usermodel.XSSFWorkbook readOwnerWorkbook(byte[] bytes,UUID tenant)throws java.io.IOException{
+        try(var zip=new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(bytes))){
+            for(var e=zip.getNextEntry();e!=null;e=zip.getNextEntry())if(e.getName().endsWith(".xml")){
+                var xml=new String(zip.readNBytes(4*1024*1024+1),java.nio.charset.StandardCharsets.UTF_8);
+                assertThat(xml).doesNotContain("TENANT-A","SYNTHETIC MOCKUP","SYNTHETIC_NOT_QUALIFIED","DESIGN MOCK","-DEMO");
+            }
+        }
+        var book=new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(bytes));
+        assertThat(book.getSheet("Metadata").getRow(4).getCell(1).getStringCellValue()).isEqualTo(tenant.toString());
+        assertThat(book.getSheet("Dashboard").getDrawingPatriarch().getCharts()).hasSize(1);
+        return book;
+    }
     private static void assertTemplateValue(org.apache.poi.ss.usermodel.Cell cell,java.math.BigDecimal expected){
         if(expected==null)assertThat(cell.getCellType()).isEqualTo(org.apache.poi.ss.usermodel.CellType.BLANK);
         else if(expected.stripTrailingZeros().precision()>15)assertThat(cell.getStringCellValue()).isEqualTo(ReportDatasetDigest.decimal(expected));
