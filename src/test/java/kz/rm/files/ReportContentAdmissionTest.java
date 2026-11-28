@@ -39,6 +39,19 @@ class ReportContentAdmissionTest {
             ReportContentInspection.require(Format.XLSX,in.readAllBytes());
         }
     }
+    @Test void effectiveWorkbookContentTypeHonorsDefaultAndOverridePrecedence()throws Exception{
+        var fallback=entries();
+        fallback.put("[Content_Types].xml",TYPES.replace("Override PartName='/xl/workbook.xml'","Default Extension='xml'"));
+        ReportContentInspection.require(Format.XLSX,zip(fallback));
+        var wrong=new LinkedHashMap<>(fallback);
+        wrong.put("[Content_Types].xml",fallback.get("[Content_Types].xml").replace("</Types>",
+            "<Override PartName='/xl/workbook.xml' ContentType='application/xml'/></Types>"));
+        assertThrows(IOException.class,()->ReportContentInspection.require(Format.XLSX,zip(wrong)));
+        var duplicate=entries();
+        duplicate.put("[Content_Types].xml",TYPES.replace("</Types>",
+            "<Override PartName='/xl/workbook.xml' ContentType='application/xml'/></Types>"));
+        assertThrows(IOException.class,()->ReportContentInspection.require(Format.XLSX,zip(duplicate)));
+    }
     @Test void rejectsWrongContainerTraversalMacroExternalXmlAndInflation() throws Exception{
         assertThrows(IOException.class,()->ReportContentInspection.require(Format.XLSX,new byte[]{80,75,3,4}));
         for(var extra:List.of("../escape","xl/vbaProject.bin","xl/externalLinks/externalLink1.xml")){

@@ -67,7 +67,7 @@ final class ReportContentInspection {
                 if(entry.getCompressedSize()>0&&count>Math.max(64*1024L,100L*entry.getCompressedSize()))throw invalid();
                 if(data!=null){
                     XmlInfo info=xml(name,data.toByteArray());
-                    if(name.equals("[Content_Types].xml"))types=info.workbookType;
+                    if(name.equals("[Content_Types].xml"))types=WORKBOOK_TYPE.equals(info.workbookOverride!=null?info.workbookOverride:info.xmlDefault);
                     if(name.equals("_rels/.rels"))rootRel=info.workbookRelationship;
                     if(name.equals("xl/workbook.xml"))workbook=info.sheet;
                     if(name.equals("xl/_rels/workbook.xml.rels")){workbookRel=true;workbookTargets.addAll(info.worksheetTargets);}
@@ -78,8 +78,12 @@ final class ReportContentInspection {
                 }
             }
         }catch(XMLStreamException|IllegalArgumentException ex){throw invalid();}
-        if(!names.equals(central)||!types||!rootRel||!workbook||!workbookRel||workbookTargets.isEmpty()
-            ||!worksheets.containsAll(workbookTargets))throw invalid();
+        // Sanitized reason codes, no names, XML or business content in logs.
+        if(!names.equals(central))throw new IOException("REPORT_FORMAT_REJECTED:ZIP_DIRECTORY");
+        if(!types)throw new IOException("REPORT_FORMAT_REJECTED:WORKBOOK_CONTENT_TYPE");
+        if(!rootRel)throw new IOException("REPORT_FORMAT_REJECTED:OFFICE_DOCUMENT_REL");
+        if(!workbook||!workbookRel||workbookTargets.isEmpty()||!worksheets.containsAll(workbookTargets))
+            throw new IOException("REPORT_FORMAT_REJECTED:WORKSHEET_REL");
     }
     private static boolean allowedName(String n){
         String lower=n.toLowerCase(Locale.ROOT);
@@ -121,7 +125,9 @@ final class ReportContentInspection {
         return names;
     }
     private static final class XmlInfo {
-        boolean workbookType,workbookRelationship,sheet,worksheet;
+        boolean workbookRelationship,sheet,worksheet;
+        String workbookOverride,xmlDefault;
+        final Set<String> contentTypeKeys=new HashSet<>();
         Set<String> worksheetTargets=new HashSet<>();
     }
     private static XmlInfo xml(String name,byte[] bytes) throws XMLStreamException,IOException {
@@ -149,7 +155,10 @@ final class ReportContentInspection {
                         if(type==null)throw invalid();
                         String lower=type.toLowerCase(Locale.ROOT);
                         if(lower.contains("macroenabled")||lower.contains("vba")||lower.contains("oleobject")||lower.contains("activex"))throw invalid();
-                        if("/xl/workbook.xml".equals(r.getAttributeValue(null,"PartName"))&&WORKBOOK_TYPE.equals(type))info.workbookType=true;
+                        String key="Override".equals(tag)?r.getAttributeValue(null,"PartName"):r.getAttributeValue(null,"Extension");
+                        if(key==null||key.isBlank()||!info.contentTypeKeys.add(tag+":"+key.toLowerCase(Locale.ROOT)))throw invalid();
+                        if("Override".equals(tag)&&"/xl/workbook.xml".equals(key))info.workbookOverride=type;
+                        if("Default".equals(tag)&&"xml".equalsIgnoreCase(key))info.xmlDefault=type;
                     }
                     if(REL.equals(ns)&&"Relationship".equals(tag)){
                         String mode=r.getAttributeValue(null,"TargetMode"),target=r.getAttributeValue(null,"Target"),
