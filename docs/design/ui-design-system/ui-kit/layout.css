@@ -45,3 +45,29 @@
 @media(max-width:767px) and (prefers-reduced-motion:no-preference){#side:not([hidden]) nav{animation:rm-nav-in var(--rm-motion-standard) var(--rm-motion-ease)}}
 @keyframes rm-drawer-in{from{transform:translateX(8px)}to{transform:none}}
 @keyframes rm-nav-in{from{transform:translateY(-4px)}to{transform:none}}
+
+/* Guardian identity — one shell, two semantic themes. */
+#side{background:var(--rm-nav-surface);color:var(--rm-nav-text);border-color:var(--rm-nav-hover)}
+#side .nav-caption,#side .nav-note{color:var(--rm-nav-muted)}
+#side .nav-item{color:var(--rm-nav-text)}
+#side .nav-item:hover{background:var(--rm-nav-hover)}
+#side .nav-item[aria-current=page]{background:var(--rm-nav-active);color:#fff;box-shadow:inset 3px 0 0 var(--rm-nav-focus)}
+#side :focus-visible{outline-color:var(--rm-nav-focus)}
+.preferences{border-top:1px solid var(--rm-nav-hover);padding-top:var(--rm-space-3);margin:var(--rm-space-4) var(--rm-space-2);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:var(--rm-space-3)}
+.preferences label,.preferences small{color:var(--rm-nav-muted);font-size:var(--rm-text-xs)}
+.preferences select{color:var(--rm-nav-text);background:var(--rm-nav-hover);border-color:#8294ad;color-scheme:dark}
+.preferences small{grid-column:1/-1}
+.brand-mark{background:var(--rm-nav-surface);color:#fff;box-shadow:inset 0 0 0 1px var(--rm-nav-hover)}
+.brand-mark .rm-icon{width:26px;height:26px;stroke:#afcbff}
+.guardian-head{display:flex;align-items:flex-start;flex-wrap:wrap;gap:var(--rm-space-3)}
+.guardian-symbol{display:grid;place-items:center;flex:none;width:44px;height:44px;background:var(--rm-info-bg);color:var(--rm-info);border-radius:var(--rm-radius-md)}
+.guardian-head>div:last-child{flex:1 1 12rem;min-width:0}
+.guardian-head h2{margin-bottom:var(--rm-space-1)}
+.guardian-head p{margin:0 0 var(--rm-space-2)}
+.guardian-panel details{margin-top:var(--rm-space-3);border-top:1px solid var(--rm-border)}
+.guardian-checks{display:grid;gap:var(--rm-space-2);margin:0}
+.guardian-checks>div{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:var(--rm-space-2);padding:var(--rm-space-2) 0;border-bottom:1px solid var(--rm-border)}
+.guardian-checks dt{font-weight:550}.guardian-checks dd{margin:0}
+.observation{border-inline-start:3px solid var(--rm-signal);background:var(--rm-surface-subtle);padding:var(--rm-space-3);border-radius:var(--rm-radius-sm);margin:var(--rm-space-3) 0}
+.observation p{margin:var(--rm-space-1) 0 0}
+#chart-details p{margin-top:var(--rm-space-2)}

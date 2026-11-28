@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const labels={"dashboard":"Обзор","list":"Реестр","form":"Формы","detail":"Детализация","catalog":"UI Kit"};const views=Object.keys(labels);let active='dashboard',selected=new Set(),rows=[],page=1,sort=1,query='',state='',epoch=0,detail=null,total=0,loadState='loading';
+const labels={"dashboard":"Обзор бизнеса","list":"Реестр","form":"Формы","detail":"Детализация","catalog":"UI Kit"};const views=Object.keys(labels);let active='dashboard',selected=new Set(),rows=[],page=1,sort=1,query='',state='',epoch=0,detail=null,total=0,loadState='loading';
 const size=3,feedback=text=>{$('feedback').textContent=text;};
 // Replace only this boundary when actual API contracts are approved. All data is synthetic.
 const adapter={async list({tenant,query,state,sort,page,fail}){await new Promise(resolve=>setTimeout(resolve,35));if(fail)throw Error('DEMO_FAILURE');const data=Array.from({length:tenant==='A'?7:4},(_,i)=>({id:tenant+'-'+String(i+1).padStart(3,'0'),name:'Демо '+tenant+' / '+(i+1),state:i%2===0?'ready':'pending',money:i===0?'123456789012.34':'100.00'})).filter(r=>(!state||r.state===state)&&(r.id+' '+r.name).toLowerCase().includes(query)).sort((a,b)=>sort*a.id.localeCompare(b.id));return {rows:data.slice((page-1)*size,page*size),total:data.length};}};
@@ -26,5 +26,11 @@ $('chart-type').onchange=draw;
 function dateCheck(){$('to').setCustomValidity($('from').value&&$('to').value&&$('to').value<$('from').value?'Окончание раньше начала':'');}for(const id of ['from','to'])$(id).oninput=dateCheck;
 $('file').onchange=()=>{const f=$('file').files[0];$('file-info').textContent=f?f.name+' · '+f.size+' bytes · не отправлен':'Файл не отправляется и не читается.';};
 $('business-form').onsubmit=e=>{e.preventDefault();dateCheck();if(!e.target.reportValidity())return;const money=$('money').value.replace(',','.');const [whole,fraction='']=money.split('.');feedback('Демо сохранено: '+whole+'.'+fraction.padEnd(2,'0')+' KZT; количество '+$('quantity').value);};$('business-form').onreset=()=>{$('to').setCustomValidity('');$('file-info').textContent='Файл не отправляется и не читается.';$('form-error').textContent='';};
-$('tenant').onchange=()=>{++epoch;query='';state='';page=1;sort=1;detail=null;$('sort-head').setAttribute('aria-sort','ascending');$('q').value='';$('state').value='';$('chart-type').value='bar';selectTab(tabs[0]);$('detail-text').textContent='Выберите запись в таблице.';$('drawer-text').textContent='';if($('drawer').open)$('drawer').close();if($('confirm').open){$('confirm').returnValue='cancel';$('confirm').close();}$('business-form').reset();feedback('Переключён демонстрационный workspace '+$('tenant').value);draw();load();go('dashboard');};
+$('tenant').onchange=()=>{++epoch;query='';state='';page=1;sort=1;detail=null;$('sort-head').setAttribute('aria-sort','ascending');$('q').value='';$('state').value='';$('chart-type').value='bar';$('protection-details').open=false;$('chart-details').open=false;selectTab(tabs[0]);$('detail-text').textContent='Выберите запись в таблице.';$('drawer-text').textContent='';if($('drawer').open)$('drawer').close();if($('confirm').open){$('confirm').returnValue='cancel';$('confirm').close();}$('business-form').reset();feedback('Переключён демонстрационный workspace '+$('tenant').value);draw();load();go('dashboard');};
 $('notifications').onclick=()=>feedback('Демо уведомления: данные не подключены.');syncNav();view(location.hash.slice(1),false);draw();load();
+
+// Presentation preferences are local to this demo page, not tenant business policy.
+$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;};
+$('density').onchange=()=>{document.documentElement.dataset.density=$('density').value;};
+document.documentElement.dataset.theme=$('theme').value;
+document.documentElement.dataset.density=$('density').value;
