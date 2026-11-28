@@ -11,7 +11,11 @@
     "priorUnlinkedIds": 20,
     "r3": 75,
     "sourceIdentityMatches": 36,
-    "existingFindingReferences": 26
+    "existingFindingReferences": 26,
+    "remainingDomainObligations": 24,
+    "remainingSourceIdsReviewed": 10,
+    "newFindings": 5,
+    "totalFindingReferences": 31
   },
   "sources": [
     "docs/spec/RM-USER-SCENARIO-MASTER-REGISTRY-v1.json",
@@ -9969,6 +9973,391 @@
   "closure": {
     "semanticFull": "NOT_MEASURED",
     "globalMethodMapping": "HOLD",
-    "reason": "Unadjudicated scope/alias/section coverage; no evidence of whole-document semantic review."
-  }
+    "reason": "Unadjudicated scope/alias/section coverage; no evidence of whole-document semantic review.",
+    "remainingIdsSourceReview": "10/10; concrete registry links and semantic equivalence not asserted",
+    "next": "B.2B.5-Q: full section coverage, exact source-to-variant and scope decisions; selected P4 work remains independent."
+  },
+  "remainingDomainObligations": [
+    {
+      "id": "SFC-REM-KMS-01",
+      "domain": "KMS",
+      "source": {
+        "path": "docs/spec/RM-KMS-SPEC-R1.md",
+        "section": "§1–3"
+      },
+      "statement": "Tenant DEK AES-256-GCM; unique nonce per key, tenant+generation and authenticated envelope; never select by slot alone.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-KMS-02",
+      "domain": "KMS",
+      "source": {
+        "path": "docs/spec/RM-KMS-SPEC-R1.md",
+        "section": "§3–4"
+      },
+      "statement": "New random key per slot reuse; exactly one ACTIVE; READY not usable; archive recovery and revoked deny; counters not proof migration complete.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-KMS-03",
+      "domain": "KMS",
+      "source": {
+        "path": "docs/implementation/RM-KMS-R1.7-FENCING-QUALIFICATION.md",
+        "section": "Implemented fencing protocol"
+      },
+      "statement": "DB-clock lease and monotonic token, guarded SQL in same transaction; primitive qualification not multi-pod worker or all-writer fence.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-PII-01",
+      "domain": "IAM",
+      "source": {
+        "path": "docs/spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md",
+        "section": "§1–3"
+      },
+      "statement": "Separate global IAM key from tenant DEK; per-field AAD and separate HMAC keys; no plaintext fallback.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-PII-02",
+      "domain": "IAM",
+      "source": {
+        "path": "docs/spec/RM-IAM-PII-R2.5-GLOBAL-PROFILE-EMAIL-VERIFICATION.md",
+        "section": "§2"
+      },
+      "statement": "Initial email unverified; single-use purpose-bound proof; proof not login or permissions; old verified address current until new proof and atomic switch.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-PII-03",
+      "domain": "IAM",
+      "source": {
+        "path": "docs/operations/RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION.md",
+        "section": "§2"
+      },
+      "statement": "Freeze all legacy writers; verified backup/restore, bounded migration, zero residual plaintext and decryptability/HMAC checks before manual seal.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-PII-04",
+      "domain": "IAM",
+      "source": {
+        "path": "docs/architecture/IAM-CRM-R22E-DELETION-RETENTION-POLICY.md",
+        "section": "Deletion process"
+      },
+      "statement": "No cascade deletion of CRM/SALES evidence; pseudonymous refs not anonymous; external revocation pending until proved; no restore of deleted identity.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-FIL-01",
+      "domain": "FILES",
+      "source": {
+        "path": "docs/spec/RM-FILES-R1.0-SERVICE-CORE-IMPLEMENTATION-DECISIONS.md",
+        "section": "§1–3"
+      },
+      "statement": "Tenant immutable file object, typed owner attachment and fresh object/PII authority; general FILES grant insufficient.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-FIL-02",
+      "domain": "FILES",
+      "source": {
+        "path": "docs/spec/RM-FILES-R1.0-SERVICE-CORE-IMPLEMENTATION-DECISIONS.md",
+        "section": "§2"
+      },
+      "statement": "Bounded streaming, actual bytes digest, CLEAN only, scanner failure deny, no overwrite of available object.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-FIL-03",
+      "domain": "FILES",
+      "source": {
+        "path": "docs/operations/RM-FILES-RUSTFS-FLAG-ROLLOUT-R1.md",
+        "section": "Preserving existing blobs"
+      },
+      "statement": "Provider flag selects new staging only; use persisted provider; no auto migration, no silent fallback or corruption inference from outage.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-FIL-04",
+      "domain": "FILES",
+      "source": {
+        "path": "docs/spec/RM-FILES-R1.md",
+        "section": "Lifecycle / §7"
+      },
+      "statement": "Detach not physical delete; active references/hold/retention prevent deletion; private original not public.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-FIL-05",
+      "domain": "FILES/REPORTING",
+      "source": {
+        "path": "docs/spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md",
+        "section": "§2"
+      },
+      "statement": "Report-specific encrypted storage verification and atomic attachment/publication; old general plaintext decision not permission for report path.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-AUD-01",
+      "domain": "AUDIT",
+      "source": {
+        "path": "docs/implementation/RM-AUDIT-NIGHTLY-RETENTION-R1.md",
+        "section": "§1–3"
+      },
+      "statement": "Approved tenant retention 3–5 years, disabled default, strict cutoff, active legal hold excludes deletion, no blanket financial/consent purge.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-AUD-02",
+      "domain": "AUDIT",
+      "source": {
+        "path": "docs/implementation/RM-AUDIT-NIGHTLY-RETENTION-R1.md",
+        "section": "§2–4"
+      },
+      "statement": "Bounded deletion batches and common policy/hold advisory fence; row locator transaction-local; no auto partition drop.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-AUD-03",
+      "domain": "AUDIT",
+      "source": {
+        "path": "docs/architecture/IAM-CRM-R22E-DELETION-RETENTION-POLICY.md",
+        "section": "Retention matrix"
+      },
+      "statement": "Privacy erasure independent of retention; WAL/backups/external copies require own policy.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-GEO-01",
+      "domain": "GEO",
+      "source": {
+        "path": "docs/architecture/RM-PLATFORM-STANDARD-R2.md",
+        "section": "UC-GEO-01"
+      },
+      "statement": "Valid active KATO for locations; geography not tenant identity; public directory no CRM PII.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-GEO-02",
+      "domain": "ORG/SALES",
+      "source": {
+        "path": "docs/spec/RM-COMMERCIAL-GEO-REGION-QR-FULFILLMENT-R1.md",
+        "section": "§3–4"
+      },
+      "statement": "Nullable paired GPS; immutable consistent origin snapshot at confirm, no invented legacy origin; scope review.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-I18N-01",
+      "domain": "I18N",
+      "source": {
+        "path": "docs/spec/RM-I18N-R1.md",
+        "section": "§1–2"
+      },
+      "statement": "One entity, kk/ru/en/zh-Hans; IDs, currencies, quantities and states not translated; locale not region.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-I18N-02",
+      "domain": "I18N",
+      "source": {
+        "path": "docs/spec/RM-I18N-R1.md",
+        "section": "§2"
+      },
+      "statement": "Requested/resolved locale and explicit fallback; critical documents/consent require approved language or explicit choice; no PII translation.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-FIN-01",
+      "domain": "FINANCE",
+      "source": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§2 payment"
+      },
+      "statement": "Invoice/payment/settlement/refund deferred; fulfillment not payment; preserve negative invariant.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-MKT-01",
+      "domain": "MARKETING",
+      "source": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§2 CRM"
+      },
+      "statement": "Campaign dispatch deferred; existing consent and deny regression preserved.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-SUB-01",
+      "domain": "SUBSCRIPTION",
+      "source": {
+        "path": "docs/spec/RM-R3-FUNCTIONAL-COVERAGE-v1.json",
+        "section": "SUB-01–03"
+      },
+      "statement": "Preserve entitlement, metering and renewal source obligations; no implied activation.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-OPS-01",
+      "domain": "OPERATIONS",
+      "source": {
+        "path": "docs/strategy/RM-MVP-CLOSURE-FREEZE-R1.md",
+        "section": "§2,4"
+      },
+      "statement": "Verified backup/restore and minimal operations; separate G1–G4; no production from synthetic CI.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "id": "SFC-REM-OPS-02",
+      "domain": "OPERATIONS",
+      "source": {
+        "path": "docs/architecture/RM-PLATFORM-STANDARD-R2.md",
+        "section": "§25"
+      },
+      "statement": "Forward additive migrations, preserve history/checksums, populated PG and recovery proof; no automatic seal.",
+      "scope": "APPLICABILITY_REVIEW",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "remainingScenarioReviews": [
+    {
+      "key": "BSR:BSR-FILES-02",
+      "scope": "REGRESSION_IF_PRESENT",
+      "decision": "Crash/restart/scanner recovery separate; link FIL-02/03, no proof from simulated fault.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:BSR-FIN-02",
+      "scope": "POST_MVP",
+      "decision": "Finance service route deferred; preserve no payment inference.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:BSR-FX-02",
+      "scope": "REGRESSION_IF_PRESENT",
+      "decision": "Assessment not publication; current source/grants review, AUTO HOLD.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:BSR-INS-01",
+      "scope": "MIXED_SCOPE_REVIEW",
+      "decision": "Historical post-MVP superseded only in explicitly admitted INT slice; metric mapping open.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:BSR-INS-02",
+      "scope": "MIXED_SCOPE_REVIEW",
+      "decision": "Historical projection gap not current defect; verify admitted replay/rebuild.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:BSR-TASK-01",
+      "scope": "CORE_MVP",
+      "decision": "Source explicitly names BUS-TASK-01 alias-support; keep both IDs, preserve followup variant.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "BSR:BSR-TASK-02",
+      "scope": "CORE_MVP",
+      "decision": "Source explicitly says BUS-TASK-02 revoked execute not equivalent to CRM cancel × complete; distinct variants.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "DUAL:BIZ-ORG-03",
+      "scope": "CORE_RELATED_REVIEW",
+      "decision": "Location lifecycle and warehouse scope; compare CORE-ORG and R3 ORG; no equivalence.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "DUAL:BIZ-TASKS-LATER-18",
+      "scope": "MIXED_SCOPE_REVIEW",
+      "decision": "Historic deferred TASK superseded for basic task only, not automation.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    },
+    {
+      "key": "DUAL:SHR-BUYER-LINK-05",
+      "scope": "CORE_RELATED_REVIEW",
+      "decision": "Explicit link, no name/email inference; current owner/permissions evidence open.",
+      "relation": "SCOPE_AND_RELATED_VARIANT_REVIEW_NOT_EQUIVALENCE",
+      "evidence": "NOT_ASSERTED"
+    }
+  ],
+  "newFindings": [
+    {
+      "id": "SFC-REM-C01",
+      "issue": "Legacy FILES no application encryption vs encrypted reporting path",
+      "status": "DOCUMENT_SCOPE_CLARIFIED_RUNTIME_REVIEW_OPEN",
+      "sources": [
+        "docs/operations/RM-FILES-RUSTFS-FLAG-ROLLOUT-R1.md",
+        "docs/spec/RM-FILES-R1.md",
+        "src/main/java/kz/rm/files/ReportFilePublicationGate.java"
+      ]
+    },
+    {
+      "id": "SFC-REM-C02",
+      "issue": "I18N three vs four languages",
+      "status": "TEXT_CORRECTED_PROPOSED_STATUS_UNCHANGED",
+      "sources": [
+        "docs/spec/RM-I18N-R1.md"
+      ]
+    },
+    {
+      "id": "SFC-REM-C03",
+      "issue": "Synthetic PII migration not real cutover",
+      "status": "OPERATIONAL_HOLD",
+      "sources": [
+        "docs/operations/RM-IAM-PII-R2.5D-POSTGRES-QUALIFICATION.md"
+      ]
+    },
+    {
+      "id": "SFC-REM-C04",
+      "issue": "Retention and privacy erasure distinct; no blanket purge",
+      "status": "SCOPE_BOUNDARY",
+      "sources": [
+        "docs/implementation/RM-AUDIT-NIGHTLY-RETENTION-R1.md",
+        "docs/architecture/IAM-CRM-R22E-DELETION-RETENTION-POLICY.md"
+      ]
+    },
+    {
+      "id": "SFC-REM-C05",
+      "issue": "KMS lease primitive vs actual multi-pod rotation/all writers",
+      "status": "OPEN_METHOD_MAPPING",
+      "sources": [
+        "docs/implementation/RM-KMS-R1.7-FENCING-QUALIFICATION.md"
+      ]
+    }
+  ]
 }

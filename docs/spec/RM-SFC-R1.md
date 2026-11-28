@@ -82,3 +82,7 @@ Snapshot 0cae504294a810363dd8396bd164d314b8c51c77: 298 tracked Markdown/JSON doc
 
 ## Reporting FC-R1.0A (2026-11-28)
 [Report inventory and source audit](RM-REPORTING-FC-R1.0.md), [registry](RM-REPORTING-FC-REGISTER-v1.json): all 383 index records and 85 atoms screened, with commerce and FX/Scheduler/EVT crosswalk candidates; 12 design templates, 9 bounded bindings, 3 gated diagnostic files, 12 operational candidates. No new denominator, approval, N/A or PASS. P4.1A.5-Q → P4.2 after GREEN; C02/C06 OPEN; controllers STOP until service freeze. Next FC-R1.0B semantic scope/artifact adjudication.
+
+
+## SFC-R1.0B.2B.5 — consolidated canonical index and remaining domains
+[Canonical index](RM-SFC-CANONICAL-INDEX-v1.json) preserves 383 master IDs, all 75 R3 requirements, 373 IDs linked to prior registers/R3 and 10 remaining source reviews without claimed equivalence, 24 selected remaining-domain obligations and five findings. Source snapshot 3de88d8bd6eb5dbf97b7e225ae72c9a58725da51 has 307 Markdown/JSON documents including parallel Reporting FC. No unique atomic denominator or complete section-level semantic coverage. I18N count corrected; legacy RustFS runbook scope clarified. Full R1.1 admission HOLD until B.2B.5-Q closes section/variant/scope gaps. Reporting P4.1A.5-Q -> P4.2 after GREEN independent; Radar F2H deferred. No runtime, migrations or CI changes.

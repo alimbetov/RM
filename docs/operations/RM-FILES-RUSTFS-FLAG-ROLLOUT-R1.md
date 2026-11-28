@@ -3,6 +3,8 @@
 **Branch:** `base_dev`. **Status:** service-only UAT implementation; production and real confidential documents remain HOLD.
 **Decision:** no application-layer file encryption. CRM database PII field encryption is unchanged. RustFS is an object storage backend, **not** a second microservice.
 
+> SFC scope clarification (2026-11-28): this is the original general FILES rollout decision, not permission to bypass report-specific encrypted storage admission. See [Reporting integration](../spec/RM-REPORTING-RADAR-EVT-INTEGRATION-R1.md), §2 and `ReportFilePublicationGate` (reviewed 3d8c05b207b8aa4c91f644420ff69e86a5475eac). The gate requires CONFIDENTIAL/AVAILABLE/CLEAN and ACTIVE encrypted_format_version=1 for its report path. General FILES encryption coverage and production approval remain open. No runtime change.
+
 ## Deployment flag
 
 | Setting | Default | Meaning |
