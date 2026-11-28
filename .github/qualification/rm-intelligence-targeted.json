@@ -424,6 +424,10 @@
     {
       "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
       "name": "durableRequestBindingAndLostResponseRecoveryPg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "sealAndReplacementAllocationSerializePg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

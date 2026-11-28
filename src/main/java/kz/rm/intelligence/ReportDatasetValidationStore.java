@@ -33,7 +33,7 @@ final class ReportDatasetValidationStore {
         tx.setTimeout(30);
     }
 
-    private record Manifest(String scope, String source, long rows, String digest) {}
+    private record Manifest(String scope, String source, long rows, String digest, Long canonicalBytes) {}
 
     ReportDatasetDigest.Result validateAndSeal(UUID tenant, UUID dataset, LocalDate date, UUID worker, long token) {
         Objects.requireNonNull(tenant);
@@ -49,9 +49,10 @@ final class ReportDatasetValidationStore {
             jdbc.queryForObject("SELECT 1 FROM pg_advisory_xact_lock_shared(1380794706,?::date-DATE '1970-01-01')",
                 Integer.class, date);
             Manifest manifest = jdbc.queryForObject("""
-                SELECT scope_digest,source_manifest_digest,expected_rows,expected_digest
-                  FROM reporting.int_report_lock_build(?,?,?,?,?,'VALIDATING')
-                """,(rs,n)->new Manifest(rs.getString(1),rs.getString(2),rs.getLong(3),rs.getString(4)),
+                SELECT a.scope_digest,a.source_manifest_digest,a.expected_rows,a.expected_digest,e.canonical_bytes
+                  FROM reporting.int_report_lock_build(?,?,?,?,?,'VALIDATING') a
+                  LEFT JOIN reporting.int_report_source_evidence e USING(tenant_id,dataset_id,staging_date)
+                """,(rs,n)->new Manifest(rs.getString(1),rs.getString(2),rs.getLong(3),rs.getString(4),rs.getObject(5,Long.class)),
                 tenant,dataset,date,worker,token);
             if (manifest == null || manifest.rows() < 0 || manifest.rows() > MAX_ROWS)
                 throw new IllegalStateException("REPORT_VALIDATION_BUDGET");
@@ -82,7 +83,8 @@ final class ReportDatasetValidationStore {
                 }
             }
             var observed = digest.finish();
-            if (observed.rows()!=manifest.rows() || !observed.sha256().equals(manifest.digest()))
+            if (observed.rows()!=manifest.rows() || !observed.sha256().equals(manifest.digest())
+                || manifest.canonicalBytes()!=null && observed.canonicalBytes()!=manifest.canonicalBytes())
                 throw new IllegalStateException("REPORT_VALIDATION_MISMATCH");
             Boolean sealed=jdbc.queryForObject("SELECT reporting.int_report_seal(?,?,?,?,?,?,?)",Boolean.class,
                 tenant,dataset,date,worker,token,observed.rows(),observed.sha256());

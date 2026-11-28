@@ -321,4 +321,52 @@ class ReportStorageQualificationTest {
             Boolean.class,t,i,UUID.randomUUID(),d,w,SCOPE,SOURCE,1L,exp)).isInstanceOf(DataAccessException.class)
             .hasMessageContaining("INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT");
     }
+    @Test void sealAndReplacementAllocationSerializePg() throws Exception {
+        UUID t=tenant(),i=UUID.randomUUID(),a=UUID.randomUUID(),w=UUID.randomUUID(),fresh=UUID.randomUUID();
+        LocalDate d=day();ensure(d);String exp=expected(t,a,BigDecimal.ONE);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
+            UUID.class,t,i,"race-"+i,SOURCE,SCOPE,"RM-R02","1")).isEqualTo(i);
+        // Short lease on a new isolated fixture; existing attempt identity stays immutable.
+        raceTx().executeWithoutResult(status->{
+            raceLimits(d);
+            jdbc.update("""
+                INSERT INTO reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date,allocated_at,
+                    scope_digest,source_manifest_digest,expected_rows,expected_digest,build_state,build_owner,build_token,build_until)
+                VALUES(?,?,?,clock_timestamp(),?,?,1,?,'BUILDING',?,1,clock_timestamp()+interval '5 seconds')
+                """,t,a,d,SCOPE,SOURCE,exp,w);
+            jdbc.update("INSERT INTO reporting.int_report_request_attempt(tenant_id,instance_id,dataset_id,staging_date) VALUES(?,?,?,?)",t,i,a,d);
+            assertThat(append(t,a,d,w,1,BigDecimal.ONE)).isTrue();freeze(t,a,d,w);
+        });
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        var sealed=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var attempting=new java.util.concurrent.CountDownLatch(1);
+        var holder=new java.util.concurrent.atomic.AtomicInteger();
+        var waiter=new java.util.concurrent.atomic.AtomicInteger();
+        try{
+            var first=pool.submit(()->raceTx().executeWithoutResult(status->{
+                raceLimits(d);holder.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                assertThat(jdbc.queryForObject("SELECT reporting.int_report_seal(?,?,?,?,?,?,?)",
+                    Boolean.class,t,a,d,w,1L,1L,exp)).isTrue();
+                sealed.countDown();await(release);
+            }));
+            await(sealed);
+            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(7);
+            while(Boolean.TRUE.equals(jdbc.queryForObject("SELECT build_until>clock_timestamp() FROM reporting.int_report_dataset_attempt WHERE tenant_id=? AND dataset_id=?",Boolean.class,t,a))){
+                if(System.nanoTime()>deadline)throw new AssertionError("R02_LEASE_EXPIRY_TIMEOUT");
+                Thread.sleep(20);
+            }
+            var second=pool.submit(()->assertThatThrownBy(()->raceTx().executeWithoutResult(status->{
+                raceLimits(d);waiter.set(jdbc.queryForObject("SELECT pg_backend_pid()",Integer.class));
+                attempting.countDown();
+                jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+                    Boolean.class,t,i,fresh,d,UUID.randomUUID(),SCOPE,SOURCE,1L,expected(t,fresh,BigDecimal.ONE));
+            })).isInstanceOf(DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT"));
+            await(attempting);blockedBy(waiter.get(),holder.get());release.countDown();
+            first.get(15,java.util.concurrent.TimeUnit.SECONDS);second.get(15,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(state(t,a)).isEqualTo("READY");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.int_report_request_attempt WHERE tenant_id=? AND instance_id=?",Long.class,t,i)).isEqualTo(1L);
+            assertThat(jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",UUID.class,t,i,a,d)).isEqualTo(a);
+        }finally{release.countDown();pool.shutdownNow();}
+    }
 }

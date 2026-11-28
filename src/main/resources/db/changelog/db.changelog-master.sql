@@ -8002,3 +8002,58 @@ CREATE TRIGGER trg_int_report_source_evidence_no_truncate BEFORE TRUNCATE ON rep
 REVOKE ALL ON reporting.int_report_source_evidence FROM PUBLIC;
 REVOKE ALL ON FUNCTION reporting.int_report_source_evidence_guard() FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_SOURCE_EVIDENCE_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0232-int-report-seal-allocation-fence dbms:postgresql splitStatements:false
+-- Serialize READY transition of a bound attempt with replacement allocation.
+-- Existing order: shared day -> attempt -> instance. Allocation takes only
+-- day -> instance -> NEW attempt; it never locks an older attempt.
+CREATE OR REPLACE FUNCTION reporting.int_report_seal(t uuid,a uuid,d date,w uuid,tok bigint,n bigint,dig text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; i uuid;
+BEGIN
+ b:=reporting.int_report_lock_build(t,a,d,w,tok,'VALIDATING');
+ SELECT instance_id INTO i FROM reporting.int_report_request_attempt
+ WHERE tenant_id=t AND dataset_id=a AND staging_date=d;
+ IF FOUND THEN
+   IF current_setting('transaction_isolation')<>'read committed'
+   THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ISOLATION'; END IF;
+   PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i FOR NO KEY UPDATE;
+   IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+   -- The instance lock may have delayed us past the original build lease.
+   IF b.build_until<=clock_timestamp() THEN RAISE EXCEPTION 'INT_REPORT_BUILD_FENCE'; END IF;
+   IF EXISTS(SELECT 1 FROM reporting.int_report_request_attempt l
+     JOIN reporting.int_report_dataset_attempt x USING(tenant_id,dataset_id,staging_date)
+     WHERE l.tenant_id=t AND l.instance_id=i AND l.dataset_id<>a
+       AND (x.build_state='READY' OR l.selected_at IS NOT NULL OR x.build_until>clock_timestamp()))
+   THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SUPERSEDED'; END IF;
+ END IF;
+ IF n IS DISTINCT FROM b.expected_rows OR dig IS DISTINCT FROM b.expected_digest
+ THEN RAISE EXCEPTION 'INT_REPORT_VALIDATION_MISMATCH'; END IF;
+ UPDATE reporting.int_report_dataset_attempt SET build_state='READY',observed_rows=n,observed_digest=dig,
+ ready_at=clock_timestamp() WHERE tenant_id=t AND dataset_id=a;
+ RETURN true;
+END $$;
+
+CREATE OR REPLACE FUNCTION reporting.int_report_allocate_request(t uuid,i uuid,a uuid,d date,w uuid,s text,src text,n bigint,dig text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed'
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ISOLATION'; END IF;
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i AND scope_digest=s FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF EXISTS(SELECT 1 FROM reporting.int_report_request_attempt l
+   JOIN reporting.int_report_dataset_attempt b USING(tenant_id,dataset_id,staging_date)
+   WHERE l.tenant_id=t AND l.instance_id=i
+   AND (l.selected_at IS NOT NULL OR b.build_state='READY' OR b.build_until>clock_timestamp()))
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT'; END IF;
+ PERFORM reporting.int_report_allocate(t,a,d,w,s,src,n,dig);
+ INSERT INTO reporting.int_report_request_attempt(tenant_id,instance_id,dataset_id,staging_date) VALUES(t,i,a,d);
+ RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION reporting.int_report_seal(uuid,uuid,date,uuid,bigint,bigint,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_allocate_request(uuid,uuid,uuid,date,uuid,text,text,bigint,text) FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_REQUEST_FENCE_FORWARD_ONLY'; END; $$;
