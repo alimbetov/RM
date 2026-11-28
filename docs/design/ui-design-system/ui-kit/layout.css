@@ -76,3 +76,10 @@
 .rm-oyu{display:none;inline-size:156px;max-inline-size:100%;block-size:auto;margin:var(--rm-space-2) auto 0;color:var(--rm-nav-muted);opacity:.14;pointer-events:none}
 @media screen and (min-width:1024px) and (min-height:720px){.rm-oyu{display:block}}
 @media(forced-colors:active){.rm-oyu{display:none}}
+
+/* RM Orbital Precision: restrained brand-only orbital cue and navy depth. */
+.brand-mark{position:relative;isolation:isolate;background:radial-gradient(ellipse at 24% 12%,var(--rm-nav-active),var(--rm-nav-surface) 76%)}
+.brand-mark .rm-icon{position:relative;z-index:1}
+.brand-orbit{position:absolute;inset:0;width:100%;height:100%;color:var(--rm-nav-focus);opacity:.38;pointer-events:none}
+#side{background-image:radial-gradient(ellipse 100% 240px at 0 0,var(--rm-nav-hover),transparent)}
+@media print,(forced-colors:active){.brand-orbit{display:none}.brand-mark,#side{background-image:none}}

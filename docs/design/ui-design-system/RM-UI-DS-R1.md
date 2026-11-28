@@ -167,6 +167,10 @@ Qualification: 16/16 existing unified scenarios + 16/16 Guardian scenarios + 2/2
 
 R1.0K.10A implements a single subtle, independently drawn Soft Jiek-inspired border strip in the desktop sidebar, following the owner's preference for a barely noticeable ornament without sharp corners. Reference requirements in RM-GUARDIAN-DESIGN-R1.md §2.1. No ornament in the working area, no new icon IDs, dependencies, business logic or CI changes. 28/28 targeted Chromium in-memory cases passed. Full previous regression was not rerun for this decorative-only increment; Design Freeze and prior cross-browser/physical-device limitations remain open. See [qualification](ui-kit/QUALIFICATION-OYU.md).
 
+## 8.11 RM Orbital Precision — restrained futuristic accent (2026-11-28)
+
+R1.0K.10B adds brand-only orbital geometry and subtle navy depth in the existing sidebar, without changes to business content, SVG icon catalog, RM OYU, tokens, runtime JS, backend or CI. See RM-GUARDIAN-DESIGN-R1.md §2.2. Targeted Chromium qualification: 20/20 orbit cases and 28/28 OYU regression cases, both exit 0; print suppression and gradient endpoint contrast checked. Full preceding 34-scenario suite not rerun. Candidate visual treatment, Design Freeze still open. See [qualification](ui-kit/QUALIFICATION-ORBIT.md).
+
 ## 9. Open decisions
 
 Frontend library and versions, browser support, mobile scope, initial locales, final qualified theme token pairs and logo assets, charting implementation, BFF/session integration, deployment topology and final page scope. These are proposed design topics, not accepted architecture. Root baseline has no dedicated top-level frontend directory; nested assets not yet audited.
