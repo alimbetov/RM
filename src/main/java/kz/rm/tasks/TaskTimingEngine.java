@@ -214,17 +214,16 @@ final class TaskTimingEngine {
                                  OR e.from_state IN ('ARCHIVED','CANCELLED') THEN 1 ELSE 0 END) AS terminal_conflicts
             """;
     }
-    private static String terminalSummary(boolean completedCandidates) {
+    private static String terminalSummary() {
         return """
             SELECT e.tenant_id,e.task_id,%s
             FROM crm.task_event e
-            WHERE e.tenant_id=? %s AND (
+            WHERE e.tenant_id=? AND (
                 e.action_code IN ('COMPLETED','ARCHIVED','CANCELLED')
                 OR e.to_state IN ('COMPLETED','ARCHIVED','CANCELLED')
                 OR e.from_state IN ('COMPLETED','ARCHIVED','CANCELLED'))
             GROUP BY e.tenant_id,e.task_id
-            """.formatted(terminalAggregates(),completedCandidates?
-                "AND e.task_id IN (SELECT id FROM completion_candidates)":"");
+            """.formatted(terminalAggregates());
     }
 
     private static String transition() {
@@ -331,7 +330,7 @@ final class TaskTimingEngine {
     }
     // Original-deadline evidence is not a membership predicate. All terminal
     // validation and timing classification fragments are shared.
-    static String calendarMembershipRelation(boolean completedCandidates) {
+    static String calendarMembershipRelation() {
         String scoped="""
             SELECT t.id,t.status,t.due_at,t.created_at,t.row_version,
                    t.assignee_user_id,t.created_by,c.evaluated_at,
@@ -339,9 +338,8 @@ final class TaskTimingEngine {
             FROM crm.task_item t
             CROSS JOIN (SELECT CAST(? AS TIMESTAMP(6) WITH TIME ZONE) AS evaluated_at) c
             LEFT JOIN (%s) ev ON ev.tenant_id=t.tenant_id AND ev.task_id=t.id
-            WHERE t.tenant_id=? AND (t.assignee_user_id=? OR t.created_by=?) %s
-            """.formatted(completionEvidence(),terminalSummary(completedCandidates),completedCandidates?
-                "AND t.id IN (SELECT id FROM completion_candidates)":"");
+            WHERE t.tenant_id=? AND (t.assignee_user_id=? OR t.created_by=?)
+            """.formatted(completionEvidence(),terminalSummary());
         String dates="""
             SELECT s.*,CASE WHEN completion_evidence='VALID'
                        THEN completion_time ELSE NULL END AS completed_at

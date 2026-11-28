@@ -147,10 +147,9 @@ public class TaskCalendarQueryService {
         var timing=f.timeliness()==null?List.<TaskTimingSnapshot.Timeliness>of():f.timeliness().stream().sorted().toList();
         // DUE without a timing predicate needs no history for membership.
         boolean simple=optimize&&f.dateBasis()==DateBasis.DUE&&timing.isEmpty();
-        boolean completedCandidates=optimize&&f.dateBasis()==DateBasis.COMPLETED;
         String relation=optimize?(simple?
             "SELECT t.id,t.status,t.due_at,t.created_by,t.assignee_user_id FROM crm.task_item t WHERE tenant_id=? AND (assignee_user_id=? OR created_by=?)":
-            TaskTimingEngine.calendarMembershipRelation(completedCandidates)):TaskTimingEngine.fullRelation(pg,false);
+            TaskTimingEngine.calendarMembershipRelation()):TaskTimingEngine.fullRelation(pg,false);
         StringBuilder sql=new StringBuilder("SELECT "+(optimize?"cal.id":"cal.*")+", "+date+
             " AS selected_date FROM ("+relation+") cal WHERE status IN ("+marks(states.size())+")");
         if(f.perspective()==Perspective.MINE_CREATED)sql.append(" AND created_by=?");
@@ -162,8 +161,7 @@ public class TaskCalendarQueryService {
             sql.append(" ORDER BY id ASC");
         }else{
             sql.append(" AND "+date+">=? AND "+date+"<?");
-            if(after!=null)sql.append(optimize?" AND ("+date+",id)>(?,?)":
-                " AND ("+date+">? OR ("+date+"=? AND id>?))");
+            if(after!=null)sql.append(" AND ("+date+">? OR ("+date+"=? AND id>?))");
             sql.append(" ORDER BY "+date+" ASC,id ASC");
         }
         sql.append(" LIMIT ?");
@@ -171,20 +169,8 @@ public class TaskCalendarQueryService {
         // event history once. A separate optimization fence prevents a
         // parameterized nested loop from re-executing the aggregate for each
         // task. All CTEs share the same PostgreSQL statement/MVCC snapshot.
-        // Necessary candidate condition only: a VALID completion has exactly one
-        // COMPLETED action, in the requested half-open interval. Do not restrict
-        // terminal aggregation by date: conflicting older/newer events must remain visible.
-        String candidates=completedCandidates?"""
-            completion_candidates AS MATERIALIZED (
-                SELECT DISTINCT t.id FROM crm.task_item t
-                JOIN crm.task_event e ON e.tenant_id=t.tenant_id AND e.task_id=t.id
-                WHERE t.tenant_id=? AND (t.assignee_user_id=? OR t.created_by=?)
-                  AND t.status IN (\'COMPLETED\',\'ARCHIVED\') AND e.action_code=\'COMPLETED\'
-                  AND e.occurred_at>=? AND e.occurred_at<?
-            ),
-            """:"";
         String statement=optimize?
-            "SELECT result.* FROM (WITH "+candidates+"page_keys AS MATERIALIZED ("+sql+"), page_history AS MATERIALIZED ("+
+            "SELECT result.* FROM (WITH page_keys AS MATERIALIZED ("+sql+"), page_history AS MATERIALIZED ("+
                 TaskTimingEngine.pageEventSummary()+"), enriched AS MATERIALIZED ("+
                 TaskTimingEngine.fullRelation(true,false,true)+") "+
                 "SELECT enriched.*,k.selected_date FROM page_keys k JOIN enriched ON enriched.id=k.id) result "+
@@ -192,10 +178,6 @@ public class TaskCalendarQueryService {
             sql.toString();
         return new QueryPlan(statement,ps->{
             int i=1;
-            if(completedCandidates){
-                ps.setObject(i++,tenant);ps.setObject(i++,user);ps.setObject(i++,user);
-                timestamp(ps,i++,f.fromInclusive());timestamp(ps,i++,f.toExclusive());
-            }
             if(!simple){timestamp(ps,i++,cutoff);ps.setObject(i++,tenant);}
             ps.setObject(i++,tenant);ps.setObject(i++,user);ps.setObject(i++,user);
             for(var state:states)ps.setString(i++,state.name());
@@ -206,8 +188,7 @@ public class TaskCalendarQueryService {
             }else{
                 timestamp(ps,i++,f.fromInclusive());timestamp(ps,i++,f.toExclusive());
                 if(after!=null){
-                    timestamp(ps,i++,after.lastDate());
-                    if(!optimize)timestamp(ps,i++,after.lastDate());
+                    timestamp(ps,i++,after.lastDate());timestamp(ps,i++,after.lastDate());
                     ps.setObject(i++,after.lastTaskId());
                 }
             }
