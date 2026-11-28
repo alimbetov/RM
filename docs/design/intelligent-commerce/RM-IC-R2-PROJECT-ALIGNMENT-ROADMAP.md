@@ -91,3 +91,6 @@ Runtime exact SHA 16a8837895bc6f4c283f6022a83f99fd665b2099. Targeted run 4592453
 
 ## 2026-11-28 — platform status update after P4.1A.2 candidate
 [Technical status audit and development map](RM-PLATFORM-STATUS-AUDIT-2026-11-28.md) reconciles base_dev 86174972 and detached P4.1A candidate 923db105. P4.0 19/23 workflows passed at observation, four running; SALES/INVENTORY PASS attempt 1. V1 encrypted storage candidate is not integrated or runtime-qualified; trusted upload, publication, delivery and catalog open. 17 registered contexts (310 main/142 test Java files in base_dev), no invented maturity scores. Q2-FINAL and G1–G4 remain separate gates. No production admission or DAG change.
+
+## 2026-11-28 — P4.1A.4-Q exact-SHA qualification
+[Qualification evidence](P4.1A.4-Q-EXACT-SHA-EVIDENCE.md): base_dev b50cbe64, 35/35 GREEN attempt 1, R02 private encrypted file replay/rollback/two-instance/GC marker PASS in both mandatory PG journeys, real RustFS/ClamAV probes PASS. QA01B and development admission PASS; business and production HOLD. P4.1A.5 next, scoped guard integration only. Full multi-process/pod and joint PG-backed KMS + RustFS + ClamAV qualification remain open. No implementation or runtime flag change.
