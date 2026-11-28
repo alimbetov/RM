@@ -120,7 +120,8 @@ class RustFsFileStorage implements FileStoragePort {
             // S3 conditional create; qualification must prove RustFS actually
             // honors If-None-Match. Never retry by overwriting an existing key.
             s3.putObject(PutObjectRequest.builder().bucket(bucket).key(key(ref))
-                .ifNoneMatch("*").contentType("application/octet-stream").build(),
+                .overrideConfiguration(c->c.putHeader("If-None-Match","*"))
+                .contentType("application/octet-stream").build(),
                 RequestBody.fromBytes(envelope));
         } catch(RuntimeException e) {
             throw new IOException("REPORT_ENCRYPTED_PUT_FAILED",e);

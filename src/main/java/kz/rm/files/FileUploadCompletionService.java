@@ -34,12 +34,14 @@ public class FileUploadCompletionService {
             // The logical state is insufficient: recheck the immutable stored bytes
             // before acknowledging an idempotent retry after process restart.
             var persisted=jdbc.query("""
-                SELECT s.storage_key,f.size_bytes,f.sha256
+                SELECT s.storage_key,f.size_bytes,f.sha256,s.encrypted_format_version
                   FROM crm.file_object f JOIN crm.file_storage s
                     ON s.tenant_id=f.tenant_id AND s.file_id=f.id
                  WHERE f.tenant_id=? AND f.id=? AND s.state='ACTIVE'
                 """,rs->rs.next()?new Stored(rs.getString(1),rs.getLong(2),
-                        rs.getString(3)):null,tenant,fileId);
+                        rs.getString(3),rs.getInt(4)):null,tenant,fileId);
+            if(persisted!=null && (persisted.version()!=0 || ReportStorageKey.encrypted(persisted.key())))
+                throw new SecurityException("REPORT_TRUSTED_UPLOAD_REQUIRED");
             if(persisted==null || !storage.matches(persisted.key(),persisted.size(),persisted.sha())) {
                 metadata.quarantineIntegrityFailure(tenant,fileId,
                         persisted==null?"":persisted.key());
@@ -78,5 +80,5 @@ public class FileUploadCompletionService {
         }
     }
 
-    private record Stored(String key,long size,String sha){}
+    private record Stored(String key,long size,String sha,int version){}
 }

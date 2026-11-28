@@ -89,7 +89,7 @@ class FileMetadataService {
         boolean alreadyAvailable(){return token==null;}
     }
     private record Locked(String state,String scanStatus,String mime,long size,
-                          UUID uploader,String checksum,UUID token) {}
+                          UUID uploader,String checksum,UUID token,String classification) {}
 
     /**
      * Serializable per-file admission with a durable claim. No transaction spans IO.
@@ -101,16 +101,17 @@ class FileMetadataService {
         if(fileId==null)throw new IllegalArgumentException("File ID required");
         var r=jdbc.query("""
             SELECT state,scan_status,mime_type,size_bytes,uploaded_by,sha256,
-                   processing_token,processing_started_at
+                   processing_token,processing_started_at,content_class
               FROM crm.file_object WHERE tenant_id=? AND id=? FOR UPDATE
             """,rs->{
                 if(!rs.next())throw new IllegalArgumentException("Upload intent not found");
                 return new ClaimRow(rs.getString(1),rs.getString(2),rs.getString(3),
                         rs.getLong(4),rs.getObject(5,UUID.class),rs.getString(6),
                         rs.getObject(7,UUID.class),
-                        rs.getTimestamp(8)==null?null:rs.getTimestamp(8).toInstant());
+                        rs.getTimestamp(8)==null?null:rs.getTimestamp(8).toInstant(),rs.getString(9));
             },tenant,fileId);
         if(!actor.equals(r.uploader()))throw new SecurityException("Only original uploader may finalize");
+        if("CONFIDENTIAL".equals(r.classification()))throw new SecurityException("REPORT_TRUSTED_UPLOAD_REQUIRED");
         FileUploadIntent intent=new FileUploadIntent(fileId,r.state(),r.scanStatus(),r.mime(),r.size());
         if("AVAILABLE".equals(r.state()) && "CLEAN".equals(r.scanStatus()))
             return new UploadClaim(intent,null);
@@ -132,7 +133,7 @@ class FileMetadataService {
         return new UploadClaim(intent,token);
     }
     private record ClaimRow(String state,String scanStatus,String mime,long size,
-                            UUID uploader,String checksum,UUID token,Instant started) {}
+                            UUID uploader,String checksum,UUID token,Instant started,String classification) {}
 
     /** Release only one's own claim. Stale workers cannot touch a newer claim. */
     @Transactional
@@ -168,15 +169,17 @@ class FileMetadataService {
         authorization.requireForCommand(actor,tenant,DomainPermission.FILES_UPLOAD);
         var locked=jdbc.query("""
                 SELECT state,scan_status,mime_type,size_bytes,uploaded_by,sha256,
-                       processing_token
+                       processing_token,content_class
                   FROM crm.file_object
                  WHERE tenant_id=? AND id=? FOR UPDATE
                 """,rs->{
                     if(!rs.next())throw new IllegalArgumentException("File not found");
                     return new Locked(rs.getString(1),rs.getString(2),rs.getString(3),
                             rs.getLong(4),rs.getObject(5,UUID.class),rs.getString(6),
-                            rs.getObject(7,UUID.class));
+                            rs.getObject(7,UUID.class),rs.getString(8));
                 },tenant,fileId);
+        if(staged.cryptoVersion()!=0 || "CONFIDENTIAL".equals(locked.classification()))
+            throw new SecurityException("REPORT_TRUSTED_UPLOAD_REQUIRED");
         if(!actor.equals(locked.uploader()) || !"STAGED".equals(locked.state())
                 || !"SCANNING".equals(locked.scanStatus()) || token==null
                 || !token.equals(locked.token())
