@@ -125,7 +125,10 @@ public class NativeBookedClosureService {
     /** Resolve the tenant's actual persisted calendar and scan in the SAME RR snapshot. */
     public MonthlyEvidence inspectMonth(VerifiedActor actor,UUID tenant,long calendarVersion,YearMonth month){
         if(calendarVersion<1||month==null)throw new IllegalArgumentException("NATIVE_MONTH_REQUEST");
-        return inspectSnapshot(actor,tenant,(t,asOf)->{
+        return inspectSnapshot(actor,tenant,(t,asOf)->monthInSnapshot(t,calendarVersion,month,asOf));
+    }
+    /** Internal only: called within this service's already authorized RR inspection. */
+    MonthlyEvidence monthInSnapshot(UUID t,long calendarVersion,YearMonth month,Instant asOf){
             var calendar=jdbc.query("""
                 SELECT zone_id,effective_from FROM crm.int_calendar_policy WHERE tenant_id=? AND version=?
                 """,rs->rs.next()?new CalendarBinding(t,calendarVersion,rs.getString(1),
@@ -135,7 +138,6 @@ public class NativeBookedClosureService {
             var p=calendar.period();
             validateRange(p.startInclusive(),p.endExclusive());
             return bindMonth(calendar,scan(t,p.startInclusive(),p.endExclusive(),asOf));
-        });
     }
     private static void validateRange(Instant from,Instant until){
         Objects.requireNonNull(from);Objects.requireNonNull(until);
@@ -144,12 +146,22 @@ public class NativeBookedClosureService {
             throw new IllegalArgumentException("NATIVE_CLOSURE_RANGE");
     }
     private <T> T inspectSnapshot(VerifiedActor actor,UUID tenant,java.util.function.BiFunction<UUID,Instant,T> read){
+        return inspectSnapshot(actor,tenant,false,read,result->{});
+    }
+    /** Shared one-per-instance budget and short authorization fences for report diagnostics.
+     * The post-check runs inside the final short RC fence, never in the long RR read. */
+    <T> T inspectReportSnapshot(VerifiedActor actor,UUID tenant,java.util.function.BiFunction<UUID,Instant,T> read,
+                               java.util.function.Consumer<T> postCheck){
+        return inspectSnapshot(actor,tenant,true,read,postCheck);
+    }
+    private <T> T inspectSnapshot(VerifiedActor actor,UUID tenant,boolean report,
+                                  java.util.function.BiFunction<UUID,Instant,T> read,java.util.function.Consumer<T> postCheck){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);
         if(TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("NATIVE_CLOSURE_OWN_TRANSACTION");
         if(!admission.tryAcquire())throw new IllegalStateException("NATIVE_CLOSURE_BUSY");
         try{
-            admit(actor,tenant);
+            admit(actor,tenant,report,()->{});
             var tx=new TransactionTemplate(manager);
             tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             tx.setReadOnly(true);tx.setTimeout(30);
@@ -162,19 +174,22 @@ public class NativeBookedClosureService {
                     "SELECT transaction_timestamp() FROM (SELECT pg_current_snapshot()) s",Timestamp.class)).toInstant();
                 // Snapshot-local authorization as well as fresh pre/post fences.
                 authorization.require(actor.userId(),tenant,DomainPermission.SALES_ORDER_READ);
+                if(report)authorization.require(actor.userId(),tenant,DomainPermission.REPORT_GENERATE);
                 return read.apply(tenant,asOf);
             }));
-            admit(actor,tenant);
+            admit(actor,tenant,report,()->postCheck.accept(result));
             return result;
         }finally{admission.release();}
     }
-    private void admit(VerifiedActor actor,UUID tenant){
+    private void admit(VerifiedActor actor,UUID tenant,boolean report,Runnable postCheck){
         var tx=new TransactionTemplate(manager);
         tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);tx.setTimeout(5);
         tx.executeWithoutResult(st->{
             var decision=authorization.requireForCommand(actor.userId(),tenant,DomainPermission.SALES_ORDER_READ);
             if(!decision.validForCurrentTransaction()||!tenant.equals(decision.tenantId()))
                 throw new SecurityException("NATIVE_CLOSURE_ADMISSION");
+            if(report)authorization.requireForCommand(actor.userId(),tenant,DomainPermission.REPORT_GENERATE);
+            postCheck.run();
             actor.userId();
         });
     }

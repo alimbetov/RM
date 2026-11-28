@@ -127,6 +127,23 @@ public class AuthorizedAnalyticalReadService {
         if(policy==null)throw new IllegalStateException("REPORT_ACCOUNTING_POLICY_NOT_ACTIVE");
         return policy;
     }
+    /** Internal diagnostic report read. Caller owns the authorized read-only RR snapshot;
+     * this method never opens another transaction or returns a publication permit. */
+    ReportSourceManifest readNativeAccountingReportInSnapshot(UUID tenant,long calendar,LocalDate last){
+        if(!TransactionSynchronizationManager.isActualTransactionActive()
+            ||!TransactionSynchronizationManager.isCurrentTransactionReadOnly()
+            ||!Objects.equals(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel(),
+                TransactionDefinition.ISOLATION_REPEATABLE_READ))
+            throw new IllegalStateException("NATIVE_REPORT_SNAPSHOT_REQUIRED");
+        if(calendar<1||last==null||last.getDayOfMonth()!=1)throw new IllegalArgumentException("REPORT_MONTH_ANCHOR");
+        var accounting=accountingPolicy(tenant,false);
+        var queries=List.of(
+            new Query(Metric.BOOKED_AMOUNT,calendar,PeriodResolver.Code.M,last,null,null,null,List.of(),accounting.currency()),
+            new Query(Metric.BOOKED_ORDERS,calendar,PeriodResolver.Code.M,last,null,null,null,List.of(),null));
+        var dates=java.util.stream.IntStream.range(0,24).mapToObj(i->last.minusMonths(23-i)).toList();
+        var read=readReportSnapshot(tenant,queries,dates,accounting);
+        return ReportSourceManifest.from(tenant,queries,read.windows(),read.evidence(),accounting);
+    }
     private record WindowRead(List<List<Result>> windows,ReportSourceManifest.SnapshotEvidence evidence){}
     private WindowRead readWindows(VerifiedActor actor,UUID tenant,List<Query> queries,List<LocalDate> anchors,boolean report,AccountingPolicy accounting){
         Objects.requireNonNull(actor);Objects.requireNonNull(tenant);

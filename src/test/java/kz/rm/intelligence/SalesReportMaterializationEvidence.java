@@ -154,6 +154,20 @@ public final class SalesReportMaterializationEvidence {
         assertThat(counter.l0).isEqualTo(2);
         assertThat(countedL3.calls).isEqualTo(2);
         assertStatisticalView(report,tenant,"225");
+        var diagnostic=context.getBean(NativeBookedReportEvidenceService.class).inspect(actor,tenant,calendar,
+            java.time.YearMonth.from(last),java.time.YearMonth.from(from));
+        assertThat(diagnostic.state()).isEqualTo(NativeBookedReportEvidenceService.State.SOURCE_NOT_QUALIFIED);
+        assertThat(diagnostic.month().source().state()).isEqualTo(NativeBookedClosureService.State.CAPTURE_INACTIVE);
+        assertThat(diagnostic.population()).isNull();assertThat(diagnostic.admitted()).isFalse();
+        assertThat(diagnostic.manifest().sourceRevision()).isEqualTo(report.sourceRevision());
+        assertThat(diagnostic.manifest().scopeDigest()).isEqualTo(report.scopeDigest());
+        assertStatisticalView(diagnostic.manifest(),tenant,"225");
+        assertThat(diagnostic.series(AuthorizedAnalyticalReadService.Metric.BOOKED_AMOUNT,ReportStatisticalView.Range.M3)
+            .comparisons().getFirst().result().change().quality()).isEqualTo(DataQuality.PARTIAL);
+        assertThatThrownBy(()->context.getBean(NativeBookedReportEvidenceService.class).inspect(actor,tenant,calendar,
+            java.time.YearMonth.from(last),java.time.YearMonth.from(last).minusMonths(24)))
+            .hasMessage("NATIVE_REPORT_TARGET");
+        System.out.println("RM_ARS_P2_NATIVE_REPORT_AUTHORITY_HOLD_ORACLE_PASS");
         for(var window:report.windows()){
             assertThat(window).hasSize(24);
             assertThat(window.stream().filter(x->x.route()==AuthorizedAnalyticalReadService.Route.L3).toList())

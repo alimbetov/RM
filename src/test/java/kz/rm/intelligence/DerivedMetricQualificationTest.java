@@ -66,6 +66,22 @@ class DerivedMetricQualificationTest {
             NativeBookedClosureService.State.SNAPSHOT_ZERO,empty,"a".repeat(64),0L);
         assertThrows(IllegalArgumentException.class,()->NativeBookedClosureService.bindMonth(binding,beforeBoundary));
     }
+    @Test void nativeAccountingPopulationParityDoesNotAdmitMissing(){
+        var empty=new NativeBookedReportEvidenceService.AccountingPopulation(0,0,BigDecimal.ZERO);
+        assertTrue(NativeBookedReportEvidenceService.matches(empty,null,null));
+        assertFalse(NativeBookedReportEvidenceService.matches(empty,BigDecimal.ZERO,BigDecimal.ZERO));
+        var positive=new NativeBookedReportEvidenceService.AccountingPopulation(3,0,new BigDecimal("125.1234"));
+        assertTrue(NativeBookedReportEvidenceService.matches(positive,new BigDecimal("3.00"),new BigDecimal("125.123400")));
+        assertFalse(NativeBookedReportEvidenceService.matches(positive,new BigDecimal("4"),new BigDecimal("125.1234")));
+        assertFalse(NativeBookedReportEvidenceService.matches(positive,new BigDecimal("3"),new BigDecimal("125.12")));
+        assertFalse(NativeBookedReportEvidenceService.matches(positive,null,null));
+        assertFalse(NativeBookedReportEvidenceService.matches(
+            new NativeBookedReportEvidenceService.AccountingPopulation(3,1,new BigDecimal("125.1234")),
+            new BigDecimal("3"),new BigDecimal("125.1234")));
+        assertTrue(NativeBookedReportEvidenceService.matches(
+            new NativeBookedReportEvidenceService.AccountingPopulation(1,0,BigDecimal.ZERO),BigDecimal.ONE,BigDecimal.ZERO));
+        assertThrows(IllegalArgumentException.class,()->new NativeBookedReportEvidenceService.AccountingPopulation(1,2,BigDecimal.ZERO));
+    }
     @Test void deterministicMathematics(){
         var p=points("100","130","160");
         var expected=Map.of(

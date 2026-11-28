@@ -63,6 +63,10 @@
     },
     {
       "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
+      "name": "nativeAccountingPopulationParityDoesNotAdmitMissing"
+    },
+    {
+      "classname": "kz.rm.intelligence.DerivedMetricQualificationTest",
       "name": "sparseComparisonUsesOnlyRequiredQualifiedEndpoints"
     },
     {
