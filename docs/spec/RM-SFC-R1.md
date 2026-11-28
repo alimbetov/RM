@@ -78,3 +78,7 @@ Snapshot 0cae504294a810363dd8396bd164d314b8c51c77: 298 tracked Markdown/JSON doc
 
 ## SFC-R1.0B.2B.4 — FX / Intelligence / EVT / Scheduler semantic and mathematical crosswalk
 [Crosswalk](RM-SFC-ANALYTICS-FX-EVT-CROSSWALK-v1.json), reviewed 9fa5bd9b34ac4b2900527b0fc48fbdf7c3c6cd8d: {"fxRequirements":24,"fxVariants":80,"fxSourceLinks":108,"schedulerPackages":8,"sectionObligations":26,"findings":8}. FX 24 requirements and 80 proposed cases preserve declared trace links; scheduler P1–P8 existing acceptance not modified; selected sections of MIC-R2/B4/B5/EVT/Reporting extracted. No new qualification, runtime, scope or CI change. Reporting P4.1A.5-Q → P4.2 after GREEN; F2H deferred. Next B.2B.5 remaining domains and canonical closure; full semantic document coverage still open.
+
+
+## Reporting FC-R1.0A (2026-11-28)
+[Report inventory and source audit](RM-REPORTING-FC-R1.0.md), [registry](RM-REPORTING-FC-REGISTER-v1.json): all 383 index records and 85 atoms screened, with commerce and FX/Scheduler/EVT crosswalk candidates; 12 design templates, 9 bounded bindings, 3 gated diagnostic files, 12 operational candidates. No new denominator, approval, N/A or PASS. P4.1A.5-Q → P4.2 after GREEN; C02/C06 OPEN; controllers STOP until service freeze. Next FC-R1.0B semantic scope/artifact adjudication.

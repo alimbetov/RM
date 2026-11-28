@@ -29,3 +29,7 @@ Local design IDs (not new accepted master-registry counts): RP-J01 manual report
 ## 5. Qualification and delivery
 P4.1A.5-Q unchanged. After GREEN: P4.2 source/DDL/permission/EVT inventory and contract reconciliation → atomic XLSX publication and owner event → PG rollback/idempotency/race/crash qualification → catalog access → PDF admission → scheduled occurrence/delivery. Radar/EVT activation separately gated; reporting producer need not wait for unavailable consumers, but no false consumer PASS. Preserve existing Exact-SHA and performance gates (Radar 200ms / 10% where applicable); no new release gate.
 RP-Q01 commit and exact one logical event; Q02 rollback no event; Q03 two tenants and foreign pointers; Q04 retry idempotency; Q05 2–4 pod races; Q06 storage-before-commit crash and orphan cleanup; Q07 commit-before-relay crash; Q08 duplicate/replay plus live; Q09 revocation both commit orders; Q10 bad ciphertext/hash/scan; Q11 expired evidence/pointer drift; Q12 unavailable consumer and independent receipts; Q13 stale/reordered event and supersession; Q14 multi-format notification identity; Q15 deadline/timezone/occurrence boundary and quality unknown vs zero; Q16 mixed PG load and existing Exact-SHA. Tests proposed, NOT_RUN. No new runtime admission or PASS by this document.
+
+
+## 6. Functional coverage crosswalk
+[Reporting FC-R1.0](RM-REPORTING-FC-R1.0.md) links RP-J01..06 to SFC obligations, not aliases or admission. RP-Q01..16 remain NOT_RUN. P4.1A.5-Q → P4.2 unchanged; no new gate/runtime.
