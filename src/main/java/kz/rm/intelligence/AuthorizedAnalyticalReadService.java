@@ -118,12 +118,7 @@ public class AuthorizedAnalyticalReadService {
                 // Reuse only within this read-only RR snapshot; every new request
                 // still runs the full independent proof validation.
                 var checkedProofs=new HashMap<ProofKey,MultidimensionalCoverageService.Status>();
-                if(report){
-                    String zone=jdbc.queryForObject("SELECT zone_id FROM crm.int_calendar_policy WHERE tenant_id=? AND version=?",String.class,tenant,q0.calendarVersion());
-                    var last=PeriodResolver.resolve(PeriodResolver.Code.M,dates.getLast(),new PeriodResolver.Policy(ZoneId.of(zone),q0.calendarVersion()));
-                    Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
-                    if(last.endExclusive().isAfter(now))throw new IllegalArgumentException("REPORT_MONTH_NOT_CLOSED");
-                }
+                if(report)return readReportSnapshot(tenant,qs,dates);
                 return qs.stream().map(query->{
                     var m=L3DerivedSeriesService.Metric.valueOf(query.metric().name());
                     var f=new L3DerivedSeriesService.Filter(query.region(),query.group(),query.sku(),query.warehouses(),query.currency());
@@ -134,6 +129,95 @@ public class AuthorizedAnalyticalReadService {
             actor.userId();
             return result;
         });
+    }
+
+    /** Closed month report extraction. One calendar/revision/pointer lookup
+     * per snapshot and one grouped L0/L3 query per metric and route. */
+    private List<List<Result>> readReportSnapshot(UUID tenant,List<Query> queries,List<LocalDate> dates){
+        if(!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) c->
+            c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql"))))
+            throw new IllegalStateException("ANALYTICAL_POSTGRESQL_REQUIRED");
+        var q0=queries.getFirst();
+        String zone=jdbc.query("SELECT zone_id FROM crm.int_calendar_policy WHERE tenant_id=? AND version=?",
+            rs->rs.next()?rs.getString(1):null,tenant,q0.calendarVersion());
+        if(zone==null)throw new IllegalArgumentException("CALENDAR_VERSION_NOT_FOUND");
+        if(q0.group()!=null&&!Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM crm.cat_group_node WHERE tenant_id=? AND id=?)",Boolean.class,tenant,q0.group())))
+            throw new IllegalArgumentException("ANALYTICAL_GROUP_NOT_FOUND");
+        if(q0.sku()!=null&&!Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM crm.cat_item WHERE tenant_id=? AND id=?)",Boolean.class,tenant,q0.sku())))
+            throw new IllegalArgumentException("ANALYTICAL_SKU_NOT_FOUND");
+        var policy=new PeriodResolver.Policy(ZoneId.of(zone),q0.calendarVersion());
+        var periods=dates.stream().map(d->PeriodResolver.resolve(PeriodResolver.Code.M,d,policy)).toList();
+        Instant now=Objects.requireNonNull(jdbc.queryForObject("SELECT transaction_timestamp()",Timestamp.class)).toInstant();
+        if(periods.getLast().endExclusive().isAfter(now))throw new IllegalArgumentException("REPORT_MONTH_NOT_CLOSED");
+        long revision=sourceRevision(tenant);
+        Pointer pointer=jdbc.query("""
+            SELECT a.generation_id,a.dim_proof_id,g.from_day,g.until_day,
+              d.dirty_revision,d.receipt_revision,d.materialization_revision,l.revision
+            FROM crm.int_active_generation a
+            JOIN crm.int_projection_generation g USING(tenant_id,generation_id)
+            JOIN crm.int_projection_lifecycle l USING(tenant_id,generation_id)
+            JOIN crm.int_dim_revision d USING(tenant_id,generation_id)
+            WHERE a.tenant_id=? AND a.projection_code='L3' AND l.lifecycle_state='ACTIVE'
+              AND g.calendar_version=? AND g.method_version=1
+            """,rs->rs.next()?new Pointer(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+                new L3DerivedSeriesService.Snapshot(rs.getObject(3,LocalDate.class),rs.getObject(4,LocalDate.class),
+                    policy,new L3DerivedSeriesService.Revision(revision,rs.getLong(5),rs.getLong(6),rs.getLong(7),rs.getLong(8)))):null,
+            tenant,q0.calendarVersion());
+        var inside=pointer==null?List.<PeriodResolver.Period>of():periods.stream().filter(period->
+            !period.startInclusive().atZone(policy.zone()).toLocalDate().isBefore(pointer.snapshot().from())
+            &&!period.endExclusive().atZone(policy.zone()).toLocalDate().isAfter(pointer.snapshot().until())).toList();
+        var proofStatus=inside.isEmpty()?null:coverage.statusInSnapshot(tenant,pointer.generation(),pointer.proof());
+        var windows=new ArrayList<List<Result>>();
+        for(var q:queries){
+            var metric=L3DerivedSeriesService.Metric.valueOf(q.metric().name());
+            var filter=new L3DerivedSeriesService.Filter(q.region(),q.group(),q.sku(),q.warehouses(),q.currency());
+            var resolved=new HashMap<PeriodResolver.Period,Result>();
+            var reasons=new HashMap<PeriodResolver.Period,String>();
+            for(var period:periods)reasons.put(period,pointer==null?"NO_MATCHING_ACTIVE_GENERATION":
+                inside.contains(period)?"PROOF_"+proofStatus.name():"OUTSIDE_GENERATION");
+            if(proofStatus==MultidimensionalCoverageService.Status.CURRENT){
+                for(var obs:l3.readPeriods(tenant,pointer.generation(),metric,filter,q.period(),inside,pointer.snapshot())){
+                    if(obs.quality()==DataQuality.STALE)reasons.put(obs.period(),"PERIOD_STAMP_STALE");
+                    else resolved.put(obs.period(),result(q,metric,obs.period(),obs.value(),Route.L3,"CURRENT_SOURCE_PARITY",
+                        pointer.generation(),pointer.proof(),revision,now));
+                }
+            }
+            var fallback=periods.stream().filter(period->!resolved.containsKey(period)).toList();
+            var values=ownerValues(tenant,metric,filter,fallback);
+            for(var period:fallback)resolved.put(period,result(q,metric,period,values.get(period),Route.L0,
+                reasons.get(period),null,null,revision,now));
+            windows.add(periods.stream().map(resolved::get).toList());
+        }
+        return List.copyOf(windows);
+    }
+
+    /** An inner join avoids counting the synthetic row of an empty month.
+     * Absent groups are mapped to null, never to a fabricated zero. */
+    private Map<PeriodResolver.Period,BigDecimal> ownerValues(UUID tenant,L3DerivedSeriesService.Metric m,
+            L3DerivedSeriesService.Filter f,List<PeriodResolver.Period> periods){
+        if(periods.isEmpty())return Map.of();
+        var args=new ArrayList<Object>();
+        for(int i=0;i<periods.size();i++){
+            args.add(i);args.add(Timestamp.from(periods.get(i).startInclusive()));args.add(Timestamp.from(periods.get(i).endExclusive()));
+        }
+        var sql=new StringBuilder("""
+            WITH requested(ordinal,lo,hi) AS (VALUES %s)
+            SELECT r.ordinal,%s FROM requested r JOIN crm.int_l2_expected_source s
+              ON s.event_at>=r.lo AND s.event_at<r.hi
+            WHERE tenant_id=? AND stream_code=?
+            """.formatted(String.join(",",Collections.nCopies(periods.size(),"(CAST(? AS integer),CAST(? AS timestamptz),CAST(? AS timestamptz))")),ownerExpression(m)));
+        args.add(tenant);args.add(m.stream);
+        ownerFilters(sql,args,tenant,m,f);
+        sql.append(" GROUP BY r.ordinal");
+        var values=new HashMap<PeriodResolver.Period,BigDecimal>();
+        jdbc.query(sql.toString(),(org.springframework.jdbc.core.RowCallbackHandler)rs->{
+            int i=rs.getInt(1);
+            if(i<0||i>=periods.size()||values.containsKey(periods.get(i)))throw new IllegalStateException("REPORT_OWNER_PERIOD");
+            values.put(periods.get(i),rs.getBigDecimal(2));
+        },args.toArray());
+        return values;
     }
     record IntradayObservation(Result result,Instant readObservedAt){}
     /** Called only after the outer service IAM and job fences are held.
@@ -254,7 +338,12 @@ public class AuthorizedAnalyticalReadService {
         StringBuilder sql=new StringBuilder("""
             SELECT %s FROM crm.int_l2_expected_source
             WHERE tenant_id=? AND stream_code=? AND event_at>=? AND event_at<?
-            """.formatted(switch(m.operation){
+            """.formatted(ownerExpression(m)));
+        ownerFilters(sql,args,tenant,m,f);
+        return jdbc.queryForObject(sql.toString(),BigDecimal.class,args.toArray());
+    }
+    private static String ownerExpression(L3DerivedSeriesService.Metric m){
+        return switch(m.operation){
                 case "ORDER" -> "CASE WHEN count(*)>0 THEN count(DISTINCT order_id)::numeric END";
                 case "SKU" -> "CASE WHEN count(*)>0 AND count(sku_id)=count(*) THEN count(DISTINCT sku_id)::numeric END";
                 case "LINE" -> "CASE WHEN count(*)>0 AND count(line_id)=count(*) THEN count(DISTINCT line_id)::numeric END";
@@ -263,7 +352,9 @@ public class AuthorizedAnalyticalReadService {
                 case "QTY_IN" -> "sum(qty_in)";
                 case "QTY_OUT" -> "sum(qty_out)";
                 default -> throw new IllegalArgumentException("ANALYTICAL_METRIC");
-            }));
+        };
+    }
+    private static void ownerFilters(StringBuilder sql,List<Object> args,UUID tenant,L3DerivedSeriesService.Metric m,L3DerivedSeriesService.Filter f){
         if(f.region()!=null){sql.append(" AND region_code=?");args.add(f.region());}
         if(f.group()!=null){
             sql.append("""
@@ -283,6 +374,6 @@ public class AuthorizedAnalyticalReadService {
         }
         if(m==L3DerivedSeriesService.Metric.FULFILLED_PRODUCT_ORDERS||m.operation.equals("PRODUCT_UNITS"))
             sql.append(" AND item_kind='PRODUCT'");
-        return jdbc.queryForObject(sql.toString(),BigDecimal.class,args.toArray());
+
     }
 }
