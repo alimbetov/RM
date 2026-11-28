@@ -428,6 +428,10 @@
     {
       "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
       "name": "sealAndReplacementAllocationSerializePg"
+    },
+    {
+      "classname": "kz.rm.intelligence.ReportStorageQualificationTest",
+      "name": "expiredRequestDispositionAndRetryBudgetPg"
     }
   ],
   "securityGate": "REQUIRED_AFTER_JUNIT"

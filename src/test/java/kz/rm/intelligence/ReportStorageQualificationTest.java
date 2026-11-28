@@ -369,4 +369,58 @@ class ReportStorageQualificationTest {
             assertThat(jdbc.queryForObject("SELECT reporting.int_report_select_request(?,?,?,?)",UUID.class,t,i,a,d)).isEqualTo(a);
         }finally{release.countDown();pool.shutdownNow();}
     }
+    @Test void expiredRequestDispositionAndRetryBudgetPg() throws Exception {
+        UUID t=tenant(),other=tenant(),i=UUID.randomUUID(),w=UUID.randomUUID();
+        LocalDate d=day();ensure(d);
+        assertThat(jdbc.queryForObject("SELECT reporting.int_report_register_request(?,?,?,?,?,?,?)",
+            UUID.class,t,i,"disposition-"+i,SOURCE,SCOPE,"RM-R02","1")).isEqualTo(i);
+        // Three short-lived owner fixtures simulate already exhausted attempts.
+        // They are created, never modified, and use the same guards as normal attempts.
+        var attempts=List.of(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID());
+        raceTx().executeWithoutResult(status->{
+            raceLimits(d);
+            for(UUID a:attempts){
+                jdbc.update("""
+                    INSERT INTO reporting.int_report_dataset_attempt(tenant_id,dataset_id,staging_date,allocated_at,
+                        scope_digest,source_manifest_digest,expected_rows,expected_digest,build_state,build_owner,build_token,build_until)
+                    VALUES(?,?,?,clock_timestamp(),?,?,1,?,'BUILDING',?,1,clock_timestamp()+interval '2 seconds')
+                    """,t,a,d,SCOPE,SOURCE,expected(t,a,BigDecimal.ONE),w);
+                jdbc.update("INSERT INTO reporting.int_report_request_attempt(tenant_id,instance_id,dataset_id,staging_date) VALUES(?,?,?,?)",t,i,a,d);
+            }
+            assertThat(jdbc.queryForObject("SELECT reporting.int_report_abandon_request_attempt(?,?,?,?)",
+                Boolean.class,t,i,attempts.getFirst(),d)).isFalse();
+        });
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(6);
+        while(Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM reporting.int_report_dataset_attempt a
+            JOIN reporting.int_report_request_attempt l USING(tenant_id,dataset_id,staging_date)
+            WHERE l.tenant_id=? AND l.instance_id=? AND a.build_until>clock_timestamp())
+            """,Boolean.class,t,i))){
+            if(System.nanoTime()>deadline)throw new AssertionError("R02_DISPOSITION_EXPIRY_TIMEOUT");
+            Thread.sleep(20);
+        }
+        UUID fresh=UUID.randomUUID();
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,i,fresh,d,w,SCOPE,SOURCE,1L,expected(t,fresh,BigDecimal.ONE)))
+            .isInstanceOf(DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_DISPOSITION_REQUIRED");
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_abandon_request_attempt(?,?,?,?)",
+            Boolean.class,other,i,attempts.getFirst(),d)).isInstanceOf(DataAccessException.class);
+        for(UUID a:attempts){
+            assertThat(jdbc.queryForObject("SELECT reporting.int_report_abandon_request_attempt(?,?,?,?)",
+                Boolean.class,t,i,a,d)).isTrue();
+            assertThat(jdbc.queryForObject("SELECT reporting.int_report_abandon_request_attempt(?,?,?,?)",
+                Boolean.class,t,i,a,d)).isFalse();
+            assertThat(state(t,a)).isEqualTo("BUILDING");
+            assertThatThrownBy(()->append(t,a,d,w,1,BigDecimal.ONE)).isInstanceOf(DataAccessException.class);
+        }
+        assertThatThrownBy(()->jdbc.queryForObject("SELECT reporting.int_report_allocate_request(?,?,?,?,?,?,?,?,?)",
+            Boolean.class,t,i,fresh,d,w,SCOPE,SOURCE,1L,expected(t,fresh,BigDecimal.ONE)))
+            .isInstanceOf(DataAccessException.class).hasMessageContaining("INT_REPORT_REQUEST_RETRY_EXHAUSTED");
+        assertThat(jdbc.queryForObject("""
+            SELECT count(*) FROM reporting.int_report_request_attempt WHERE tenant_id=? AND instance_id=?
+              AND abandoned_at IS NOT NULL AND abandon_reason='LEASE_EXPIRED' AND selected_at IS NULL
+            """,Long.class,t,i)).isEqualTo(3L);
+        assertThat(jdbc.queryForObject("SELECT 'RETENTION_NOT_ADMITTED'=ANY(reporting.int_report_retention_blockers(?))",
+            Boolean.class,d)).isTrue();
+    }
 }

@@ -59,6 +59,10 @@ final class SalesReportMaterializer {
         }));
         var recovered=recover(actor,tenant,queries,instance);
         if(recovered!=null)return recovered;
+        disposeExpired(actor,tenant,queries,instance);
+        // An earlier Seal may have committed while disposition was waiting.
+        recovered=recover(actor,tenant,queries,instance);
+        if(recovered!=null)return recovered;
         // Source admission and RR snapshot finish before any reporting writes.
         var manifest=reader.readReportMonths(actor,tenant,queries);
         if(!scope.equals(manifest.scopeDigest()))throw new IllegalStateException("R02_SCOPE_MISMATCH");
@@ -101,6 +105,25 @@ final class SalesReportMaterializer {
         }catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
     }
     private record Candidate(UUID dataset,LocalDate day){}
+    private void disposeExpired(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance){
+        var candidates=Objects.requireNonNull(tx.execute(status->{
+            limits();reader.admitReportRecovery(actor,tenant,queries);
+            return jdbc.query("""
+                SELECT l.dataset_id,l.staging_date FROM reporting.int_report_request_attempt l
+                JOIN reporting.int_report_dataset_attempt a USING(tenant_id,dataset_id,staging_date)
+                WHERE l.tenant_id=? AND l.instance_id=? AND l.abandoned_at IS NULL
+                  AND l.selected_at IS NULL AND a.build_state<>'READY' AND a.build_until<=clock_timestamp()
+                ORDER BY l.staging_date,l.dataset_id LIMIT 4
+                """,(rs,n)->new Candidate(rs.getObject(1,UUID.class),rs.getObject(2,LocalDate.class)),tenant,instance);
+        }));
+        if(candidates.size()>3)throw new IllegalStateException("R02_ATTEMPT_BUDGET");
+        for(var candidate:candidates)tx.executeWithoutResult(status->{
+            limits();reader.admitReportRecovery(actor,tenant,queries);lock(candidate.day());
+            jdbc.queryForObject("SELECT reporting.int_report_abandon_request_attempt(?,?,?,?)",Boolean.class,
+                tenant,instance,candidate.dataset(),candidate.day());
+            actor.userId();
+        });
+    }
     private Receipt recover(VerifiedActor actor,UUID tenant,List<Query> queries,UUID instance){
         return tx.execute(status->{
             limits();reader.admitReportRecovery(actor,tenant,queries);

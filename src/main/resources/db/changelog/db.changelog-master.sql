@@ -8057,3 +8057,103 @@ END $$;
 REVOKE ALL ON FUNCTION reporting.int_report_seal(uuid,uuid,date,uuid,bigint,bigint,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION reporting.int_report_allocate_request(uuid,uuid,uuid,date,uuid,text,text,bigint,text) FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_REQUEST_FENCE_FORWARD_ONLY'; END; $$;
+
+
+--changeset rm:0233-int-report-terminal-attempt-recovery dbms:postgresql splitStatements:false
+-- Owner-side terminal disposition only. No deletion admission or consumer abandonment.
+-- Three total attempts is a bounded pilot policy, not a runtime SLA.
+ALTER TABLE reporting.int_report_request_attempt ADD COLUMN abandoned_at timestamptz,
+ ADD COLUMN abandon_reason varchar(32),
+ ADD CONSTRAINT ck_int_report_request_disposition CHECK(
+ (abandoned_at IS NULL AND abandon_reason IS NULL) OR
+ (abandoned_at IS NOT NULL AND abandon_reason IS NOT NULL
+ AND abandon_reason='LEASE_EXPIRED' AND selected_at IS NULL));
+
+CREATE OR REPLACE FUNCTION reporting.int_report_request_selection_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE;
+BEGIN
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt a
+ WHERE a.tenant_id=NEW.tenant_id AND a.dataset_id=NEW.dataset_id AND a.staging_date=NEW.staging_date;
+ IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM reporting.int_report_instance i
+ WHERE i.tenant_id=NEW.tenant_id AND i.instance_id=NEW.instance_id AND i.scope_digest=b.scope_digest)
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF TG_OP='INSERT' THEN
+   IF NEW.selected_at IS NOT NULL OR NEW.abandoned_at IS NOT NULL OR NEW.abandon_reason IS NOT NULL
+   THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_INITIAL'; END IF;
+ ELSE
+   IF OLD.selected_at IS NOT NULL OR OLD.abandoned_at IS NOT NULL
+   THEN RAISE EXCEPTION 'INT_REPORT_DISPOSITION_IMMUTABLE'; END IF;
+   IF NEW.selected_at IS NOT NULL AND NEW.abandoned_at IS NULL AND NEW.abandon_reason IS NULL THEN
+     IF b.build_state<>'READY' THEN RAISE EXCEPTION 'INT_REPORT_SELECTION_TRANSITION'; END IF;
+   ELSIF NEW.selected_at IS NULL AND NEW.abandoned_at IS NOT NULL AND NEW.abandon_reason='LEASE_EXPIRED' THEN
+     IF b.build_state='READY' OR b.build_until>clock_timestamp()
+       OR NEW.abandoned_at<b.build_until
+       OR NEW.abandoned_at>clock_timestamp()
+       OR EXISTS(SELECT 1 FROM reporting.int_report_consumer c
+          WHERE c.tenant_id=NEW.tenant_id AND c.dataset_id=NEW.dataset_id AND c.staging_date=NEW.staging_date)
+     THEN RAISE EXCEPTION 'INT_REPORT_ABANDONMENT_DENIED'; END IF;
+   ELSE RAISE EXCEPTION 'INT_REPORT_SELECTION_TRANSITION';
+   END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+
+-- Day -> old attempt -> instance. Never hold two dates or lock an old
+-- attempt from allocation. Check committed state and lease after locks.
+CREATE FUNCTION reporting.int_report_abandon_request_attempt(t uuid,i uuid,a uuid,d date)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b reporting.int_report_dataset_attempt%ROWTYPE; l reporting.int_report_request_attempt%ROWTYPE;
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed'
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ISOLATION'; END IF;
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ SELECT * INTO b FROM reporting.int_report_dataset_attempt
+ WHERE tenant_id=t AND dataset_id=a AND staging_date=d FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ SELECT * INTO l FROM reporting.int_report_request_attempt
+ WHERE tenant_id=t AND instance_id=i AND dataset_id=a AND staging_date=d;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF l.abandoned_at IS NOT NULL OR l.selected_at IS NOT NULL OR b.build_state='READY'
+ OR b.build_until>clock_timestamp() THEN RETURN false; END IF;
+ IF EXISTS(SELECT 1 FROM reporting.int_report_consumer c WHERE c.tenant_id=t AND c.dataset_id=a AND c.staging_date=d)
+ THEN RAISE EXCEPTION 'INT_REPORT_ABANDONMENT_DENIED'; END IF;
+ UPDATE reporting.int_report_request_attempt SET abandoned_at=clock_timestamp(),abandon_reason='LEASE_EXPIRED'
+ WHERE tenant_id=t AND instance_id=i AND dataset_id=a AND abandoned_at IS NULL AND selected_at IS NULL;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_DISPOSITION_LOST'; END IF;
+ RETURN true;
+END $$;
+
+CREATE OR REPLACE FUNCTION reporting.int_report_allocate_request(t uuid,i uuid,a uuid,d date,w uuid,s text,src text,n bigint,dig text)
+ RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed'
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ISOLATION'; END IF;
+ IF d IS NULL THEN RAISE EXCEPTION 'INT_REPORT_DATE_REQUIRED'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(1380794706,d-date '1970-01-01');
+ PERFORM reporting.int_report_assert_day(d);
+ PERFORM 1 FROM reporting.int_report_instance WHERE tenant_id=t AND instance_id=i AND scope_digest=s FOR NO KEY UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_SCOPE'; END IF;
+ IF EXISTS(SELECT 1 FROM reporting.int_report_request_attempt l
+   JOIN reporting.int_report_dataset_attempt b USING(tenant_id,dataset_id,staging_date)
+   WHERE l.tenant_id=t AND l.instance_id=i
+   AND (l.selected_at IS NOT NULL OR b.build_state='READY' OR b.build_until>clock_timestamp()))
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_ALREADY_HAS_RESULT_OR_ACTIVE_ATTEMPT'; END IF;
+ IF EXISTS(SELECT 1 FROM reporting.int_report_request_attempt l
+   WHERE l.tenant_id=t AND l.instance_id=i AND l.abandoned_at IS NULL)
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_DISPOSITION_REQUIRED'; END IF;
+ IF (SELECT count(*) FROM reporting.int_report_request_attempt l WHERE l.tenant_id=t AND l.instance_id=i)>=3
+ THEN RAISE EXCEPTION 'INT_REPORT_REQUEST_RETRY_EXHAUSTED'; END IF;
+ PERFORM reporting.int_report_allocate(t,a,d,w,s,src,n,dig);
+ INSERT INTO reporting.int_report_request_attempt(tenant_id,instance_id,dataset_id,staging_date) VALUES(t,i,a,d);
+ RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION reporting.int_report_abandon_request_attempt(uuid,uuid,uuid,date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_request_selection_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION reporting.int_report_allocate_request(uuid,uuid,uuid,date,uuid,text,text,bigint,text) FROM PUBLIC;
+-- Retention remains NOT_ADMITTED: an abandoned binding is not a partition drop permit.
+--rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_ATTEMPT_DISPOSITION_FORWARD_ONLY'; END; $$;
