@@ -94,6 +94,9 @@ public final class TrustedReportUpload {
         r.reauthorize(actor);
         authorization.requireForCommand(actor.userId(),r.tenant(),DomainPermission.FILES_UPLOAD);
         authorization.requireForCommand(actor.userId(),r.tenant(),DomainPermission.FILES_READ);
+        // Existing ARS lock order: IAM -> shared day -> instance -> file.
+        jdbc.queryForObject("SELECT 1 FROM pg_advisory_xact_lock_shared(1380794706,?::date-DATE '1970-01-01')",
+            Integer.class,r.stagingDate());
         var found=jdbc.query("""
             SELECT i.instance_id FROM reporting.int_report_instance i
             JOIN reporting.int_report_request_attempt l USING(tenant_id,instance_id)

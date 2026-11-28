@@ -105,6 +105,13 @@ class FileRecoveryService {
             if(snap==null)return new Claim("ABSENT",null,null,0,null,null,null,null);
             if("AVAILABLE".equals(snap.state()))
                 return new Claim("VERIFY",null,snap.storageKey(),snap.size(),snap.sha256(),snap.mime(),snap.version(),snap.classification());
+            // V1 STAGED holds the only potentially recoverable ciphertext.
+            // Never sweep it before an authorized replay or terminal rejection.
+            if("STAGED".equals(snap.state())&&"CONFIDENTIAL".equals(snap.classification())
+               &&Boolean.TRUE.equals(jdbc.queryForObject("""
+                   SELECT EXISTS(SELECT 1 FROM reporting.int_report_file_intent WHERE tenant_id=? AND file_id=?)
+                   """,Boolean.class,tenant,fileId)))
+                return new Claim("REPLAY_REQUIRED",null,null,0,null,null,null,null);
             if("STAGED".equals(snap.state())) {
                 if("SCANNING".equals(snap.scanStatus())
                     && (snap.started()==null ||
@@ -126,7 +133,7 @@ class FileRecoveryService {
             return new Claim("SKIPPED",null,null,0,null,null,null,null);
         });
         if(claim==null || "ABSENT".equals(claim.outcome()) || "BUSY".equals(claim.outcome())
-                || "SKIPPED".equals(claim.outcome()))
+                || "SKIPPED".equals(claim.outcome()) || "REPLAY_REQUIRED".equals(claim.outcome()))
             return new Result(claim==null?"ABSENT":claim.outcome(),0);
         try {
             if("VERIFY".equals(claim.outcome())) {
@@ -142,14 +149,14 @@ class FileRecoveryService {
                     valid=storage.matches(claim.activeKey(),claim.size(),claim.sha256());
                 else throw new IOException("REPORT_STORAGE_VERSION_UNSUPPORTED");
                 if(!valid) {
-                    transactions.executeWithoutResult(status->jdbc.update("""
+                    Integer changed=transactions.execute(status->jdbc.update("""
                         UPDATE crm.file_object SET state='REJECTED',scan_status='ERROR',
                             row_version=row_version+1
                          WHERE tenant_id=? AND id=? AND state='AVAILABLE' AND scan_status='CLEAN'
                            AND ((CAST(? AS varchar) IS NULL AND NOT EXISTS (SELECT 1 FROM crm.file_storage s WHERE s.tenant_id=? AND s.file_id=? AND s.state='ACTIVE'))
                              OR EXISTS (SELECT 1 FROM crm.file_storage s WHERE s.tenant_id=? AND s.file_id=? AND s.state='ACTIVE' AND s.storage_key=?))
                         """,tenant,fileId,claim.activeKey(),tenant,fileId,tenant,fileId,claim.activeKey()));
-                    return new Result("QUARANTINED",0);
+                    return new Result(Integer.valueOf(1).equals(changed)?"QUARANTINED":"CHANGED",0);
                 }
             }
             int removed=0;
@@ -157,8 +164,7 @@ class FileRecoveryService {
             // files are cleaned only after stale processing has been fenced.
             for(String key:storage.listKeys(tenant,fileId)) {
                 if(key.equals(claim.activeKey()))continue;
-                // V1 deletion requires a dedicated attempt/commit fence (P4.1A.4).
-                if(ReportStorageKey.encrypted(key))continue;
+                if(ReportStorageKey.encrypted(key)&&!terminalV1Orphan(tenant,fileId,key))continue;
                 storage.delete(key);
                 removed++;
             }
@@ -175,4 +181,33 @@ class FileRecoveryService {
             }
         }
     }
+
+    /** A V1 key can be removed only in a terminal, immutable report namespace.
+     * The SQL guard prevents terminal -> STAGED and mutation/deletion of the
+     * referenced V1 pointer. This makes the check valid after lock release;
+     * no transaction is held over object-store IO. Repeated delete is safe.
+     * STAGED or quarantined-with-pointer remain fail closed until retention.
+     */
+    private boolean terminalV1Orphan(UUID tenant,UUID file,String key)throws IOException{
+        boolean staged=key.contains("/stage-v1-");
+        ReportStorageKey.attempt(key,tenant,file,staged);
+        return Boolean.TRUE.equals(transactions.execute(status->jdbc.query("""
+            SELECT f.state,f.scan_status,f.processing_token,
+                   s.storage_key,s.state,s.encrypted_format_version
+              FROM crm.file_object f
+              JOIN reporting.int_report_file_intent i ON i.tenant_id=f.tenant_id AND i.file_id=f.id
+              LEFT JOIN crm.file_storage s ON s.tenant_id=f.tenant_id AND s.file_id=f.id
+             WHERE f.tenant_id=? AND f.id=? AND f.content_class='CONFIDENTIAL'
+             FOR UPDATE OF f
+            """,rs->{
+                if(!rs.next()||rs.getObject(3)!=null)return false;
+                String state=rs.getString(1),pointer=rs.getString(4);
+                if(key.equals(pointer))return false;
+                return ("AVAILABLE".equals(state)&&"CLEAN".equals(rs.getString(2))&&pointer!=null
+                    &&ReportStorageKey.encrypted(pointer)&&"ACTIVE".equals(rs.getString(5))
+                    &&rs.getInt(6)==1)
+                    ||("REJECTED".equals(state)&&"INFECTED".equals(rs.getString(2))&&pointer==null);
+            },tenant,file)));
+    }
+
 }

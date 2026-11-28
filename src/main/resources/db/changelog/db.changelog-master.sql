@@ -8472,3 +8472,37 @@ CREATE TRIGGER trg_int_report_file_intent_no_truncate BEFORE TRUNCATE
  ON reporting.int_report_file_intent FOR EACH STATEMENT EXECUTE FUNCTION crm.int_reject_fact_mutation();
 REVOKE ALL ON reporting.int_report_file_intent FROM PUBLIC;
 --rollback DO $$ BEGIN RAISE EXCEPTION 'INT_REPORT_FILE_INTENT_FORWARD_ONLY'; END; $$;
+
+--changeset rm:0236-int-report-v1-terminal-fence dbms:postgresql splitStatements:false
+-- A terminal report cannot acquire a new upload token. The immutable file
+-- pointer is retained until a separately admitted REPORT retention lifecycle.
+-- This is the post-lock safety condition for out-of-transaction orphan GC.
+CREATE FUNCTION crm.int_report_file_terminal_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM reporting.int_report_file_intent i WHERE i.tenant_id=OLD.tenant_id AND i.file_id=OLD.id) THEN
+   IF TG_OP='DELETE' THEN RAISE EXCEPTION 'REPORT_FILE_RETENTION_NOT_ADMITTED'; END IF;
+   IF (NEW.tenant_id,NEW.id,NEW.uploaded_by,NEW.request_key,NEW.content_class,NEW.mime_type,NEW.size_bytes,NEW.sha256)
+      IS DISTINCT FROM (OLD.tenant_id,OLD.id,OLD.uploaded_by,OLD.request_key,OLD.content_class,OLD.mime_type,OLD.size_bytes,OLD.sha256)
+      OR (OLD.state IN ('AVAILABLE','REJECTED','DELETING','DELETED') AND
+         (NEW.state='STAGED' OR NEW.processing_token IS NOT NULL))
+   THEN RAISE EXCEPTION 'REPORT_FILE_TERMINAL_OR_IDENTITY'; END IF;
+   IF OLD.state='REJECTED' AND NEW.state<>'REJECTED' THEN RAISE EXCEPTION 'REPORT_FILE_TERMINAL_OR_IDENTITY'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_file_terminal_guard BEFORE UPDATE OR DELETE ON crm.file_object
+ FOR EACH ROW EXECUTE FUNCTION crm.int_report_file_terminal_guard();
+CREATE FUNCTION crm.int_report_v1_pointer_guard() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF OLD.encrypted_format_version=1 AND EXISTS(
+    SELECT 1 FROM reporting.int_report_file_intent i WHERE i.tenant_id=OLD.tenant_id AND i.file_id=OLD.file_id)
+ THEN RAISE EXCEPTION 'REPORT_FILE_POINTER_IMMUTABLE'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_int_report_v1_pointer_guard BEFORE UPDATE OR DELETE ON crm.file_storage
+ FOR EACH ROW EXECUTE FUNCTION crm.int_report_v1_pointer_guard();
+REVOKE ALL ON FUNCTION crm.int_report_file_terminal_guard(),crm.int_report_v1_pointer_guard() FROM PUBLIC;
+--rollback DO $$ BEGIN RAISE EXCEPTION 'REPORT_FILE_TERMINAL_FENCE_FORWARD_ONLY'; END; $$;
